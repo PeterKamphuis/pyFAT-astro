@@ -1,15 +1,11 @@
 #!/usr/local/bin/ python3
 # -*- coding: utf-8 -*-
 # This is the python version of FAT
-
-import support_functions as sf
-import sys,getopt
+__version__ = 'pyFAT 1.0.0'
+import sys
 import os
 from optparse import OptionParser
 import traceback
-
-
-__version__ = 'pyFAT 1.0.0'
 
 '''
 ;+
@@ -57,441 +53,91 @@ __version__ = 'pyFAT 1.0.0'
 
 
 def FAT(argv):
+    #Get the directory we are running from
+    original_dir = os.getcwd()
+    #Ad the support dir to the system path and read the functions from there
+    sys.path.insert(1, original_dir+'/Support')
+    import read_functions as rf
+    #Constants that are used in the code
+    H_0 = 70. #km/s/Mpc #Hubble constant
+
+    #Then check the input options
     parser  = OptionParser()
     parser.add_option('-c','--cf','--configuration_file', action ="store" ,dest = "configfile", default = 'FAT_INPUT.config', help = 'Define the input configuration file.',metavar='CONFIGURATION_FILE')
-    parser.add_option('-d','--debug', action ="store" ,dest = "debug", default = False, help = 'Print debug messages',metavar = '')
-    parser.add_option('-i','--ic','--installation_check', action ="store" ,dest = "installation_check", default = False, help = 'Run the installation _check.',metavar = '')
-    parser.add_option('--LVT','--LVHIS_TEST', action ="store" ,dest = "lvhis_test", default = False, help = 'Run the LVHIS Test. Developer Only.')
-    parser.add_option('--PT','--PAPER_TEST', action ="store" ,dest = "paper_test", default = False, help = 'Run the PAPER Test. Developer Only.')
-    parser.add_option('--FD','--FULL_DATABASE', action ="store" ,dest = "full_test", default = False, help = 'Run the Full Database Test. Developer Only.')
+    parser.add_option('-d','--debug', action ="store_true" ,dest = "debug", default = False, help = 'Print debug messages',metavar = '')
+    parser.add_option('-i','--ic','--installation_check', action ="store_true" ,dest = "installation_check", default = False, help = 'Run the installation _check.',metavar = '')
+    parser.add_option('--LVT','--LVHIS_TEST', action ="store_true" ,dest = "lvhis_test", default = False, help = 'Run the LVHIS Test. Developer Only.')
+    parser.add_option('--PT','--PAPER_TEST', action ="store_true" ,dest = "paper_test", default = False, help = 'Run the PAPER Test. Developer Only.')
+    parser.add_option('--FD','--FULL_DATABASE', action ="store_true" ,dest = "full_test", default = False, help = 'Run the Full Database Test. Developer Only.')
+    parser.add_option('-p','--problems', action ="store_true" ,dest = "problems", default = False, help = 'Run the Problem test set. Developer Only.')
+    parser.add_option('-t','--timing', action ="store_true" ,dest = "timing", default = False, help = 'Create a file in the maindir that provides start and stop times for each galaxy.')
     input_parameters,args = parser.parse_args()
+    input_parameters.original_dir = original_dir
     basic_info  = 'BasicInfo'
     if input_parameters.installation_check:
         input_parameters.configfile = 'Installation_Check/FAT_INPUT.config'
     if input_parameters.lvhis_test:
         fat_main_test_dir = os.environ["FAT_TEST_DIR"]
-        input_parameters.configfile=fatmaintest+'/LVHIS-26_3/Input.config'
+        input_parameters.configfile=fat_main_test_dir+'/LVHIS-26_3/Input.config'
     if input_parameters.paper_test:
         fat_main_test_dir = os.environ["FAT_TEST_DIR"]
-        input_parameters.configfile=fatmaintest+'/SmallCat_Warps/Input_1.config'
-    if input_parameters.paper_test:
+        input_parameters.configfile=fat_main_test_dir+'/SmallCat_Warps/Input_1.config'
+    if input_parameters.full_test:
         fat_main_test_dir = os.environ["FAT_TEST_DIR"]
-        input_parameters.configfile=fatmaintest+'/LVHIS-26_3/Input.config'
-'''
-                                ;Location of the input configuration file
-  if keyword_set(installation_check) then $
-     configfile='Installation_Check/FAT_INPUT.config'
-  if keyword_set(lvhistest) then begin
-     spawn,'printenv FAT_TEST_DIR',fatmaintest
-     configfile=fatmaintest+'/LVHIS-26_3/Input.config'
-  endif
-  if keyword_set(papertest) then begin
-     spawn,'printenv FAT_TEST_DIR',fatmaintest
-     configfile=fatmaintest+'/SmallCat_Warps/Input_1.config'
-  endif
-  if keyword_set(restest) then begin
-     spawn,'printenv FAT_TEST_DIR',fatmaintest
-     configfile=fatmaintest+'Test_Res_v5.0/FAT_INPUT.config'
-  endif
-  IF n_elements(configfile) EQ 0 then begin
-     configfile='FAT_INPUT.config'
-  endif
+        input_parameters.configfile=fat_main_test_dir+'/Full_Database/FAT_INPUT.config'
+    if input_parameters.problems:
+        fat_main_test_dir = os.environ["FAT_TEST_DIR"]
+        input_parameters.configfile=fat_main_test_dir+'/Problems/FAT_INPUT.config'
+    #Then get the directory we are running from
 
 
-                                ;dumb resolve routine doesn't accept paths so cd to support dir
-  CD,supportdir,current=old_dir
-  RESOLVE_ROUTINE, 'beam_plot'
-  RESOLVE_ROUTINE, 'book_keeping'
-  RESOLVE_ROUTINE, 'buildaxii'
-  RESOLVE_ROUTINE, 'calc_edge'
-  RESOLVE_ROUTINE, 'changeradii'
-  RESOLVE_ROUTINE, 'check_cflux'
-  RESOLVE_ROUTINE, 'cleanup'
-  RESOLVE_ROUTINE, 'clean_header'
-  RESOLVE_ROUTINE, 'colour_bar'
-  RESOLVE_ROUTINE, 'colormaps'
-  RESOLVE_ROUTINE, 'columndensity'
-  RESOLVE_ROUTINE, 'convertradec'
-  RESOLVE_ROUTINE, 'convertskyanglefunction',/IS_FUNCTION
-  RESOLVE_ROUTINE, 'create_residuals'
-  RESOLVE_ROUTINE, 'dec_names'
-  RESOLVE_ROUTINE, 'extract_pv'
-  RESOLVE_ROUTINE, 'fat_fit',/IS_FUNCTION
-  IF gdlidl then RESOLVE_ROUTINE,'fat_gdlgauss',/IS_FUNCTION,/COMPILE_FULL_FILE
-  RESOLVE_ROUTINE, 'fat_hanning',/IS_FUNCTION
-  RESOLVE_ROUTINE, 'fat_ploterror'
-  RESOLVE_ROUTINE, 'fat_smooth',/IS_FUNCTION
-  RESOLVE_ROUTINE, 'fit_ellipse',/IS_FUNCTION
-  RESOLVE_ROUTINE, 'getdhi'
-  RESOLVE_ROUTINE, 'get_fixedringsv9'
-  RESOLVE_ROUTINE, 'get_newringsv9'
-  RESOLVE_ROUTINE, 'get_progress'
-  RESOLVE_ROUTINE, 'int_profilev2'
-  RESOLVE_ROUTINE, 'interpolate'
-  RESOLVE_ROUTINE, 'install_check',/IS_FUNCTION
-  RESOLVE_ROUTINE, 'isnumeric',/IS_FUNCTION
-  RESOLVE_ROUTINE, 'linenumber',/IS_FUNCTION
-  RESOLVE_ROUTINE, 'momentsv2'
-  RESOLVE_ROUTINE, 'obtain_inclinationv8'
-  RESOLVE_ROUTINE, 'obtain_pav2'
-  RESOLVE_ROUTINE, 'obtain_velpa'
-  RESOLVE_ROUTINE, 'obtain_w50'
-  RESOLVE_ROUTINE, 'organize_output'
-  RESOLVE_ROUTINE, 'overview_plot'
-  RESOLVE_ROUTINE, 'pre_ran_sofia'
-  RESOLVE_ROUTINE, 'preprocessing'
-  RESOLVE_ROUTINE, 'ra_names'
-  RESOLVE_ROUTINE, 'read_template'
-  RESOLVE_ROUTINE, 'rename'
-  RESOLVE_ROUTINE, 'revised_regularisation_com'
-  RESOLVE_ROUTINE, 'revised_regularisation_rot'
-  RESOLVE_ROUTINE, 'rottab'
-  RESOLVE_ROUTINE, 'run_sofia'
-  RESOLVE_ROUTINE, 'sbr_check'
-  RESOLVE_ROUTINE, 'set_sbr'
-  RESOLVE_ROUTINE, 'set_vrotv6'
-  RESOLVE_ROUTINE, 'set_warp_slopev3'
-  RESOLVE_ROUTINE, 'showpixelsmap'
-  RESOLVE_ROUTINE, 'writefittingvariables'
-  RESOLVE_ROUTINE, 'writenewtotemplate'
-  CD,old_dir
+    #Check the existence of the config file and read it
+    read_succes = False
+    while not read_succes:
+        try:
+            Original_Configuration = rf.config_file(input_parameters)
+            read_succes = True
+        except:
+            print(traceback.print_exc())
+            input_parameters.configfile = input('''
+                    You have provided a config file but it can't be found.
+                    If you want to provide a config file please give the correct name.
+                    Else press CTRL-C to abort.
+            ''')
+    #Then read the input Catalogue
+    Catalogue = rf.catalogue(Original_Configuration['CATALOGUE'])
+    # Get the longest directory name to format the output directory properly
+    dirname = 'Directory Name'
+    maximum_directory_length = len(dirname)
+    for directory in Catalogue['DIRECTORYNAME']:
+        if len(directory) > maximum_directory_length:
+            maximum_directory_length = len(directory)
+    # Create a file to write the results to if if required
+    if not os.path.exists(Original_Configuration['OUTPUTCATALOGUE']) or Original_Configuration['NEW_OUTPUT']:
+        output_catalogue = open(Original_Configuration['OUTPUTCATALOGUE'],'w')
+        comment = 'Comments on Fit Result'
+        AC1 = 'AC1'
+        AC2 = 'AC2'
+        output_catalogue.write(f'{dirname:{maximum_directory_length}s} {AC1:6s} {AC2:6s} {comment}')
+        output_catalogue.close()
 
-tryconfigagain:
-                                ;open the configuration file and get the proper parameters
-  fileexist=FILE_TEST(configfile)
-                                ;however sometimes the config is not found
-  IF strlen(configfile) NE 0 AND fileexist EQ 0 then begin
-     print,"You have provided a config file but it can't be found"
-     print,"If you want to provide a config file please give the name"
-     print,"Else press enter to continue"
-     disp=''
-     WHILE (disp EQ '') DO BEGIN
-        read,disp
-        IF disp EQ '' then begin
-           configfile=''
-           disp='hh'
-        ENDIF else begin
-           configfile=disp
-        ENDELSE
-     ENDWHILE
-     goto,tryconfigagain
-  ENDIF
-  IF fileexist EQ 0 then goto,noconfig
-  close,1
-  h=' '
-  openr,1,configfile
-  filelength=FILE_LINES(configfile)-1
-  WHILE ~ EOF(1) DO BEGIN
-     readf,1,h
-     tmp=str_sep(strtrim(strcompress(h),2),'=')
-     IF n_elements(tmp) GT 1 then begin
-        case STRLOWCASE(strtrim(tmp[0],2)) of
-                                ;thefirst galaxy to be fitted
-           'startgalaxy':startgalaxy=double(tmp[1])
-                                ;thelast galaxy to be fitted
-                                ;if set to -1 the whole catalogue will be fitted
-           'endgalaxy':endgalaxy=double(tmp[1])
-                                ;parameters to skip certain fits for testing
-                                ;Files need to be present as it will only skip the tirific fitting part
-                                ;if you want to run only part of the code use testing remainder and will go on
-                                ;to the next galaxy
-           'testing':testing=double(tmp[1])
-                                ;Remove all previous pre-processing as cutting the cube 0 no 1 yes 2
-                                ;use provided preprocessing
-           'allnew':allnewin=double(tmp[1])
-                                ;Parameters for finishing the fitting process early
-                                ;IF set to one the program finishes after this loop (The first 1 it encounters)
-           'finishafter':finishafter=double(tmp[1])
-                                ;Input catalogue for the pipeline
-           'catalogue':catalogue=tmp[1]
-                                ;Directory with all the directories of the galaxies to be fitted
-           'maindir':maindir=tmp[1]
-                                ;Output file for the fitting results
-           'outputcatalogue':outputcatalogue=tmp[1]
-                                ;Output file for the log of the fit
-           'outputlog':olog=tmp[1]
-                                ;trigger for creating new output
-                                ;results file 'y' or append the old one 'n'
-           'new_output':newresult=tmp[1]
-                                ;trigger for creating a new output
-                                ;log file 'y' or append the old one 'n'
-           'new_log':newlog=tmp[1]
-                                ;Optimal number of pixels per maj axis beam
-           'opt_pixelbeam':optpixelbeam=fix(tmp[1])
-                                ;Hanning smoothed or not (y=1, n=0)
-           'velocity_resolution':vresolution=double(tmp[1])
-                                ;Clean up after the fitting is complete.
-           'maps_output':bookkeeping=double(tmp[1])
-                                ;Do we want warp info
-           'warp_output':warpoutput=double(tmp[1])
-           else:begin
-              print,'this should be empty'
-           end
-        endcase
-     endif
-  ENDWHILE
-  close,1
-                                ;if we are checking the installation
-                                ;then the maindir, outputcatalogue and
-                                ;Log go into the
-                                ;originaldir+installationcheck.
-  if keyword_set(Installation_Check) then begin
-     catalogue=originaldir[0]+'/Installation_Check/FAT_Input_Catalogue.txt'
-     maindir=originaldir[0]+'/Installation_Check/'
-     outputcatalogue=originaldir[0]+'/Installation_Check/Output_N2903.txt'
-  endif
-                                ;If maindir, outputcatalogue or
-                                ;catalog start with a ~ then replace
-                                ;it with the full path as append does
-                                ;not work in gdl otherwise.
+    if input_parameters.timing:
+        timing_result = open(Original_Configuration['MAINDIR']+'/Timing_Result.txt','w')
+        timing_result.write("This file contains the system start and end times for the fitting of each galaxy")
+        timing_result.close
 
-  tildepresent=STRMID(maindir,0,1)
-  thisishome=' '
-  IF tildepresent EQ '~' then begin
-     cd,'~',CURRENT=old_dir
-     spawn,'pwd',thisishome
-     cd,old_dir
-     maindir= STRJOIN(STRSPLIT(maindir, '~',/regex,/extract,/preserve_null),thisishome)
-  ENDIF
-  tildepresent=STRMID(catalogue,0,1)
-  IF tildepresent EQ '~' then begin
-     IF thisishome EQ ' ' then begin
-        cd,'~',CURRENT=old_dir
-        spawn,'pwd',thisishome
-        cd,old_dir
-        print,'are we doing this?'
-     ENDIF
-     catalogue= STRJOIN(STRSPLIT(catalogue, '~',/regex,/extract,/preserve_null),thisishome)
-  ENDIF
-  tildepresent=STRMID(outputcatalogue,0,1)
-  IF tildepresent EQ '~' then begin
-     IF thisishome EQ ' ' then begin
-        cd,'~',CURRENT=old_dir
-        spawn,'pwd',thisishome
-        cd,old_dir
-        print,'are we doing this?'
-     ENDIF
-     outputcatalogue= STRJOIN(STRSPLIT(outputcatalogue, '~',/regex,/extract,/preserve_null),thisishome)
-  ENDIF
+    # If the end galaxy is -1 fit the whole catalogue
+    if Original_Configuration['ENDGALAXY'] == -1:
+        Original_Configuration['ENDGALAXY'] = len(Catalogue['NUMBER'])
 
-noconfig:
-                                ;Make idiot failsafe standards for the config files
-  IF size(maindir,/TYPE) NE 7 then begin
-     print,'You have not provided the maindirectory for the data cubes'
-     disp=''
-     WHILE (disp EQ '') DO BEGIN
-        print,'Please provide the maindir for the data (Default = home)'
-        read,disp
-        IF disp EQ '' then disp='~'
-        filetest=FILE_TEST(disp)
-        IF filetest EQ 0 then begin
-           print,'That is not a valid directory please try again'
-           disp=''
-        ENDIF
-     ENDWHILE
-     maindir=disp
-  ENDIF
-  IF size(catalogue,/TYPE) NE 7 then begin
-     print,'You have not provided a catalogue with directories and initial estimates'
-     disp=''
-     WHILE (disp EQ '') DO BEGIN
-        print,'Please provide the catalogue with initial estimates (No Default)'
-        read,disp
-        filetest=FILE_TEST(disp)
-        IF filetest EQ 0 then begin
-           print,'That is not a valid file, please try again'
-           disp=''
-        ENDIF
-     ENDWHILE
-     catalogue=disp
-  ENDIF
-  IF size(outputcatalogue,/TYPE) NE 7 then begin
-     disp=''
-     WHILE (disp EQ '') DO BEGIN
-        print,'Please provide the file for results (Default = '+maindir+'/output_dir/fit_result.txt)'
-        read,disp
-        if disp EQ '' then begin
-           wehaveadir=FILE_TEST(maindir+'/output_dir')
-           IF wehaveadir EQ 0 then begin
-              spawn,'mkdir '+maindir+'/output_dir/',isthere
-           ENDIF
-           disp=maindir+'output_dir/fit_results.txt'
-        endif
-     ENDWHILE
-     outputcatalogue=disp
-  ENDIF
-                                ;defaults for configuration file
-  IF size(finishafter,/TYPE) EQ 0 then finishafter=2
-  IF size(testing,/TYPE) EQ 0 then testing=0
-  IF size(startgalaxy,/TYPE) EQ 0 then startgalaxy=0
-  IF size(endgalaxy,/TYPE) EQ 0 then endgalaxy=-1
-  IF size(newlog,/TYPE) EQ 0 then newlog='y'
-  IF size(newresult,/TYPE) EQ 0 then newresult='y'
-  IF n_elements(vresolution) EQ 0 then vresolution=1.
-  IF n_elements(optpixelbeam) EQ 0 then optpixelbeam=4.
-  IF n_elements(allnewin) EQ 0 then allnewin=1
-  IF n_elements(bookkeeping) EQ 0 then bookkeeping=3
-  IF n_elements(warpoutput) EQ 0 then warpoutput=0
+    for i in range(Original_Configuration['STARTGALAXY'],Original_Configuration['ENDGALAXY']):
 
-  IF bookkeeping EQ 5. then bookkeeping=4
 
-  bookkeepingin=bookkeeping
-  finishafterold=finishafter
-                                ;start a log with current program name
-  help,calls=cc
-  print,linenumber()+"This is version "+version[0]+" of the program"
-                                ;Create a file to write the results to
-  If not FILE_TEST(outputcatalogue) OR strupcase(newresult) EQ 'Y' then begin
-     openw,1,outputcatalogue
-     printf,1,format='(A60,2A12,A120)','Name','AC1','AC2','Comments on Fit Result'
-     close,1
-  endif
 
-                                ;read the input catalogue
-  openr,1,catalogue
-  filelength=FILE_LINES(catalogue)-1
-  catnumber=strarr(filelength)
-  catRA=strarr(filelength)
-  catDEC=strarr(filelength)
-  epoch=strarr(filelength)
-  catPA=dblarr(filelength)
-  catPAdev=dblarr(filelength)
-  catinc=dblarr(filelength)
-  catincdev=dblarr(filelength)
-  catvsys=dblarr(filelength)
-  catmaxrot=dblarr(filelength)
-  catmaxrotdev=dblarr(filelength)
-  catDistance=dblarr(filelength)
-  catnoise=dblarr(filelength)
-  catmajbeam=dblarr(filelength)
-  catminbeam=dblarr(filelength)
-  catbpa=dblarr(filelength)
-  catDirname=strarr(filelength)
-  catCubename=strarr(filelength)
-  catMom0name=strarr(filelength)
-  catMom1name=strarr(filelength)
-  catMaskname=strarr(filelength)
-  catCatalogname=strarr(filelength)
-  h=' '
-  readf,1,h
-  tmp=str_sep(strtrim(strcompress(h),2),'|')
-                                ;IF we have a new catalog we need to
-                                ;determine what each column is
-                                ;referring to
-  IF n_elements(tmp) LT 16 then begin
-                                ;When using the Sofia input it is not
-                                ;necessary to have a specific ordering
-                                ;of the input catalogue just the
-                                ;correct column names
-     tmpnumber=WHERE(STRLOWCASE(tmp) EQ 'number')
-     tmpdistance=WHERE(STRLOWCASE(tmp) EQ 'distance')
-     tmpdir=WHERE(STRLOWCASE(tmp) EQ 'directoryname')
-     tmpcube=WHERE(STRLOWCASE(tmp) EQ 'cubename')
-     IF n_elements(tmp) GT 4 then begin
-        test=WHERE(STRLOWCASE(tmp) EQ 'basename')
-        IF test[0] EQ -1 then begin
-           tmpmom1=WHERE(STRLOWCASE(tmp) EQ 'moment1')
-           tmpmom0=WHERE(STRLOWCASE(tmp) EQ 'moment0')
-           tmpmask=WHERE(STRLOWCASE(tmp) EQ 'mask')
-           tmpcatalog=WHERE(STRLOWCASE(tmp) EQ 'catalog')
-                                ;If we want to use preprocessed input
-                                ;than we need moment0 moment1 a mask
-                                ;and a catalog
-           IF allnewin GT 1 AND (tmpmom1[0] EQ -1 OR tmpmom0[0] EQ -1 OR tmpmask[0] EQ -1 OR tmpcatalog[0] EQ -1) then begin
-              print,'Your catalog file is not configured properly. Aborting'
-              stop
-           ENDIF
-        ENDIF
-     ENDIF ELSE BEGIN
-                                ;If we want to use preprocessed input
-                                ;than we need moment0 moment1 a mask
-                                ;and a catalog
-        IF allnewin GT 1 then begin
-           print,'Your catalog file is not configured properly. Aborting'
-           stop
-        ENDIF
-     ENDELSE
-  ENDIF
-                                ;Then read the actual input from the catalo
-  h=' '
-  counter=0
-  for i=0,filelength-1 do begin
-     readf,1,h
-     tmp=str_sep(strtrim(strcompress(h),2),'|')
-     if  n_elements(tmp) LT 3 then begin
-        counter++
-     ENDIF
+        '''
 
-     IF n_elements(tmp) GE 16 then begin
-                                ;Old fashioned input of initial
-                                ;estimates from the literature
-                                ;Better to use the Sofia estimates as
-                                ;the program is fine tuned to them
-        catnumber[i]=tmp[0]
-        catRA[i]=tmp[1]
-        catDEC[i]=tmp[2]
-        epoch[i]=tmp[3]
-        catPA[i]=double(tmp[4])
-        catinc[i]=double(tmp[5])
-        catincdev[i]=double(tmp[6])
-        catvsys[i]=double(tmp[7])
-        catmaxrot[i]=double(tmp[8])
-        catDistance[i]=double(tmp[9])
-        IF catDistance[i] LT 1. THEN catDistance[i]=1.
-        catnoise[i]=double(tmp[10])
-        catmajbeam[i]=double(tmp[11])
-        catminbeam[i]=double(tmp[12])
-        catbpa[i]=double(tmp[13])
-        catDirname[i]=tmp[14]
-        tmpagain=str_sep(tmp[15],'.')
-        IF n_elements(tmpagain) GT 1 and STRLOWCASE(tmpagain[n_elements(tmpagain)-1]) EQ 'fits' then begin
-           IF n_elements(tmpagain) GT 2 then catCubename[i]=STRJOIN(tmpagain[0:n_elements(tmpagain)-2],'.') else catCubename[i]=tmpagain[0]
-        endif else catCubename[i]=tmp[15]
-        IF n_elements(tmp) GT 16 then begin
-           catMom0name[i]=tmp[16]
-           catMom1name[i]=tmp[17]
-        ENDIF ELSE BEGIN
-           catMom0name[i]='youshouldnotnameyourfilesthisway'
-           catMom1name[i]='youshouldnotnameyourfilesthisway'
-        ENDELSE
-        counter=0
-     ENDIF ELSE BEGIN
-        IF n_elements(tmp) GT 3 then begin
-           counter=0            ;IF we have a new catalog we use the determined order
-           catnumber[i]=tmp[tmpnumber]
-           catDirname[i]=tmp[tmpdir]
-           tmpagain=str_sep(tmp[tmpcube],'.')
-           IF n_elements(tmpagain) GT 1 and STRLOWCASE(tmpagain[n_elements(tmpagain)-1]) EQ 'fits' then begin
-              IF n_elements(tmpagain) GT 2 then catCubename[i]=STRJOIN(tmpagain[0:n_elements(tmpagain)-2],'.') else catCubename[i]=tmpagain[0]
-           endif else catCubename[i]=tmp[tmpcube]
-           catDistance[i]=double(tmp[tmpdistance])
-                                ;IF we have preprocessed data we read the file names
-           IF allnewin GT 1 then begin
-              IF test[0] EQ -1 then begin
-                 catMom0name[i]=tmp[tmpmom0]
-                 catMom1name[i]=tmp[tmpmom1]
-                 catMaskname[i]=tmp[tmpmask]
-                 catCatalogname[i]=tmp[tmpcatalog]
-                 tmpagain=str_sep(tmp[tmpcatalog],'.')
-                 IF n_elements(tmpagain) GT 1 and STRLOWCASE(tmpagain[n_elements(tmpagain)-1]) NE 'ascii' then catCatalogname[i]=tmp[tmpcatalog]+'.ascii'
-              ENDIF ELSE BEGIN
-                 catMom0name[i]=tmp[test]+'_mom0'
-                 catMom1name[i]=tmp[test]+'_mom1'
-                 catMaskname[i]=tmp[test]+'_mask'
-                 catCatalogname[i]=tmp[test]+'_cat.ascii'
-              ENDELSE
-                                ; else we make sure they have a
-                                ; silly name so they don't
-                                ; exist in the directory
-           ENDIF ELSE BEGIN
-              catMom0name[i]='youshouldnotnameyourfilesthisway'
-              catMom1name[i]='youshouldnotnameyourfilesthisway'
-           ENDELSE
-        ENDIF
-     ENDELSE
 
-  endfor
-  close,1
+
                                 ;if our end galaxy is -1 then we want
                                 ;to fit the full catalog
   IF startgalaxy LT 0 then startgalaxy = 0
@@ -502,10 +148,17 @@ noconfig:
   for i=startgalaxy,endgalaxy do begin
                                 ;To ensure using the right template we
                                 ;read them everytime we start a new galaxy
+     starttime=systime()
      finishafter=finishafterold
      allnew=allnewin
      bookkeeping=bookkeepingin
+     ring_spacing = ring_spacing_in
+     fix_incl= fix_incl_in
+     fix_pa= fix_pa_in
+     fix_sdis= fix_sdis_in
+
      doubled=0
+     ini_mode_factor=25.
      currentfitcube=catcubename[i]
      noisemapname=currentfitcube+'_noisemap'
      close,1
@@ -513,6 +166,8 @@ noconfig:
      IF size(olog,/TYPE) EQ 7 then begin
         if catdirname[i] EQ './' then log=maindir+'/'+olog else $
            log=maindir+'/'+catdirname[i]+'/'+olog
+        prevlog=maindir+'/'+catdirname[i]+'/Prev_Log.txt'
+        spawn,'mv '+log+' '+prevlog
         IF not FILE_TEST(log) OR strupcase(newlog) EQ 'Y' then begin
            openw,66,log
            printf,66,linenumber()+"This file is a log of the fitting process run at "+systime()
@@ -538,9 +193,6 @@ noconfig:
                                 ;tirific fit
      read_template,supportdir+'/2ndfit.def', tirificsecond, tirificsecondvars
                                 ;Read the template sofia input file
-;     IF allnew LT 2 then begin
-;        read_template,supportdir+'/sofiainput.txt',sofia,sofiatriggers,/SOFIA
-;     ENDIF
                                 ;print which galaxy we are at
      print,linenumber()+"We're at galaxy number "+strtrim(string(i,format='(I10)'),2)+". Which is catalogue id number "+catnumber[i]
      IF size(log,/TYPE) EQ 7 then begin
@@ -577,9 +229,12 @@ noconfig:
         cubext='.FITS'
         fitsexists=FILE_TEST(maindir+'/'+catdirname[i]+'/'+currentfitcube+cubeext)
      ENDIF
+
      if fitsexists EQ 0 then begin
+        comment='This galaxy has no fits cube to work with, it is skipped.'
+        commentlen='A'+strtrim(string(strlen(comment)),2)
         openu,1,outputcatalogue,/APPEND
-        printf,1,format='(A60,2A12,A120)',catDirname[i],0.,0.,' This galaxy has no fits cube to work with, it is skipped.'
+        printf,1,catDirname[i],strtrim(string(0),2),strtrim(string(0),2),comment,format='("",('+dirformat+')," ",2(A6),"  ",('+commentlen+'))'
         close,1
         IF size(log,/TYPE) EQ 7 then begin
            openu,66,log,/APPEND
@@ -596,9 +251,9 @@ noconfig:
      maxrings=0.
      propermom0=0
      propermom1=0
+     propermom2=0
      propermomnoise=0
      optimized=0
-   ;  sofiafail=0
      wroteblank=0
 
                                 ;Let's see if a pre-processed
@@ -619,12 +274,12 @@ noconfig:
            beam=[catmajbeam[i],catminbeam[i]]
         ENDIF ELSE beam=[1,1]
         noise=1
-        clean_header,header,writecube,beam,log=log,catalogue=outputcatalogue,directory=catdirname[i]
+        clean_header,header,writecube,beam,log=log,catalogue=outputcatalogue,directory=catdirname[i],dir_format=dirformat
         IF writecube EQ 2 then begin
            bookkeeping=5
            GOTO,FINISHTHISGALAXY
         ENDIF
-        preprocessing,dummy,header,writecube,catalogue=outputcatalogue,noise=noise,name=currentfitcube,directory=catdirname[i],log=log
+        preprocessing,dummy,header,writecube,catalogue=outputcatalogue,noise=noise,name=currentfitcube,directory=catdirname[i],log=log,dir_format=dirformat
         Case 1 of
            writecube EQ 0:begin
               IF size(log,/TYPE) EQ 7 then begin
@@ -682,7 +337,7 @@ noconfig:
      cubecdelt=(ABS(sxpar(header,'CDELT1'))+ABS(sxpar(header,'CDELT2')))/2.
      cubecrvalDEC=sxpar(header,'CRVAL2')
      channelwidth=ABS(sxpar(header,'CDELT3'))
-     veltype=strtrim(strcompress(sxpar(header,'CUNIT3')))
+     veltype=STRUPCASE(strtrim(strcompress(sxpar(header,'CUNIT3'))))
      pixfwhm=beam[0]/(cubecdelt*3600.)
      catmajbeam[i]=beam[0]
      catminbeam[i]=beam[1]
@@ -703,8 +358,10 @@ noconfig:
            pre_ran_sofia,names,new_dir,supportdirchecked,pixfwhm,header,errormessage,VSYSpix,RApix,DECpix,Totflux,log=log
            propermom1=FILE_TEST(maindir+'/'+catdirname[i]+'/'+catmom1name[i]+'.fits')
            propermom0=FILE_TEST(maindir+'/'+catdirname[i]+'/'+catmom0name[i]+'.fits')
+           propermom2=FILE_TEST(maindir+'/'+catdirname[i]+'/'+catmom2name[i]+'.fits')
            IF propermom1 then print,'Moment 1 = '+catmom1name[i]+'.fits'
            IF propermom0 then print,'Moment 0 = '+catmom0name[i]+'.fits'
+           IF propermom2 then print,'Moment 2 = '+catmom0name[i]+'.fits'
            goto,skipallsofia
         end
         1:begin
@@ -734,6 +391,8 @@ noconfig:
                     catMom0name[i]='Moments/'+currentfitcube+'_mom0_small' ;reset the mom0 map to the one just found
                     propermom1=FILE_TEST(maindir+'/'+catdirname[i]+'/Moments/'+currentfitcube+'_mom1_small.fits')
                     catMom1name[i]='Moments/'+currentfitcube+'_mom1_small' ;reset the mom0 map to the one just found
+                    propermom2=FILE_TEST(maindir+'/'+catdirname[i]+'/Moments/'+currentfitcube+'_mom1_small.fits')
+                    catMom2name[i]='Moments/'+currentfitcube+'_mom2_small' ;reset the mom0 map to the one just found
                     propermomnoise=FILE_TEST(maindir+'/'+catdirname[i]+'/Moments/'+currentfitcube+'_noisemap_small.fits')
                     noisemapname='Moments/'+currentfitcube+'_noisemap_small'
                     currentfitcube=currentfitcube+'_small'
@@ -741,9 +400,7 @@ noconfig:
                     sizex=sxpar(header,'NAXIS1')
                     sizey=sxpar(header,'NAXIS2')
                     allnew=3
-                 ;   CD,new_dir,CURRENT=old_dir
-                 ;   goto,skipallsofia
-                 ENDIF
+                ENDIF
               ENDIF ELSE BEGIN
                  allnew=1
                  goto,mismatchedmoments
@@ -761,11 +418,11 @@ noconfig:
                     catMom0name[i]='Moments/'+currentfitcube+'_mom0' ;reset the mom0 map to the one just found
                     propermom1=FILE_TEST(maindir+'/'+catdirname[i]+'/Moments/'+currentfitcube+'_mom1.fits')
                     catMom1name[i]='Moments/'+currentfitcube+'_mom1' ;reset the mom0 map to the one just found
+                    propermom2=FILE_TEST(maindir+'/'+catdirname[i]+'/Moments/'+currentfitcube+'_mom2.fits')
+                    catMom2name[i]='Moments/'+currentfitcube+'_mom2' ;reset the mom0 map to the one just found
                     propermomnoise=FILE_TEST(maindir+'/'+catdirname[i]+'/Moments/'+currentfitcube+'_noisemap.fits')
                     noisemapname='Moments/'+currentfitcube+'_noisemap'
                     allnew=2
-;                    CD,new_dir,CURRENT=old_dir
- ;                   goto,skipallsofia
                  ENDIF
               ENDIF ELSE BEGIN
                  allnew=1
@@ -792,30 +449,63 @@ noconfig:
         end
      endcase
      mismatchedmoments:
-
-     run_sofia,allnew,new_dir,currentfitcube,catcatalogname[i],supportdirchecked,pixfwhm,header,errormessage,VSYSpix,RApix,DECpix,Totflux,log=log
+     ;Identify fully flagged channels in the cube
+     tmp_channels=dblarr(n_elements(dummy[0,0,*]))
+     for j=0,n_elements(dummy[0,0,*])-1 do begin
+       tmp = WHERE(FINITE(dummy[*,*,j]) NE 1.)
+       if n_elements(tmp) EQ n_elements(dummy[*,*,j]) then begin
+            IF size(log,/TYPE) EQ 7 then begin
+              openu,66,log,/APPEND
+              printf,66,linenumber()+"Channel "+strtrim(string(j))+" is fully flagged, blanking it in SoFiA."
+              close,66
+            ENDIF
+            tmp_channels[j]=1.
+       ENDIF
+     ENDFOR
+     IF TOTAL(tmp_channels) NE 0. then blank_channels = WHERE(tmp_channels EQ 1) else blank_channels = -1
+     beams_in_cube = (n_elements(dummy[*,0,0])+n_elements(dummy[0,*,0]))/(2.*pixfwhm)
+     channels_in_cube =  n_elements(dummy[0,0,*])
+     IF size(log,/TYPE) EQ 7 then begin
+       openu,66,log,/APPEND
+       printf,66,linenumber()+"This cube fits on average "+strtrim(string(fix(beams_in_cube)))+" beams and has "+strtrim(string(channels_in_cube))+" channels"
+       close,66
+     ENDIF
+     run_sofia,allnew,new_dir,currentfitcube,catcatalogname[i],supportdirchecked,pixfwhm,header,errormessage,VSYSpix,RApix,DECpix,Totflux,log=log,beams_in_cube = beams_in_cube,channels_in_cube = channels_in_cube
 
      catCatalogname[i]=currentfitcube+'_cat.ascii'
      catmaskname[i]=currentfitcube+'_binmask'
+     IF blank_channels[0] NE -1 then begin
+       mask=readfits(maindir+'/'+catdirname[i]+'/'+catmaskname[i]+'.fits',headermask,/NOSCALE,/SILENT)
+       for j=0,n_elements(blank_channels)-1 do begin
+          mask[*,*,blank_channels[j]] = 0.
+       ENDFOR
+       writefits,maindir+'/'+catdirname[i]+'/'+catmaskname[i]+'.fits',mask,headermask
+     ENDIF
      skipallsofia:
      if fix(errormessage[0]) EQ 5 then begin
-      ;  print,errormessage[1]
         IF size(log,/TYPE) EQ 7 then begin
            openu,66,log,/APPEND
            printf,66,linenumber()+errormessage[1]
            close,66
         ENDIF
+        commentlen='A'+strtrim(string(strlen(errormessage[1])),2)
         openu,1,outputcatalogue,/APPEND
-        printf,1,format='(A60,2A12,A120)',catDirname[i],0.,0.,errormessage[1]
+        printf,1,catDirname[i],strtrim(string(0),2),strtrim(string(0),2),errormessage[1],format='("",('+dirformat+')," ",2(A6),"  ",('+commentlen+'))'
         close,1
         bookkeeping=5
         goto,finishthisgalaxy
      endif
                                 ;Convert pixel coordinates to Degrees
-     DECdeg=sxpar(header,'CRVAL2')+(DECpix[0]-sxpar(header,'CRPIX2')+1)*sxpar(header,'CDELT2')
-     RAdeg=sxpar(header,'CRVAL1')+(RApix[0]-sxpar(header,'CRPIX1')+1)*sxpar(header,'CDELT1')/COS(DECdeg*(!pi/180.))
-     DECboundeg=sxpar(header,'CRVAL2')+(DECpix[1:2]-sxpar(header,'CRPIX2')+1)*sxpar(header,'CDELT2')
-     RAboundeg=sxpar(header,'CRVAL1')+((RApix[1:2]-sxpar(header,'CRPIX1')+1)*sxpar(header,'CDELT1'))/COS(DECboundeg*(!pi/180.))
+                                ;Use the more accurate astrolib functions
+     xyad,header,RApix[0],DECpix[0],RAdeg,DECdeg
+     xyad,header,RApix[1],DECpix[1],RAlow,DEClow
+     xyad,header,RApix[2],DECpix[2],RAhigh,DEChigh
+     DECboundeg=[DEClow,DEChigh]
+     RAboundeg=[RAlow,RAhigh]
+     ;DECdeg=sxpar(header,'CRVAL2')+(DECpix[0]-sxpar(header,'CRPIX2')+1)*sxpar(header,'CDELT2')
+     ;RAdeg=sxpar(header,'CRVAL1')+(RApix[0]-sxpar(header,'CRPIX1')+1)*sxpar(header,'CDELT1')/COS(DECdeg*(!pi/180.))
+     ;DECboundeg=sxpar(header,'CRVAL2')+(DECpix[1:2]-sxpar(header,'CRPIX2')+1)*sxpar(header,'CDELT2')
+     ;RAboundeg=sxpar(header,'CRVAL1')+((RApix[1:2]-sxpar(header,'CRPIX1')+1)*sxpar(header,'CDELT1'))/COS(DECboundeg*(!pi/180.))
      RAboundeg=RAboundeg[SORT(RAboundeg)]
      DECboundeg=DECboundeg[SORT(DECboundeg)]
      IF strupcase(veltype) EQ 'M/S' then begin
@@ -827,6 +517,11 @@ noconfig:
         ROTboun=sxpar(header,'CRVAL3')+(VSYSpix[1:2]-sxpar(header,'CRPIX3')+1)*sxpar(header,'CDELT3')
         ROTboun=ROTboun[SORT(ROTboun)]
      ENDELSE
+     ;if the distance is -1 we assume Hubble follow
+     if catDistance[i] EQ -1 then catDistance[i] = catVSYS[i]/H_0
+     ;Let.s ensure it is not less than 0.5 Mpc to  avoid crashes
+     if catDistance[i] LT 0.5 then catDistance[i] = 0.5
+
      mask=readfits(maindir+'/'+catdirname[i]+'/'+catmaskname[i]+'.fits',headermask,/NOSCALE,/SILENT)
                                 ;let's make sure our cube and mask have the same size
      IF sxpar(header,'NAXIS1') NE sxpar(headermask,'NAXIS1') OR  sxpar(header,'NAXIS2') NE sxpar(headermask,'NAXIS2') $
@@ -836,6 +531,7 @@ noconfig:
         propermomnoise=0
         propermom0=0
         propermom1=0
+        propermom2=0
         IF size(log,/TYPE) EQ 7 then begin
            openu,66,log,/APPEND
            printf,66,linenumber()+"The size of the mask and the cube is not the same. Remaking all derived maps and masks."
@@ -857,9 +553,9 @@ noconfig:
         IF veltype EQ 'M/S' then channelwidthkm=channelwidth/1000. else channelwidthkm=channelwidth
         noisemap=fltarr(n_elements(mask[*,0,0]),n_elements(mask[0,*,0]))
         for j=0,n_elements(mask[0,0,*])-1 do begin
-           noisemap=noisemap+(mask[*,*,j]*catnoise[i]*channelwidthkm)^2
+           noisemap=noisemap+mask[*,*,j]
         endfor
-        noisemap=SQRT(noisemap)
+        noisemap=SQRT(noisemap)*catnoise[i]*channelwidthkm
         headernoisemap=header
         sxdelpar,headernoisemap,'CUNIT3'
         sxdelpar,headernoisemap,'CTYPE3'
@@ -887,12 +583,14 @@ noconfig:
      ENDELSE
      mom0ext='.fits'
      mom1ext='.fits'
+     mom2ext='.fits'
      if not propermom0 then begin
                                 ;if we have no proper moment0 we make it
         tmpmask=fltarr(n_elements(dummy[*,0,0]),n_elements(dummy[0,*,0]),n_elements(dummy[0,0,*]))
         tmpmask[WHERE(mask GT 0.)]=dummy[WHERE(mask GT 0.)]
         headermap=header
                                 ;Same as in gipsy
+        writefits,maindir+'/'+catdirname[i]+'/'+currentfitcube+'_testcub.fits',float(tmpmask),header
         momentsv2,tmpmask,moment0map,headermap,0.
         writefits,maindir+'/'+catdirname[i]+'/'+currentfitcube+'_mom0.fits',float(moment0map),headermap
                                 ;reset the mom0 map to the one just created
@@ -915,6 +613,7 @@ noconfig:
            ENDIF
            propermom0=0.
            propermom1=0.
+           propermom2=0.
            propermomnoise=0.
            allnew=1
            goto,mismatchedmoments
@@ -951,6 +650,43 @@ noconfig:
            allnew=1
            propermom0=0.
            propermom1=0.
+           propermom2=0.
+           propermomnoise=0.
+           goto,mismatchedmoments
+        ENDIF
+        IF NOT sxpar(headermap,'BMAJ') then sxaddpar,headervel,'BMAJ',catmajbeam[i]
+        IF NOT sxpar(headermap,'BMIN') then sxaddpar,headervel,'BMIN',catminbeam[i]
+     ENDELSE
+     if not propermom2 then begin
+                                ;if we have no proper moment 2 we make it
+        tmpmask=fltarr(n_elements(dummy[*,0,0]),n_elements(dummy[0,*,0]),n_elements(dummy[0,0,*]))
+        tmpmask[WHERE(mask GT 0.)]=dummy[WHERE(mask GT 0.)]
+        headerwidth=header
+                                ;Same as in gipsy
+        momentsv2,tmpmask,moment2map,headerwidth,2.,gdlidl=gdlidl
+        writefits,maindir+'/'+catdirname[i]+'/'+currentfitcube+'_mom2.fits',float(moment2map),headerwidth
+                                ;reset the mom 1 map to the one just created
+        catMom2name[i]=currentfitcube+'_mom2'
+        IF size(log,/TYPE) EQ 7 then begin
+           openu,66,log,/APPEND
+           printf,66,linenumber()+"We have created the moment 2 map."
+           close,66
+        ENDIF ELSE BEGIN
+           print,linenumber()+"We have created the moment 2 map."
+        Endelse
+     ENDIF ELSE BEGIN
+        moment2map=readfits(maindir+'/'+catdirname[i]+'/'+catMom2name[i]+mom2ext,headerwidth,/NOSCALE,/SILENT)
+        IF sxpar(headerwidth,'CDELT1') NE sxpar(header,'CDELT1') OR sxpar(headerwidth,'CDELT2') NE sxpar(header,'CDELT2') then begin
+           IF size(log,/TYPE) EQ 7 then begin
+              openu,66,log,/APPEND
+              printf,66,linenumber()+"the pixel scale in your cube and moment 2 map do not correspond."
+              printf,66,linenumber()+"recreating the moment maps."
+              close,66
+           ENDIF
+           allnew=1
+           propermom0=0.
+           propermom1=0.
+           propermom2=0.
            propermomnoise=0.
            goto,mismatchedmoments
         ENDIF
@@ -961,12 +697,14 @@ noconfig:
                                 ;Check that all our maps and cube line up in size
      IF  sxpar(header,'NAXIS1') NE sxpar(headermap,'NAXIS1') OR  sxpar(header,'NAXIS2') NE sxpar(headermap,'NAXIS2') $
         OR  sxpar(header,'NAXIS1') NE sxpar(headervel,'NAXIS1') OR  sxpar(header,'NAXIS2') NE sxpar(headervel,'NAXIS2') $
+        OR  sxpar(header,'NAXIS1') NE sxpar(headerwidth,'NAXIS1') OR  sxpar(header,'NAXIS2') NE sxpar(headerwidth,'NAXIS2') $
         OR  sxpar(header,'NAXIS1') NE sxpar(headernoisemap,'NAXIS1') OR  sxpar(header,'NAXIS2') NE sxpar(headernoisemap,'NAXIS2') then begin
         allnew=1
         currentfitcube=catcubename[i]
         propermomnoise=0
         propermom0=0
         propermom1=0
+        propermom2=0
         IF size(log,/TYPE) EQ 7 then begin
            openu,66,log,/APPEND
            printf,66,linenumber()+"The size of the moment maps and the cube is not the same. Remaking all derived maps and masks."
@@ -1017,11 +755,13 @@ noconfig:
         IF maxy[countmin] EQ 0 then maxy[countmin]=n_elements(mask[0,*,0])-1
         xhandle=MAX(maxx-minx)
         yhandle=MAX(maxy-miny)
-
-        maxrings=round(SQRT((xhandle/2.)^2+(yhandle/2.)^2)/(catmajbeam[i]/(ABS(sxpar(header,'cdelt1'))*3600.))+3)
+        ringbuffer=fix(3./ring_spacing)
+        if ringbuffer GT 6 then ringbuffer=6
+        if ringbuffer LT 2 then ringbuffer=2
+        maxrings=round(SQRT((xhandle/2.)^2+(yhandle/2.)^2)/((catmajbeam[i]*ring_spacing)/(ABS(sxpar(header,'cdelt1'))*3600.))+ringbuffer)
 
         IF NOT smallexists then begin
-           newsize=fix((2.*(maxrings+1.)*catmajbeam[i])/(ABS(sxpar(header,'cdelt1'))*3600.))
+           newsize=fix((2.*(maxrings+1.)*(catmajbeam[i]*ring_spacing))/(ABS(sxpar(header,'cdelt1'))*3600.))
            IF floor(RApix[0]-newsize/2.) GE 0. AND floor(RApix[0]+newsize/2.) LT  sxpar(header,'NAXIS1') AND $
               floor(DECpix[0]-newsize/2.) GE 0. AND floor(DECpix[0]+newsize/2.) LT sxpar(header,'NAXIS2') AND $
               not smallexists then begin
@@ -1060,6 +800,15 @@ noconfig:
               newdummy[*,*]=moment1map[floor(RApix[0]-newsize/2.):floor(RApix[0]+newsize/2.),floor(DECpix[0]-newsize/2.):floor(DECpix[0]+newsize/2.)]
               writefits,maindir+'/'+catdirname[i]+'/'+catMom1name[i]+'_small.fits',float(newdummy),headervel
               moment1map=newdummy
+              moment2map=readfits(maindir+'/'+catdirname[i]+'/'+catMom2Name[i]+'.fits',headerwidth,/SILENT)
+              newdummy=fltarr(newsize+1,newsize+1)
+              sxaddpar,headerwidth,'NAXIS1',newsize+1
+              sxaddpar,headerwidth,'NAXIS2',newsize+1
+              sxaddpar,headerwidth,'CRPIX1',sxpar(headerwidth,'CRPIX1')-floor(RApix[0]-newsize/2.)
+              sxaddpar,headerwidth,'CRPIX2',sxpar(headerwidth,'CRPIX2')-floor(DECpix[0]-newsize/2.)
+              newdummy[*,*]=moment2map[floor(RApix[0]-newsize/2.):floor(RApix[0]+newsize/2.),floor(DECpix[0]-newsize/2.):floor(DECpix[0]+newsize/2.)]
+              writefits,maindir+'/'+catdirname[i]+'/'+catMom2name[i]+'_small.fits',float(newdummy),headerwidth
+              moment2map=newdummy
               noisemap=readfits(maindir+'/'+catdirname[i]+'/'+currentfitcube+'_noisemap.fits',headernoise,/SILENT)
               newdummy=fltarr(newsize+1,newsize+1)
               sxaddpar,headernoise,'NAXIS1',newsize+1
@@ -1074,13 +823,14 @@ noconfig:
               CD, new_dir, CURRENT=old_dir
               spawn,'rm -f '+currentfitcube+'_cont.png '+currentfitcube+'_scat.png',isthere
               IF allnew LT 2 then begin
-                 spawn,'rm -f '+catmaskname[i]+'.fits '+catMom1name[i]+'.fits '+catMom0name[i]+'.fits '+currentfitcube+'_noisemap.fits',isthere
+                 spawn,'rm -f '+catmaskname[i]+'.fits '+catMom1name[i]+'.fits '+catMom0name[i]+'.fits '+catMom2name[i]+'.fits '+currentfitcube+'_noisemap.fits',isthere
               ENDIF
               CD,old_dir
               currentfitcube=currentfitcube+'_small'
               smallexists=1
               catMom0name[i]=catMom0name[i]+'_small'
               catMom1name[i]=catMom1name[i]+'_small'
+              catMom2name[i]=catMom2name[i]+'_small'
               catmaskname[i]=catmaskname[i]+'_small'
               Old=RApix[0]
               RApix[0]=floor(newsize/2.)+(RApix[0]-floor(RApix[0]))
@@ -1121,9 +871,11 @@ noconfig:
      tmp=WHERE(mask EQ 1.)
      maxbright=MAX(dummy[tmp])
      maxSN=maxbright/catnoise[i]
-     IF maxSN LT 4. then begin
+     IF maxSN LT 2.5 then begin
+        comment = 'The maximum Signal to Noise in this cube is '+strtrim(string(MaxSN),2)+' that is not enough for a fit.'
+        commentlen='A'+strtrim(string(strlen(comment)),2)
         openu,1,outputcatalogue,/APPEND
-        printf,1,format='(A60,2A12,A120)',catDirname[i],0.,0.,' The maximum Signal to Noise in this cube is '+string(MaxSN)+' that is not enough for a fit.'
+        printf,1,catDirname[i],strtrim(string(0),2),strtrim(string(0),2),comment,format='("",('+dirformat+')," ",2(A6),"  ",('+commentlen+'))'
         close,1
         IF size(log,/TYPE) EQ 7 then begin
            openu,66,log,/APPEND
@@ -1138,6 +890,7 @@ noconfig:
      pixelarea=ABS(3600.^2*sxpar(header,'CDELT2')*sxpar(header,'CDELT1'))
      pixelsizeRA=ABS(sxpar(header,'CDELT1'))
      pixelsizeDEC=ABS(sxpar(header,'CDELT2'))
+     pixelsize=(pixelsizeRA+pixelsizeDEC)/2.
                                 ;Let's get the size of the cube
      imagesize=sxpar(header,'CDELT2')*(sxpar(header,'NAXIS2')/2.)*3600.
                                 ;IF it is not in km/s convert
@@ -1147,8 +900,8 @@ noconfig:
      pixperbeam=beamarea/(ABS(pixelsizeRA*3600.)*ABS(pixelsizeDEC*3600.))
                                 ;Obtain the cutoff values without
                                 ;inclination corrections.
-     rad=[0.,((findgen(maxrings+2.))*catmajbeam[i]+catmajbeam[i]/5.)]
-     calc_edge,catnoise[i],rad,[catmajbeam[i],catminbeam[i]],cutoffor
+     rad=[0.,((findgen(maxrings+2.))*catmajbeam[i]*ring_spacing+catmajbeam[i]/5.)]
+     calc_edge,catnoise[i],rad,[catmajbeam[i],catminbeam[i],channelwidth],cutoffor,vsys=catVSYS[i]
                                 ;And print the values
 
      IF size(log,/TYPE) EQ 7 then begin
@@ -1168,24 +921,44 @@ noconfig:
                                 ;image. But let's reduce it by 1 rings
                                 ;as to not run into edge problems
                                 ;Initial size guess is
-     norings=fix(round((imagesize)/(catmajbeam[i]))-2)
+     norings=fix(round((imagesize)/(catmajbeam[i]*ring_spacing)))
+
                                 ; If there is lt 1.5 beams in the cube we can stop here
 
-     IF norings LT 1.5 OR maxrings LE 4 then begin
+     ;IF norings LT 1.5/ring_spacing then begin
+     ;OR maxrings LE 2/ring_spacing then begin
+     ;   openu,1,outputcatalogue,/APPEND
+     ;   printf,1,format='(A60,2A12,A120)',catDirname[i],0.,0.,"This Cube is too small"
+     ;   close,1
+     ;   IF size(log,/TYPE) EQ 7 then begin
+     ;      openu,66,log,/APPEND
+     ;      printf,66,linenumber()+"We are aborting this fit as the located source is too small"
+     ;      printf,66,linenumber()+"We have"+strtrim(string(norings[0]/ring_spacing))+" rings."
+     ;      close,66
+     ;   ENDIF
+     ;   print,linenumber()+"We are aborting this fit as the located source is too small"
+     ;   bookkeeping=5
+     ;   goto,finishthisgalaxy
+     ;ENDIF
+                                ;Now let's obtain a initial pa
+                                ;and inclination for the galaxy
+     obtain_pa_incl,moment0map,newPA,newinclination,[RApix[0],DECpix[0]],NOISE=momnoise,BEAM=catmajbeam[i]/(pixelsize*3600.),gdlidl=gdlidl,extent=noringspix
+
+     IF TOTAL([newPA,newinclination]) EQ 0. then begin
+        comment = "No initial estimates. Likely the source is too faint."
+        commentlen='A'+strtrim(string(strlen(comment)),2)
         openu,1,outputcatalogue,/APPEND
-        printf,1,format='(A60,2A12,A120)',catDirname[i],0.,0.,"This Cube is too small"
+        printf,1,catDirname[i],strtrim(string(0),2),strtrim(string(0),2),comment,format='("",('+dirformat+')," ",2(A6),"  ",('+commentlen+'))'
         close,1
         IF size(log,/TYPE) EQ 7 then begin
            openu,66,log,/APPEND
-           printf,66,linenumber()+"We are aborting this fit as the located source is too small"
+           printf,66,linenumber()+"We are aborting this fit as we cannot establish proper initial estimates."
            close,66
         ENDIF
-        print,linenumber()+"We are aborting this fit as the located source is too small"
+        print,linenumber()+"We are aborting this fit as we cannot establish proper initial estimates."
         bookkeeping=5
         goto,finishthisgalaxy
      ENDIF
-                                ;Now let's obtain a initial pa and inclination for the galaxy
-     obtain_pav2,moment0map,newPA,inclination=newinclination,center=[RApix[0],DECpix[0]],noise=momnoise,iterations=10.
                                 ;Let's check wether the PA
                                 ;lines up with the kinematical
                                 ;or needs a 180  degree shift
@@ -1291,20 +1064,24 @@ noconfig:
         PAfixboun='n'
      ENDELSE
      avPA=dblarr(2)
+     mismatch=0.
                                 ;get the kinematical PA
      obtain_velpa,moment1map,velPA,center=[RApix[0],DECpix[0]],intensity=moment0map
      IF ABS(velPA[0]-newPA[0]) LT 25. then begin
-        avPA[0]=(velPA[0]+newPA[0])/2.
+        avPA[0]=(velPA[0]/velPA[1]+newPA[0]/newPA[1])/(1./velPA[1]+1./newPA[1])
         avPA[1]=SQRT(velPA[1]^2+newPA[1]^2)/2.
      endif else begin
         IF FINITE(velPA[0]) then begin
            avPA[0]=velPA[0]
            avPA[1]=velPA[1]
+;recalculate the inclination based on the velPA in case it is very
+;different from the found PA
         ENDIF else avPA=newPA
+        mismatch=1
      ENDELSE
                                 ;recalculate the inclination
 
-     obtain_inclinationv8,moment0map,avPA,newinclination,[RApix[0],DECpix[0]],extend=noringspix,noise=momnoise,beam=catmajbeam[i]/(pixelsizeRA*3600.),gdlidl=gdlidl
+
 
      obtain_w50,dummy,mask,header,W50
                                 ;We want to adjust the cutoff values
@@ -1315,13 +1092,13 @@ noconfig:
                                 ;that the cutoff value should be
                                 ;declined and below that increased
      cutoffcorrection=SIN(75.*!DtoR)/SIN((newinclination[0]+newinclination[1]/2.)*!DtoR)
+     IF newinclination[0] GT 80. then cutoffcorrection=0.9
      IF newinclination[0]+newinclination[1]/2. GT 50 then cutoffcorrection=1.
      IF newinclination[0]+newinclination[1]/2. LT 50 AND newinclination[0]+newinclination[1]/2. GT 40  then cutoffcorrection=1.+(50-(newinclination[0]+newinclination[1]/2.))*0.05
      IF cutoffcorrection GT 2.5 then cutoffcorrection=2.5
      IF doubled and cutoffcorrection GT 1. then cutoffcorrection=SQRT(cutoffcorrection)
 
      ringcorrection=cutoffcorrection
- ;    ringcorrection=0.
      WHILE maxrings-4-floor(ringcorrection/2.) LT 4 AND ringcorrection GT 1.03 do ringcorrection=ringcorrection-0.25
 
      IF size(log,/TYPE) EQ 7 then begin
@@ -1336,13 +1113,18 @@ noconfig:
                                 ;should take this inclination into
                                 ;account
      case 1 of
-        cutoffcorrection GT 1.03 :norings=maxrings-4-floor(ringcorrection/2.)
-        newinclination[0] GT 80:norings=maxrings-2
-        else:norings=maxrings-4
+        cutoffcorrection GT 1.03 :norings=maxrings-round((4.+floor(ringcorrection/2.))/ring_spacing)
+        newinclination[0] GT 80:norings=maxrings-round(2./ring_spacing)
+        else:norings=maxrings-round(4./ring_spacing)
      endcase
-     IF norings LT 3 then norings=3
-     IF newinclination[0] LT 60 then norings=norings[0]-1.
-     noringspix=norings[0]*catmajbeam[i]/(ABS(sxpar(headermap,'cdelt1'))*3600.)
+     IF norings[0] LT 1  OR norings[0]-round(1./ring_spacing) LT 1. then begin
+        norings[0] = maxrings-ringbuffer
+        if norings[0] LT 1. then norings[0]=1.
+     endif else begin
+        IF newinclination[0] LT 60 AND norings[0] GT 4 then norings=norings[0]-round(1./ring_spacing)
+     endelse
+     ;IF norings LT 3 then norings=3
+     noringspix=norings[0]*(catmajbeam[i]*ring_spacing)/(ABS(sxpar(headermap,'cdelt1'))*3600.)
 
      IF size(log,/TYPE) EQ 7 then begin
         openu,66,log,/APPEND
@@ -1366,110 +1148,141 @@ noconfig:
      setfinishafter=0.
                                 ; if the galaxy is too small we will
                                 ; only fit a flat disk
-     if norings[0] LE 3. then begin
-        norings[0]=(maxrings-3)*2.
-        noringspix=norings[0]*(catmajbeam[i]/2.)/(ABS(sxpar(headermap,'cdelt1'))*3600.)
-        rad=[0.,((findgen(maxrings*2.))*(catmajbeam[i]/2)+catmajbeam[i]/10.)]
-        calc_edge,catnoise[i],rad,[catmajbeam[i],catminbeam[i]],cutoffor
-        cutoffor=cutoffor/SQRT(norings[0])
-        cutoff=cutoffor*cutoffcorrection
-        IF norings LT 3. then begin
+     IF size(log,/TYPE) EQ 7 then begin
+        openu,66,log,/APPEND
+        printf,66,linenumber()+"With a ring size of "+strtrim(string(ring_spacing),2)+" we get "+strtrim(string(norings[0]),2)+" number of rings."
+        close,66
+     ENDIF
+     if norings[0] LE 4. then begin
+        ring_spacing_new = ring_spacing
+        ring_spacing_up=ring_spacing
+        ;we always want at least 3 beams in the model
+        WHILE ring_spacing_new GT 0.5 AND norings[0] LE 4. do begin
+
+           ring_spacing_new = ring_spacing_new/1.5
+           IF ring_spacing_new LT 0.5 then ring_spacing_new=0.5
+           if norings[0] LE 2. then begin
+              norings[0]=round(norings[0]*ring_spacing_up/ring_spacing_new)
+           endif else norings[0]=round(norings[0]*ring_spacing_up/ring_spacing_new-0.66)
+           ring_spacing_up=ring_spacing_new
            IF size(log,/TYPE) EQ 7 then begin
               openu,66,log,/APPEND
-              printf,66,linenumber()+"This should never happen."
+              printf,66,linenumber()+"Therefore we will reduce the ring size."
+              printf,66,linenumber()+"With a ring size of "+strtrim(string(ring_spacing_new),2)+" we get "+strtrim(string(norings[0]),2)+"number of rings."
               close,66
            ENDIF
-           print,maxrings,norings[0]
-           print,linenumber()+"This should never happen."
-           stop
-        ENDIF ELSE begin
-                                ;we don't want to do individual ring fits on this cube
+        ENDWHILE
+
+        IF norings[0] LT 3. then begin
+           comment = "This Cube is too small"
+           commentlen='A'+strtrim(string(strlen(comment)),2)
+           openu,1,outputcatalogue,/APPEND
+           printf,1,catDirname[i],strtrim(string(0),2),strtrim(string(0),2),comment,format='("",('+dirformat+')," ",2(A6),"  ",('+commentlen+'))'
+           close,1
+           IF size(log,/TYPE) EQ 7 then begin
+              openu,66,log,/APPEND
+              printf,66,linenumber()+"We are aborting this fit as the located source is too small"
+              close,66
+           ENDIF
+           print,linenumber()+"We are aborting this fit as the located source is too small"
+           bookkeeping=5
+           goto,finishthisgalaxy
+        ENDIF
+        maxrings=maxrings*ring_spacing/ring_spacing_new
+        noringspix=norings[0]*(catmajbeam[i]*ring_spacing_new)/(ABS(sxpar(headermap,'cdelt1'))*3600.)
+        rad=[0.,((findgen(round(maxrings)))*(catmajbeam[i]*ring_spacing_new)+catmajbeam[i]/5)]
+        calc_edge,catnoise[i],rad,[catmajbeam[i],catminbeam[i],channelwidth],cutoffor,vsys=catVSYS[i]
+        ring_spacing = ring_spacing_new
+
+        ;if the model is less than 6 beams across we will not fit a warp
+        if norings[0]*ring_spacing LT 3. then begin
+                                ;we don't want to do individual
+                                ;ring fits on this cube
+           cutoffor=cutoffor/(norings[0])^0.4
            IF finishafter GT 1. then finishafter=1.1
-           maxrings=maxrings*2.-1
-                                ;we also want to make sure that we are in the cube
+           maxrings=maxrings-1
            IF size(log,/TYPE) EQ 7 then begin
               openu,66,log,/APPEND
-              printf,66,linenumber()+"Being a small galaxy we have halved the rings sizes "+catDirname[i]+"in galaxy # "+strtrim(string(fix(i)),2)+" at "+systime()
-              printf,66,linenumber()+"The new cutoff values are: "
-              printf,66,linenumber()+"Radius           Minimum SBR"
-              for j=0,n_elements(rad)-1 do begin
-                 printf,66,rad[j],cutoff[j]
-              endfor
+              printf,66,linenumber()+"This galaxy is smaller than 6 beams across hence we fit only a flat disc."
               close,66
            ENDIF
-        ENDELSE
+                                ;we also want to make sure that we are in the cube
+
+        ENDIF
+        IF size(log,/TYPE) EQ 7 then begin
+           openu,66,log,/APPEND
+           printf,66,linenumber()+"Having not enough rings across the major axis we reduced the rings sizes "+catDirname[i]+"in galaxy # "+strtrim(string(fix(i)),2)+" at "+systime()
+           printf,66,linenumber()+"The new cutoff values are: "
+           printf,66,linenumber()+"Radius           Minimum SBR"
+           for j=0,n_elements(rad)-1 do begin
+              printf,66,rad[j],cutoffor[j]
+           endfor
+           close,66
+        ENDIF
+
+        cutoff=cutoffor*cutoffcorrection
      ENDIF ELSE BEGIN
         if norings[0] GT maxrings then begin
            norings[0]=maxrings
-           noringspix=norings[0]*catmajbeam[i]/(ABS(sxpar(headermap,'cdelt1'))*3600.)
+           noringspix=norings[0]*catmajbeam[i]*ring_spacing/(ABS(sxpar(headermap,'cdelt1'))*3600.)
         ENDIF
 
 
      ENDELSE
 
-     IF finishafter EQ 1.1 then begin
-        rings=(findgen(norings[0]))*(catmajbeam[i]/2.)+(catmajbeam[i]/10.)
+
+     IF maxrings GT 25 AND norings[0] GT 20 then begin
+        doubled=1
+        tmpring=norings[0]-10.
+        IF newinclination[0] LT 40 then tmpring=tmpring+2
+        norings=10.+fix(tmpring/2.)
+        rings=dblarr(norings[0])
+        rings[0:9]=(findgen(10))*catmajbeam[i]*ring_spacing+catmajbeam[i]/5.
+        rings[10:norings[0]-1]=(findgen(fix(tmpring/2.)))*catmajbeam[i]*ring_spacing*2+catmajbeam[i]/5.+11.*catmajbeam[i]*ring_spacing
+        norings[0]=norings[0]+1.
+        rad=[0.,rings[0:9],(findgen(fix((maxrings-10.)/2.)))*catmajbeam[i]*ring_spacing*2+catmajbeam[i]/5.+11.*catmajbeam[i]]*ring_spacing
+        IF finishafter GT 1 then finishafter=2.1
+        maxrings=10.+fix((maxrings-10.)/2.)
+
+        calc_edge,catnoise[i],rad,[catmajbeam[i],catminbeam[i],channelwidth],cutoffor,vsys=catVSYS[i]
+
+        cutoff=cutoffor*cutoffcorrection
+        IF size(log,/TYPE) EQ 7 then begin
+           openu,66,log,/APPEND
+           printf,66,linenumber()+"Being a large galaxy we have doubled the outer the ring sizes "+catDirname[i]+"in galaxy # "+strtrim(string(fix(i)),2)+" at "+systime()
+           printf,66,linenumber()+"The new cutoff values are: "
+           printf,66,linenumber()+"Radius           Minimum SBR"
+           for j=0,n_elements(rad)-1 do begin
+              printf,66,rad[j],cutoffor[j]
+           endfor
+           printf,66,linenumber()+"These are corrected with "+strtrim(string(cutoffcorrection),2)
+           close,66
+        ENDIF
+        IF size(log,/TYPE) EQ 7 then begin
+           openu,66,log,/APPEND
+           printf,66,linenumber()+"The number of rings for the fitting = "+strtrim(string(fix(norings[0])),2)
+           printf,66,linenumber()+"Fitting with "+strtrim(string(ring_spacing*2),2)+" times the beam major axis FWHM beyond ring 10."
+           close,66
+        ENDIF ELSE BEGIN
+           print,linenumber()+"The number of rings for the fitting = "+strtrim(string(fix(norings[0])),2)
+           print,linenumber()+"Fitting with "+strtrim(string(ring_spacing*2),2)+" times the beam major axis FWHM beyond ring 10."
+        Endelse
+
+
+     ENDIF ELSE BEGIN
+        rings=(findgen(norings[0]))*catmajbeam[i]*ring_spacing+catmajbeam[i]/5.
         norings[0]=norings[0]+1.
         IF size(log,/TYPE) EQ 7 then begin
            openu,66,log,/APPEND
            printf,66,linenumber()+"The number of rings for the fitting = "+strtrim(string(fix(norings[0])),2)
-           printf,66,linenumber()+"Fitting with half the beam major axis FWHM as ringsize."
+           printf,66,linenumber()+"Fitting with "+strtrim(string(ring_spacing),2)+" times the beam major axis FWHM as ringsize."
            close,66
         ENDIF ELSE BEGIN
            print,linenumber()+"The number of rings for the fitting = "+strtrim(string(fix(norings[0])),2)
-           print,linenumber()+"Fitting with half the beam major axis FWHM as ringsize."
+           print,linenumber()+"Fitting with "+strtrim(string(ring_spacing),2)+"times the beam major axis FWHM as ringsize."
         Endelse
-     ENDIF ELSE BEGIN
-        IF maxrings GT 25 AND norings[0] GT 20 then begin
-           doubled=1
-           tmpring=norings[0]-10.
-           IF newinclination[0] LT 40 then tmpring=tmpring+2
-           norings=10.+fix(tmpring/2.)
-           rings=dblarr(norings[0])
-           rings[0:9]=(findgen(10))*catmajbeam[i]+catmajbeam[i]/5.
-           rings[10:norings[0]-1]=(findgen(fix(tmpring/2.)))*catmajbeam[i]*2+catmajbeam[i]/5.+11.*catmajbeam[i]
-           norings[0]=norings[0]+1.
-           rad=[0.,rings[0:9],(findgen(fix((maxrings-10.)/2.)))*catmajbeam[i]*2+catmajbeam[i]/5.+11.*catmajbeam[i]]
-           IF finishafter GT 1 then finishafter=2.1
-           maxrings=10.+fix((maxrings-10.)/2.)
-           calc_edge,catnoise[i],rad,[catmajbeam[i],catminbeam[i]],cutoffor
-           cutoff=cutoffor*cutoffcorrection
-           IF size(log,/TYPE) EQ 7 then begin
-              openu,66,log,/APPEND
-              printf,66,linenumber()+"Being a large galaxy we have doubled the outer the ring sizes "+catDirname[i]+"in galaxy # "+strtrim(string(fix(i)),2)+" at "+systime()
-              printf,66,linenumber()+"The new cutoff values are: "
-              printf,66,linenumber()+"Radius           Minimum SBR"
-              for j=0,n_elements(rad)-1 do begin
-                 printf,66,rad[j],cutoffor[j]
-              endfor
-              printf,66,linenumber()+"These are corrected with "+strtrim(string(cutoffcorrection),2)
-              close,66
-           ENDIF
-           IF size(log,/TYPE) EQ 7 then begin
-              openu,66,log,/APPEND
-              printf,66,linenumber()+"The number of rings for the fitting = "+strtrim(string(fix(norings[0])),2)
-              printf,66,linenumber()+"Fitting with the twice the beam major axis FWHM beyond ring 10."
-              close,66
-           ENDIF ELSE BEGIN
-              print,linenumber()+"The number of rings for the fitting = "+strtrim(string(fix(norings[0])),2)
-              print,linenumber()+"Fitting with the twice the beam major axis FWHM beyond ring 10."
-           Endelse
-
-
-        ENDIF ELSE BEGIN
-           rings=(findgen(norings[0]))*catmajbeam[i]+catmajbeam[i]/5.
-           norings[0]=norings[0]+1.
-           IF size(log,/TYPE) EQ 7 then begin
-              openu,66,log,/APPEND
-              printf,66,linenumber()+"The number of rings for the fitting = "+strtrim(string(fix(norings[0])),2)
-              printf,66,linenumber()+"Fitting with the beam major axis FWHM as ringsize."
-              close,66
-           ENDIF ELSE BEGIN
-              print,linenumber()+"The number of rings for the fitting = "+strtrim(string(fix(norings[0])),2)
-              print,linenumber()+"Fitting with the beam major axis FWHM as ringsize."
-           Endelse
-        ENDELSE
      ENDELSE
+
                                 ;print the inclination and PA we found to the output log
      IF size(log,/TYPE) EQ 7 then begin
         openu,66,log,/APPEND
@@ -1496,7 +1309,6 @@ noconfig:
      catPA[i]=newPA[0]
      catPAdev[i]=newPA[1]
      catinc[i]=newinclination[0]
-
      catincdev[i]=newinclination[1]
                                 ;calculate the vmax based on inclination and W50
      IF catinc[i] LT 40 then begin
@@ -1515,17 +1327,6 @@ noconfig:
         sxaddpar,new_header,'CRPIX2',sxpar(header,'CRPIX2')/(double(sxpar(header,'NAXIS2'))/(fix(sxpar(header,'NAXIS2')/ratio)))+(1.-1./ratio),format='(E20.12)'
         sxaddpar,new_header,'NAXIS1',fix(sxpar(header,'NAXIS1')/ratio)
         sxaddpar,new_header,'NAXIS2',fix(sxpar(header,'NAXIS2')/ratio)
-                                ;This was the old congrid
-                                ;change that gave
-                                ;offsets. Let's try the new one.
-  ;      new_Cube=CONGRID(dummy,fix(sxpar(header,'NAXIS1')/ratio),fix(sxpar(header,'NAXIS2')/ratio),sxpar(header,'NAXIS3'),/MINUS_ONE)
-
-   ;     sxaddpar,new_header,'CDELT1',sxpar(header,'CDELT1')*(double(sxpar(header,'NAXIS1'))/(fix(sxpar(header,'NAXIS1')/ratio)-1)),format='(E20.12)'
-    ;    sxaddpar,new_header,'CDELT2',sxpar(header,'CDELT2')*(double(sxpar(header,'NAXIS2'))/(fix(sxpar(header,'NAXIS2')/ratio)-1)),format='(E20.12)'
-     ;   sxaddpar,new_header,'CRPIX1',sxpar(header,'CRPIX1')/(double(sxpar(header,'NAXIS1'))/(fix(sxpar(header,'NAXIS1')/ratio)))+(1.0/ratio),format='(E20.12)'
-      ;  sxaddpar,new_header,'CRPIX2',sxpar(header,'CRPIX2')/(double(sxpar(header,'NAXIS2'))/(fix(sxpar(header,'NAXIS2')/ratio)))+(1.0/ratio),format='(E20.12)'
-     ;   sxaddpar,new_header,'NAXIS1',fix(sxpar(header,'NAXIS1')/ratio)
-     ;   sxaddpar,new_header,'NAXIS2',fix(sxpar(header,'NAXIS2')/ratio)
         CD,new_dir,CURRENT=old_dir
         currentfitcube=currentfitcube+'_opt'
         writefits,maindir+'/'+catdirname[i]+'/'+currentfitcube+cubeext,float(new_Cube),new_header
@@ -1546,12 +1347,12 @@ noconfig:
      totflux[0]=totflux[0]/pixperbeam
      IF FINITE(totflux[0]) NE 1 then begin
         tmp=WHERE(FINITE(moment0map))
-        totflux=TOTAL(moment0map[tmp])/pixperbeam
+        totflux=TOTAL(moment0map[tmp])/pixperbeam/ABS(channelwidth)
      ENDIF
      HIMASS=2.36E5*catDistance[i]^2*totflux*ABS(channelwidth)
      convertradec,RAhr,DEChr
      getDHI,moment0map,headermap,catPA[i],[RADeg,DECdeg,catVSYS[i]],DHI
-     catmaxrotdev[i]=(VSYSdiff/2.)/SIN((newinclination[0])*!pi/180.)
+     catmaxrotdev[i]=(VSYSdiff/4.)/SIN((newinclination[0])*!pi/180.)
      IF catmaxrot[i] LT 20*channelwidth AND catmaxrotdev[i] LT 25.*channelwidth then  catmaxrotdev[i]=25.*channelwidth
      IF catmaxrotdev[i] LT 4*channelwidth then catmaxrotdev[i]=4*channelwidth
      IF size(log,/TYPE) EQ 7 then begin
@@ -1582,13 +1383,15 @@ noconfig:
      close,1
 
      IF Totflux[0] LT 0. then begin
-         IF size(log,/TYPE) EQ 7 then begin
+        IF size(log,/TYPE) EQ 7 then begin
            openu,66,log,/APPEND
            printf,66,linenumber()+"This galaxy has negative total flux. That will not work. Aborting "
            close,66
         ENDIF
+        comment = 'We found an initial negative total flux.'
+        commentlen='A'+strtrim(string(strlen(comment)),2)
         openu,1,outputcatalogue,/APPEND
-        printf,1,format='(A60,2A12,A120)',catDirname[i],0.,0.,'We found an initial negative total flux.'
+        printf,1,catDirname[i],strtrim(string(0),2),strtrim(string(0),2),comment,format='("",('+dirformat+')," ",2(A6),"  ",('+commentlen+'))'
         close,1
         bookkeeping=5
         goto,finishthisgalaxy
@@ -1607,8 +1410,10 @@ noconfig:
                                 ;break if we do not want to use tirific
      IF finishafter EQ 0. then begin
         if setfinishafter NE 1 then begin
+           comment = 'You have chosen to skip the fitting process after all preparations for the fit'
+           commentlen='A'+strtrim(string(strlen(comment)),2)
            openu,1,outputcatalogue,/APPEND
-           printf,1,format='(A60,2A12,A120)',catDirname[i],0.,0.,'You have chosen to skip the fitting process after all preparations for the fit'
+           printf,1,catDirname[i],strtrim(string(0),2),strtrim(string(0),2),comment,format='("",('+dirformat+')," ",2(A6),"  ",('+commentlen+'))'
            close,1
         ENDIF
         if optimized then begin
@@ -1619,13 +1424,21 @@ noconfig:
         goto,finishthisgalaxy
      ENDIF
                                 ;build up moment 0 axis
-     buildaxii,headermap,xaxmom0,yaxmom0
+     ;buildaxii,headermap,xaxmom0,yaxmom0
                                 ;some counters for keeping track
      prevmodification=0.
      overwrite=0.
      lastsbr=100
      counter=0.
      countsbr=0.
+     restart_counter = 0
+     continue_tirific = 'initialized'
+     curr_run_id = 'stopped'
+     case 1 of
+       norings[0] LT 5: inimode = 1
+       norings[0] LT 15: inimode = 2
+       else: inimode = 3
+     endcase
      ringmodifier=0
      plus2beamshift=0
      shiftcentercounter=0.
@@ -1675,31 +1488,41 @@ noconfig:
                                 ;but that does mean we'd like
                                 ;to change SBR a lot so we set quite
                                 ;large starting steps
-     string1='SBR '+strtrim(strcompress(string(norings[0],format='(I3)')),1)+' SBR_2 '+strtrim(strcompress(string(norings[0],format='(I3)')),1)
-     string2='1'
-     string3=strtrim(strcompress(string(cutoff[fix(norings[0])/2.],format='(E12.5)')),1)
-     string4='7.5E-5'
-     string5='2E-6'
-     string6='5E-5'
-     string7='1E-6'
-     string8='3'
-     string9='70'
+     string1=''
+     string2=''
+     string3=''
+     string4=''
+     string5=''
+     string6=''
+     string7=''
+
                                 ;The minimum is based on the cutoff
                                 ;values and therefore we need to set
                                 ;every ring in the tirific file
-     for j=norings[0]-1,2,-1 do begin
-        string1=string1+','+'SBR '+strtrim(strcompress(string(j,format='(I3)')),1)+' SBR_2 '+strtrim(strcompress(string(j,format='(I3)')),1)
-        string2=string2+' 1'
-        string3=string3+' '+strtrim(strcompress(string(cutoff[fix(j-1)]/2.,format='(E12.5)')),1)
-        string4=string4+' 7.5E-5'
-        string5=string5+' 2E-6'
-        string6=string6+' 5E-5'
-        string7=string7+' 1E-6'
-        string8=string8+' 3'
-        string9=string9+' 70'
-     endfor
-     SBRinput1=[string1,string2,string3,string4,string5,string6,string7,string8,string9,string9]
-     SBRinput2=[' SBR 1 SBR_2 1',$
+     IF norings[0]*ring_spacing LT 7 then begin
+        for j=norings[0],3,-1 do begin
+           string1=string1+','+'SBR '+strtrim(strcompress(string(j,format='(I3)')),1)+' SBR_2 '+strtrim(strcompress(string(j,format='(I3)')),1)
+           string2=string2+' 1'
+           string3=string3+' '+strtrim(strcompress(string(cutoff[fix(j-1)]/2.,format='(E12.5)')),1)
+           string4=string4+' 7.5E-5'
+           string5=string5+' 2E-6'
+           string6=string6+' 5E-6'
+           string7=string7+' 3'
+        endfor
+     ENDIF else begin
+        for j=norings[0],4,-1 do begin
+           string1=string1+','+'SBR '+strtrim(strcompress(string(j,format='(I3)')),1)+', SBR_2 '+strtrim(strcompress(string(j,format='(I3)')),1)
+           string2=string2+' 1 1'
+           string3=string3+' '+strtrim(strcompress(string(cutoff[fix(j-1)]/2.,format='(E12.5)')),1)+' '+strtrim(strcompress(string(cutoff[fix(j-1)]/2.,format='(E12.5)')),1)
+           string4=string4+' 7.5E-5 7.5E-5'
+           string5=string5+' 2E-6 2E-6'
+           string6=string6+' 5E-6 5E-6'
+           string7=string7+' 3 3'
+        endfor
+     ENDELSE
+     string1 = STRMID(string1,1,STRLEN(string1)-1)
+     SBRinput1=[string1,string2,string3,string4,string5,string6,string7]
+     SBRinput2=[' SBR 1 2 3 SBR_2 1 2 3',$
                 strtrim(strcompress(string(peaksbr,format='(E12.5)'))),'0','1E-5','1E-6','5E-5','1E-6','3','70','70']
                                 ;Now setting some general values
      tmppos=where('INSET' EQ tirificfirstvars)
@@ -1733,7 +1556,7 @@ noconfig:
                                 ;than 1/4th of the beam we want to
                                 ;make it a quarter of the beam at high inclinations
      If catdistance[i] EQ 1. then begin
-        IF catinc[i] GT 80. then inpzval=MAX([(catmajbeam[i]*norings[0])/150.,catmajbeam[i]/4.]) else  inpzval=(catmajbeam[i]*norings[0])/150.
+        IF catinc[i] GT 80. then inpzval=MAX([(catmajbeam[i]*ring_spacing*norings[0])/150.,catmajbeam[i]/4.]) else  inpzval=(catmajbeam[i]*ring_spacing*norings[0])/150.
         tmppos=where('Z0' EQ tirificfirstvars)
         tirificfirst[tmppos]='Z0='+strtrim(strcompress(string((inpzval))))
         tmppos=where('Z0_2' EQ tirificfirstvars)
@@ -1759,14 +1582,13 @@ noconfig:
                                 ;If we change the amount of rings we need to come back here
      sbrshift:
      case finishafter of
-        1.1:rings=(findgen(norings[0]))*(catmajbeam[i]/2.)+(catmajbeam[i]/10.)
         2.1:begin
            tmpring=norings[0]-10.
            rings=dblarr(norings[0])
-           rings[0:9]=(findgen(10))*catmajbeam[i]+catmajbeam[i]/5.
-           rings[10:norings[0]-1]=(findgen(fix(tmpring)))*catmajbeam[i]*2+catmajbeam[i]/5.+11.*catmajbeam[i]
+           rings[0:9]=(findgen(10))*catmajbeam[i]*ring_spacing+catmajbeam[i]/5.
+           rings[10:norings[0]-1]=(findgen(fix(tmpring)))*catmajbeam[i]*ring_spacing*2+catmajbeam[i]/5.+11.*catmajbeam[i]*ring_spacing
         end
-       else:rings=(findgen(norings[0]))*catmajbeam[i]+catmajbeam[i]/5.
+       else:rings=(findgen(norings[0]))*catmajbeam[i]*ring_spacing+catmajbeam[i]/5.
      endcase
 
 
@@ -1835,14 +1657,14 @@ noconfig:
         catinc[i] LT 75: begin
            INCLinput1=['INCL 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+$
                        ' INCL_2 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1),$
-                       string(catinc[i]+catincdev[i]+10),string(catinc[i]-catincdev[i]-10),string(1.),string(0.1),string(0.5),string(0.1),'3','70','70']
+                       string(catinc[i]+catincdev[i]+10),string(catinc[i]-catincdev[i]-10),string(5.),string(0.1),string(1.0),string(0.1),'3','70','70']
 
            IF INCLinput1[2] LT 5 then INCLinput1[2]='5'
            IF INCLinput1[2] GT 60 then INCLinput1[2]='60'
         end
         else:INCLinput1=['INCL 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+$
                          ' INCL_2 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1),$
-                         string(catinc[i]+catincdev[i]),string(catinc[i]-catincdev[i]),string(0.2),string(0.01),string(0.5),string(0.001),'3','70','70']
+                         string(catinc[i]+catincdev[i]),string(catinc[i]-catincdev[i]),string(1.0),string(0.01),string(1.0),string(0.001),'3','70','70']
      endcase
                                 ; have to ensure that the parameters are within the limits
      IF INCLinput1[1] GT 90. then INCLinput1[1]='90.'
@@ -1893,13 +1715,13 @@ noconfig:
                                 ;30 kpc which means that
                                 ;0.5=norings[0]/60. and so on
         IF catinc[i] GT 80 then begin
-           Z0input1[1]=string(MAX([catmajbeam[i]*norings[0]/66.,catmajbeam[i]/2.]))
-        ENDIF ELSE  Z0input1[1]=string(catmajbeam[i]*norings[0]/66.)
+           Z0input1[1]=string(MAX([catmajbeam[i]*norings[0]*ring_spacing/66.,catmajbeam[i]/2.]))
+        ENDIF ELSE  Z0input1[1]=string(catmajbeam[i]*ring_spacing*norings[0]/66.)
         Z0input1[2]='0.'
-        Z0input1[3]=string(-1*catmajbeam[i]*norings[0]/1.5E5)
-        Z0input1[4]=string(catmajbeam[i]*norings[0]/1.5E6)
-        Z0input1[5]=string(catmajbeam[i]*norings[0]/1500)
-        Z0input1[6]=string(catmajbeam[i]*norings[0]/1.5E6)
+        Z0input1[3]=string(-1*catmajbeam[i]*ring_spacing*norings[0]/1.5E5)
+        Z0input1[4]=string(catmajbeam[i]*ring_spacing*norings[0]/1.5E6)
+        Z0input1[5]=string(catmajbeam[i]*ring_spacing*norings[0]/1500)
+        Z0input1[6]=string(catmajbeam[i]*ring_spacing*norings[0]/1.5E6)
      ENDIF
 
 
@@ -1908,7 +1730,7 @@ noconfig:
 
                                 ;Now The rotation
 
-     VROTmax=catmaxrotdev[i]
+     VROTmax=catmaxrot[i]+catmaxrotdev[i]
      VROTmin=channelwidth
                                 ;ensure reasonable vrotmax dependent
                                 ;on inclination as more unsure at low inclination
@@ -1972,9 +1794,6 @@ noconfig:
         minxpos=strcompress(string(RAdeg-catmajbeam[i]/3600.))
         maxypos=strcompress(string(DECdeg+catmajbeam[i]/3600.))
         minypos=strcompress(string(DECdeg-catmajbeam[i]/3600.))
-;        xposinput1=[ ' XPOS 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+$
-                                ;                    ' XPOS_2
-                                ;                    1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1), maxxpos,minxpos,'5E-4','1E-5','1E-4','1E-6','3','70','70']
         ;We'll be satified with a change less than a tenth of a pixel
         xposinput1=[ ' XPOS 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+$
                       ' XPOS_2 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1), +$
@@ -1997,29 +1816,73 @@ noconfig:
                      ' YPOS_2 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1),+$
                      maxypos,minypos,strtrim(string(pixelsizeDEC*2.)),strtrim(string(pixelsizeDEC/10.)),+$
                       strtrim(string(pixelsizeDEC/2.)),strtrim(string(pixelsizeDEC/10.)),'3','70','70']
-;        xposinput1=[ ' XPOS 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+$
-;                     ' XPOS_2 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1), maxxpos,minxpos,'1E-3','1E-5','5E-5','1E-6','3','70','70']
-;        yposinput1=[ ' YPOS 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+$
-;                     ' YPOS_2 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1), maxypos,minypos,'1E-3','1E-5','5E-5','1E-6','3','70','70']
      ENDELSE
      tryone=0.
                                 ;   IF we have a low inclination we first want to fit the PA by itself
      PAest=0.
      INCLest=0.
-     IF catinc[i]  LT 50 AND counter EQ 0. then begin
+     INCLinput1=['INCL 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+$
+                 ' INCL_2 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1),$
+                 string(catinc[i]+catincdev[i]+20),string(catinc[i]-catincdev[i]-20),string(2),string(0.1),string(0.1),'3']
+     IF (catinc[i]  LT 50 OR mismatch EQ 1 OR ceil(norings[0]*COS(catinc[i]*!DtoR))*ring_spacing LE 5) AND counter EQ 0. then begin
                                 ;If we have a small number of beams
                                 ;acros the minor axis the inclination
                                 ;is very unsure and we first want to
-                                ;fit the inclination
-        IF ceil(norings[0]*COS(catinc[i]*!DtoR)) LE 5 then begin
-           goto,notfornow
+                                ;fit the inclination. If the KinPA and VelPA do not match we want to fit the PA
+        PAinincl=catPA[i]
+        INCLinincl=catinc[i]
+        maxrotinincl=catmaxrot[i]
+        fixstring='VROT '+strtrim(strcompress(string(norings[0]-1,format='(I3)')),1)+':'+strtrim(strcompress(string(fix(norings[0]*0.5+2),format='(I3)')),1)+' VROT_2 '+strtrim(strcompress(string(norings[0]-1,format='(I3)')),1)+':'+strtrim(strcompress(string(fix(norings[0]*0.5+2),format='(I3)')),1)
+        IF ceil(norings[0]*COS(catinc[i]*!DtoR))*ring_spacing LE 5 OR catinc[i] LT 30. OR mismatch EQ 1 then begin
+
+                                ; Avoid runaway rotation
+           IF mismatch EQ 1 then begin
+              IF size(log,/TYPE) EQ 7 then begin
+                 openu,66,log,/APPEND
+                 printf,66,linenumber()+"Because of a difference between the kinematic PA and the morphological PA we will scramble the inclination."
+                 printf,66,linenumber()+"Original inclination ="+string(catinc[i])+" New = "+string(catinc[i]-5.)
+                 close,66
+              ENDIF
+              catinc[i]=catinc[i]-5.
+              catincdev[i]=catincdev[i]+10.
+           ENDIF ELSE BEGIN
+              catinc[i]=catinc[i]-3.
+              catincdev[i]=catincdev[i]+5.
+           ENDELSE
+           IF catinc[i] LT 5 then catinc[i]=5.
+
+           tmppos=where('INCL' EQ tirificfirstvars)
+           tirificfirst[tmppos]='INCL='+strtrim(strcompress(string(catinc[i])))
+           tmppos=where('INCL_2' EQ tirificfirstvars)
+           tirificfirst[tmppos]='INCL_2='+strtrim(strcompress(string(catinc[i])))
+           TMP_VEL=W50/2./SIN(ABS(INCLinincl)*!pi/180.)
+           IF TMP_VEL GT 300. then TMP_VEL= 300.
+           tmppos=where('VROT' EQ tirificfirstvars)
+           tirificfirst[tmppos]='VROT= 0. '+strtrim(strcompress(string(tmp_vel)))
+           tmppos=where('VROT_2' EQ tirificfirstvars)
+           tirificfirst[tmppos]='VROT_2= 0. '+strtrim(strcompress(string(tmp_vel)))
            INCLest=1
+           ;INCLinput1=['INCL 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+$
+           ;             ' INCL_2 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1),$
+           ;             '90.',string(catinc[i]-catincdev[i]-5),string(1.),string(0.1),string(0.5),string(0.05),'5','70','70']
            INCLinput1=['INCL 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+$
-                       ' INCL_2 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1),$
-                       '90.',string(catinc[i]-catincdev[i]),string(0.5),string(0.1),string(1.0),string(0.1),'3','70','70']
-           PAinput1=['PA 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+$
-                     ' PA_2 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1),$
-                     string((catPA[i])+catPAdev[i]+40.),string((catPA[i])-catPAdev[i]-40),string(6),string(0.1),string(0.05),string(0.01),'3','70','70']
+                        ' INCL_2 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1),$
+                        '90.',string(catinc[i]-catincdev[i]-5),string(5.),string(0.5),string(0.1),'5']
+           ;PAinput1=['PA 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+$
+           ;           ' PA_2 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1),$
+           ;           string((catPA[i])+catPAdev[i]+40.),string((catPA[i])-catPAdev[i]-40),string(6),string(0.1),string(1.0),string(0.01),'3','70','70']
+           IF mismatch EQ 1 THEN BEGIN
+
+             PAinput1=['PA 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+$
+                      ' PA_2 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1),$
+                      string((catPA[i])+catPAdev[i]+40.),string((catPA[i])-catPAdev[i]-40),string(10),string(1.),string(0.5),'3']
+           ENDIF ELSE BEGIN
+             PAinput1=['PA 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+$
+                      ' PA_2 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1),$
+                      string((catPA[i])+catPAdev[i]+30.),string((catPA[i])-catPAdev[i]-30),string(5),string(1.),string(0.25),'3']
+           ENDELSE
+
+           IF INCLinput1[2] LT 2. then INCLinput1[2]='2'
 
            IF PAfixboun NE 'n' then begin
               IF PAfixboun EQ 'w' then begin
@@ -2031,191 +1894,229 @@ noconfig:
                  IF catPA[i]-catPAdev[i]-40. LT 0. then PAinput1[2]='0'
               ENDIF
            ENDIF
-           VROTinputINCL=['VROT 2:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+$
-                          ' VROT_2 2:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)$
-                          ,string(VROTmax),string(0.),$
-                          string(channelwidth),string(0.1*channelwidth),string(channelwidth),string(0.01*channelwidth),'3','70','70']
 
-           Writefittingvariables,tirificfirst,inclinput1,VROTinputINCL,painput1,sbrinput1,sbrinput2
+           ;VROTinputINCL=['!VROT '+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+':2 '+$
+          ;                ' VROT_2 '+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+':2'$
+          ;                ,string(VROTmax),string(0.),$
+          ;                string(channelwidth),string(0.1*channelwidth),string(0.5*channelwidth),string(0.01*channelwidth),'3','70','70',fixstring]
+           VROTinputINCL=['!VROT '+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+':2 '+$
+                          ' VROT_2 '+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+':2'$
+                          ,string(VROTmax),string(0.), string(4*channelwidth),string(0.1*channelwidth),string(0.1*channelwidth),'5',fixstring]
+           Writefittingvariables,tirificfirst,inclinput1,VROTinputINCL,painput1,sbrinput1,sbrinput2,INIMODE=inimode
+
            againINCLestimate:
            IF size(log,/TYPE) EQ 7 then begin
               openu,66,log,/APPEND
-              printf,66,linenumber()+"Because there are only a few beams across the minor axis we first adjust the inclination "+catDirname[i]+" which is galaxy # "+strtrim(string(fix(i)),2)+" at "+systime()
+              printf,66,linenumber()+"Because there are only a few beams across the minor axis or we have low inclination we first adjust the inclination "+catDirname[i]+" which is galaxy # "+strtrim(string(fix(i)),2)+" at "+systime()
               close,66
            ENDIF
+           restart_counter++
+           tmppos=where('RESTARTID' EQ tirificfirstvars)
+           tirificfirst[tmppos]='RESTARTID= '+string(fix(restart_counter))
+
            openw,1,maindir+'/'+catdirname[i]+'/tirific.def'
            for index=0,n_elements(tirificfirst)-1 do begin
               printf,1,tirificfirst[index]
            endfor
            close,1
-           gipsyfirst=strarr(1)
+
+           IF testing GE 1 then goto,testing1INCL
            IF size(log,/TYPE) EQ 7 then begin
               openu,66,log,/APPEND
               printf,66,linenumber()+"Starting tirific the INCL estimate in  "+catDirname[i]+" which is galaxy # "+strtrim(string(fix(i)),2)+" at "+systime()
               close,66
            ENDIF
-
-           IF testing GE 1 then goto,testing1INCL
            print,linenumber()+"Starting tirific the INCL estimate in  "+catDirname[i]+" which is galaxy # "+strtrim(string(fix(i)),2)+" at "+systime()
-           gipsyfirst='tirific DEFFILE=tirific.def ACTION=1'
-           spawn,gipsyfirst,isthere2
-           ; Let's check how we did in the fit
-           get_progress,maindir+'/'+catdirname[i]+'/progress1.txt',AC1,nopoints,loops,toymodels
+
+
+           run_tirific, continue_tirific, curr_run_id, bookkeeping, output_name='1stfit.', $
+                  store_name='1stfitold.', log=log, loops=loops,nopoints=nopoints, $
+                  AC=AC1,toymodels=toymodels,run_unit=run_unit
+           IF bookkeeping EQ 5 THEN goto,finishthisgalaxy
+
            ;If not accepted we try again
-           IF AC1 EQ 0. and INCLest LT 5 then begin
-              IF size(log,/TYPE) EQ 7 then begin
-                 openu,66,log,/APPEND
-                 printf,66,linenumber()+"The INCL estimate was not accepted try again. Tries: "+string(INCLest)
-                 close,66
-              ENDIF
-              VariablesWanted=['PA','PA_2','INCL','INCL_2','VROT','VROT_2']
-              firstfitvalues=0.
-              writenewtotemplate,tirificfirst,maindir+'/'+catdirname[i]+'/1stfit.def',Arrays=firstfitvalues,VariableChange=VariablesWanted
-              catPA[i]=firstfitvalues[0,0]
-              catinc[i]=firstfitvalues[0,2]
-              catmaxrot[i]=firstfitvalues[1,4]
-              PAinput1=['PA 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+$
-                        ' PA_2 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1),$
-                        string((catPA[i])+catPAdev[i]+30.),string((catPA[i])-catPAdev[i]-30),string(5),string(0.1),string(0.05),string(0.01),'3','70','70']
-              IF PAfixboun NE 'n' then begin
-                 IF PAfixboun EQ 'w' then begin
-                    IF catPA[i]+catPAdev[i]+40. GT 360 then PAinput1[1]='360'
-                    IF catPA[i]-catPAdev[i]-40. LT 180 then PAinput1[2]='180'
-                 ENDIF
-                 IF PAfixboun EQ 'e' then begin
-                    IF catPA[i]+catPAdev[i]+40. GT 180. then PAinput1[1]='180'
-                    IF catPA[i]-catPAdev[i]-40. LT 0. then PAinput1[2]='0'
-                 ENDIF
-              ENDIF
-              INCLinput1=['INCL 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+$
-                          ' INCL_2 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1),$
-                          '90.',string(catinc[i]-catincdev[i]-20),string(3),string(0.1),string(0.5),string(0.1),'3','70','70']
-              Writefittingvariables,tirificfirst,painput1,inclinput1,vrotinputINCL
-              INCLest=INCLest+1.
-              goto,againINCLestimate
-           ENDIF ELSE BEGIN
+           ;IF AC1 EQ 0. and INCLest LT 1 then begin
+            ;  IF size(log,/TYPE) EQ 7 then begin
+            ;     openu,66,log,/APPEND
+            ;     printf,66,linenumber()+"The INCL estimate was not accepted try again. Tries: "+string(INCLest)
+            ;     close,66
+            ;  ENDIF
+            ;  VariablesWanted=['PA','PA_2','INCL','INCL_2','VROT','VROT_2','SBR','SBR_2']
+            ;  firstfitvalues=0.
+            ;  writenewtotemplate,tirificfirst,maindir+'/'+catdirname[i]+'/1stfit.def',Arrays=firstfitvalues,VariableChange=VariablesWanted
+            ;  catPA[i]=firstfitvalues[0,0]
+            ;  catinc[i]=firstfitvalues[0,2]
+            ;  catmaxrot[i]=firstfitvalues[1,4]
+            ;  IF catinc[i] LT 5 then catinc[i]=5.
+            ;  PAinput1=['PA 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+$
+            ;          ' PA_2 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1),$
+            ;          string((catPA[i])+catPAdev[i]+30.),string((catPA[i])-catPAdev[i]-30),string(5),string(1.),string(PAinput1[5]*(1+INCLest*0.25)),'5']
+            ;  ;PAinput1=['PA 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+$
+            ;  ;          ' PA_2 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1),$
+            ;  ;          string((catPA[i])+catPAdev[i]+30.),string((catPA[i])-catPAdev[i]-30),string(5),string(0.1),string(0.05),string(0.01),'3','70','70']
+            ;  IF PAfixboun NE 'n' then begin
+            ;     IF PAfixboun EQ 'w' then begin
+            ;        IF catPA[i]+catPAdev[i]+40. GT 360 then PAinput1[1]='360'
+            ;        IF catPA[i]-catPAdev[i]-40. LT 180 then PAinput1[2]='180'
+            ;     ENDIF
+            ;     IF PAfixboun EQ 'e' then begin
+            ;        IF catPA[i]+catPAdev[i]+40. GT 180. then PAinput1[1]='180'
+            ;        IF catPA[i]-catPAdev[i]-40. LT 0. then PAinput1[2]='0'
+            ;     ENDIF
+            ;  ENDIF
+            ;  INCLinput1=['INCL 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+$
+            ;            ' INCL_2 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1),$
+            ;            '90.',string(catinc[i]-catincdev[i]-5),string(5.),string(0.5),string(0.1*(1.+INCLest*0.5)),'5']
+            ;  VROTinputINCL=['!VROT '+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+':2 '+$
+            ;              ' VROT_2 '+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+':2'$
+            ;              ,string(VROTmax),string(0.), string(4*channelwidth),string(0.1*channelwidth),string(0.1*channelwidth*(1.+INCLest*0.5)),'5',fixstring]
+              ;INCLinput1=['INCL 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+$
+              ;            ' INCL_2 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1),$
+              ;            '90.',string(catinc[i]-catincdev[i]-20),string(1.),string(0.5),string(0.1),string(0.01),'3','70','70']
+            ;  Writefittingvariables,tirificfirst,painput1,inclinput1,vrotinputINCL,INIMODE=inimode
+
+
+            ;  INCLest=INCLest+1.
+            ;  goto,againINCLestimate
+           ;ENDIF
+           ;ELSE BEGIN
 
               ;When accepted update our values
-              VariablesWanted=['PA','PA_2','INCL','INCL_2','VROT','VROT_2']
-              firstfitvalues=0.
-              writenewtotemplate,tirificfirst,maindir+'/'+catdirname[i]+'/1stfit.def',Arrays=firstfitvalues,VariableChange=VariablesWanted
-              catPA[i]=firstfitvalues[0,0]
-              catinc[i]=firstfitvalues[0,2]
-              catmaxrot[i]=firstfitvalues[1,4]
-           ENDELSE
-           notfornow:
-           print,'I"m not sure'
+            ;  VariablesWanted=['PA','PA_2','INCL','INCL_2','VROT','VROT_2','SBR','SBR_2']
+            ;  firstfitvalues=0.
+          ;    writenewtotemplate,tirificfirst,maindir+'/'+catdirname[i]+'/1stfit.def',Arrays=firstfitvalues,VariableChange=VariablesWanted
+
+          ;    IF size(log,/TYPE) EQ 7 then begin
+          ;       openu,66,log,/APPEND
+          ;       printf,66,linenumber()+"Because of low inclination (<30) or small number of beams across minor axis (< 5):"
+          ;       printf,66,linenumber()+"We have adjusted the PA from "+string(PAinincl)+" to "+string(firstfitvalues[0,0])+'+/-'+string(newPA[1])
+          ;       printf,66,linenumber()+"The inclination from "+string(INCLinincl)+" to "+string(firstfitvalues[0,2])+'+/-'+string(newinclination[1])
+          ;       printf,66,linenumber()+"The max rotation from "+string(maxrotinincl)+" to "+string(firstfitvalues[n_elements(firstfitvalues[*,0])-2,4])+'+/-'+string(catmaxrotdev[1])
+          ;       printf,66,linenumber()+"We have adjusted the fit setting of the inclination and VROT."
+          ;       close,66
+          ;    ENDIF
+          ;    catPA[i]=firstfitvalues[0,0]
+          ;    catinc[i]=firstfitvalues[0,2]
+          ;    IF catinc[i] LT 5 then catinc[i]=5.
+          ;    catmaxrot[i]=firstfitvalues[1,4]
+
+
+           ;ENDELSE
         ENDIF
         testing1INCL:
-        INCLinput1=['INCL 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+$
-                    ' INCL_2 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1),$
-                    string(catinc[i]+catincdev[i]+20),string(catinc[i]-catincdev[i]-20),string(0.5),string(0.1),string(5.),string(0.1),'3','70','70']
-        IF INCLinput1[1] GT 90. then INCLinput1[1]='90'
-        IF INCLinput1[1] LT 30 then INCLinput1[1]='30'
-        IF INCLinput1[2] LT 5 then INCLinput1[2]='5'
-        IF INCLinput1[2] GT 60 then INCLinput1[2]='60'
-        PAinput1=['PA 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+$
-                  ' PA_2 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1),$
-                  string((catPA[i])+catPAdev[i]+30.),string((catPA[i])-catPAdev[i]-30),string(2.5),string(0.1),string(0.05),string(0.01),'3','70','70']
-        IF PAfixboun NE 'n' then begin
-           IF PAfixboun EQ 'w' then begin
-              IF catPA[i]+catPAdev[i]+30. GT 360 then PAinput1[1]='360'
-              IF catPA[i]-catPAdev[i]-30. LT 180 then PAinput1[2]='180'
-           ENDIF
-           IF PAfixboun EQ 'e' then begin
-              IF catPA[i]+catPAdev[i]+30. GT 180. then PAinput1[1]='180'
-              IF catPA[i]-catPAdev[i]-30. LT 0. then PAinput1[2]='0'
-           ENDIF
-        ENDIF
-        VROTinputPA=['VROT 2:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+$
-                     ' VROT_2 2:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)$
-                     ,string(VROTmax),string(0.),$
-                     string(channelwidth),string(0.01*channelwidth),string(channelwidth),string(0.01*channelwidth),'3','70','70']
-        Writefittingvariables,tirificfirst,painput1,sbrinput1,sbrinput2,VROTinputPA
 
-        againPAestimate:
 
-        openw,1,maindir+'/'+catdirname[i]+'/tirific.def'
-        for index=0,n_elements(tirificfirst)-1 do begin
-           printf,1,tirificfirst[index]
-        endfor
-        close,1
-        gipsyfirst=strarr(1)
-        IF size(log,/TYPE) EQ 7 then begin
-           openu,66,log,/APPEND
-           printf,66,linenumber()+"Starting tirific the PA estimate in  "+catDirname[i]+" which is galaxy # "+strtrim(string(fix(i)),2)+" at "+systime()
-           close,66
-        ENDIF
-        IF testing GE 1 then goto,testing1PA
-        print,linenumber()+"Starting tirific the PA estimate in "+catDirname[i]+" which is galaxy # "+strtrim(string(fix(i)),2)+" at "+systime()
-        gipsyfirst='tirific DEFFILE=tirific.def ACTION=1'
-        spawn,gipsyfirst,isthere2
-                                ;get the results
-        get_progress,maindir+'/'+catdirname[i]+'/progress1.txt',AC1,nopoint,loops,toymodels
-                                ;If failed try again
-        IF AC1 EQ 0. and PAest LT 5 then begin
-           IF size(log,/TYPE) EQ 7 then begin
-              openu,66,log,/APPEND
-              printf,66,linenumber()+"The Pa estimate was not accepted try again. Tries: "+string(PAest)
-              close,66
-           ENDIF
-           VariablesWanted=['PA','PA_2']
-           firstfitvalues=0.
-           writenewtotemplate,tirificfirst,maindir+'/'+catdirname[i]+'/1stfit.def',Arrays=firstfitvalues,VariableChange=VariablesWanted
-           catPA[i]=firstfitvalues[0,0]
-           IF catPA[i] GT 360. then begin
-              WHILE catPA[i] GT 360. do catPA[i]=catPA[i]-360.
-           ENDIF
-           PAinput1=['PA 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+$
-                     ' PA_2 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1),$
-                     string((catPA[i])+catPAdev[i]+30.),string((catPA[i])-catPAdev[i]-30),string(5),string(0.1),string(0.05),string(0.01),'3','70','70']
-           IF PAfixboun NE 'n' then begin
-              IF PAfixboun EQ 'w' then begin
-                 IF catPA[i]+catPAdev[i]+30. GT 360 then PAinput1[1]='360'
-                 IF catPA[i]-catPAdev[i]-30. LT 180 then PAinput1[2]='180'
-              ENDIF
-              IF PAfixboun EQ 'e' then begin
-                 IF catPA[i]+catPAdev[i]+30. GT 180. then PAinput1[1]='180'
-                 IF catPA[i]-catPAdev[i]-30. LT 0. then PAinput1[2]='0'
-              ENDIF
-           ENDIF
-           IF size(log,/TYPE) EQ 7 then begin
-               openu,66,log,/APPEND
-               printf,66,linenumber()+"Trying the PA estimate again with PA="+strtrim(string(catPA[i]))+" and the boundaries ["+STRJOIN([strtrim(string(PAinput1[2]),2),strtrim(string(PAinput1[1]),2)],',')+"]"
-               close,66
-            ENDIF
-           Writefittingvariables,tirificfirst,painput1,vrotinputPA
-           PAest=PAest+1.
-           goto,againPAestimate
+        ;We only want to check the PA if we have not checked the INCL
+        IF INCLest EQ 0 THEN BEGIN
+          ;PAinput1=['PA 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+$
+          ;          ' PA_2 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1),$
+          ;          string((catPA[i])+catPAdev[i]+30.),string((catPA[i])-catPAdev[i]-30),string(2.5),string(0.1),string(0.05),string(0.01),'3','70','70']
+          PAinput1=['PA 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+$
+                    ' PA_2 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1),$
+                    string((catPA[i])+catPAdev[i]+30.),string((catPA[i])-catPAdev[i]-30),string(5),string(0.5),string(0.1),'3']
+          IF PAfixboun NE 'n' then begin
+             IF PAfixboun EQ 'w' then begin
+                IF catPA[i]+catPAdev[i]+30. GT 360 then PAinput1[1]='360'
+                IF catPA[i]-catPAdev[i]-30. LT 180 then PAinput1[2]='180'
+             ENDIF
+             IF PAfixboun EQ 'e' then begin
+                IF catPA[i]+catPAdev[i]+30. GT 180. then PAinput1[1]='180'
+                IF catPA[i]-catPAdev[i]-30. LT 0. then PAinput1[2]='0'
+             ENDIF
+          ENDIF
+          ;VROTinputPA=['!VROT '+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+':2 '+$
+          ;             ' VROT_2 '+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+':2'$
+          ;             ,string(VROTmax),string(0.),$
+          ;             string(channelwidth),string(0.01*channelwidth),string(channelwidth),string(0.01*channelwidth),'3','70','70',fixstring]
+          VROTinputPA=['!VROT '+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+':2 '+$
+                       ' VROT_2 '+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+':2'$
+                       ,string(VROTmax),string(0.), string(3*channelwidth),string(0.1*channelwidth),string(0.1*channelwidth),'5',fixstring]
+          Writefittingvariables,tirificfirst,painput1,sbrinput1,sbrinput2,VROTinputPA,INIMODE=inimode
+
+
+          againPAestimate:
+          restart_counter++
+          tmppos=where('RESTARTID' EQ tirificfirstvars)
+          tirificfirst[tmppos]='RESTARTID= '+string(fix(restart_counter))
+          openw,1,maindir+'/'+catdirname[i]+'/tirific.def'
+          for index=0,n_elements(tirificfirst)-1 do begin
+             printf,1,tirificfirst[index]
+          endfor
+          close,1
+
+          IF testing GE 1 then goto,testing1PA
+          IF size(log,/TYPE) EQ 7 then begin
+             openu,66,log,/APPEND
+             printf,66,linenumber()+"Starting tirific the PA estimate in  "+catDirname[i]+" which is galaxy # "+strtrim(string(fix(i)),2)+" at "+systime()
+             close,66
+          ENDIF
+          print,linenumber()+"Starting tirific the PA estimate in "+catDirname[i]+" which is galaxy # "+strtrim(string(fix(i)),2)+" at "+systime()
+
+          run_tirific, continue_tirific, curr_run_id, bookkeeping, output_name='1stfit.', $
+                    store_name='1stfitold.', log=log,loops=loops,nopoints=nopoints,AC=AC1, $
+                    toymodels=toymodels,run_unit=run_unit
+          IF bookkeeping EQ 5 THEN goto,finishthisgalaxy
+
+          ;IF AC1 EQ 0. and PAest LT 1 then begin
+          ;   IF size(log,/TYPE) EQ 7 then begin
+          ;      openu,66,log,/APPEND
+          ;      printf,66,linenumber()+"The Pa estimate was not accepted try again. Tries: "+string(PAest)
+          ;      close,66
+        ;     ENDIF
+        ;     VariablesWanted=['PA','PA_2','VROT','VROT_2','SBR','SBR_2']
+        ;     firstfitvalues=0.
+        ;     writenewtotemplate,tirificfirst,maindir+'/'+catdirname[i]+'/1stfit.def',Arrays=firstfitvalues,VariableChange=VariablesWanted
+        ;     catPA[i]=firstfitvalues[0,0]
+        ;     IF catPA[i] GT 360. then begin
+        ;        WHILE catPA[i] GT 360. do catPA[i]=catPA[i]-360.
+        ;     ENDIF
+        ;     PAinput1[5]=string(PAinput1[5]*(1+PAest*0.5))
+             ;PAinput1=['PA 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+$
+              ;         ' PA_2 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1),$
+              ;         string((catPA[i])+catPAdev[i]+30.),string((catPA[i])-catPAdev[i]-30),string(5),string(0.1),string(0.05),string(0.01),'3','70','70']
+        ;     IF PAfixboun NE 'n' then begin
+        ;        IF PAfixboun EQ 'w' then begin
+        ;           IF catPA[i]+catPAdev[i]+30. GT 360 then PAinput1[1]='360'
+        ;           IF catPA[i]-catPAdev[i]-30. LT 180 then PAinput1[2]='180'
+        ;        ENDIF
+        ;        IF PAfixboun EQ 'e' then begin
+        ;           IF catPA[i]+catPAdev[i]+30. GT 180. then PAinput1[1]='180'
+        ;           IF catPA[i]-catPAdev[i]-30. LT 0. then PAinput1[2]='0'
+        ;        ENDIF
+        ;     ENDIF
+        ;     IF size(log,/TYPE) EQ 7 then begin
+        ;         openu,66,log,/APPEND
+        ;         printf,66,linenumber()+"Trying the PA estimate again with PA="+strtrim(string(catPA[i]))+" and the boundaries ["+STRJOIN([strtrim(string(PAinput1[2]),2),strtrim(string(PAinput1[1]),2)],',')+"]"
+        ;         close,66
+        ;      ENDIF
+        ;     Writefittingvariables,tirificfirst,painput1,vrotinputPA,INIMODE=inimode
+
+
+        ;     PAest=PAest+1.
+        ;     goto,againPAestimate
+        ;  ENDIF
         ENDIF
         testing1PA:
                                 ;get the values from these adapted
                                 ;models and write them into the
                                 ;tirific array
-        VariablesWanted=['PA','PA_2','INCL','INCL_2','VROT','VROT_2']
+        VariablesWanted=['PA','PA_2','INCL','INCL_2','VROT','VROT_2','SBR','SBR_2']
         firstfitvalues=0.
         writenewtotemplate,tirificfirst,maindir+'/'+catdirname[i]+'/1stfit.def',Arrays=firstfitvalues,VariableChange=VariablesWanted
                                 ;if the change is large we want to
                                 ;adjust our inc and vrot estimates as
                                 ;well
         newPA=[firstfitvalues[0,0],ABS(firstfitvalues[0,0]-newPA[0])+newPA[1]]
-        IF INCLest GT 0. then begin
-           newinclination=[firstfitvalues[0,2],20.]
-           newrot=firstfitvalues[1,4]
-        ENDIF else begin
-           obtain_inclinationv8,moment0map,newPA,newinclination,[RApix[0],DECpix[0]],extend=noringspix,noise=momnoise,beam=catmajbeam[i]/(pixelsizeRA*3600.),gdlidl=gdlidl
+        newinclination=[firstfitvalues[0,2],catincdev[i]]
+        newrot=firstfitvalues[1,4]
 
-           IF newinclination[0] LT 40 then newrot=W50/2./SIN(ABS(newinclination[0]+5.0)*!pi/180.) else newrot=W50/2./SIN(newinclination[0]*!pi/180.)
-        ENDELSE
                                 ;when we get a new inclination we need
                                 ;to reset our cutoff values.
         cutoffcorrection=SIN(75.*!DtoR)/SIN((newinclination[0]+newinclination[1]/2.)*!DtoR)
+        IF newinclination[0] GT 80. then cutoffcorrection=0.9
         IF newinclination[0]+newinclination[1]/2. GT 50 then cutoffcorrection=1.
         IF newinclination[0]+newinclination[1]/2. LT 50 AND newinclination[0]+newinclination[1]/2. GT 40  then cutoffcorrection=1.+(50-(newinclination[0]+newinclination[1]/2.))*0.05
 
-     ;   cutoffcorrection=SIN(75.*!DtoR)/SIN(newinclination[0]*!DtoR)
-     ;   IF newinclination[0] GT 50 then cutoffcorrection=1.
-     ;   IF newinclination[0] LT 50 AND newinclination[0] GT 40  then cutoffcorrection=1.+(50-newinclination[0])*0.05
         IF cutoffcorrection GT 2.5 then cutoffcorrection=2.5
         IF doubled and cutoffcorrection GT 1. then cutoffcorrection=SQRT(cutoffcorrection)
 
@@ -2229,35 +2130,41 @@ noconfig:
         IF INCLest GT 0. then begin
            IF size(log,/TYPE) EQ 7 then begin
               openu,66,log,/APPEND
-              printf,66,linenumber()+"Because of a low number of beams across the minor axis,"
-              printf,66,linenumber()+"We have adjusted the PA from to "+string(catPA[i])+'+/-'+string(newPA[1])
-              printf,66,linenumber()+"The inclination to "+string(catInc[i])+'+/-'+string(newinclination[1])
-              printf,66,linenumber()+"Maxrot to "+string(newrot[0])+'+/-'+string(catmaxrotdev[i])
+              printf,66,linenumber()+"Because of low inclination (<30) or small number of beams across minor axis (< 5):"
+              printf,66,linenumber()+"We have adjusted the PA from "+string(PAinincl)+' to '+string(newPA[0])+'+/-'+string(newPA[1])
+              printf,66,linenumber()+"The inclination from "+string(INCLinincl)+" to "+string(newinclination[0])+'+/-'+string(newinclination[1])
+              printf,66,linenumber()+"The max rotation from "+string(maxrotinincl)+" to "+string(newrot[0])+'+/-'+string(catmaxrotdev[i])
               printf,66,linenumber()+"We have adjusted the fit setting of the inclination and VROT."
               close,66
            ENDIF
         ENDIF ELSE BEGIN
            IF size(log,/TYPE) EQ 7 then begin
               openu,66,log,/APPEND
-              printf,66,linenumber()+"Because of low inclination "+string(catinc[i])
-              printf,66,linenumber()+"We have adjusted the PA from "+string(catPA[i])+" to "+string(firstfitvalues[0,0])+'+/-'+string(newPA[1])
-              printf,66,linenumber()+"The inclination from "+string(catInc[i])+" to "+string(newinclination[0])+'+/-'+string(newinclination[1])
+              printf,66,linenumber()+"Because of low inclination (<50) or a mismatch between the KinPA and VelPA estimate :"
+              printf,66,linenumber()+"We have adjusted the PA from "+string(PAinincl)+' to '+string(newPA[0])+'+/-'+string(newPA[1])
+              printf,66,linenumber()+"This should not change The inclination from "+string(INCLinincl)+" to "+string(newinclination[0])+'+/-'+string(newinclination[1])
+              printf,66,linenumber()+"The max rotation from "+string(maxrotinincl)+" to "+string(newrot[0])+'+/-'+string(catmaxrotdev[i])
               printf,66,linenumber()+"We have adjusted the fit setting of the inclination and VROT."
               close,66
            ENDIF
+
         ENDELSE
         catPAdev[i]=15.
         catinc[i]=newinclination[0]
         catincdev[i]=newinclination[1]
-        catPA[i]=firstfitvalues[0,0]
+        catPA[i]=newPA[0]
+        catmaxrot[i]=newrot[0]
                                 ;adapt the inc values
-        tmppos=where('INCL' EQ tirificfirstvars)
-        tirificfirst[tmppos]='INCL='+strtrim(strcompress(string(catinc[i])))
-        tmppos=where('INCL_2' EQ tirificfirstvars)
-        tirificfirst[tmppos]='INCL_2='+strtrim(strcompress(string(catinc[i])))
+        ;tmppos=where('INCL' EQ tirificfirstvars)
+        ;tirificfirst[tmppos]='INCL='+strtrim(strcompress(string(catinc[i])))
+        ;tmppos=where('INCL_2' EQ tirificfirstvars)
+        ;tirificfirst[tmppos]='INCL_2='+strtrim(strcompress(string(catinc[i])))
+        ;INCLinput1=['INCL 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+$
+        ;            ' INCL_2 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1),$
+        ;            string(catinc[i]+catincdev[i]+10),string(catinc[i]-catincdev[i]-10),string(0.2),string(0.1),string(1.),string(0.1),'3','70','70']
         INCLinput1=['INCL 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+$
                     ' INCL_2 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1),$
-                    string(catinc[i]+catincdev[i]+10),string(catinc[i]-catincdev[i]-10),string(0.2),string(0.1),string(1.),string(0.1),'3','70','70']
+                    string(catinc[i]+catincdev[i]+10),string(catinc[i]-catincdev[i]-10),string(0.5),string(0.1),string(0.1),'3']
 
         IF INCLinput1[1] GT 90. then INCLinput1[1]='90'
         IF INCLinput1[1] LT 30 then INCLinput1[1]='30'
@@ -2266,7 +2173,7 @@ noconfig:
         IF INCLinput1[2] GT 60 then INCLinput1[2]='60'
                                 ;and the vrot values
 
-        VROTmax=catmaxrotdev[i]
+        VROTmax=catmaxrot[i]+catmaxrotdev[i]
         VROTmin=channelwidth
                                 ;WE want to ensure a reasonable vrot max
         IF VROTmax LT 80 then VROTmax=80.
@@ -2275,11 +2182,10 @@ noconfig:
         string2=string(VROTmax)
         string3=string(VROTmin)
         string4=string(2*channelwidth)
-        string5=string(0.01*channelwidth)
-        string6=string(0.2*channelwidth)
-        string7=string(0.01*channelwidth)
-        string8='3'
-        string9='70'
+        string5=string(0.05*channelwidth)
+        ;string6=string(0.2*channelwidth)
+        string7=string(0.05*channelwidth)
+        string8='5'
         IF centralexclude then begin
            IF catinc[i] LT 40 then begin
               string10='VROT 2 '+strtrim(strcompress(string(norings[0]-1,format='(I3)')),1)+':'+strtrim(strcompress(string(fix(norings[0]*0.5+2),format='(I3)')),1)+' VROT_2 2 '+strtrim(strcompress(string(norings[0]-1,format='(I3)')),1)+':'+strtrim(strcompress(string(fix(norings[0]*0.5+2),format='(I3)')),1)
@@ -2295,39 +2201,45 @@ noconfig:
         ENDELSE
 
         IF norings[0] GT 4 then begin
-           VROTinput1=[string1,string2,string3,string4,string5,string6,string7,string8,string9,string9,string10]
+           VROTinput1=[string1,string2,string3,string4,string5,string7,string8,string10]
         ENDIF ELSE BEGIN
-           VROTinput1=[string1,string2,string3,string4,string5,string6,string7,string8,string9,string9,' ']
+           VROTinput1=[string1,string2,string3,string4,string5,string7,string8,' ']
         ENDELSE
         tmppos=where('VROT' EQ tirificfirstvars)
         tirificfirst[tmppos]='VROT= 0. '+string(catmaxrot[i])
         tmppos=where('VROT_2' EQ tirificfirstvars)
         tirificfirst[tmppos]='VROT_2= 0. '+string(catmaxrot[i])
-        print,'Peculiar'
      ENDIF
                                 ;Since our first SBR estimate is very
                                 ;crude we want to adapt that by itself first
      IF counter EQ 0 then begin
-        Writefittingvariables,tirificfirst,sbrinput1,sbrinput2,painput1,vrotinput1
+        Writefittingvariables,tirificfirst,sbrinput1,sbrinput2,painput1,vrotinput1,INIMODE=inimode
+        restart_counter++
+        tmppos=where('RESTARTID' EQ tirificfirstvars)
+        tirificfirst[tmppos]='RESTARTID= '+string(fix(restart_counter))
         openw,1,maindir+'/'+catdirname[i]+'/tirific.def'
         for index=0,n_elements(tirificfirst)-1 do begin
            printf,1,tirificfirst[index]
         endfor
         close,1
+
+        IF testing GE 1 then goto,testing1SBR
         IF size(log,/TYPE) EQ 7 then begin
            openu,66,log,/APPEND
            printf,66,linenumber()+"Starting tirific SBR estimate in  "+catDirname[i]+" which is galaxy # "+strtrim(string(fix(i)),2)+" at "+systime()
            close,66
         ENDIF
         print,linenumber()+"Starting tirific SBR estimate in  "+catDirname[i]+" which is galaxy # "+strtrim(string(fix(i)),2)+" at "+systime()
-        gipsyfirst=strarr(1)
-        IF testing GE 1 then goto,testing1SBR
-        gipsyfirst='tirific DEFFILE=tirific.def ACTION=1'
+
+        run_tirific, continue_tirific, curr_run_id, bookkeeping, output_name='1stfit.', $
+                  store_name='1stfitold.', log=log,loops=loops,nopoints=nopoints,AC=AC1,$
+                  toymodels=toymodels,run_unit=run_unit
+        IF bookkeeping EQ 5 THEN goto,finishthisgalaxy
         testing1SBR:
-        spawn,gipsyfirst,isthere2
+
+
         VariablesWanted=['RADI','SBR','SBR_2','PA','PA_2','VROT','VROT_2']
         firstfitvalues=0.
-        get_progress,maindir+'/'+catdirname[i]+'/progress1.txt',AC1,nopoints,loops,toymodels
         check_cflux,nopoints,norings[0],tirificfirst,tirificfirstvars,cfluxadjusted,log=log
         IF cfluxadjusted then  VariablesWanted=['RADI','SBR','SBR_2','VROT','VROT_2']
         writenewtotemplate,tirificfirst,maindir+'/'+catdirname[i]+'/1stfit.def',Arrays=firstfitvalues,VariableChange=VariablesWanted
@@ -2343,40 +2255,21 @@ noconfig:
         ENDELSE
 
 
-        IF INCLest LT 1 then begin
-           obtain_inclinationv8,moment0map,newPA,newinclination,[RApix[0],DECpix[0]],extend=noringspix,noise=momnoise,beam=catmajbeam[i]/(pixelsizeRA*3600.),gdlidl=gdlidl
-                                ;when we get a new inclination we need
-                                ;to reset our cutoff values.
-           cutoffcorrection=SIN(75.*!DtoR)/SIN((newinclination[0]+newinclination[1]/2.)*!DtoR)
-           IF newinclination[0]+newinclination[1]/2. GT 50 then cutoffcorrection=1.
-           IF newinclination[0]+newinclination[1]/2. LT 50 AND newinclination[0]+newinclination[1]/2. GT 40  then cutoffcorrection=1.+(50-(newinclination[0]+newinclination[1]/2.))*0.05
 
-           IF cutoffcorrection GT 2.5 then cutoffcorrection=2.5
-           IF doubled and cutoffcorrection GT 1. then cutoffcorrection=SQRT(cutoffcorrection)
-
-           IF size(log,/TYPE) EQ 7 then begin
-              openu,66,log,/APPEND
-              printf,66,linenumber()+"Cutoff values will be adjusted for inclination by multiplying them with"+string(cutoffcorrection)
-              close,66
-           ENDIF
-           cutoff=cutoffor*cutoffcorrection
-        ENDIF
         tmppos=where('SBR' EQ VariablesWanted)
         SBRarr=firstfitvalues[*,tmppos]
 
         tmppos=where('SBR_2' EQ VariablesWanted)
         SBRarr2=firstfitvalues[*,tmppos]
-                                ;We always want to smooth the surface brightnes. Added 16-06-2017
-        SBRarr=fat_hanning(SBRarr)
-        SBRarr2=fat_hanning(SBRarr2)
-
-
-
-
+                                ;We always want to smooth the surface
+                                ;brightnes. Added 16-06-2017
+        tmppos=where('RADI' EQ VariablesWanted)
+        SBRarr=fat_savgol(SBRarr,firstfitvalues[*,tmppos],/HALF)
+        SBRarr2=fat_savgol(SBRarr2,firstfitvalues[*,tmppos],/HALF)
                                 ;checking the surface brightness
         sbr_check,tirificfirst, tirificfirstvars,sbrarr,sbrarr2,cutoff
         IF newinclination[0] LT 40 then newrot=W50/2./SIN(ABS(newinclination[0]+5)*!pi/180.) else newrot=W50/2./SIN(newinclination[0]*!pi/180.)
-        catmaxrotdev[i]=(VSYSdiff/2.)/SIN(newinclination[0]*!pi/180.)
+        catmaxrotdev[i]=(VSYSdiff/4.)/SIN(newinclination[0]*!pi/180.)
         IF catmaxrotdev[i] LT 3*channelwidth then catmaxrotdev[i]=3*channelwidth
         IF size(log,/TYPE) EQ 7 then begin
            openu,66,log,/APPEND
@@ -2433,7 +2326,7 @@ noconfig:
            IF INCLinput1[2] GT 60 then INCLinput1[2]='60'
         endif
                                 ;and the vrot values
-        VROTmax=catmaxrotdev[i]
+        VROTmax=catmaxrot[i]+catmaxrotdev[i]
         VROTmin=channelwidth
                                 ;We want to ensure that we have a
                                 ;reasonable Vrot max
@@ -2492,32 +2385,38 @@ noconfig:
         minstep=strtrim(strcompress(string(cutoff[norings[0]-1]/2.,format='(E8.1)')),1)
      ENDELSE
 
-     satlevel=strtrim(strcompress(string(5.*double(startstep),format='(E8.1)')),1)
-     string1='SBR '+strtrim(strcompress(string(fix(norings[0]),format='(I3)')),1)+' SBR_2 '+strtrim(strcompress(string(fix(norings[0]),format='(I3)')),1)
-     string2='1'
-     string3=strtrim(strcompress(string(cutoff[fix(norings[0])]/2.,format='(E12.5)')),1)
-     string4=startstep
-     string5=minstep
-     string6=strtrim(strcompress(string(5.*double(startstep),format='(E8.1)')),1)
-     string7=minstep
-     string8='3'
-     string9='70'
+     satlevel=strtrim(strcompress(string(5.*double(startstep)/10.,format='(E8.1)')),1)
 
-     for j=norings[0]-1,2,-1 do begin
-        string1=string1+','+'SBR '+strtrim(strcompress(string(j,format='(I3)')),1)+' SBR_2 '+strtrim(strcompress(string(j,format='(I3)')),1)
-        string2=string2+' 1'
-        IF doubled then string3=string3+' '+strtrim(strcompress(string(cutoff[fix(j-1)]/4.,format='(E12.5)')),1) else string3=string3+' '+strtrim(strcompress(string(cutoff[fix(j-1)]/2.,format='(E12.5)')),1)
-        string4=string4+' '+startstep
-        string5=string5+' '+minstep
-        string6=string6+' '+strtrim(strcompress(string(5.*double(startstep),format='(E8.1)')),1)
-        string7=string7+' '+minstep
-        string8=string8+' 3'
-        string9=string9+' 70'
+     string1=''
+     string2=''
+     string3=''
+     string4=''
+     string5=''
+     string6=''
+     string7=''
+
+                                ;The minimum is based on the cutoff
+                                ;values and therefore we need to set
+                                ;every ring in the tirific file
+
+     for j=norings[0],3,-1 do begin
+        string1=string1+','+'SBR '+strtrim(strcompress(string(j,format='(I3)')),1)+', SBR_2 '+strtrim(strcompress(string(j,format='(I3)')),1)
+        string2=string2+' 1 1'
+        IF doubled then $
+           string3=string3+' '+strtrim(strcompress(string(cutoff[fix(j-1)]/4.,format='(E12.5)')),1)+' '+strtrim(strcompress(string(cutoff[fix(j-1)]/4.,format='(E12.5)')),1) $
+           else string3=string3+' '+strtrim(strcompress(string(cutoff[fix(j-1)]/2.,format='(E12.5)')),1)+' '+strtrim(strcompress(string(cutoff[fix(j-1)]/2.,format='(E12.5)')),1)
+        string4=string4+' '+startstep+' '+startstep
+        string5=string5+' '+minstep+' '+minstep
+        string6=string6+' '+strtrim(strcompress(string(satlevel,format='(E8.1)')),1)+' '+strtrim(strcompress(string(satlevel,format='(E8.1)')),1)
+        string7=string7+' 3 3'
      endfor
-     SBRinput1=[string1,string2,string3,string4,string5,string6,string7,string8,string9,string9]
+     ;ENDELSE
+     string1 = STRMID(string1,1,STRLEN(string1)-1)
+
+     SBRinput1=[string1,string2,string3,string4,string5,string6,string7]
                                 ;The inner rings should be fitted as one
-     SBRinput2=[' SBR 1 SBR_2 1',$
-                strtrim(strcompress(string(ABS(SBRarr[1]),format='(E12.5)'))) ,'0','1E-5','1E-6','5E-5','1E-6','3','70','70']
+     SBRinput2=[' SBR 1 2  SBR_2 1 2 ',$
+                strtrim(strcompress(string(ABS(SBRarr[2])*2.,format='(E12.5)'))) ,'0','1E-5','1E-6','5E-6','3']
      smoothrotation=0.
      keepcenter=0.
      fixedcenter=0.
@@ -2530,23 +2429,23 @@ noconfig:
                                 ;on inclination
      if not keepcenter and not fixedcenter and not cfluxadjusted then begin
         case 1 of
-           catinc[i] LT 30: Writefittingvariables,tirificfirst,xposinput1,yposinput1,vsysinput1,painput1,vrotinput1,sbrinput1,sbrinput2,inclinput1
-           catinc[i] LT 50:Writefittingvariables,tirificfirst,xposinput1,yposinput1,vsysinput1,painput1,vrotinput1,inclinput1,sbrinput1,sbrinput2
-           catinc[i] GT 75:Writefittingvariables,tirificfirst,xposinput1,yposinput1,vsysinput1,painput1,vrotinput1,sbrinput1,sbrinput2,inclinput1,z0input1
-           else:Writefittingvariables,tirificfirst,xposinput1,yposinput1,vsysinput1,painput1,inclinput1,vrotinput1,sbrinput1,sbrinput2
+           catinc[i] LT 30: Writefittingvariables,tirificfirst,xposinput1,yposinput1,vsysinput1,painput1,vrotinput1,sbrinput1,sbrinput2,inclinput1,INIMODE=inimode
+           catinc[i] LT 50:Writefittingvariables,tirificfirst,xposinput1,yposinput1,vsysinput1,painput1,vrotinput1,inclinput1,sbrinput1,sbrinput2,INIMODE=inimode
+           catinc[i] GT 75:Writefittingvariables,tirificfirst,xposinput1,yposinput1,vsysinput1,painput1,vrotinput1,sbrinput1,sbrinput2,inclinput1,z0input1,INIMODE=inimode
+           else:Writefittingvariables,tirificfirst,xposinput1,yposinput1,vsysinput1,painput1,inclinput1,vrotinput1,sbrinput1,sbrinput2,INIMODE=inimode
         endcase
-     ENDIF ELSE BEGIN
+    ENDIF ELSE BEGIN
         case 1 of
-           catinc[i] LT 30:Writefittingvariables,tirificfirst,painput1,vrotinput1,sbrinput1,sbrinput2,inclinput1
-           catinc[i] LT 50:Writefittingvariables,tirificfirst,painput1,vrotinput1,inclinput1,sbrinput1,sbrinput2
-           catinc[i] GT 75:Writefittingvariables,tirificfirst,painput1,vrotinput1,sbrinput1,sbrinput2,inclinput1,z0input1
-           else:Writefittingvariables,tirificfirst,painput1,inclinput1,vrotinput1,sbrinput1,sbrinput2
+           catinc[i] LT 30:Writefittingvariables,tirificfirst,painput1,vrotinput1,sbrinput1,sbrinput2,inclinput1,INIMODE=inimode
+           catinc[i] LT 50:Writefittingvariables,tirificfirst,painput1,vrotinput1,inclinput1,sbrinput1,sbrinput2,INIMODE=inimode
+           catinc[i] GT 75:Writefittingvariables,tirificfirst,painput1,vrotinput1,sbrinput1,sbrinput2,inclinput1,z0input1,INIMODE=inimode
+           else:Writefittingvariables,tirificfirst,painput1,inclinput1,vrotinput1,sbrinput1,sbrinput2,INIMODE=inimode
         endcase
      ENDELSE
                                 ;If we tried fifty times and have not
                                 ;found a reasonable solution then we
                                 ;give up
-     IF counter GT 50 then begin
+     IF counter GT 30 then begin
         IF size(log,/TYPE) EQ 7 then begin
            openu,66,log,/APPEND
            printf,66,linenumber()+"We have rerun "+string(counter)+" times and still haven't found an acceptable solution."
@@ -2554,13 +2453,19 @@ noconfig:
            printf,66,linenumber()+"We are aborting this galaxy."
            close,66
         ENDIF
+        comment = 'We could not find a proper center.'
+        commentlen='A'+strtrim(string(strlen(comment)),2)
         openu,1,outputcatalogue,/APPEND
-        printf,1,format='(A60,2A12,A120)',catDirname[i],0.,0.,'We could not find a proper center.'
+        printf,1,catDirname[i],strtrim(string(0),2),strtrim(string(0),2),comment,format='("",('+dirformat+')," ",2(A6),"  ",('+commentlen+'))'
         close,1
         bookkeeping=5
         goto,finishthisgalaxy
      ENDIF
      ;Write the current array to the def file
+     restart_counter++
+     tmppos=where('RESTARTID' EQ tirificfirstvars)
+     tirificfirst[tmppos]='RESTARTID= '+string(fix(restart_counter))
+     print,linenumber()+'We used '+tirificfirst[tmppos]+' to restart'
      openw,1,maindir+'/'+catdirname[i]+'/tirific.def'
      for index=0,n_elements(tirificfirst)-1 do begin
         printf,1,tirificfirst[index]
@@ -2571,10 +2476,6 @@ noconfig:
                                 ;if this is the second fit we do want
                                 ;to keep the first one not being old
      IF testing GE 1 then goto,testing1
-     IF tryone EQ 1 then begin
-        rename,'1stfit.','1stfitall.'
-     endif
-     counter++
      IF size(log,/TYPE) EQ 7 then begin
         openu,66,log,/APPEND
         printf,66,linenumber()+"Starting tirific first estimate in  "+catDirname[i]+"  which is galaxy #  "+strtrim(string(fix(i)),2)+" at "+systime()
@@ -2583,20 +2484,20 @@ noconfig:
         close,66
      ENDIF
      print,linenumber()+"Starting tirific first estimate in  "+catDirname[i]+"  which is galaxy #  "+strtrim(string(fix(i)),2)+" at "+systime()
-     ;Add this line in to follow the evolution of the first fit.
-;     spawn,'mv 1stfit.def 1stfit_'+strtrim(strcompress(string(fix(counter))),2)+'.def'
-
-     tmppos=where('CFLUX' EQ tirificfirstvars)
-     tmppos2=where('CFLUX_2' EQ tirificfirstvars)
-
-     rename,'1stfit.','1stfitold.'
-     gipsyfirst=strarr(1)
-     gipsyfirst='tirific DEFFILE=tirific.def ACTION=1'
-     spawn,gipsyfirst,isthere2
+     IF tryone EQ 1 then begin
+        output_name = '1stfit.'
+        store_name = '1stfitall.'
+     ENDIF ELSE BEGIN
+        output_name = '1stfit.'
+        store_name = '1stfitold.'
+     ENDELSE
+     counter++
+     run_tirific, continue_tirific, curr_run_id, bookkeeping, output_name=output_name, $
+                  store_name=store_name, log=log, loops=loops,nopoints=nopoints,AC=AC1, $
+                  toymodels=toymodels,run_unit=run_unit
 
      testing1:
-                                ;Let's check if it is accepted
-     get_progress,maindir+'/'+catdirname[i]+'/progress1.txt',AC1,nopoints,loops,toymodels
+
      IF size(log,/TYPE) EQ 7 then begin
         openu,66,log,/APPEND
         IF AC1 EQ 1 then begin
@@ -2638,9 +2539,14 @@ noconfig:
      SBRarr=firstfitvalues[*,tmppos]
      tmppos=where('SBR_2' EQ VariablesWanted)
      SBRarr2=firstfitvalues[*,tmppos]
-                                ;We always want to smooth the surface brightnes. Added 16-06-2017
-     SBRarr=fat_hanning(SBRarr)
-     SBRarr2=fat_hanning(SBRarr2)
+                                ;We always want to smooth the surface
+                                ;brightnes. Added 16-06-2017
+     tmppos=where('RADI' EQ VariablesWanted)
+     ;To judge whether we want extend we want to use the non-smoothed profiles
+     SBRarrunmod=SBRarr
+     SBRarr2unmod=SBRarr2
+     SBRarr=fat_savgol(SBRarr,firstfitvalues[*,tmppos],/half)
+     SBRarr2=fat_savgol(SBRarr2,firstfitvalues[*,tmppos],/half)
 
      tmppos=where('VROT' EQ VariablesWanted)
      VROTarr=firstfitvalues[*,tmppos]
@@ -2660,8 +2566,10 @@ noconfig:
      endif
                                 ; Let's see if the values are too close to the boundaries or not
                                 ;First the inclination
-     diffmax=ABS(firstfitvalues[0,0]-double(inclinput1[1]))
+     diffmax=ABS(double(inclinput1[1])-firstfitvalues[0,0])
      diffmin=ABS(firstfitvalues[0,0]-double(inclinput1[2]))
+     IF inclinput1[2] EQ 5. then diffmin = 0.2*catincdev[i]
+     IF inclinput1[1] EQ 90 then diffmax = 0.2*catincdev[i]
      oldinc=catinc[i]
      oldpa=catpa[i]
      paraised=0.
@@ -2680,7 +2588,7 @@ noconfig:
         tmppos=where('INCL_2' EQ tirificfirstvars)
         tirificfirst[tmppos]='INCL_2= '+strtrim(string(catinc[i]))
         catmaxrot[i]=W50/2./SIN(catinc[i]*!pi/180.)
-        catmaxrotdev[i]=(VSYSdiff/2.)/SIN(catinc[i]*!pi/180.)
+        catmaxrotdev[i]=(VSYSdiff/4.)/SIN(catinc[i]*!pi/180.)
         tmppos=where('VROT' EQ tirificfirstvars)
         tirificfirst[tmppos]=stringvelocities
         tmp=str_sep(strtrim(strcompress(stringvelocities),2),'=')
@@ -2695,7 +2603,7 @@ noconfig:
         ENDELSE
      ENDIF ELSE Begin
         ; Otherwise we will adjust the boundaries if they are insecure
-        IF ceil(norings[0]*COS(firstfitvalues[0,0]*!DtoR)) GT 4 OR (norings[0] GT 6. AND catinc[i] GT 80.) then begin
+        IF ceil(norings[0]*ring_spacing*COS(firstfitvalues[0,0]*!DtoR)) GT 4 OR (norings[0]*ring_spacing GT 6. AND catinc[i] GT 80.) then begin
                                 ;If we are on the boundary we reject
                                 ;the new value unless we are in very
                                 ;uncertain conditions
@@ -2708,9 +2616,9 @@ noconfig:
            ENDELSE
                                 ;However if this is due to high
                                 ;inclination we still want to reset vrot
-           IF  (norings[0] GT 6. AND catinc[i] GT 80.) then begin
+           IF  (norings[0]*ring_spacing GT 6. AND catinc[i] GT 80.) then begin
               catmaxrot[i]=W50/2./SIN(catinc[i]*!pi/180.)
-              catmaxrotdev[i]=(VSYSdiff/2.)/SIN(catinc[i]*!pi/180.)
+              catmaxrotdev[i]=(VSYSdiff/4.)/SIN(catinc[i]*!pi/180.)
               tmppos=where('VROT' EQ tirificfirstvars)
               tirificfirst[tmppos]=stringvelocities
               tmp=str_sep(strtrim(strcompress(stringvelocities),2),'=')
@@ -2728,7 +2636,7 @@ noconfig:
            tmppos=where('INCL_2' EQ tirificfirstvars)
            tirificfirst[tmppos]='INCL_2= '+strtrim(string(catinc[i]))
            catmaxrot[i]=W50/2./SIN(catinc[i]*!pi/180.)
-           catmaxrotdev[i]=(VSYSdiff/2.)/SIN(catinc[i]*!pi/180.)
+           catmaxrotdev[i]=(VSYSdiff/4.)/SIN(catinc[i]*!pi/180.)
            tmppos=where('VROT' EQ tirificfirstvars)
            tirificfirst[tmppos]=stringvelocities
            tmp=str_sep(strtrim(strcompress(stringvelocities),2),'=')
@@ -2741,7 +2649,7 @@ noconfig:
            ENDIF ELSE BEGIN
               print,linenumber()+"Although the incl hit its boundary we adjusted to"+string(catinc[i])+"due to the small ring size. "
            ENDELSE
-           VROTmax=catmaxrotdev[i]
+           VROTmax=catmaxrot[i]+catmaxrotdev[i]
            INCLmin=catinc[i]-catincdev[i]-20
                                 ;We base the minimum vrot max on
                                 ;inclination however the maximum of
@@ -2757,12 +2665,10 @@ noconfig:
                                 ;when we get a new inclination we need
                                 ;to reset our cutoff values.
      cutoffcorrection=SIN(75.*!DtoR)/SIN((catinc[i]+newinclination[1]/2.)*!DtoR)
+     IF newinclination[0] GT 80. then cutoffcorrection=0.9
      IF catinc[i]+newinclination[1]/2. GT 50 then cutoffcorrection=1.
      IF catinc[i]+newinclination[1]/2. LT 50 AND catinc[i]+newinclination[1]/2. GT 40  then cutoffcorrection=1.+(50-(catinc[i]+newinclination[1]/2.))*0.05
 
-    ; cutoffcorrection=SIN(75.*!DtoR)/SIN(catinc[i]*!DtoR)
-    ; IF catinc[i] GT 50 then cutoffcorrection=1.
-    ; IF catinc[i] LT 50 AND catinc[i] GT 40  then cutoffcorrection=1.+(50-catinc[i])*0.05
      IF cutoffcorrection GT 2.5 then cutoffcorrection=2.5
      IF doubled and cutoffcorrection GT 1. then cutoffcorrection=SQRT(cutoffcorrection)
 
@@ -2843,7 +2749,7 @@ noconfig:
                        IF catPA[i]-catPAdev[i]-30. LT 0. then PAinput1[2]='0'
                     ENDIF
                  ENDIF
-                 Writefittingvariables,tirificfirst,painput1
+                 Writefittingvariables,tirificfirst,painput1,INIMODE=inimode
                  PAest++
                  goto,againPAestimate
               ENDIF else begin
@@ -2872,10 +2778,7 @@ noconfig:
         ENDELSE
         AC1=0
      ENDELSE
-     lastsbr=firstfitvalues[n_elements(firstfitvalues[*,2])-1,2]
-     avlastsbr=(TOTAL(firstfitvalues[n_elements(firstfitvalues[*,2])-2:n_elements(firstfitvalues[*,2])-1,2]))/2.
-     lastsbr2=firstfitvalues[n_elements(firstfitvalues[*,8])-1,2]
-     avlastsbr2=(TOTAL(firstfitvalues[n_elements(firstfitvalues[*,2])-2:n_elements(firstfitvalues[*,8])-1,2]))/2.
+
      tmppos=where('Z0' EQ tirificfirstvars)
      tirificfirst[tmppos]='Z0= '+strtrim(string(firstfitvalues[0,10]))
      tmppos=where('Z0_2' EQ tirificfirstvars)
@@ -2916,8 +2819,8 @@ noconfig:
                                 ;if the shift is more than two beams
                                 ;from the initial guess something went
                                 ;wrong
-           IF norings LE 25 then resetlimit=catmajbeam[i]/1800. else begin
-              resetlimit=catmajbeam[i]/3600.*norings[0]*0.08
+           IF norings*ring_spacing LE 25 then resetlimit=catmajbeam[i]/1800. else begin
+              resetlimit=catmajbeam[i]/3600.*norings[0]*ring_spacing*0.08
            ENDELSE
            IF    ABS(RADeg-newxpos) GT resetlimit OR ABS(DECDeg-newypos) GT resetlimit then begin
               IF size(log,/TYPE) EQ 7 then begin
@@ -3016,8 +2919,10 @@ noconfig:
 
 
                                 ;let's see if the model has the right size
-           IF secondtime OR doubled then norings=newrings else get_newringsv9,SBRarr,SBRarr2,cutoff,newrings
-                                ;cannot have newsize smaller than 3
+           IF secondtime OR doubled THEN norings=newrings ELSE get_newringsv9,SBRarrunmod,SBRarr2unmod,cutoff,newrings
+           ;Let' see what happens when we fix the rings for the first step, That is a bad idea as the last rings throw things off
+
+                                ;cannot have newsize smaller than 4
            if newrings LT 3 then begin
               IF size(log,/TYPE) EQ 7 then begin
                  openu,66,log,/APPEND
@@ -3053,21 +2958,21 @@ noconfig:
                                 ;  improved version can allow
                                 ;  large estimates of the initial
                                 ;  version changed -2 to -3 (15-05-2015)
-           IF newrings GT sofiarings+2 OR newrings LT sofiarings-3 then begin
+           IF newrings GT sofiarings+(2/ring_spacing) OR newrings LT sofiarings-(3./ring_spacing) then begin
               IF size(log,/TYPE) EQ 7 then begin
                  openu,66,log,/APPEND
                  printf,66,linenumber()+"The new amount of rings ("+strtrim(string(fix(newrings)),2)+") deviates too much from the sofia estimate ("+string(sofiarings)+")."
                  close,66
               ENDIF
               IF newrings LT norings[0] then begin
-                 IF norings[0] GT sofiarings-2 then newrings=norings[0]-1 else newrings=sofiarings-2
+                 IF norings[0] GT sofiarings-round(2/ring_spacing) then newrings=norings[0]-1 else newrings=sofiarings-round(2/ring_spacing)
                  IF size(log,/TYPE) EQ 7 then begin
                     openu,66,log,/APPEND
                     printf,66,linenumber()+"We set the number of rings to "+strtrim(string(fix(newrings)),2)
                     close,66
                  ENDIF
               endif Else begin
-                 IF norings[0] LT sofiarings+2 then newrings=norings[0]+1 else newrings=sofiarings+2
+                 IF norings[0] LT sofiarings+round(2/ring_spacing) then newrings=norings[0]+1 else newrings=sofiarings+round(2/ring_spacing)
                  IF size(log,/TYPE) EQ 7 then begin
                     openu,66,log,/APPEND
                     printf,66,linenumber()+"We set the number of rings to "+strtrim(string(fix(newrings)),2)
@@ -3077,7 +2982,7 @@ noconfig:
 
            ENDIF
            ;ENDIF
-           IF newrings LT norings[0] AND constring NE 1 then begin
+           IF newrings LT norings[0] AND constring NE 1 AND smoothrotation EQ 0. then begin
               IF newrings LE forcedring then begin
                  IF norings[0] GT forcedring then begin
                     newrings=forcedring
@@ -3118,7 +3023,8 @@ noconfig:
               ENDIF
               oldrings=norings[0]
                                 ;If no change then go on with the fitting process
-              IF newrings EQ norings[0] then goto,nocutfirst else norings[0]=newrings
+              IF newrings EQ norings[0] THEN goto,nocutfirst ELSE norings[0]=newrings
+
                                 ;check if we fitted this size before
               tmp=WHERE(prevrings EQ newrings)
               IF tmp[0] NE -1 AND newrings NE oldrings then begin
@@ -3137,11 +3043,9 @@ noconfig:
                  print,linenumber()+"We cut a ring! lastcut"+string(lastcutrings)+" lastadd "+string(lastaddrings)+" new "+strtrim(string(fix(newrings)),2)+" old "+string(oldrings)
               ENDELSE
               lastcutrings=norings[0]
+              changeradii,tirificfirst,norings[0],continue_tirific
               fluxadjust=0.
-              tmppos=where('SBR' EQ tirificfirstvars)
-              tirificfirst[tmppos]='SBR='+STRJOIN(SBRarr[0:norings-1],' ')
-              tmppos=where('SBR_2' EQ tirificfirstvars)
-              tirificfirst[tmppos]='SBR_2='+STRJOIN(SBRarr2[0:norings-1],' ')
+              sbr_check,tirificfirst, tirificfirstvars,sbrarr,sbrarr2,cutoff
               countsbr++
               overwrite=0.
               prevmodification=-1
@@ -3174,7 +3078,7 @@ noconfig:
            ENDIF
                                 ;If we want to add a ring we need to
                                 ;set some parameters and make estimate
-           IF newrings GT norings[0] AND (prevmodification NE -1 OR overwrite EQ 1) AND secondtime NE 1 then begin
+           IF newrings GT norings[0] AND (prevmodification NE -1 OR overwrite EQ 1) AND secondtime NE 1 AND smoothrotation EQ 0 then begin
               tmp=WHERE(prevrings EQ newrings)
               IF tmp[0] NE -1 AND newrings NE norings[0] then begin
                  IF size(log,/TYPE) EQ 7 then begin
@@ -3193,6 +3097,8 @@ noconfig:
               ENDIF ELSE BEGIN
                  print,linenumber()+"We added a ring to the model."
               ENDELSE
+              changeradii,tirificfirst,norings[0],continue_tirific
+              ;if norings[0]*ring_spacing LT 6. then catinc[i]=catinc[i]+2.
               prevmodification=1.
               ringmodifier=ringmodifier+1
               countsbr++
@@ -3211,14 +3117,16 @@ noconfig:
            ENDIF ELSE BEGIN
               print,linenumber()+"The fit diverged out of the boundaries set by the parameterization. That can't be good."
            ENDELSE
+           comment = 'This galaxy diverged out of the set boundaries.'
+           commentlen='A'+strtrim(string(strlen(comment)),2)
            openu,1,outputcatalogue,/APPEND
-           printf,1,format='(A60,2A12,A120)',catDirname[i],0.,0.,'This galaxy diverged out of the set boundaries.'
+           printf,1,catDirname[i],strtrim(string(0),2),strtrim(string(0),2),comment,format='("",('+dirformat+')," ",2(A6),"  ",('+commentlen+'))'
            close,1
            bookkeeping=5
            goto,finishthisgalaxy
         ENDELSE
      ENDELSE
-     IF AC1 NE 1 And tryone LT 10. then begin
+     IF AC1 NE 1 And tryone LT 0. then begin
                                 ;If not accepted let's try again
 
 
@@ -3238,10 +3146,13 @@ noconfig:
                                 ;smoothed rotation curve when all is well
      IF NOT smoothrotation then begin
         smoothrotation=1
-        VROTarr=firstfitvalues[*,7]
-        SBRarr=(firstfitvalues[*,2]+firstfitvalues[*,8])/2.
+        tmppos=where('VROT' EQ VariablesWanted)
+        VROTarr=firstfitvalues[*,tmppos[0]]
+        sbrpos=where('SBR' EQ VariablesWanted)
+        sbrpos2=where('SBR_2' EQ VariablesWanted)
+        SBRarrcom=(firstfitvalues[*,sbrpos[0]]+firstfitvalues[*,sbrpos2])/2.
           ;We always want to smooth the surface brightnes. Added 16-06-2017
-        SBRarr=fat_hanning(SBRarr)
+        SBRarrcom=fat_savgol(SBRarrcom,firstfitvalues[*,9])
         VROTarr[0]=0.
         vmaxdev=MAX([30,7.5*channelwidth*(1.+vresolution)])
         verror=MAX([5.,channelwidth/2.*(1.+vresolution)/SQRT(sin(catinc[i]*!DtoR))])
@@ -3252,10 +3163,11 @@ noconfig:
         ENDIF ELSE BEGIN
            print,linenumber()+"We shall now smooth the rotation curve."
         ENDELSE
+        sigmarot=verror
         IF VROTarr[1] LT 120. AND VROTarr[2] LT 120. then begin
-           revised_regularisation_rot,VROTarr,SBRarr, firstfitvalues[*,9],/REVERSE,fixedrings=norings[0]-fix(norings[0]*3./4.),difference=verror,cutoff=cutoff,arctan=0.,order=polorder,max_par=VROTmax,min_par=channelwidth,log=log
+           revised_regularisation_rot,VROTarr,SBRarrcom, firstfitvalues[*,9],/REVERSE,fixedrings=norings[0]-fix(norings[0]*3./4.),difference=verror,cutoff=cutoff,arctan=0.,order=polorder,max_par=VROTmax,min_par=channelwidth,log=log ,error=sigmarot,ring_spacing=ring_spacing
         ENDIF ELSE Begin
-           revised_regularisation_rot,VROTarr,SBRarr, firstfitvalues[*,9],/REVERSE,fixedrings=norings[0]-fix(norings[0]*3./4.),difference=verror,cutoff=cutoff,arctan=0.,order=polorder,max_par=VROTmax,min_par=channelwidth,/NOCENTRAL,log=log
+           revised_regularisation_rot,VROTarr,SBRarrcom, firstfitvalues[*,9],/REVERSE,fixedrings=norings[0]-fix(norings[0]*3./4.),difference=verror,cutoff=cutoff,arctan=0.,order=polorder,max_par=VROTmax,min_par=channelwidth,/NOCENTRAL,log=log ,error=sigmarot,ring_spacing=ring_spacing
         ENDELSE
         tmp0check=WHERE(VROTarr LT 0)
         IF tmp0check[0] NE -1 then VROTarr[tmp0check]=3.*channelwidth
@@ -3263,6 +3175,15 @@ noconfig:
         tirificfirst[tmppos]='VROT= 0. '+STRJOIN(strtrim(string(VROTarr[1:n_elements(VROTarr[*])-1]),2),' ')
         tmppos=where('VROT_2' EQ tirificfirstvars)
         tirificfirst[tmppos]='VROT_2= 0. '+STRJOIN(strtrim(string(VROTarr[1:n_elements(VROTarr[*])-1]),2),' ')
+                                ;We also want a full smoothing on the
+                                ;profile
+        tmppos=where('RADI' EQ VariablesWanted)
+        sbrarr=fat_savgol(firstfitvalues[*,sbrpos],firstfitvalues[*,tmppos])
+        sbrarr2=fat_savgol(firstfitvalues[*,sbrpos2],firstfitvalues[*,tmppos])
+
+        sbr_check,tirificfirst, tirificfirstvars,sbrarr,sbrarr2,cutoff
+
+
         vrotinputoriginal=vrotinput1
         VROTinput1=['VROT 2:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+$
                     ' VROT_2 2:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1),$
@@ -3271,6 +3192,7 @@ noconfig:
            openu,66,log,/APPEND
            printf,66,linenumber()+"We have smoothed the rotation curve in the first fit."
            close,66
+           print,linenumber()+"We have smoothed the rotation curve in the first fit."
         ENDIF ELSE BEGIN
            print,linenumber()+"We have smoothed the rotation curve in the first fit."
         ENDELSE
@@ -3287,9 +3209,6 @@ noconfig:
         close,66
      ENDIF
      testing1skip:
-
-
-
                                 ;Reading out the fit values
      Basicinfovars=['XPOS','YPOS','VSYS','PA','INCL','VROT']
      writenewtotemplate,tirificfirst,maindir+'/'+catdirname[i]+'/1stfit.def',Arrays=Basicinfovalues,VariableChange=Basicinfovars,Variables=tirificfirstvars,/EXTRACT
@@ -3302,7 +3221,7 @@ noconfig:
      DEChr=Basicinfovalues[0,1]
      DECdiff=maxchangeDEC*3600.
 
-                               ;If the cube is optimized then make a model at full resolution
+                               ;If the cube is optimized then make a model at full resolution else make sure to kill tirific
      IF optimized then begin
         tmp=str_sep(strtrim(strcompress(currentfitcube),2),'_opt')
         IF n_elements(tmp) EQ 2 then begin
@@ -3312,23 +3231,36 @@ noconfig:
            writenewtotemplate,tirificfirst,maindir+'/'+catdirname[i]+'/1stfit.def'
            tmppos=where('LOOPS' EQ tirificfirstvars)
            tirificfirst[tmppos]='LOOPS=  0'
+           tmppos=where('INIMODE' EQ tirificfirstvars)
+           tirificfirst[tmppos]='INIMODE=  0'
+           tmppos=where('RESTARTNAME' EQ tirificfirstvars)
+           tirificfirst[tmppos]='RESTARTNAME= '
            openw,1,maindir+'/'+catdirname[i]+'/tirific.def'
            for index=0,n_elements(tirificfirst)-1 do begin
               printf,1,tirificfirst[index]
            endfor
            close,1
            IF testing GE 1 then goto,skiporver
-           rename,'1stfit.','1stfit_opt.'
-           gipsyfirst=strarr(1)
-           gipsyfirst='tirific DEFFILE=tirific.def ACTION=1'
-           spawn,gipsyfirst,isthere2
+           output_name = '1stfit.'
+           store_name = '1stfit_opt.'
+           continue_tirific ='optimized'
+           IF size(log,/TYPE) EQ 7 then begin
+             openu,66,log,/APPEND
+             printf,66,linenumber()+"As we are using a optimized resolution cube, we are making a full resolution model"
+             close,66
+           ENDIF
+           run_tirific, continue_tirific, curr_run_id, bookkeeping, output_name=output_name, $
+                  store_name=store_name, log=log,loops=loops,nopoints=nopoints,AC=AC1, $
+                  toymodels=toymodels,run_unit=run_unit
+           IF bookkeeping EQ 5 THEN goto,finishthisgalaxy
+
            skiporver:
            currentfitcube=currentfitcube+'_opt'
         ENDIF
-     ENDIF
-
-
-
+     ENDIF ELSE BEGIN
+       kill_tirific,curr_run_id,run_unit
+     ENDELSE
+     continue_tirific = 're-initialized for 2ndfit'
 
 
      tmpcube=readfits(maindir+'/'+catdirname[i]+'/1stfit.fits',hedtmp1stcube,/SILENT)
@@ -3346,8 +3278,10 @@ noconfig:
      hedtmp1st=hedtmp1stcube
      tmpix=WHERE(tmpcube GT catnoise[i])
      IF tmpix[0] EQ -1 then begin
+        comment = 'The first fit does not have flux above the noise level, this means a mis fit.'
+        commentlen='A'+strtrim(string(strlen(comment)),2)
         openu,1,outputcatalogue,/APPEND
-        printf,1,format='(A60,2A12,A120)',catDirname[i],AC1,0.,'The first fit does not have flux above the noise level, this means a mis fit.'
+        printf,1,catDirname[i],strtrim(string(fix(AC1)),2),strtrim(string(0),2),comment,format='("",('+dirformat+')," ",2(A6),"  ",('+commentlen+'))'
         close,1
         IF size(log,/TYPE) EQ 7 then begin
            openu,66,log,/APPEND
@@ -3359,7 +3293,7 @@ noconfig:
      endif
      IF size(log,/TYPE) EQ 7 then begin
         openu,66,log,/APPEND
-        printf,66,linenumber()+'we use this mask for the moment maps'+catmaskname[i]
+        printf,66,linenumber()+'we use this mask for the moment maps '+catmaskname[i]
         close,66
      ENDIF
      mask=readfits(maindir+'/'+catdirname[i]+'/'+catmaskname[i]+'.fits',headermask,/NOSCALE,/SILENT)
@@ -3371,6 +3305,9 @@ noconfig:
      hedtmp1stv=hedtmp1stcube
      momentsv2,tmpmask,tmpmapv,hedtmp1stv,1.,gdlidl=gdlidl
      writefits,maindir+'/'+catdirname[i]+'/1stfit_mom1.fits',float(tmpmapv),hedtmp1stv
+     hedtmp1stw=hedtmp1stcube
+     momentsv2,tmpmask,tmpmapw,hedtmp1stw,2.,gdlidl=gdlidl
+     writefits,maindir+'/'+catdirname[i]+'/1stfit_mom2.fits',float(tmpmapw),hedtmp1stw
      getDHI,tmpmap,hedtmp1st,Basicinfovalues[0,3],[RAhr,DEChr,Basicinfovalues[0,4]],DHI
      totflux=[TOTAL(tmpcube[tmpix])/pixperbeam,(TOTAL(2.*cutoff[0:norings[0]-1]))/(n_elements(tmpix)/pixperbeam)]
      VSYSdiff=maxchangevel
@@ -3394,20 +3331,110 @@ noconfig:
             string(strtrim(strcompress(string(convertskyanglefunction(DHI,catDistance[i]),format='(F8.1)')),2))
      close,1
 
+                                ;Let's add errors to the file
+     firstfitvaluesnames=0.
+     writenewtotemplate,tirificfirst,maindir+'/'+catdirname[i]+'/1stfit.def',Arrays=firstfitvalues,VariableChange=firstfitvaluesnames,Variables=tirificfirstvars
+     errorsadd=['VROT','VROT_2','PA','PA_2','INCL','INCL_2','SDIS','SDIS_2']
+     tmpfile=strarr(n_elements(tirificfirst)+8)
+     added=0
+                                ;Add the errors to the final tirific
+                                ;file
+     newrings=norings[0]
+     for j=0,n_elements(tirificfirst)-1 do begin
+        tmp=str_sep(strtrim(strcompress(tirificfirst[j]),2),'=')
+        tmpex=WHERE(tmp[0] EQ errorsadd)
+        if tmpex[0] NE -1 then begin
+           tmpfile[j+added]=tirificfirst[j]
+           added++
+           case tmpex[0] of
+              0:begin
+                 IF n_elements(sigmarot) LT newrings then sigmarot=replicate(channelwidth,newrings)
+                 errs=dblarr(n_elements(sigmarot))
+                 errs=sigmarot
+                                ;/SIN(incarr1*!DtoR)
+                 errs[0]=double(channelwidth)
+                 tmpposv=WHERE(firstfitvaluesnames EQ 'VROT')
+                 avrot=TOTAL(firstfitvalues[1:n_elements(firstfitvalues[*,tmpposv])-1,tmpposv])/n_elements(firstfitvalues[1:n_elements(firstfitvalues[*,tmpposv])-1,tmpposv])
+                 tmpavrot=WHERE(errs GT avrot/2.)
+
+                 IF tmpavrot[0] NE -1 AND avrot NE 0 then errs[WHERE(errs GT avrot/2.)]=avrot/2.
+                 tmpfile[j+added]='# '+tmp[0]+'_ERR='+STRJOIN(strtrim(strcompress(string(errs[0:newrings-1]))),' ')
+              end
+              1: begin
+                 IF n_elements(sigmarot) LT newrings then sigmarot=replicate(channelwidth,newrings)
+                 errs=sigmarot
+                 errs[0]=double(channelwidth)
+                 tmpposv=WHERE(firstfitvaluesnames EQ 'VROT_2')
+                 avrot=TOTAL(firstfitvalues[1:n_elements(firstfitvalues[*,tmpposv])-1,tmpposv])/n_elements(firstfitvalues[1:n_elements(firstfitvalues[*,tmpposv])-1,tmpposv])
+                 tmpavrot=WHERE(errs GT avrot/2.)
+
+                 IF tmpavrot[0] NE -1 AND avrot NE 0 then errs[WHERE(errs GT avrot/2.)]=avrot/2.
+                 tmpfile[j+added]='# '+tmp[0]+'_ERR='+STRJOIN(strtrim(strcompress(string(errs[0:newrings-1]))),' ')
+              end
+              2: begin
+                 sigmapa1=replicate(1.,newrings)
+                 IF n_elements(sigmapa1) LT newrings then sigmapa1=replicate(2,newrings)
+                 tmpfile[j+added]='# '+tmp[0]+'_ERR='+STRJOIN(strtrim(strcompress(string(sigmapa1[0:newrings-1]))),' ')
+              end
+              3: begin
+                 sigmapa2=replicate(1.,newrings)
+                 IF n_elements(sigmapa2) LT newrings then  sigmapa2=replicate(2,newrings)
+                 tmpfile[j+added]='# '+tmp[0]+'_ERR='+STRJOIN(strtrim(strcompress(string(sigmapa2[0:newrings-1]))),' ')
+              end
+              4: begin
+                 sigmaincl1=replicate(4.*exp(-catinc[i]^2.5/10^3.5)+1.5,newrings)
+                 IF n_elements(sigmaincl1) LT newrings then  sigmaincl1=replicate(4,newrings)
+                 tmpfile[j+added]='# '+tmp[0]+'_ERR='+STRJOIN(strtrim(strcompress(string(sigmaincl1[0:newrings-1]))),' ')
+              end
+              5: begin
+                 sigmaincl2=replicate(4.*exp(-catinc[i]^2.5/10^3.5)+1.5,newrings)
+                 IF n_elements(sigmaincl2) LT newrings then   sigmaincl2=replicate(4,newrings)
+                 tmpfile[j+added]='# '+tmp[0]+'_ERR='+STRJOIN(strtrim(strcompress(string(sigmaincl2[0:newrings-1]))),' ')
+              end
+              6: begin
+                 sigmasdis = replicate(channelwidth/2.,newrings)
+                 IF n_elements(sigmasdis) LT newrings then   sigmasdis=replicate(channelwidth/2.,newrings)
+                 tmpfile[j+added]='# '+tmp[0]+'_ERR='+STRJOIN(strtrim(strcompress(string(sigmasdis[0:newrings-1]))),' ')
+              end
+              7: begin
+                 sigmasdis = replicate(channelwidth/2.,newrings)
+                 IF n_elements(sigmasdis) LT newrings then   sigmasdis=replicate(channelwidth/2.,newrings)
+                 tmpfile[j+added]='# '+tmp[0]+'_ERR='+STRJOIN(strtrim(strcompress(string(sigmasdis[0:newrings-1]))),' ')
+              end
+              else:print,'odd'
+           endcase
+        endif else tmpfile[j+added]=tirificfirst[j]
+     endfor
+     tirificfirst=tmpfile
+                                ;write the final file and produce the final model
+     openw,1,maindir+'/'+catdirname[i]+'/1stfit.def'
+     for index=0,n_elements(tirificfirst)-1 do begin
+        printf,1,tirificfirst[index]
+     endfor
+     close,1
+
+
+
+
+
+
      IF finishafter EQ 1 then begin
+        comment = 'You have chosen to skip the fitting process after the first fit'
+        commentlen='A'+strtrim(string(strlen(comment)),2)
         openu,1,outputcatalogue,/APPEND
-        printf,1,format='(A60,2A12,A120)',catDirname[i],AC1,0.,'You have chosen to skip the fitting process after the first fit'
+        printf,1,catDirname[i],strtrim(string(fix(AC1)),2),strtrim(string(0),2),comment,format='("",('+dirformat+')," ",2(A6),"  ",('+commentlen+'))'
         close,1
         bookkeeping=bookkeeping+0.5
         goto,finishthisgalaxy
      ENDIF
      prevmodification=0
 ;******************************************This is the end of the first fit******************************
-
+     endtime_firststep = systime()
      sigmapa1=0.
      sigmapa2=0.
      sigmaincl1=0.
      sigmaincl2=0.
+     sigmasdis=0.
      sigmarot=0.
      velfixrings=1
      tmppos=where('INSET' EQ tirificsecondvars)
@@ -3428,6 +3455,8 @@ noconfig:
      Vfrom1=firstfitvalues[*,tmppos]
      half=fix(n_elements(firstfitvalues[*,tmppos])/2.)
      VROTarr[*]=firstfitvalues[*,tmppos]
+     tmppos=where('SDIS' EQ firstfitvaluesnames)
+     SDISarr=dblarr(n_elements(firstfitvalues[*,tmppos]))
      tmppos=where('SBR' EQ firstfitvaluesnames)
      SBRarr=firstfitvalues[*,tmppos]
      tmppos=where('INCL' EQ firstfitvaluesnames)
@@ -3438,11 +3467,21 @@ noconfig:
      tmppos=where('SBR_2' EQ firstfitvaluesnames)
      SBRarr2=firstfitvalues[*,tmppos]
                                 ;We always want to smooth the surface brightnes. Added 16-06-2017
-     get_newringsv9,SBRarr,SBRarr2,cutoff,newindrings,/individual
-     SBRarr=fat_hanning(SBRarr,rings=newindrings[0])
-     SBRarr2=fat_hanning(SBRarr2,rings=newindrings[1])
+     SBRarr=fat_savgol(SBRarr,RADarr)
+     SBRarr2=fat_savgol(SBRarr2,RADarr)
+     SBRarr[0:1]=(SBRarr[0:1]+SBRarr2[0:1])/2.
+     SBRarr2[0:1]=SBRarr[0:1]
+                                ;To make sure that we fit a warp we
+                                ;want to increase the brightness of
+                                ;the last two rings after the first
+                                ;fit
+     SBRarr[n_elements(SBRarr)-3:n_elements(SBRarr)-1]=SBRarr[n_elements(SBRarr)-3:n_elements(SBRarr)-1]*1.2
+     SBRarr2[n_elements(SBRarr2)-3:n_elements(SBRarr2)-1]=SBRarr[n_elements(SBRarr2)-3:n_elements(SBRarr2)-1]*1.2
 
-
+     tmppos=where('SBR' EQ tirificsecondvars)
+     tirificsecond[tmppos]='SBR= '+STRJOIN(SBRarr[0:n_elements(SBRarr)-1],' ')
+     tmppos=where('SBR_2' EQ tirificsecondvars)
+     tirificsecond[tmppos]='SBR_2= '+STRJOIN(SBRarr2[0:n_elements(SBRarr2)-1],' ')
      tmppos=where('INCL_2' EQ firstfitvaluesnames)
      INCLang2=firstfitvalues[*,tmppos]
      IF catinc[i] GT 80. then begin
@@ -3453,14 +3492,42 @@ noconfig:
      PAang2=firstfitvalues[*,tmppos]
      tmppos=where('NUR' EQ firstfitvaluesnames)
      norings=firstfitvalues[0,tmppos]
-     IF norings LE 4 then begin
-        IF norings GE 3 and finishafter NE 1.1 then begin
+     IF norings*ring_spacing LE 4 then begin
+        IF norings*ring_spacing GE 2 and finishafter NE 1.1 and ring_spacing GT 0.75 then begin
+           ring_spacing_new = ring_spacing/1.5
+           norings[0]=round(norings[0]*ring_spacing/ring_spacing_new)
+        ;we always want at least 3 beams in the model
+           WHILE ring_spacing_new GT 0.75 AND norings[0] LT 3 do begin
+              ring_spacing_new = ring_spacing_new/2.
+              norings[0]=round(norings[0]*ring_spacing/ring_spacing_new)
+           ENDWHILE
+
+           IF norings[0] LT 3. then begin
+              comment = 'The first fit model is too small to fit variations.'
+              commentlen='A'+strtrim(string(strlen(comment)),2)
+              openu,1,outputcatalogue,/APPEND
+              printf,1,catDirname[i],strtrim(string(fix(AC1)),2),strtrim(string(0),2),comment,format='("",('+dirformat+')," ",2(A6),"  ",('+commentlen+'))'
+              close,1
+              IF size(log,/TYPE) EQ 7 then begin
+                 openu,66,log,/APPEND
+                 printf,66,linenumber()+'The first fit model is too small to fit variations.'
+                 printf,66,linenumber()+"Finished "+catDirname[i]+" which is galaxy #  "+strtrim(string(fix(i)),2)+" at "+systime()
+                 close,66
+              ENDIF
+              IF optimized then begin
+                 currentfitcube = noptname[0]
+              ENDIF
+              bookkeeping=bookkeeping+0.5
+              goto,finishthisgalaxy
+           ENDIF
+           maxrings=maxrings*ring_spacing/ring_spacing_new
+           noringspix=norings[0]*(catmajbeam[i]*ring_spacing_new)/(ABS(sxpar(headermap,'cdelt1'))*3600.)
+           rad=[0.,((findgen(round(maxrings)))*(catmajbeam[i]*ring_spacing_new)+catmajbeam[i]/5)]
+           calc_edge,catnoise[i],rad,[catmajbeam[i],catminbeam[i],channelwidth],cutoffor,vsys=catVSYS[i]
+
+
+           ring_spacing = ring_spacing_new
            finishafter=1.1
-           norings[0]=(norings[0]-1)*2.
-           maxrings=maxrings*2.
-           noringspix=norings[0]*(catmajbeam[i]/2.)/(ABS(sxpar(headermap,'cdelt1'))*3600.)
-           rad=[0.,((findgen(maxrings))*(catmajbeam[i]/2.)+catmajbeam[i]/10.)]
-           calc_edge,catnoise[i],rad,[catmajbeam[i],catminbeam[i]],cutoffor
            cutoff=cutoffor*cutoffcorrection
            tmp=rad[0:norings[0]-1]
            rad=tmp
@@ -3474,6 +3541,8 @@ noconfig:
            tmp=1
            interpolate,SBRarr2,RADarr,newradii=rad,output=tmp
            SBRarr2=tmp
+           SBRarr[0:1]=(SBRarr[0:1]+SBRarr2[0:1])/2.
+           SBRarr2[0:1]=SBRarr[0:1]
            RADarr=rad
            tmppos=where('RADI' EQ tirificsecondvars)
            tirificsecond[tmppos]='RADI= '+STRJOIN(strtrim(strcompress(string(RADarr))),' ')
@@ -3484,9 +3553,12 @@ noconfig:
            tmppos=where('NUR' EQ tirificsecondvars)
            tirificsecond[tmppos]='NUR= '+STRJOIN(strtrim(strcompress(string(norings[0]))),' ')
 
+
         endif else begin
+           comment = 'The first fit model is too small to fit variations.'
+           commentlen='A'+strtrim(string(strlen(comment)),2)
            openu,1,outputcatalogue,/APPEND
-           printf,1,format='(A60,A12,A12,A80)',catDirname[i],AC1,0,'The first fit model is too small to fit variations.'
+           printf,1,catDirname[i],strtrim(string(fix(AC1)),2),strtrim(string(0),2),comment,format='("",('+dirformat+')," ",2(A6),"  ",('+commentlen+'))'
            close,1
            IF size(log,/TYPE) EQ 7 then begin
               openu,66,log,/APPEND
@@ -3497,6 +3569,7 @@ noconfig:
            IF optimized then begin
               currentfitcube = noptname[0]
            ENDIF
+           IF finishafter GT 1.75 then finishafter=finishafter-1
            bookkeeping=bookkeeping+0.5
            goto,finishthisgalaxy
         ENDELSE
@@ -3519,14 +3592,10 @@ noconfig:
 
 
 
-;     IF sofiafail then begin
-;        lowring=3
-;        highring=maxrings
-;        IF finishafter EQ 1.1 then highring=(maxrings-2)*2
-;     ENDIF else begin
-        lowring=norings[0]-3
-        highring=norings[0]+2
-;     ENDELSE
+
+     lowring=norings[0]-(3/ring_spacing)
+     highring=norings[0]+(2/ring_spacing)
+
      tmppos=where('VROT' EQ tirificsecondvars)
      tirificsecond[tmppos]='VROT= 0.'+STRJOIN(strtrim(strcompress(string(VROTarr[1:n_elements(VROTarr)-1]))),' ')
      tmppos=where('VROT_2' EQ tirificsecondvars)
@@ -3538,7 +3607,7 @@ noconfig:
 
      IF norings[0] LT 4 then begin
         norings[0]=4.
-        changeradii,tirificsecond,norings[0]
+        changeradii,tirificsecond,norings[0],continue_tirific
         IF size(log,/TYPE) EQ 7 then begin
            openu,66,log,/APPEND
            printf,66,linenumber()+"We added a ring to the model cause there were too few the new number of rings = "+strtrim(string(fix(norings[0])),2)
@@ -3562,7 +3631,7 @@ noconfig:
      INCLinput1=['INCL 1:'+strtrim(strcompress(string(innerfix,format='(F7.4)')),1)+' INCL_2 1:'+strtrim(strcompress(string(innerfix,format='(F7.4)')),1),string(INCLmax),string(INCLmin),string(1.),string(0.1),string(0.5),string(0.1),'3','70','70']
                                 ;PA
      PAtir=(TOTAL(PAang)+TOTAL(PAang2))/(n_elements(PAang)+n_elements(PAang2))
-     PAinput1=['PA 1:'+strtrim(strcompress(string(innerfix,format='(F7.4)')),1)+' PA_2 1:'+strtrim(strcompress(string(innerfix,format='(F7.4)')),1),string(PAtir+40),string(PAtir-40),string(0.5),string(0.1),string(1.),string(0.1),'3','70','70']
+     PAinput1=['PA 1:'+strtrim(strcompress(string(innerfix,format='(F7.4)')),1)+' PA_2 1:'+strtrim(strcompress(string(innerfix,format='(F7.4)')),1),string(PAtir+40),string(PAtir-40),string(5),string(0.1),string(0.1),string(0.1),'5','70','70']
                                 ;VROT
      VROTmax=MAX(Vfrom1[1:n_elements(Vfrom1)-1],Min=VROTmin)
      VROTmax=VROTmax*1.5
@@ -3575,17 +3644,29 @@ noconfig:
                                 ; more uncartain at lower inclination
      IF VROTmax LT 60. then VROTmax=60.
      IF vrotmax GT 600. then VROTmax=600.
+                                ;SDIS
+     SDISmax=MAX(SDISarr,Min=SDISmin)
+     SDISmax=SDISmax*1.5
+     SDISmin=SDISmin/4.
+                                ;the minimum can never be less than
+                                ;the channelwidth
+     IF SDISmin LT channelwidth then SDISmin=channelwidth
+                                ; The maximum should not be less than
+                                ; 80 /sin(inclination) as it becomes
+                                ; more uncartain at lower inclination
+     IF SDISmax LT 25. then SDISmax=25.
+     IF sdismax GT 50. then SDISmax=50.
                                 ; See how much of the rotation curve we want to fit as a slope
-     get_newringsv9,SBRarr,SBRarr2,2.*cutoff,velconstused
+     get_newringsv9,SBRarr,SBRarr2,2.5*cutoff,velconstused
      velconstused--
-     IF norings[0] GT 8 AND not finishafter EQ 2.1 then velconstused=velconstused-1
+     IF norings[0]*ring_spacing GT 8 AND not finishafter EQ 2.1 then velconstused=velconstused-1
      set_vrotv6,vrotinput1,VROTarr,velconstused,vrotmax,vrotmin,norings,channelwidth,avinner=avinner,centralexclude=centralexclude,finish_after=finishafter
+     set_sdis,sdisinput1,SDISarr,velconstused,sdismax,sdismin,norings,channelwidth,avinner=avinner,finish_after=finishafter,fix=fix_sdis
                                 ;set the surface brightness values
      set_sbr,SBRinput1,SBRinput2,SBRinput3,SBRinput4,SBRinput5,SBRinput6,SBRarr,cutoff,norings,finishafter,/initial,doubled=doubled
-                                ;SDIS
-     SDISinput1=['SDIS 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+$
-                 ' SDIS_2 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1),$
-                 '25','5','1','0.1','0.5','0.05','3','70','70']
+                                ;SDIS 14-09-2018 let's make an
+                                ;attempt at fitting the dispersion in
+                                ;a similar fashion to the pa
                                 ;Z0
      Z0input1=['Z0 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+$
                ' Z0_2 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1),$
@@ -3604,13 +3685,13 @@ noconfig:
                                 ;30 kpc which means that
                                 ;0.5=norings[0]/60. and so on
         IF catinc[i] GT 80 then begin
-           Z0input1[1]=string(MAX([catmajbeam[i]*norings[0]/60.,catmajbeam[i]/2.]))
-        ENDIF ELSE  Z0input1[1]=string(catmajbeam[i]*norings[0]/60.)
+           Z0input1[1]=string(MAX([catmajbeam[i]*ring_spacing*norings[0]/60.,catmajbeam[i]/2.]))
+        ENDIF ELSE  Z0input1[1]=string(catmajbeam[i]*ring_spacing*norings[0]/60.)
         Z0input1[2]='0.'
-        Z0input1[3]=string(-1*catmajbeam[i]*norings[0]/6E4)
-        Z0input1[4]=string(catmajbeam[i]*norings[0]/6E5)
-        Z0input1[5]=string(catmajbeam[i]*norings[0]/60.)
-        Z0input1[6]=string(catmajbeam[i]*norings[0]/6E5)
+        Z0input1[3]=string(-1*catmajbeam[i]*ring_spacing*norings[0]/6E4)
+        Z0input1[4]=string(catmajbeam[i]*ring_spacing*norings[0]/6E5)
+        Z0input1[5]=string(catmajbeam[i]*ring_spacing*norings[0]/60.)
+        Z0input1[6]=string(catmajbeam[i]*ring_spacing*norings[0]/6E5)
      ENDIF
                                 ;And then make the other string input variables with the same
                                 ;parameters and an additional string
@@ -3634,7 +3715,8 @@ noconfig:
                                 ;with half beams than we let the rings
                                 ;beyond 4 free
      IF norings[0] GT 4 AND finishafter NE 1.1 then begin
-                                ;And some different fitting parameters for the free rings
+                                ;And some different fitting parameters
+                                ;for the free rings
         INCLinput2[5]='0.5'
         INCLinput2[3]='1.0'
         INCLinput3[5]='0.5'
@@ -3645,6 +3727,10 @@ noconfig:
         PAinput3[3]='0.5'
                                                           ;update INCL and PA
         set_warp_slopev3,SBRarr,SBRarr2,cutoff,INCLinput2,PAinput2,INCLinput3,PAinput3,norings,log=log,innerfix=innerfix
+        if fix_incl EQ 0. then INCLinput1[0]='INCL 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+$
+                                             ' INCL_2 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)
+        if fix_pa EQ 0. then PAinput1[0]='PA 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+$
+                                         ' PA_2 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)
      endif else begin
                                 ;Otherwise we just fit  a single flat disk
         INCLinput1[0]='INCL 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+$
@@ -3652,10 +3738,14 @@ noconfig:
         PAinput1[0]='PA 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+$
                     ' PA_2 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)
         IF doubled then begin
-           print,'These are peculiar conversion errors'
+
         ENDIF else SBRinput1[2]=strtrim(strcompress(string(cutoff[n_elements(cutoff)-1]/4.,format='(E12.5)')),1)
-        print,'These are peculiar conversion errors'
      endelse
+     ;Set the inimode with new newradii
+     case 1 of
+       norings[0] LT 5: inimode = 2
+       else: inimode = 3
+     endcase
 
                                 ;If the first fit is accepted we only change the central position minimally
      IF AC1 EQ 1 then begin
@@ -3671,16 +3761,31 @@ noconfig:
         vsysinput1=[ ' VSYS 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+$
                      ' VSYS_2 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1),strtrim(strcompress(string(catvsys[i]+100.)),1),$
                      strtrim(strcompress(string(catvsys[i]-100.)),1),'0.5','0.01','2','0.5','3','70','70']
-        IF norings[0] LE 4 OR finishafter EQ 1.1 then begin
-           Writefittingvariables,tirificsecond,inclinput1,painput1,vrotinput1,sbrinput1,sbrinput2,sbrinput4,sbrinput3,z0input1,$
-                                 xposinput1,yposinput1,vsysinput1,sdisinput1
-        ENDIF ELSE BEGIN
-           Writefittingvariables,tirificsecond,inclinput1,inclinput2,inclinput3,painput1,painput2,painput3,vrotinput1,sbrinput1,sbrinput2,sbrinput4,sbrinput3,z0input1,$
-                                 xposinput1,yposinput1,vsysinput1,sdisinput1
-        ENDELSE
+        case 1 of
+           norings[0] LE 4 OR finishafter EQ 1.1 OR (fix_incl EQ 0. and fix_pa EQ 0.): begin
+              Writefittingvariables,tirificsecond,inclinput1,painput1,vrotinput1,sdisinput1,sbrinput1,sbrinput2,sbrinput4,sbrinput3,z0input1,$
+                                    xposinput1,yposinput1,vsysinput1,INIMODE=inimode
+           end
+           fix_incl EQ 0. and fix_pa EQ 1.: begin
+              Writefittingvariables,tirificsecond,inclinput1,painput1,painput2,painput3,$
+                                    vrotinput1,sdisinput1,sbrinput1,sbrinput2,sbrinput4,sbrinput3,z0input1,$
+                                    xposinput1,yposinput1,vsysinput1,INIMODE=inimode
+           end
+           fix_incl EQ 1. and fix_pa EQ 0.: begin
+              Writefittingvariables,tirificsecond,inclinput1,inclinput2,inclinput3,painput1,$
+                                 vrotinput1,sdisinput1,sbrinput1,sbrinput2,sbrinput4,sbrinput3,z0input1,$
+                                    xposinput1,yposinput1,vsysinput1,INIMODE=inimode
+           end
+           else: begin
+              Writefittingvariables,tirificsecond,inclinput1,inclinput2,inclinput3,painput1,painput2,painput3,$
+                                    vrotinput1,sdisinput1,sbrinput1,sbrinput2,sbrinput4,sbrinput3,z0input1,$
+                                    xposinput1,yposinput1,vsysinput1,INIMODE=inimode
+           end
+        endcase
+
      endif else begin
                                 ;Else we allow more variation in the
-                                ;center
+                                ;center and fit them first
         xposinput1=[ ' XPOS 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+$
                       ' XPOS_2 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1),'360','0', +$
                       strtrim(string(pixelsizeRA*3.)),strtrim(string(pixelsizeRA/10.)),+$
@@ -3691,13 +3796,24 @@ noconfig:
                      strtrim(string(pixelsizeDEC)),strtrim(string(pixelsizeDEC/10.)),'3','70','70']
         vsysinput1=[ ' VSYS 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+$
                      ' VSYS_2 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1),strtrim(strcompress(string(catvsys[i]+100.)),1),strtrim(strcompress(string(catvsys[i]-100.)),1),'2','0.5','2','0.5','3','70','70']
-        IF norings[0] LE 4 or finishafter EQ 1.1 then begin
-           Writefittingvariables,tirificsecond,xposinput1,yposinput1,vsysinput1,inclinput1,painput1,vrotinput1,$
-                                 sbrinput1,sbrinput2,sbrinput4,sbrinput3,z0input1,sdisinput1
-        ENDIF ELSE BEGIN
-           Writefittingvariables,tirificsecond,xposinput1,yposinput1,vsysinput1,inclinput1,inclinput2,inclinput3,painput1,painput2,painput3,vrotinput1,$
-                                 sbrinput1,sbrinput2,sbrinput4,sbrinput3,z0input1,sdisinput1
-        ENDELSE
+        case 1 of
+           norings[0] LE 4 OR finishafter EQ 1.1 OR (fix_incl EQ 0. and fix_pa EQ 0.): begin
+              Writefittingvariables,tirificsecond, xposinput1,yposinput1,vsysinput1,inclinput1,painput1,vrotinput1,sdisinput1,$
+              sbrinput1,sbrinput2,sbrinput4,sbrinput3,z0input1,INIMODE=inimode
+           end
+           fix_incl EQ 0. and fix_pa EQ 1.: begin
+              Writefittingvariables,tirificsecond, xposinput1,yposinput1,vsysinput1,inclinput1,painput1,painput2,painput3,$
+                                    vrotinput1,sdisinput1,sbrinput1,sbrinput2,sbrinput4,sbrinput3,z0input1,INIMODE=inimode
+           end
+           fix_incl EQ 1. and fix_pa EQ 0.: begin
+              Writefittingvariables,tirificsecond, xposinput1,yposinput1,vsysinput1,inclinput1,inclinput2,inclinput3,painput1,$
+                                    vrotinput1,sdisinput1,sbrinput1,sbrinput2,sbrinput4,sbrinput3,z0input1,INIMODE=inimode
+           end
+           else: begin
+              Writefittingvariables,tirificsecond, xposinput1,yposinput1,vsysinput1,inclinput1,inclinput2,inclinput3,painput1,painput2,painput3,$
+                                    vrotinput1,sdisinput1,sbrinput1,sbrinput2,sbrinput4,sbrinput3,z0input1,INIMODE=inimode
+           end
+        endcase
      endelse
                                 ;Setting a bunch of fit tracking variables
      forcedring=0.
@@ -3721,6 +3837,7 @@ noconfig:
                                 ;If the second fit is not accepted we
                                 ;come back to this point to do the refitting
      notacceptedtwo:
+
      prevXPOS=newXPOS
      prevYPOS=newYPOS
      prevslopedrings=slopedrings
@@ -3737,9 +3854,35 @@ noconfig:
            tirificsecond[tmppos]='INSET=  '+strtrim(strcompress(string(currentfitcube+'.fits')))
         ENDIF
      ENDIF
-                                ;If we are testing than skip the fitting
+     ;case 1 of
+    ;    norings[0] LT 5: memode=0
+    ;    norings[0] LT 15: memode=1
+    ;    norings[0] LT 30: memode=2
+    ;    else: memode=3
+     ;endcase
+     ;tmppos=where('INIMODE' EQ tirificsecondvars)
+     ;tirificsecond[tmppos]='INIMODE=  '+strtrim(strcompress(string(memode)))
+     tmppos=where('LOOPS' EQ tirificsecondvars)
+     case 1 of
+        trytwo LT 5: begin
+           tirificsecond[tmppos]='LOOPS=  12'
+        end
+        trytwo LT 10: begin
+           tirificsecond[tmppos]='LOOPS=  8'
+        end
+        else: begin
+           tirificsecond[tmppos]='LOOPS=  5'
+        end
+     endcase
+
+
+
+;If we are testing than skip the fitting
      IF testing GE 2 then goto,testing2
                                 ;Write the tirific file and update log
+     restart_counter++
+     tmppos=where('RESTARTID' EQ tirificsecondvars)
+     tirificsecond[tmppos]='RESTARTID= '+string(fix(restart_counter))
      openw,1,maindir+'/'+catdirname[i]+'/tirific.def'
      for index=0,n_elements(tirificsecond)-1 do begin
         printf,1,tirificsecond[index]
@@ -3759,18 +3902,18 @@ noconfig:
         print,'something has gone horribly wrong'
         stop
      ENDIF
-;     spawn,'mv 2ndfit.def 2ndfit_'+strtrim(strcompress(string(fix(counter))),2)+'.def'
-     rename,'2ndfit.','2ndfitold.'
-     gipsyfirst=strarr(1)
-     gipsyfirst='tirific DEFFILE=tirific.def ACTION=1'
-     spawn,gipsyfirst,isthere2
+     nopoints=0
+     run_tirific, continue_tirific, curr_run_id,bookkeeping,output_name='2ndfit.', $
+                  store_name='2ndfitold.',log=log,loops=loops,nopoints=nopoints,AC=AC2, $
+                  toymodels=toymodels,run_unit=run_unit
+
+
 
      testing2:
                                 ;Then we check wether the fit is accepted if not we see if the PA and
                                 ;INCL can be accepted IF the positions were not accepted before we try
                                 ;then as well
-     nopoints=0
-     get_progress,maindir+'/'+catdirname[i]+'/progress2.txt',AC2,nopoints,loops,toymodels
+
      IF size(log,/TYPE) EQ 7 then begin
         openu,66,log,/APPEND
         IF AC2 EQ 1 then begin
@@ -3811,14 +3954,36 @@ noconfig:
      tmp=WHERE(VROTarr GT VROTmax)
      IF tmp[0] ne -1 then VROTarr[tmp]=VROTmax*0.8
      tmp=WHERE(VROTarr LT VROTmin)
-     IF tmp[0] ne -1 then VROTarr[tmp]=VROTmin*2.
+     IF tmp[0] ne -1 then begin
+        IF tmp[0] EQ 0 then begin
+           IF n_elements(tmp) GT 1 then VROTarr[tmp[1:n_elements(tmp)-1]]=VROTmin*2.
+        ENDIF ELSE VROTarr[tmp]=VROTmin*2.
+     ENDIF
+     tmppos=where('SDIS' EQ secondfitvaluesnames)
+     SDISarr=secondfitvalues[*,tmppos]
+                                ;We check that it is not out off bound
+     tmp=WHERE(SDISarr GT SDISmax)
+     IF tmp[0] ne -1 then SDISarr[tmp]=SDISmax*0.8
+     tmp=WHERE(SDISarr LT SDISmin)
+     IF tmp[0] ne -1 then SDISarr[tmp]=SDISmin*1.5
 
      tmppos=where('SBR' EQ secondfitvaluesnames)
      SBRarr=secondfitvalues[*,tmppos]
+     SBRarrunmod=SBRarr
                                 ;We always want to smooth the surface brightnes. Added 16-06-2017
-     get_newringsv9,SBRarr,SBRarr2,cutoff,newindrings,/individual
-     SBRarr=fat_hanning(SBRarr,rings=newindrings[0])
-     SBRarror=SBRarr
+
+
+                                ;and take the central point as the
+                                ;extension of the previous two. Added
+                                ;18-10-2018. This is done in
+                                ;fat_savgol already
+     ;inSBR=SBRarr[1:2]
+     ;inRad=RADarr[1:2]
+     ;newRAD=RADarr[0:2]
+     ;newSBR=1
+     ;interpolate,inSBR,inRad,newradii=newRAD,output=newSBR
+     ;SBRarr[0]=newSBR[0]
+    ;
 
      tmppos=where('INCL' EQ secondfitvaluesnames)
      INCLang=secondfitvalues[*,tmppos]
@@ -3830,14 +3995,50 @@ noconfig:
      tmp=WHERE(VROTarr2 GT VROTmax)
      IF tmp[0] ne -1 then VROTarr2[tmp]=VROTmax*0.8
      tmp=WHERE(VROTarr2 LT VROTmin)
-     IF tmp[0] ne -1 then VROTarr2[tmp]=VROTmin*2.
+     IF tmp[0] ne -1 then begin
+        IF tmp[0] EQ 0 then begin
+           IF n_elements(tmp) GT 1 then VROTarr2[tmp[1:n_elements(tmp)-1]]=VROTmin*2.
+        ENDIF ELSE VROTarr2[tmp]=VROTmin*2.
+     ENDIF
+
+     tmppos=where('SDIS_2' EQ secondfitvaluesnames)
+     SDISarr2=secondfitvalues[*,tmppos]
+                                ;We check that it is not out off bound
+     tmp=WHERE(SDISarr2 GT SDISmax)
+     IF tmp[0] ne -1 then SDISarr2[tmp]=SDISmax*0.8
+     tmp=WHERE(SDISarr2 LT SDISmin)
+     IF tmp[0] ne -1 then SDISarr2[tmp]=SDISmin*1.5
 
 
      tmppos=where('SBR_2' EQ secondfitvaluesnames)
      SBRarr2=secondfitvalues[*,tmppos]
+     SBRarr2unmod=SBRarr2
                                 ;We always want to smooth the surface brightnes. Added 16-06-2017
-     get_newringsv9,SBRarr,SBRarr2,cutoff,newindrings,/individual
-     SBRarr2=fat_hanning(SBRarr2,rings=newindrings[1])
+    ; IF finalsmooth GE 1 OR norings[0]*ring_spacing GT 4 then begin
+        IF size(log,/TYPE) EQ 7 then begin
+           openu,66,log,/APPEND
+           printf,66,linenumber()+"Smoothing the full SBR profile."
+           Close,66
+        ENDIF
+        SBRarr=fat_savgol(SBRarr,RADarr)
+        SBRarr2=fat_savgol(SBRarr2,RADarr)
+     ;endif else begin
+     ;   IF size(log,/TYPE) EQ 7 then begin
+     ;      openu,66,log,/APPEND
+     ;      printf,66,linenumber()+"Smoothing half the SBR profile."
+     ;      Close,66
+     ;   ENDIF
+     ;   SBRarr=fat_savgol(SBRarr,RADarr,/Half)
+     ;   SBRarr2=fat_savgol(SBRarr2,RADarr,/Half)
+     ;endif
+
+     SBRarr[0]=(SBRarr[0]+SBRarr2[0])/2.
+     SBRarr2[0]=SBRarr[0]
+     tmppos=where('SBR' EQ tirificsecondvars)
+     tirificsecond[tmppos]='SBR= '+STRJOIN(SBRarr[0:n_elements(SBRarr)-1],' ')
+     tmppos=where('SBR_2' EQ tirificsecondvars)
+     tirificsecond[tmppos]='SBR_2= '+STRJOIN(SBRarr2[0:n_elements(SBRarr2)-1],' ')
+     SBRarror=SBRarr
      SBRarr2or=SBRarr2
 
      tmppos=where('INCL_2' EQ secondfitvaluesnames)
@@ -3906,8 +4107,10 @@ noconfig:
               printf,66,linenumber()+"Finished "+catDirname[i]+" which is galaxy #  "+strtrim(string(fix(i)),2)+" at "+systime()
               close,66
            ENDIF
+           comment = 'The first fit centre kept jumping away.'
+           commentlen='A'+strtrim(string(strlen(comment)),2)
            openu,1,outputcatalogue,/APPEND
-           printf,1,format='(A60,2A12,A120)',catDirname[i],AC1,0.,'The first fit centre kept jumping away.'
+           printf,1,catDirname[i],strtrim(string(fix(AC1)),2),strtrim(string(0),2),comment,format='("",('+dirformat+')," ",2(A6),"  ",('+commentlen+'))'
            close,1
            bookkeeping=5
            goto,finishthisgalaxy
@@ -3921,7 +4124,7 @@ noconfig:
         tirificsecond[tmppos]=' YPOS= '+string(prevYPOS)
         tmppos=where('YPOS_2' EQ tirificsecondvars)
         tirificsecond[tmppos]=' YPOS_2= '+string(prevYPOS)
-        for j=0,n_elements(SBRarr)-1 do begin
+        for j=2,n_elements(SBRarr)-1 do begin
            IF SBRarr[j] LT cutoff[j] then SBRarr[j]=cutoff[j]*3.
            IF SBRarr2[j] LT cutoff[j] then SBRarr2[j]=cutoff[j]*3.
         endfor
@@ -3982,11 +4185,14 @@ noconfig:
      sbr_check,tirificsecond, tirificsecondvars,sbrarr,sbrarr2,cutoff
                                 ;We get the rings for which we only
                                 ;want to fit a slope in the rotation curve
-     get_newringsv9,SBRarr,SBRarr2,2.*cutoff,velconstused
+     get_newringsv9,SBRarr,SBRarr2,2.5*cutoff,velconstused
      velconstused--
-     IF norings[0] GT 8 AND not finishafter EQ 2.1 then velconstused=velconstused-1
-     IF (TOTAL(VROTarr[1:2])/2. GT 150 AND VROTarr[1] GT VROTarr[2] AND VROTarr[1] GT VROTarr[3]) OR $
-        (MEAN(VROTarr[1:n_elements(vrotarr)-1]) GT 250.) then begin
+     IF norings[0]*ring_spacing GT 8 AND not finishafter EQ 2.1 then velconstused=velconstused-1
+     xind=0
+     ;IF (TOTAL(VROTarr[1:2])/2. GT 120 AND VROTarr[1] GT VROTarr[2] AND VROTarr[1] GT VROTarr[3]) OR $
+     ;   (MEAN(VROTarr[2:n_elements(vrotarr)-1]) GT 200.) then begin
+     IF TOTAL(VROTarr[1:2])/2. GT 180. OR $
+        (MEAN(VROTarr[2:n_elements(vrotarr)-1]) GT 120.) then begin
         x=n_elements(VROTarr)-1
         WHILE VROTarr[x] GT  VROTarr[x-1] AND x GT fix(n_elements(VROTarr)/2) DO x--
 
@@ -3994,7 +4200,7 @@ noconfig:
         IF x LT n_elements(VROTarr)-1 then begin
            IF size(log,/TYPE) EQ 7 then begin
               openu,66,log,/APPEND
-              printf,66,linenumber()+'This is a massive galaxy hence we flatten the outer part if x is less '+$
+              printf,66,linenumber()+'This is a massive galaxy hence we flatten the outer part if '+strtrim(string(x),2)+' is less '+$
                      strtrim(string(n_elements(VROTarr)-1),2)
               printf,66,linenumber()+'From ring '+strtrim(string(x),2)+' on we have the value '+strtrim(string(VROTarr[x]),2)
               close,66
@@ -4007,9 +4213,10 @@ noconfig:
            tmppos=where('VROT_2' EQ tirificsecondvars)
            tirificsecond[tmppos]=stringVROT
            slope=1
+           xind=x
            IF norings[0]-x GT velconstused then velconstused=norings[0]-x
         ENDIF ELSE BEGIN
-           IF MEAN(VROTarr[1:n_elements(vrotarr)-1]) GT 250. then begin
+           IF MEAN(VROTarr[1:n_elements(vrotarr)-1]) GT 200. then begin
               min=MAX(VROTarr)
               xind=n_elements(VROTarr)-1
               for x=fix(n_elements(VROTarr)/2),n_elements(VROTarr)-1 do begin
@@ -4027,7 +4234,7 @@ noconfig:
                  tmppos=where('VROT_2' EQ tirificsecondvars)
                  tirificsecond[tmppos]=stringVROT
                  slope=1
-                 IF norings[0]-xind GT velconstused then velconstused=norings[0]-xind
+                                ;            IF norings[0]-xind GT velconstused then velconstused=norings[0]-xind
                  IF size(log,/TYPE) EQ 7 then begin
                     openu,66,log,/APPEND
                     printf,66,linenumber()+'This is a massive galaxy hence we flatten the outer part if xind is less '+$
@@ -4061,6 +4268,7 @@ noconfig:
         IF velfixrings GT 1 then VROTarr[n_elements(VROTarr)-velfixrings:n_elements(VROTarr)-1]=TOTAL(VROTarr[n_elements(VROTarr)-velfixrings:n_elements(VROTarr)-1])/n_elements(VROTarr[n_elements(VROTarr)-velfixrings:n_elements(VROTarr)-1])
      ENDIF
      set_vrotv6,vrotinput1,VROTarr,velconstused,vrotmax,vrotmin,norings,channelwidth,avinner=avinner,finish_after=finishafter,slope=slope
+     set_sdis,sdisinput1,SDISarr,velconstused,sdismax,sdismin,norings,channelwidth,finish_after=finishafter,slope=slope,fix=fix_sdis
                                 ;Then set the surface brighness profile parameters
      set_sbr,SBRinput1,SBRinput2,SBRinput3,SBRinput4,SBRinput5,SBRinput6,SBRarr,cutoff,norings,finishafter,doubled=doubled
                                 ;Update the rings to be fitted in the other parameters
@@ -4077,6 +4285,10 @@ noconfig:
         PAinput1[0]='PA 1:'+strtrim(strcompress(string(innerfix,format='(F7.4)')),1)+' PA_2 1:'+strtrim(strcompress(string(innerfix,format='(F7.4)')),1)
                                 ;update INCL and PA
         set_warp_slopev3,SBRarr,SBRarr2,cutoff,INCLinput2,PAinput2,INCLinput3,PAinput3,norings,log=log,innerfix=innerfix,sloped=slopedrings
+        if fix_incl EQ 0. then   INCLinput1[0]='INCL 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+$
+                                               ' INCL_2 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)
+        if fix_pa EQ 0. then   PAinput1[0]='PA 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+$
+                                           ' PA_2 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)
      ENDELSE
 
                                 ;additionallly we should updat the min
@@ -4089,76 +4301,194 @@ noconfig:
                                 ;last ring that isn't affected
      boundaryadjustment=0.
      lastreliablerings=n_elements(INCLang)
-     INCLrings=0
-     PArings=0
+
+     PAinput1old=PAinput1
+     INCLinput1old = INCLinput1
+     PAinput2old=PAinput2
+     INCLinput2old = INCLinput2
+     PAinput3old=PAinput3
+     INCLinput3old = INCLinput3
+
 
      IF double(INCLinput1[1]) LT 90. OR double(INCLinput2[1]) LT 90. OR  double(INCLinput3[1]) LT 90.  AND norings[0] GT 4 then begin
-        tmp=WHERE(INCLang GE (double(INCLinput2[1])-double(INCLinput2[3])))
-        tmp2=WHERE(INCLang2 GE (double(INCLinput3[1])-double(INCLinput3[3])))
-        IF n_elements(tmp) GE 2 OR n_elements(tmp2) GE 2 then begin
-           boundaryadjustment=1
-           IF double(INCLinput1[1]+5.) LT 90 then INCLinput1[1]=strtrim(strcompress(string(double(INCLinput1[1]+5.))),2) else INCLinput1[1]='90.'
-           IF double(INCLinput2[1]+5.) LT 90. then INCLinput2[1]=strtrim(strcompress(string(double(INCLinput2[1]+5.))),2) else INCLinput2[1]='90.'
-           IF double(INCLinput3[1]+5.) LT 90. then INCLinput3[1]=strtrim(strcompress(string(double(INCLinput3[1]+5.))),2) else INCLinput3[1]='90.'
+        ;tmp=WHERE(INCLang GE (double(INCLinput2[1])-double(INCLinput2[3])))
+        ;tmp2=WHERE(INCLang2 GE (double(INCLinput3[1])-double(INCLinput3[3])))
+        IF finishafter EQ 1.1 or fix_incl EQ 0. then begin
+           tmp=WHERE(INCLang GE (double(INCLinput1[1])-double(INCLinput1[4])))
+           tmp2=WHERE(INCLang2 GE (double(INCLinput1[1])-double(INCLinput1[4])))
+        ENDIF ELSE BEGIN
+           tmp=WHERE(INCLang GE (double(INCLinput2[1])-double(INCLinput2[4])))
+           tmp2=WHERE(INCLang2 GE (double(INCLinput3[1])-double(INCLinput3[4])))
+        ENDELSE
+        IF tmp[0] EQ n_elements(INCLang)-2 OR tmp[0] EQ n_elements(INCLang)-1 then tmp=[-1]
+        IF tmp2[0] EQ n_elements(INCLang2)-2  OR tmp2[0] EQ n_elements(INCLang2)-1 then tmp2=[-1]
+        case 1 of
+           (n_elements(tmp) GE 2 OR n_elements(tmp) GE 2) AND  (finishafter EQ 1.1 or fix_incl EQ 0.): begin
+              IF INCLinput1[1] LT 90. then begin
+                 INCLinput1[1]=strtrim(strcompress(string(double(INCLinput1[1]+5.))),2)
+                 INCLinput2[1]=INCLinput1[1]
+                 INCLinput3[1]=INCLinput1[1]
+                 boundaryadjustment=1
+              ENDIF
+           end
+           tmp[0] NE -1 or  tmp2[0] NE -1:begin
+              IF INCLinput2[1] LT 90 then begin
+                 INCLinput2[1]=strtrim(strcompress(string(double(INCLinput2[1]+5.))),2)
+                 boundaryadjustment=1
+              ENDIF
+              IF INCLinput3[1] LT 90 then begin
+                 INCLinput3[1]=strtrim(strcompress(string(double(INCLinput3[1]+5.))),2)
+                 boundaryadjustment=1
+              ENDIF
+
+           END
+
+
+           else:
+        endcase
+
+        IF boundaryadjustment EQ 1 then begin
            IF tmp[0] EQ -1 then tmp[0]=n_elements(INCLang)
            IF tmp2[0] EQ -1 then tmp2[0]=n_elements(INCLang)
            tmp=MAX([tmp,tmp2],min=lastreliablerings)
-           INCLrings++
         ENDIF
      ENDIF
-     IF double(INCLinput1[2]) GT 5 OR double(INCLinput2[2]) GT 5 OR double(INCLinput3[2]) GT 5 then begin
-        IF norings[0] LE 4 then begin
+     IF double(INCLinput1[2]) GT 5 OR double(INCLinput2[2]) GT 5 OR double(INCLinput3[2]) GT 5 AND norings[0] GT 4 then begin
+        IF finishafter EQ 1.1 or fix_incl EQ 0. then begin
            tmp=WHERE(INCLang LE (double(INCLinput1[2])+double(INCLinput1[3])))
            tmp2=WHERE(INCLang2 LE (double(INCLinput1[2])+double(INCLinput1[3])))
         ENDIF ELSE BEGIN
            tmp=WHERE(INCLang LE (double(INCLinput2[2])+double(INCLinput2[3])))
-           tmp2=WHERE(INCLang2 LE (double(INCLinput2[2])+double(INCLinput2[3])))
+           tmp2=WHERE(INCLang2 LE (double(INCLinput3[2])+double(INCLinput3[3])))
         ENDELSE
-        IF n_elements(tmp) GE 2 OR n_elements(tmp2) GE 2 then begin
-           boundaryadjustment=1
-           IF double(INCLinput1[2]-5.) GT 5. then INCLinput1[2]=strtrim(strcompress(string(double(INCLinput1[2]-5.))),2) else INCLinput1[2]='5.'
-           IF double(INCLinput2[2]-5.) GT 5. then INCLinput2[2]=strtrim(strcompress(string(double(INCLinput2[2]-5.))),2) else INCLinput2[2]='5.'
-           IF double(INCLinput3[2]-5.) GT 5. then INCLinput3[2]=strtrim(strcompress(string(double(INCLinput3[2]-5.))),2) else INCLinput3[2]='5.'
+
+        IF tmp[0] EQ n_elements(INCLang)-2 OR  tmp[0] EQ n_elements(INCLang)-1 then tmp=[-1]
+        IF tmp2[0] EQ n_elements(INCLang2)-2 OR tmp2[0] EQ n_elements(INCLang2)-1 then tmp2=[-1]
+        case 1 of
+           (n_elements(tmp) GE 2 OR n_elements(tmp) GE 2) AND  (finishafter EQ 1.1 or fix_incl EQ 0.): begin
+              IF INCLinput1[2] GT 5. then begin
+                 INCLinput1[2]=strtrim(strcompress(string(double(INCLinput1[2]-5.))),2)
+                 INCLinput2[2]=INCLinput1[2]
+                 INCLinput3[2]=INCLinput1[2]
+                 boundaryadjustment=1
+              ENDIF
+           end
+           tmp[0] NE -1 or tmp2[0] NE -1:begin
+              IF INCLinput2[2] GT 5 then begin
+                 INCLinput2[2]=strtrim(strcompress(string(double(INCLinput2[2]-5.))),2)
+                 boundaryadjustment=1
+              ENDIF
+              IF INCLinput3[2] GT 5 then begin
+                 INCLinput3[2]=strtrim(strcompress(string(double(INCLinput3[2]-5.))),2)
+                 boundaryadjustment=1
+              ENDIF
+           END
+
+           else:
+        endcase
+
+
+        IF boundaryadjustment EQ 1 then begin
            IF tmp[0] EQ -1 then tmp[0]=n_elements(INCLang)
            IF tmp2[0] EQ -1 then tmp2[0]=n_elements(INCLang)
-           tmp=MAX([tmp,tmp2,lastreliablerings],min=lastreliablerings)
-           INCLrings++
+           tmp=MAX([tmp,tmp2,lastreliablerings],min=lastreliableringsINCL)
+           if lastreliableringsINCL LT lastreliablerings then lastreliablerings=lastreliableringsINCL
         ENDIF
      ENDIF
      IF ABS(double(PAinput1[1])-double(PAinput1[2])) LT 400 OR ABS(double(PAinput2[1])-double(PAinput2[2])) LT 400 OR  ABS(double(PAinput3[1])-double(PAinput3[2])) LT 400 AND norings[0] GT 4 then begin
-        tmp=WHERE(PAang GE (double(PAinput2[1])-double(PAinput2[3])))
-        tmp2=WHERE(PAang2 GE (double(PAinput2[1])-double(PAinput2[3])))
-        IF n_elements(tmp) GE 2 OR n_elements(tmp2) GE 2 then begin
-           boundaryadjustment=1
-           IF PAinput1[1] LT 400 then PAinput1[1]=strtrim(strcompress(string(double(PAinput1[1]+10.))),2) else  boundaryadjustment=0
-           IF PAinput2[1] LT 400 then PAinput2[1]=strtrim(strcompress(string(double(PAinput2[1]+10.))),2) else  boundaryadjustment=0
-           IF PAinput3[1] LT 400 then PAinput3[1]=strtrim(strcompress(string(double(PAinput3[1]+10.))),2) else  boundaryadjustment=0
-           PArings++
-        ENDIF
-        IF norings[0] LE 4 or finishafter EQ 1.1 then begin
+        IF finishafter EQ 1.1 or fix_pa EQ 0. then begin
+           tmp=WHERE(PAang GE (double(PAinput1[1])-double(PAinput1[3])))
+           tmp2=WHERE(PAang2 GE (double(PAinput1[1])-double(PAinput1[3])))
+        ENDIF ELSE BEGIN
+           tmp=WHERE(PAang GE (double(PAinput2[1])-double(PAinput2[3])))
+           tmp2=WHERE(PAang2 GE (double(PAinput3[1])-double(PAinput3[3])))
+        ENDELSE
+
+        IF tmp[0] EQ n_elements(PAang)-2 OR tmp[0] EQ n_elements(PAang)-1 then tmp=[-1]
+        IF tmp2[0] EQ n_elements(PAang2)-2 OR tmp2[0] EQ n_elements(PAang2)-1 then tmp2=[-1]
+        case 1 of
+           (n_elements(tmp) GE 2 OR n_elements(tmp) GE 2) AND  (finishafter EQ 1.1 or fix_pa EQ 0.): begin
+              IF PAinput1[1] LT 400 then begin
+                 PAinput1[1]=strtrim(strcompress(string(double(PAinput1[1]+25.))),2)
+                 PAinput2[1]=PAinput1[1]
+                 PAinput3[1]=PAinput1[1]
+                 boundaryadjustment=1
+              ENDIF
+           end
+           tmp[0] NE -1 or tmp2[0] NE -1: begin
+              IF PAinput2[1] LT 400 then begin
+                 PAinput2[1]=strtrim(strcompress(string(double(PAinput2[1]+25.))),2)
+                 boundaryadjustment=1
+              ENDIF
+              IF PAinput3[1] LT 400 then begin
+                 PAinput3[1]=strtrim(strcompress(string(double(PAinput3[1]+25.))),2)
+                 boundaryadjustment=1
+              ENDIF
+           end
+           else:
+        endcase
+
+        IF finishafter EQ 1.1 or fix_pa EQ 0. then begin
            tmp=WHERE(PAang LE (double(PAinput1[2])+double(PAinput1[3])))
            tmp2=WHERE(PAang2 LE (double(PAinput1[2])+double(PAinput1[3])))
         ENDIF ELSE BEGIN
            tmp=WHERE(PAang LE (double(PAinput2[2])+double(PAinput2[3])))
-           tmp2=WHERE(PAang2 LE (double(PAinput2[2])+double(PAinput2[3])))
+           tmp2=WHERE(PAang2 LE (double(PAinput3[2])+double(PAinput3[3])))
         ENDELSE
-        IF n_elements(tmp) GE 2 OR n_elements(tmp2) GE 2 then begin
-           boundaryadjustment=1
-           IF PAinput1[2] GT -40 then PAinput1[2]=strtrim(strcompress(string(double(PAinput1[2]-10.))),2) else  boundaryadjustment=0
-           IF PAinput2[1] GT -40 then PAinput2[2]=strtrim(strcompress(string(double(PAinput2[2]-10.))),2) else  boundaryadjustment=0
-           IF PAinput3[1] GT -40 then PAinput3[2]=strtrim(strcompress(string(double(PAinput3[2]-10.))),2) else  boundaryadjustment=0
-           IF tmp[0] EQ -1 then tmp[0]=n_elements(INCLang)
-           IF tmp2[0] EQ -1 then tmp2[0]=n_elements(INCLang)
-           tmp=MAX([tmp,tmp2,lastreliablerings],min=lastreliablerings)
-           PArings++
-        ENDIF
+        IF tmp[0] EQ n_elements(PAang)-2 OR  tmp[0] EQ n_elements(PAang)-1 then tmp=[-1]
+        IF tmp2[0] EQ n_elements(PAang2)-2 OR tmp2[0] EQ n_elements(PAang2)-1 then tmp2=[-1]
+        case 1 of
+           (n_elements(tmp) GE 2 OR n_elements(tmp) GE 2) AND  (finishafter EQ 1.1 or fix_pa EQ 0.): begin
+              IF PAinput1[2] GT -40 then begin
+                 PAinput1[2]=strtrim(strcompress(string(double(PAinput1[2]-25.))),2)
+                 PAinput2[2]=PAinput1[2]
+                 PAinput3[2]=PAinput1[2]
+                 boundaryadjustment=1
+              ENDIF
+           end
+           tmp[0] NE -1 OR tmp2[0] NE -1: begin ;We want to change both limits as warps are predominatly mostly symmetric
+              IF PAinput2[2] GT -40 then begin
+                 PAinput2[2]=strtrim(strcompress(string(double(PAinput2[2]-25.))),2)
+                 boundaryadjustment=1
+              ENDIF
+              IF PAinput3[2] GT -40 then begin
+                 PAinput3[2]=strtrim(strcompress(string(double(PAinput3[2]-25.))),2)
+                 boundaryadjustment=1
+              ENDIF
+           end
+           else:
+        endcase
+        if boundaryadjustment EQ 1 then begin
+           IF tmp[0] EQ -1 then tmp[0]=n_elements(PAang)
+           IF tmp2[0] EQ -1 then tmp2[0]=n_elements(PAang2)
+           tmp=MAX([tmp,tmp2],min=lastreliableringsPA)
+           if lastreliableringsPA LT lastreliablerings then lastreliablerings=lastreliableringsPA
+        endif
      ENDIF
+     INCLangor=INCLang
+     INCLang2or=INCLang2
+     PAangor=PAang
+     PAang2or=PAang2
+     IF float(INCLinput1old[1]) NE float(INCLinput1[1]) OR $
+        float(INCLinput2old[1]) NE float(INCLinput2[1]) OR $
+        float(INCLinput3old[1]) NE float(INCLinput3[1]) OR $
+        float(INCLinput1old[2]) NE float(INCLinput1[2]) OR $
+        float(INCLinput2old[2]) NE float(INCLinput2[2]) OR $
+        float(INCLinput3old[2]) NE float(INCLinput3[2]) OR $
+        float(PAinput1old[1]) NE float(PAinput1[1]) OR $
+        float(PAinput2old[1]) NE float(PAinput2[1]) OR $
+        float(PAinput3old[1]) NE float(PAinput3[1]) OR $
+        float(PAinput1old[2]) NE float(PAinput1[2]) OR $
+        float(PAinput2old[2]) NE float(PAinput2[2]) OR $
+        float(PAinput3old[2]) NE float(PAinput3[2]) THEN boundaryadjustment = 1 ELSE boundaryadjustment = 0
+
+
                                 ;If we determined that the boundaries should be updated than we need
                                 ;to check SBR and reset the values, as
                                 ;well as smooth the INCL, PAand VROT
      IF boundaryadjustment then begin
         IF lastreliablerings EQ 0 then lastreliablerings=1
-        for j=n_elements(SBRarr)-1,0,-1 do begin
+        for j=n_elements(SBRarr)-1,2,-1 do begin
            IF SBRarr[j] LE cutoff[j] then begin
               SBRarr[j]=cutoff[j]*2.
            ENDIF else break
@@ -4167,13 +4497,19 @@ noconfig:
         IF lastreliablerings LT n_elements(SBRarr)-1 then begin
            ;It is also important to give the outer rings a lot of flux
            SBRarr[lastreliablerings:n_elements(SBRarr)-1]=cutoff[lastreliablerings:n_elements(SBRarr)-1]*6.
-           INCLang[lastreliablerings:n_elements(SBRarr)-1]=INCLang[lastreliablerings-1+INCLrings]
-           PAang[lastreliablerings:n_elements(SBRarr)-1]=PAang[lastreliablerings-1+PArings]
-           IF lastreliablerings EQ 1 then VROTarr[lastreliablerings:n_elements(SBRarr)-1]=MEAN(VROTarr[1:n_elements(VROTarr)-1]) else VROTarr[lastreliablerings:n_elements(SBRarr)-1]=VROTarr[lastreliablerings-1]
+           INCLang[*]=MEAN(INCLang)
+           PAang[lastreliablerings:n_elements(SBRarr)-1]=PAang[lastreliablerings]
+           IF lastreliablerings EQ 1 then begin
+              VROTarr[lastreliablerings:n_elements(SBRarr)-1]=MEAN(VROTarr[1:n_elements(VROTarr)-1])
+              SDISarr[lastreliablerings:n_elements(SBRarr)-1]=MEAN(SDISarr[1:n_elements(SDISarr)-1])
+           ENDIF else BEGIN
+              VROTarr[lastreliablerings:n_elements(SBRarr)-1]=VROTarr[lastreliablerings]
+              SDISarr[lastreliablerings:n_elements(SDISarr)-1]=SDISarr[lastreliablerings]
+           ENDELSE
            comin=[[PAang],[INCLang]]
            errors=[[0.],[0.]]
 
-           revised_regularisation_com,comin,SBRarror,RADarr,fixedrings=3,difference=[1.,4.*exp(-catinc[i]^2.5/10^3.5)+1.5],cutoff=cutoff,arctan=1,order=polorder,max_par=[PAinput2[1],INCLinput2[1]],min_par=[PAinput2[2],INCLinput2[2]],accuracy=[1./4.,1.],error=errors ,gdlidl=gdlidl,log=log
+           revised_regularisation_com,comin,SBRarror,RADarr,fixedrings=3,difference=[1.,4.*exp(-catinc[i]^2.5/10^3.5)+1.5],cutoff=cutoff,arctan=1,order=polorder,max_par=[PAinput2[1],INCLinput2[1]],min_par=[PAinput2[2],INCLinput2[2]],accuracy=[1./4.,1.],error=errors ,gdlidl=gdlidl,log=log ,ring_spacing=ring_spacing
            PAang=comin[*,0]
            INCLang=comin[*,1]
            sigmapa1=errors[*,0]
@@ -4185,7 +4521,7 @@ noconfig:
            tmppos=where('PA' EQ tirificsecondvars)
            tirificsecond[tmppos]=stringINCL
         ENDIF
-        for j=n_elements(SBRarr2)-1,0,-1 do begin
+        for j=n_elements(SBRarr2)-1,2,-1 do begin
            IF SBRarr2[j] LE cutoff[j] then begin
               SBRarr2[j]=cutoff[j]*2.
            ENDIF else break
@@ -4194,12 +4530,19 @@ noconfig:
         IF lastreliablerings LT n_elements(SBRarr)-1 then begin
              ;It is also important to give the outer rings a lot of flux
            SBRarr2[lastreliablerings:n_elements(SBRarr2)-1]=cutoff[lastreliablerings:n_elements(SBRarr2)-1]*6.
-           INCLang2[lastreliablerings:n_elements(SBRarr2)-1]=INCLang2[lastreliablerings-1+INCLrings]
-           PAang2[lastreliablerings:n_elements(SBRarr2)-1]=PAang2[lastreliablerings-1+PArings]
-           IF lastreliablerings EQ 1 then VROTarr2[lastreliablerings:n_elements(SBRarr)-1]=MEAN(VROTarr2[1:n_elements(VROTarr2)-1]) else VROTarr2[lastreliablerings:n_elements(SBRarr2)-1]=VROTarr2[lastreliablerings-1]
+                                ;INCLang2[lastreliablerings:n_elements(SBRarr2)-1]=INCLang2[lastreliablerings]
+           INCLang2[*]=MEAN(INCLang2)
+           PAang2[lastreliablerings:n_elements(SBRarr2)-1]=PAang2[lastreliablerings]
+           IF lastreliablerings EQ 1 then BEGIN
+              VROTarr2[lastreliablerings:n_elements(SBRarr)-1]=MEAN(VROTarr2[1:n_elements(VROTarr2)-1])
+              SDISarr2[lastreliablerings:n_elements(SBRarr)-1]=MEAN(SDISarr2[1:n_elements(SDISarr2)-1])
+           ENDIF else BEGIN
+              VROTarr2[lastreliablerings:n_elements(SBRarr2)-1]=VROTarr2[lastreliablerings]
+              SDISarr2[lastreliablerings:n_elements(SBRarr2)-1]=SDISarr2[lastreliablerings]
+           ENDELSE
             comin=[[PAang2],[INCLang2]]
            errors=[[0.],[0.]]
-           revised_regularisation_com,comin,SBRarr2or,RADarr,fixedrings=3,difference=[1.,4.*exp(-catinc[i]^2.5/10^3.5)+1.5],cutoff=cutoff,arctan=1,order=polorder,max_par=[PAinput2[1],INCLinput2[1]],min_par=[PAinput2[2],INCLinput2[2]],accuracy=[1./4.,1.],error=errors ,gdlidl=gdlidl,log=log
+           revised_regularisation_com,comin,SBRarr2or,RADarr,fixedrings=3,difference=[1.,4.*exp(-catinc[i]^2.5/10^3.5)+1.5],cutoff=cutoff,arctan=1,order=polorder,max_par=[PAinput3[1],INCLinput3[1]],min_par=[PAinput3[2],INCLinput3[2]],accuracy=[1./4.,1.],error=errors ,gdlidl=gdlidl,log=log,ring_spacing=ring_spacing
            PAang2=comin[*,0]
            INCLang2=comin[*,1]
            sigmapa2=errors[*,0]
@@ -4215,9 +4558,10 @@ noconfig:
         tmpSBR=(SBRarror+SBRarr2or)/2.
         verror=MAX([5.,channelwidth/2.*(1.+vresolution)/SQRT(sin(catinc[i]*!DtoR))])
         IF double(VROTarr[1]) LT 120. AND  double(VROTarr[2]) LT 120. then begin
-           revised_regularisation_rot,VROTarr,tmpSBR, RADarr,/REVERSE,fixedrings=velfixrings,difference=verror,cutoff=cutoff,arctan=1,order=polorder,error=sigmarot,log=log,max_par=VROTmax,min_par=channelwidth
+
+           revised_regularisation_rot,VROTarr,tmpSBR, RADarr,/REVERSE,fixedrings=velfixrings,difference=verror,cutoff=cutoff,arctan=1,order=polorder,error=sigmarot,log=log,max_par=VROTmax,min_par=channelwidth,ring_spacing=ring_spacing
         ENDIF ELSE BEGIN
-           revised_regularisation_rot,VROTarr,tmpSBR, RADarr,/REVERSE,fixedrings=velfixrings,difference=verror,cutoff=cutoff,arctan=1,/NOCENTRAL,error=sigmarot,log=log,max_par=VROTmax,min_par=channelwidth
+           revised_regularisation_rot,VROTarr,tmpSBR, RADarr,/REVERSE,fixedrings=velfixrings,difference=verror,cutoff=cutoff,arctan=1,/NOCENTRAL,error=sigmarot,log=log,max_par=VROTmax,min_par=channelwidth,ring_spacing=ring_spacing
         ENDELSE
 
         stringVROT='VROT= 0. '+STRJOIN(string(VROTarr[1:n_elements(VROTarr)-1]),' ')
@@ -4228,6 +4572,22 @@ noconfig:
         tirificsecond[tmppos]=stringVROT
                                 ;If we do this we also need to check the vrot min
         if VROTarr[lastreliablerings-1] LT avinner then vrotinput1[2]=string(VROTmin)+' '+string(VROTarr[lastreliablerings-1]*0.6)
+                                ;SDIS
+        SDISarr=(SDISarr+SDISarr2)/2.
+        if norings[0] LT 4 OR finishafter EQ 1.1 then begin
+           SDISarr[*]=MEAN(SDISarr)
+           sigmasdis=replicate(channelwidth/4.,n_elements(SDISarr))
+        endif else begin
+           regularisation_sdis,SDISarr,tmpSBR,RADarr,log=log,max_par=SDISmax,min_par=SDISmin,arctan=1,fixedrings=velfixrings,difference=channelwidth/4.,cutoff=cutoff,gdlidl=gdlidl ,error= sigmasdis
+        endelse
+        stringSDIS='SDIS= '+STRJOIN(string(SDISarr[0:n_elements(SDISarr)-1]),' ')
+        tmppos=where('SDIS' EQ tirificsecondvars)
+        tirificsecond[tmppos]=stringSDIS
+        stringSDIS='SDIS_2= '+STRJOIN(string(SDISarr[0:n_elements(SDISarr)-1]),' ')
+        tmppos=where('SDIS_2' EQ tirificsecondvars)
+        tirificsecond[tmppos]=stringSDIS
+        SBRarr[0:1]=(SBRarr[0:1]+SBRarr2[0:1])/2.
+        SBRarr2[0:1]=SBRarr[0:1]
         stringSBR='SBR= '+STRJOIN(string(SBRarr),' ')
         tmppos=where('SBR' EQ tirificsecondvars)
         tirificsecond[tmppos]=stringSBR
@@ -4235,20 +4595,43 @@ noconfig:
         tmppos=where('SBR_2' EQ tirificsecondvars)
         tirificsecond[tmppos]=stringSBR
                                 ;Write the fitting variables to files
-        IF norings[0] LE 4 or finishafter EQ 1.1 then begin
-           Writefittingvariables,tirificsecond,inclinput1,painput1,vrotinput1,$
-                                 sbrinput1,sbrinput2,sbrinput4,sbrinput3,z0input1,sdisinput1
-        ENDIF ELSE BEGIN
-           Writefittingvariables,tirificsecond,inclinput1,inclinput2,inclinput3,painput1,painput2,painput3,vrotinput1,$
-                                 sbrinput1,sbrinput2,sbrinput4,sbrinput3,z0input1,sdisinput1
-        ENDELSE
+        case 1 of
+           norings[0] LE 4 OR finishafter EQ 1.1 OR (fix_incl EQ 0. and fix_pa EQ 0.): begin
+              Writefittingvariables,tirificsecond,inclinput1,painput1,vrotinput1,sdisinput1,sbrinput1,sbrinput2,sbrinput4,sbrinput3,z0input1,$
+                                    xposinput1,yposinput1,vsysinput1,INIMODE=inimode
+           end
+           fix_incl EQ 0. and fix_pa EQ 1.: begin
+              Writefittingvariables,tirificsecond,inclinput1,painput1,painput2,painput3,$
+                                    vrotinput1,sdisinput1,sbrinput1,sbrinput2,sbrinput4,sbrinput3,z0input1,$
+                                    xposinput1,yposinput1,vsysinput1,INIMODE=inimode
+           end
+           fix_incl EQ 1. and fix_pa EQ 0.: begin
+              Writefittingvariables,tirificsecond,inclinput1,inclinput2,inclinput3,painput1,$
+                                 vrotinput1,sdisinput1,sbrinput1,sbrinput2,sbrinput4,sbrinput3,z0input1,$
+                                    xposinput1,yposinput1,vsysinput1,INIMODE=inimode
+           end
+           else: begin
+              Writefittingvariables,tirificsecond,inclinput1,inclinput2,inclinput3,painput1,painput2,painput3,$
+                                    vrotinput1,sdisinput1,sbrinput1,sbrinput2,sbrinput4,sbrinput3,z0input1,$
+                                    xposinput1,yposinput1,vsysinput1,INIMODE=inimode
+           end
+        endcase
+
+
+
         IF size(log,/TYPE) EQ 7 then begin
            openu,66,log,/APPEND
            printf,66,linenumber()+"We changed the boundaries. These are the new boundaries: "
-           printf,66,linenumber()+"PA upper limits="+PAinput1[1]+" "+PAinput2[1]+" "+PAinput2[1]+" "
-           printf,66,linenumber()+"PA lower limits="+PAinput1[2]+" "+PAinput2[2]+" "+PAinput2[2]+" "
-           printf,66,linenumber()+"INCL upper limits="+INCLinput1[1]+" "+INCLinput2[1]+" "+INCLinput2[1]+" "
-           printf,66,linenumber()+"INCL lower limits="+INCLinput1[2]+" "+INCLinput2[2]+" "+INCLinput2[2]+" "
+           printf,66,linenumber()+"PA upper limits="+PAinput1[1]+" "+PAinput2[1]+" "+PAinput3[1]+" "
+           printf,66,linenumber()+"PA lower limits="+PAinput1[2]+" "+PAinput2[2]+" "+PAinput3[2]+" "
+           printf,66,linenumber()+"INCL upper limits="+INCLinput1[1]+" "+INCLinput2[1]+" "+INCLinput3[1]+" "
+           printf,66,linenumber()+"INCL lower limits="+INCLinput1[2]+" "+INCLinput2[2]+" "+INCLinput3[2]+" "
+           printf,66,linenumber()+"Wit the the following PAs "
+           printf,66,linenumber()+STRJOIN(strtrim(string(PAangor[*]),2),' ')
+           printf,66,linenumber()+STRJOIN(strtrim(string(PAang2or[*]),2),' ')
+           printf,66,linenumber()+"And the following Inclinations "
+           printf,66,linenumber()+STRJOIN(strtrim(string(INCLangor[*]),2),' ')
+           printf,66,linenumber()+STRJOIN(strtrim(string(INCLang2or[*]),2),' ')
 
            Close,66
         ENDIF
@@ -4261,14 +4644,14 @@ noconfig:
                                 ;sbr is actually of some value for the
                                 ;weighing in the smoothing.
      IF finalsmooth EQ 1 then begin
-        for j=n_elements(SBRarr)-1,0,-1 do begin
+        for j=n_elements(SBRarr)-1,2,-1 do begin
            IF SBRarr[j] LE cutoff[j] then begin
               SBRarr[j]=cutoff[j]*0.5
            ENDIF else break
         endfor
         tmp=WHERE(SBRarr LT 0.)
         IF tmp[0] NE -1 then SBRarr[tmp]=cutoff[tmp]*0.95
-        for j=n_elements(SBRarr2)-1,0,-1 do begin
+        for j=n_elements(SBRarr2)-1,2,-1 do begin
            IF SBRarr2[j] LE cutoff[j] then begin
               SBRarr2[j]=cutoff[j]*0.5
            ENDIF else break
@@ -4293,13 +4676,13 @@ noconfig:
                                 ;doesn't amplify every iteration
      IF finalsmooth EQ 1 then prefunc=0 else prefunc=1
      centralincl=(INCLang[0]+INCLang2[0])/2.
-     IF norings[0] GT 15 then accuracy=0.5+COS(centralincl*!DtoR)*0.5*15./norings[0] else accuracy=1
+     IF norings[0]*ring_spacing GT 15 then accuracy=0.5+COS(centralincl*!DtoR)*0.5*15./(norings[0]*ring_spacing) else accuracy=1
 
                                 ;Smoothing PA_1
      if finalsmooth LE 1 AND norings[0] GT 4 and finishafter NE 1.1 then begin
         comin=[[PAang],[INCLang]]
         errors=[[0.],[0.]]
-        padiv=1.5-(ATAN((norings[0]-5.)*2.))*5.25/!pi
+        padiv=1.5-(ATAN((norings[0]*ring_spacing-5.)*2.))*5.25/!pi
         IF padiv LT 1.0 then padiv=1.0
         IF size(log,/TYPE) EQ 7 then begin
            openu,66,log,/APPEND
@@ -4310,11 +4693,12 @@ noconfig:
            Close,66
         ENDIF
         IF keyword_set(debug) then print,linenumber()+'making sure it is here before'
-        revised_regularisation_com,comin,SBRarror,RADarr,fixedrings=fixedrings,difference=[padiv,4.*exp(-catinc[i]^2.5/10^3.5)+1.5],cutoff=cutoff,arctan=prefunc,order=polorder1,max_par=[PAinput2[1],INCLinput2[1]],min_par=[PAinput2[2],INCLinput2[2]],accuracy=[accuracy/4.,accuracy],error=errors ,gdlidl=gdlidl,log=log,sloped=prevslopedrings[0]
-
+        if fix_pa EQ 1 or fix_incl EQ 1 then begin
+           revised_regularisation_com,comin,SBRarror,RADarr,fixedrings=fixedrings,difference=[padiv,4.*exp(-catinc[i]^2.5/10^3.5)+1.5],cutoff=cutoff,arctan=prefunc,order=polorder1,max_par=[PAinput2[1],INCLinput2[1]],min_par=[PAinput2[2],INCLinput2[2]],accuracy=[accuracy/4.,accuracy],error=errors ,gdlidl=gdlidl,log=log,sloped=prevslopedrings[0],ring_spacing=ring_spacing
+        ENDIF
         IF keyword_set(debug) then print,linenumber()+'making sure it is here after'
-        PAang=comin[*,0]
-        INCLang=comin[*,1]
+        IF fix_pa EQ 1 then PAang=comin[*,0]
+        IF fix_incl EQ 1 then INCLang=comin[*,1]
         sigmapa1=errors[*,0]
         sigmaincl1=errors[*,1]
 
@@ -4324,7 +4708,7 @@ noconfig:
      if finalsmooth LE 1 AND norings[0] GT 4 and finishafter NE 1.1 then begin
         comin=[[PAang2],[INCLang2]]
         errors=[[0.],[0.]]
-        padiv=1.5-(ATAN((norings[0]-5.)*2.))*5.25/!pi
+        padiv=1.5-(ATAN((norings[0]*ring_spacing-5.)*2.))*5.25/!pi
         IF padiv LT 1.0 then padiv=1.0
         IF size(log,/TYPE) EQ 7 then begin
            openu,66,log,/APPEND
@@ -4334,10 +4718,11 @@ noconfig:
            printf,66,linenumber()+"The inner" +string(fixedrings)+" rings are fixed."
            Close,66
         ENDIF
-        revised_regularisation_com,comin,SBRarr2or,RADarr,fixedrings=fixedrings,difference=[padiv,4.*exp(-catinc[i]^2.5/10^3.5)+1.5],cutoff=cutoff,arctan=prefunc,order=polorder2,max_par=[PAinput3[1],INCLinput3[1]],min_par=[PAinput3[2],INCLinput3[2]],accuracy=[accuracy/4.,accuracy],error=errors ,gdlidl=gdlidl,log=log,sloped=prevslopedrings[1]
-
-        PAang2=comin[*,0]
-        INCLang2=comin[*,1]
+        if fix_pa EQ 1 or fix_incl EQ 1 then begin
+           revised_regularisation_com,comin,SBRarr2or,RADarr,fixedrings=fixedrings,difference=[padiv,4.*exp(-catinc[i]^2.5/10^3.5)+1.5],cutoff=cutoff,arctan=prefunc,order=polorder2,max_par=[PAinput3[1],INCLinput3[1]],min_par=[PAinput3[2],INCLinput3[2]],accuracy=[accuracy/4.,accuracy],error=errors ,gdlidl=gdlidl,log=log,sloped=prevslopedrings[1],ring_spacing=ring_spacing
+        endif
+        if fix_pa EQ 1 then PAang2=comin[*,0]
+        if fix_incl EQ 1 then INCLang2=comin[*,1]
         sigmapa2=errors[*,0]
         sigmaincl2=errors[*,1]
 
@@ -4359,12 +4744,6 @@ noconfig:
      stringPA='PA_2= '+STRJOIN(string(PAang2),' ')
      tmppos=where('PA_2' EQ tirificsecondvars)
      tirificsecond[tmppos]=stringPA
-                                ;inclination
-                                ;Smoothing INCL_1
-   ;  polorder1=0.
-
-                                ;Smoothing INCL_2
-   ;  polorder2=0.
 
                                 ;making sure that the rings that are
                                 ;fixed are the average of both sides
@@ -4399,10 +4778,10 @@ noconfig:
                                 ;combination gives good results
                                 ;let's leave it like this.
      SBRav=(SBRarr+SBRarr2)/2.
-     get_newringsv9,SBRav,SBRav,2.*cutoff,velconstused
+     get_newringsv9,SBRav,SBRav,2.5*cutoff,velconstused
      velconstused--
-     IF double(norings[0]) GT 15. then begin
-        IF double(norings[0]) LT 25. then fact = 10 else fact= 20-(norings[0]/2.5)
+     IF double(norings[0])*ring_spacing GT 15. then begin
+        IF double(norings[0])*ring_spacing LT 25. then fact = 10 else fact= 20-(norings[0]*ring_spacing/2.5)
         if fact LT 6 then fact=6
 
         IF velconstused GT norings[0]-ceil(norings[0]/fact) then velconstused=norings[0]-ceil(norings[0]/fact)
@@ -4410,7 +4789,7 @@ noconfig:
      ENDIF
      prefunc=0.
      IF norings[0]-velconstused LT 2 then velconstused=norings[0]-1
-     IF norings[0] GT 8 AND not finishafter EQ 2.1 then velconstused=velconstused-1
+     IF norings[0]*ring_spacing GT 8 AND not finishafter EQ 2.1 then velconstused=velconstused-1
 
 
      if finalsmooth LE 1 then begin
@@ -4433,78 +4812,16 @@ noconfig:
               ENDIF else velconstused=norings[0]
            ENDIF else velconstused=norings[0]
         ENDIF
-        slope=0
-        IF size(log,/TYPE) EQ 7 then begin
-           openu,66,log,/APPEND
-           printf,66,linenumber()+"This is VROT before checking for a massive galaxy."
-           printf,66,VROTarr
-           close,66
-        ENDIF
-        IF (TOTAL(VROTarr[1:2])/2. GT 150 AND VROTarr[1] GT VROTarr[2] AND VROTarr[1] GT VROTarr[3]) OR $
-           (MEAN(VROTarr[1:n_elements(vrotarr)-1]) GT 250.) then begin
-           x=n_elements(VROTarr)-1
-           WHILE VROTarr[x] GT  VROTarr[x-1] AND x GT fix(n_elements(VROTarr)/2) DO x--
 
+        ;Check that or fixedrings are larger then the flattened outer part
+        IF norings[0]-xind GT velconstused then velconstused=norings[0]-xind
 
-           IF x LT n_elements(VROTarr)-1 then begin
-              IF size(log,/TYPE) EQ 7 then begin
-                 openu,66,log,/APPEND
-                 printf,66,linenumber()+'This is a massive galaxy hence we flatten the outer part if x is less '+$
-                        strtrim(string(n_elements(VROTarr)-1),2)
-                 printf,66,linenumber()+'From ring '+strtrim(string(x),2)+' on we have the value '+strtrim(string(VROTarr[x]),2)
-                 close,66
-              ENDIF
-              VROTarr[x:n_elements(VROTarr)-1]=VROTarr[x]
-              stringVROT='VROT= 0. '+STRJOIN(string(VROTarr[1:n_elements(VROTarr)-1]),' ')
-              tmppos=where('VROT' EQ tirificsecondvars)
-              tirificsecond[tmppos]=stringVROT
-              stringVROT='VROT_2= 0. '+STRJOIN(string(VROTarr[1:n_elements(VROTarr)-1]),' ')
-              tmppos=where('VROT_2' EQ tirificsecondvars)
-              tirificsecond[tmppos]=stringVROT
-              slope=1
-              IF norings[0]-x GT velconstused then velconstused=norings[0]-x
-           ENDIF ELSE BEGIN
-              IF MEAN(VROTarr[1:n_elements(vrotarr)-1]) GT 250. then begin
-                 min=MAX(VROTarr)
-                 xind=n_elements(VROTarr)-1
-                 for x=fix(n_elements(VROTarr)/2),n_elements(VROTarr)-1 do begin
-                    IF VROTarr[x] LT min then begin
-                       min=VROTarr[x]
-                       xind=x
-                    ENDIF
-                 ENDFOR
-                 IF xind LT n_elements(VROTarr)-1 then begin
-                    VROTarr[xind:n_elements(VROTarr)-1]=VROTarr[xind]
-                    stringVROT='VROT= 0. '+STRJOIN(string(VROTarr[1:n_elements(VROTarr)-1]),' ')
-                    tmppos=where('VROT' EQ tirificsecondvars)
-                    tirificsecond[tmppos]=stringVROT
-                    stringVROT='VROT_2= 0. '+STRJOIN(string(VROTarr[1:n_elements(VROTarr)-1]),' ')
-                    tmppos=where('VROT_2' EQ tirificsecondvars)
-                    tirificsecond[tmppos]=stringVROT
-                    slope=1
-                    IF norings[0]-xind GT velconstused then velconstused=norings[0]-xind
-                    IF size(log,/TYPE) EQ 7 then begin
-                       openu,66,log,/APPEND
-                       printf,66,linenumber()+'This is a massive galaxy hence we flatten the outer part if xind is less '+$
-                              strtrim(string(n_elements(VROTarr)-1),2)
-                       printf,66,linenumber()+'From ring '+strtrim(string(xind),2)+' on we have the value '+strtrim(string(VROTarr[xind]),2)
-                       close,66
-                    ENDIF
-                 ENDIF
-              ENDIF
-           ENDELSE
-        ENDIF
 
         velfixrings=norings[0]-velconstused
         IF velfixrings LT 1 then velfixrings=1
         IF velfixrings EQ 1 AND norings[0] GT 5 then velfixrings=2
 
-        locmax=WHERE(MAX(VROTarr) EQ VROTarr)
-        IF size(log,/TYPE) EQ 7 then begin
-           openu,66,log,/APPEND
-           printf,66,linenumber()+"Vmax occurs at ring no "+string(locmax[n_elements(locmax)-1]+1)
-           close,66
-        ENDIF
+
         if locmax[n_elements(locmax)-1] LT n_elements(VROTarr)/2.  AND MEAN(VROTarr[fix(n_elements(VROTarr)/2.):n_elements(VROTarr)-1]) GT 120. then begin
             IF size(log,/TYPE) EQ 7 then begin
                openu,66,log,/APPEND
@@ -4513,44 +4830,27 @@ noconfig:
             ENDIF
            slope=1
            IF velfixrings GT 1 then VROTarr[n_elements(VROTarr)-velfixrings:n_elements(VROTarr)-1]=TOTAL(VROTarr[n_elements(VROTarr)-velfixrings:n_elements(VROTarr)-1])/n_elements(VROTarr[n_elements(VROTarr)-velfixrings:n_elements(VROTarr)-1])
+           stringVROT='VROT= 0. '+STRJOIN(string(VROTarr[1:n_elements(VROTarr)-1]),' ')
+           tmppos=where('VROT' EQ tirificsecondvars)
+           tirificsecond[tmppos]=stringVROT
+           stringVROT='VROT_2= 0. '+STRJOIN(string(VROTarr[1:n_elements(VROTarr)-1]),' ')
+           tmppos=where('VROT_2' EQ tirificsecondvars)
+           tirificsecond[tmppos]=stringVROT
         ENDIF
-        IF finalsmooth EQ 1 AND velconstused LT norings[0] AND (norings[0] LT 15 OR (polorder1[1] LT 4. AND polorder2[1] LT 4)) then begin
-           vrotslopinput=strarr(10)
-           start=3.+fix((norings[0]-3.)/5.)
-           set_vrotv6,vrotslopinput,VROTarr,velconstused,vrotmax,vrotmin,norings,channelwidth,avinner=avinner,start=start,centralexclude=centralexclude,finish_after=finishafter,slope=slope
-           INCLinputall=['INCL 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+' '+$
-                    'INCL_2 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1),$
-                         '90','5',string(0.5),string(0.1),string(0.5),string(0.1),'3','70','70']
-
-           Writefittingvariables,tirificsecond,INCLinputall,vrotslopinput
-           openw,1,maindir+'/'+catdirname[i]+'/tirific.def'
-           for index=0,n_elements(tirificsecond)-1 do begin
-              printf,1,tirificsecond[index]
-           endfor
-           close,1
-                                ;Perform tirific check with only changes as a whole to the parameters
-           IF size(log,/TYPE) EQ 7 then begin
-              openu,66,log,/APPEND
-              printf,66,linenumber()+"Starting slope adjustment in "+catDirname[i]+" which is galaxy # "+strtrim(string(fix(i)),2)+" at "+systime()
-              close,66
-           ENDIF
-           IF MEAN(VROTarr) GT 1000. then begin
-              print,'something has gone horribly wrong'
-              stop
-           ENDIF
-           print,linenumber()+"Starting slope adjustment in "+catDirname[i]+" which is galaxy # "+strtrim(string(fix(i)),2)+" at "+systime()
-           rename,'2ndfit.','2ndfittmp.'
-           gipsyfirst=strarr(1)
-           gipsyfirst='tirific DEFFILE=tirific.def ACTION=1'
-           spawn,gipsyfirst,isthere2
-           writenewtotemplate,tirificsecond,maindir+'/'+catdirname[i]+'/2ndfit.def',Arrays=secondfitvalues,VariableChange=secondfitvaluesnames,Variables=tirificsecondvars
-           rename,'2ndfit.','2ndfitslop.'
-           rename,'2ndfittmp.','2ndfit.'
-           tmppos=where('VROT' EQ secondfitvaluesnames)
-           VROTarr=secondfitvalues[*,tmppos]
-        ENDIF
-
-;this is where we end this experiment
+        tmpSBR=(SBRarror+SBRarr2or)/2.
+        SDISarr=(SDISarr+SDISarr2)/2.
+        if norings[0] LT 4*ring_spacing OR finishafter EQ 1.1 then begin
+           SDISarr[*]=MEAN(SDISarr)
+           sigmasdis=replicate(channelwidth/4.,n_elements(SDISarr))
+        endif else begin
+           regularisation_sdis,SDISarr,tmpSBR,RADarr,log=log,max_par=SDISmax,min_par=SDISmin,arctan=prefunc,fixedrings=velfixrings,difference=channelwidth/4.,cutoff=cutoff,gdlidl=gdlidl ,error= sigmasdis
+        endelse
+        stringSDIS='SDIS= '+STRJOIN(string(SDISarr[0:n_elements(SDISarr)-1]),' ')
+        tmppos=where('SDIS' EQ tirificsecondvars)
+        tirificsecond[tmppos]=stringSDIS
+        stringSDIS='SDIS_2= '+STRJOIN(string(SDISarr[0:n_elements(SDISarr)-1]),' ')
+        tmppos=where('SDIS_2' EQ tirificsecondvars)
+        tirificsecond[tmppos]=stringSDIS
 
                                 ;it is important to use the original
                                 ;non centrallly modified profiles here
@@ -4560,10 +4860,14 @@ noconfig:
 
         tmpSBR=(SBRarror+SBRarr2or)/2.
         tmphigh=str_sep(strtrim(strcompress(VROTinput1[1]),2),' ')
-        tmplow=str_sep(strtrim(strcompress(VROTinput1[2]),2),' ')
+                                ;This way things would be set to
+                                ;avinner which would heavily penalize
+                                ;slowly rising curves.
+                                ;tmplow=str_sep(strtrim(strcompress(VROTinput1[2]),2),' ')
 
+        tmplow=vrotmin
         vmaxdev=MAX([30.,7.5*channelwidth*(1.+vresolution)])
-        verror=MAX([5.,channelwidth/2.*(1.+vresolution)/SQRT(sin(INCLang[0]*!DtoR))])
+        verror=MAX([4.,channelwidth/2.*(1.+vresolution)/SQRT(sin(INCLang[0]*!DtoR))])
         IF ~(FINITE(verror)) then verror=channelwidth/2.*(1.+vresolution)/SQRT(sin(5.*!DtoR))
         IF size(log,/TYPE) EQ 7 then begin
            openu,66,log,/APPEND
@@ -4577,13 +4881,22 @@ noconfig:
            printf,66,linenumber()+"The velocity error = "+strtrim(string(verror),2)
            Close,66
         ENDIF
+                                ; if we do not have more freering than
+                                ; max order we only want to smooth
+                                ;if n_elements(VROTarr)-velfixrings LT
+                                ;8 AND SUM([polorder1,polorder2]) EQ
+                                ;0. then velprefunc=0 else
+                                ;velprefunc=prefunc
+        ;if n_elements(VROTarr)-velfixrings LT 8 then velprefunc=1 else velprefunc=prefunc
                                 ;If the central parameters are LT 120
                                 ;we want to take the central ring into
                                 ;account otherwise not
-        IF double(VROTarr[1]) LT 120. AND  double(VROTarr[2]) LT 120. then begin
-           revised_regularisation_rot,VROTarr,tmpSBR, RADarr,/REVERSE,fixedrings=velfixrings,difference=verror,cutoff=cutoff,arctan=prefunc,order=polorder,max_par=tmphigh[0],min_par=tmplow[0],accuracy=accuracy,error=sigmarot,log=log
+
+        velprefunc=prefunc
+        IF (double(VROTarr[1]) LT 120. AND  double(VROTarr[2]) LT 120.) then begin
+           revised_regularisation_rot,VROTarr,tmpSBR, RADarr,/REVERSE,fixedrings=velfixrings,difference=verror,cutoff=cutoff,arctan=velprefunc,order=polorder,max_par=tmphigh[0],min_par=tmplow[0],accuracy=accuracy,error=sigmarot,log=log,ring_spacing=ring_spacing
         ENDIF ELSE BEGIN
-           revised_regularisation_rot,VROTarr,tmpSBR, RADarr,/REVERSE,fixedrings=velfixrings,difference=verror,cutoff=cutoff,arctan=prefunc,/NOCENTRAL,order=polorder,max_par=tmphigh[0],min_par=tmplow[0],accuracy=accuracy,error=sigmarot,log=log
+           revised_regularisation_rot,VROTarr,tmpSBR, RADarr,/REVERSE,fixedrings=velfixrings,difference=verror,cutoff=cutoff,arctan=velprefunc,/NOCENTRAL,order=polorder,max_par=tmphigh[0],min_par=tmplow[0],accuracy=accuracy,error=sigmarot,log=log,ring_spacing=ring_spacing
         ENDELSE
         tmp0check=WHERE(VROTarr LT 0)
         IF tmp0check[0] NE -1 then VROTarr[tmp0check]=tmplow[0]
@@ -4600,6 +4913,16 @@ noconfig:
            printf,66,linenumber()+"And fixed "+string(velfixrings)+" rings."
            Close,66
         ENDIF
+         ;SDIS
+       ; SDISarr=(SDISarr+SDISarr2)/2.
+       ; if norings[0] LT 4 OR finishafter EQ 1.1 then begin
+       ;    SDISarr[*]=MEAN(SDISarr)
+       ;    sigmasdis=replicate(channelwidth/4.,n_elements(SDISarr))
+       ; endif else begin
+       ;    regularisation_sdis,SDISarr,tmpSBR,RADarr,log=log,max_par=SDISmax,min_par=SDISmin,arctan=prefunc,fixedrings=velfixrings,difference=channelwidth/4.,cutoff=cutoff,gdlidl=gdlidl ,error= sigmasdis
+       ; endelse
+
+
      ENDIF
                                 ;As the SBR used is the average and
                                 ;the rotation curve is the same for
@@ -4630,22 +4953,30 @@ noconfig:
                                 ;profile that are below the cutoff to
                                 ;a very small number so they do not
                                 ;affect the fit
-     IF finalsmooth EQ 1 then begin
+     IF finalsmooth GE 1 then begin
         get_newringsv9,SBRarr,SBRarr2,cutoff,newindrings,/individual
         IF newindrings[0] EQ n_elements(SBRarr)-2 and SBRarr[n_elements(SBRarr)-1] GT cutoff[n_elements(SBRarr)-1] then newindrings[0]=n_elements(SBRarr)
         IF newindrings[0] LT n_elements(SBRarr) then begin
            SBRarr[newindrings[0]-1:n_elements(SBRarr)-1]=1E-16
         ENDIF
-        stringSBR='SBR= '+STRJOIN(string(SBRarr),' ')
-        tmppos=where('SBR' EQ tirificsecondvars)
-        tirificsecond[tmppos]=stringSBR
         IF newindrings[1] EQ n_elements(SBRarr2)-2 and SBRarr2[n_elements(SBRarr2)-1] GT cutoff[n_elements(SBRarr2)-1] then newindrings[1]=n_elements(SBRarr2)
         IF newindrings[1] LT n_elements(SBRarr2) then begin
            SBRarr2[newindrings[1]-1:n_elements(SBRarr2)-1]=1E-16
         ENDIF
+        SBRarr[0:1]=(SBRarr[0:1]+SBRarr2[0:1])/2.
+        SBRarr2[0:1]=SBRarr[0:1]
+        stringSBR='SBR= '+STRJOIN(string(SBRarr),' ')
+        tmppos=where('SBR' EQ tirificsecondvars)
+        tirificsecond[tmppos]=stringSBR
         stringSBR='SBR_2= '+STRJOIN(string(SBRarr2),' ')
         tmppos=where('SBR_2' EQ tirificsecondvars)
         tirificsecond[tmppos]=stringSBR
+        IF size(log,/TYPE) EQ 7 then begin
+           openu,66,log,/APPEND
+           printf,66,linenumber()+"The last SBR 1 is "+string(STRJOIN(string(SBRarr),' '))
+           printf,66,linenumber()+"The last SBR 2 is "+string(STRJOIN(string(SBRarr2),' '))
+           close,66
+        ENDIF
      ENDIF
      IF size(log,/TYPE) EQ 7 then begin
         openu,66,log,/APPEND
@@ -4666,17 +4997,22 @@ noconfig:
      tmppos=where('VROT_2' EQ tirificsecondvars)
      tirificsecond[tmppos]=stringVROT
 
-
+     stringSDIS='SDIS= '+STRJOIN(string(SDISarr[0:n_elements(SDISarr)-1]),' ')
+     tmppos=where('SDIS' EQ tirificsecondvars)
+     tirificsecond[tmppos]=stringSDIS
+     stringSDIS='SDIS_2= '+STRJOIN(string(SDISarr[0:n_elements(SDISarr)-1]),' ')
+     tmppos=where('SDIS_2' EQ tirificsecondvars)
+     tirificsecond[tmppos]=stringSDIS
 
 
                                 ;IF we have not done too many
                                 ;iterations and we are not on the
                                 ;final smoothing than we want to check
                                 ;the extend of the models
-     IF sbrmodify LT 10. AND finalsmooth NE 1 AND secondtime NE 1  then begin
+     IF sbrmodify LT 10. AND finalsmooth LT 1 AND secondtime NE 1  then begin
                                 ;check the SBR profiles to see if we
                                 ;need to cut/add a ring.
-        get_newringsv9,SBRarr,SBRarr2,cutoff,newrings
+        get_newringsv9,SBRarrunmod,SBRarr2unmod,cutoff,newrings
         IF size(log,/TYPE) EQ 7 then begin
            openu,66,log,/APPEND
            printf,66,linenumber()+"Newrings should always be bigger or equal to velconstused "+strtrim(string(fix(newrings)),2)+" =>"+string(velconstused)
@@ -4707,21 +5043,21 @@ noconfig:
            close,66
         ENDIF
       ;  IF NOT sofiafail then begin
-        IF newrings GT sofiarings+3 OR newrings LT sofiarings-3 then begin
+        IF newrings GT sofiarings+(3/ring_spacing) OR newrings LT sofiarings-(3/ring_spacing) then begin
            IF size(log,/TYPE) EQ 7 then begin
               openu,66,log,/APPEND
               printf,66,linenumber()+"The new amount of rings ("+strtrim(string(fix(newrings)),2)+") deviates too much from the sofia estimate ("+string(sofiarings)+")."
               close,66
            ENDIF
            IF newrings LT norings[0] then begin
-              IF norings[0] GT sofiarings-3 then newrings=norings[0]-1 else newrings=sofiarings-3
+              IF norings[0] GT sofiarings-round(3/ring_spacing) then newrings=norings[0]-1 else newrings=sofiarings-round(3/ring_spacing)
               IF size(log,/TYPE) EQ 7 then begin
                  openu,66,log,/APPEND
                  printf,66,linenumber()+"We set the number of rings to "+strtrim(string(fix(newrings)),2)
                  close,66
               ENDIF
            endif Else begin
-              IF norings[0] LT sofiarings+3 then newrings=norings[0]+1 else newrings=sofiarings+3
+              IF norings[0]*ring_spacing LT sofiarings+round(3/ring_spacing) then newrings=norings[0]+1 else newrings=sofiarings+round(3/ring_spacing)
               IF size(log,/TYPE) EQ 7 then begin
                  openu,66,log,/APPEND
                  printf,66,linenumber()+"We set the number of rings to "+strtrim(string(fix(newrings)),2)
@@ -4798,10 +5134,12 @@ noconfig:
               print,linenumber()+"We cut a ring! lastcut"+string(lastcutrings)+" lastadd "+string(lastaddrings)+" new "+strtrim(string(fix(newrings)),2)+" old "+string(oldrings)
            ENDELSE
                                 ;change the template to have a ring less
-           changeradii,tirificsecond,norings[0]
+           changeradii,tirificsecond,norings[0],continue_tirific
            lastcutrings=norings[0]
                                 ;Set the fitting parameters
            set_vrotv6,vrotinput1,VROTarr,velconstused,vrotmax,vrotmin,norings,channelwidth,avinner=avinner,centralexclude=centralexclude,finish_after=finishafter
+           set_sdis,sdisinput1,SDISarr,velconstused,sdismax,sdismin,norings,channelwidth,finish_after=finishafter,slope=slope,fix=fix_sdis
+
                                 ;Adapt the other fitting parameters
                                 ;first the SBRarr
            set_sbr,SBRinput1,SBRinput2,SBRinput3,SBRinput4,SBRinput5,SBRinput6,SBRarr,cutoff,norings,finishafter,log=log,doubled=doubled
@@ -4818,11 +5156,7 @@ noconfig:
                             ' YPOS_2 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)
               vsysinput1[0]=' VSYS 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+$
                             ' VSYS_2 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)
-              sdisinput1[0]=' SDIS 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+$
-                            ' SDIS_2 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)
-              Writefittingvariables,tirificsecond,inclinput1,painput1,$
-                                    vrotinput1,sbrinput1,sbrinput2,sbrinput4,sbrinput3,z0input1,$
-                                    xposinput1,yposinput1,vsysinput1,sdisinput1
+
            ENDIF ELSE BEGIN
                                 ;Need to update the arrays otherwise might use
                                 ;them later with wrong ring numbers
@@ -4830,6 +5164,10 @@ noconfig:
               PAinput1[0]='PA 1:'+strtrim(strcompress(string(innerfix,format='(F7.4)')),1)+' PA_2 1:'+strtrim(strcompress(string(innerfix,format='(F7.4)')),1)
                                 ;update INCL and PA
               set_warp_slopev3,SBRarr,SBRarr2,cutoff,INCLinput2,PAinput2,INCLinput3,PAinput3,norings,log=log,innerfix=innerfix,sloped=slopedrings
+              if fix_pa EQ 0. then   PAinput1[0]='PA 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+$
+                                                 ' PA_2 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)
+              if fix_incl EQ 0. then INCLinput1[0]='INCL 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+$
+                                                   ' INCL_2 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)
                                 ;And the central parameters
               z0input1[0]='Z0 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+$
                           ' Z0_2 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)
@@ -4839,18 +5177,54 @@ noconfig:
                             ' YPOS_2 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)
               vsysinput1[0]=' VSYS 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+$
                             ' VSYS_2 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)
-              sdisinput1[0]=' SDIS 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+$
-                            ' SDIS_2 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)
-              IF norings[0] LE 6 then begin
-                 Writefittingvariables,tirificsecond,inclinput1,inclinput2,inclinput3,painput1,painput2,painput3,$
-                                       vrotinput1,sbrinput1,sbrinput2,sbrinput4,sbrinput3,z0input1,$
-                                       xposinput1,yposinput1,vsysinput1,sdisinput1
-              ENDIF ELSE BEGIN
-                 Writefittingvariables,tirificsecond,inclinput1,inclinput2,inclinput3,painput1,painput2,painput3,$
-                                       vrotinput1,sbrinput5,sbrinput1,sbrinput6,sbrinput2,sbrinput4,sbrinput3,z0input1,$
-                                       xposinput1,yposinput1,vsysinput1,sdisinput1
-              ENDELSE
+
            ENDELSE
+           case 1 of
+              norings[0] LE 4 OR finishafter EQ 1.1 OR (fix_incl EQ 0. and fix_pa EQ 0.): begin
+                 Writefittingvariables,tirificsecond,inclinput1,painput1,$
+                                       vrotinput1,sdisinput1,sbrinput1,sbrinput2,sbrinput4,sbrinput3,z0input1,$
+                                       xposinput1,yposinput1,vsysinput1,INIMODE=inimode
+
+              end
+              fix_incl EQ 0. and fix_pa EQ 1.: begin
+                 IF norings[0] LE 6 then begin
+                    Writefittingvariables,tirificsecond,inclinput1,painput1,painput2,painput3,$
+                                          vrotinput1,sdisinput1,sbrinput1,sbrinput2,sbrinput4,sbrinput3,z0input1,$
+                                          xposinput1,yposinput1,vsysinput1,INIMODE=inimode
+                 ENDIF ELSE BEGIN
+                    Writefittingvariables,tirificsecond,inclinput1,painput1,painput2,painput3,$
+                                          vrotinput1,sdisinput1,sbrinput5,sbrinput1,sbrinput6,sbrinput2,sbrinput4,sbrinput3,z0input1,$
+                                          xposinput1,yposinput1,vsysinput1,INIMODE=inimode
+                 ENDELSE
+              end
+              fix_incl EQ 1. and fix_pa EQ 0.: begin
+                 IF norings[0] LE 6 then begin
+                    Writefittingvariables,tirificsecond,inclinput1,inclinput2,inclinput3,painput1,painput2,painput3,$
+                                          vrotinput1,sdisinput1,sbrinput1,sbrinput2,sbrinput4,sbrinput3,z0input1,$
+                                          xposinput1,yposinput1,vsysinput1,INIMODE=inimode
+                 ENDIF ELSE BEGIN
+                    Writefittingvariables,tirificsecond,inclinput1,inclinput2,inclinput3,painput1,painput2,painput3,$
+                                          vrotinput1,sdisinput1,sbrinput5,sbrinput1,sbrinput6,sbrinput2,sbrinput4,sbrinput3,z0input1,$
+                                          xposinput1,yposinput1,vsysinput1,INIMODE=inimode
+                 ENDELSE
+
+              end
+              else: begin
+                 IF norings[0] LE 6 then begin
+                    Writefittingvariables,tirificsecond,inclinput1,inclinput2,inclinput3,painput1,painput2,painput3,$
+                                          vrotinput1,sdisinput1,sbrinput1,sbrinput2,sbrinput4,sbrinput3,z0input1,$
+                                          xposinput1,yposinput1,vsysinput1,INIMODE=inimode
+                 ENDIF ELSE BEGIN
+                    Writefittingvariables,tirificsecond,inclinput1,inclinput2,inclinput3,painput1,painput2,painput3,$
+                                          vrotinput1,sdisinput1,sbrinput5,sbrinput1,sbrinput6,sbrinput2,sbrinput4,sbrinput3,z0input1,$
+                                          xposinput1,yposinput1,vsysinput1,INIMODE=inimode
+                 ENDELSE
+
+              end
+           endcase
+
+
+
                                 ;Update counters and go to a new
                                 ;iteration of the model.
            sbrmodify++
@@ -4879,6 +5253,7 @@ noconfig:
               overwrite=1
            ENDIF
         ENDIF
+
                                 ;If we do not have those conditions
                                 ;and the previous iteration was a cut
                                 ;we do not add a ring
@@ -4894,7 +5269,7 @@ noconfig:
         IF newrings GT norings[0] AND (prevmodification NE -1 OR overwrite EQ 1) AND newrings LT highring then begin
            norings[0]=newrings
            addring:
-           changeradii,tirificsecond,norings[0]
+           changeradii,tirificsecond,norings[0],continue_tirific
                                 ;we need to estimate some values for the added rings
            prefunc=0.
            tmppos=where('RADI' EQ tirificsecondvars)
@@ -4911,16 +5286,18 @@ noconfig:
               printf,66,linenumber()+"The inner" +string(fixedrings)+" rings are fixed."
               Close,66
            ENDIF
-           revised_regularisation_com,comin,tmpsbr,RADarr,fixedrings=fixedrings,difference=[2.,6.*exp(-catinc[i]^2.5/10^3.5)+4.],cutoff=cutoff,arctan=prefunc,order=polorder,max_par=[PAinput2[1],INCLinput2[1]],min_par=[PAinput2[2],INCLinput2[2]],gdlidl=gdlidl,log=log,/extending
-
+           if fix_pa eq 1 or fix_incl EQ 1 then begin
+              revised_regularisation_com,comin,tmpsbr,RADarr,fixedrings=fixedrings,difference=[2.,6.*exp(-catinc[i]^2.5/10^3.5)+4.],cutoff=cutoff,arctan=prefunc,order=polorder,max_par=[PAinput2[1],INCLinput2[1]],min_par=[PAinput2[2],INCLinput2[2]],gdlidl=gdlidl,log=log,/extending,ring_spacing=ring_spacing
+           endif
            tmp2=PAang
            PAang=dblarr(n_elements(RADarr))
            PAang[0:n_elements(PAang)-2]=tmp2
-           PAang[n_elements(PAang)-1]=comin[n_elements(comin[*,0])-1,0]
+           IF fix_pa EQ 1 then PAang[n_elements(PAang)-1]=comin[n_elements(comin[*,0])-1,0] else  PAang[n_elements(PAang)-1]=PAang[0]
+
            tmp2=INCLang
            INCLang=dblarr(n_elements(RADarr))
            INCLang[0:n_elements(INCLang)-2]=tmp2
-           INCLang[n_elements(INCLang)-1]=comin[n_elements(comin[*,1])-1,1]
+           IF fix_incl EQ 1 then INCLang[n_elements(INCLang)-1]=comin[n_elements(comin[*,1])-1,1] else  INCLang[n_elements(INCLang)-1]=INCLang[0]
                                 ;PA_2
 
            tmpsbr2=[SBRarr2or,cutoff[n_elements(SBRarr2)]]
@@ -4932,16 +5309,17 @@ noconfig:
               printf,66,linenumber()+"The inner" +string(fixedrings)+" rings are fixed."
               Close,66
            ENDIF
-           revised_regularisation_com,comin,tmpsbr2,RADarr,fixedrings=fixedrings,difference=[2.,6.*exp(-catinc[i]^2.5/10^3.5)+4.],cutoff=cutoff,arctan=prefunc,order=polorder2,max_par=[PAinput3[1],INCLinput3[1]],min_par=[PAinput3[2],INCLinput3[2]],gdlidl=gdlidl,log=log,/extending
-
+           if fix_pa eq 1 or fix_incl EQ 1 then begin
+              revised_regularisation_com,comin,tmpsbr2,RADarr,fixedrings=fixedrings,difference=[2.,6.*exp(-catinc[i]^2.5/10^3.5)+4.],cutoff=cutoff,arctan=prefunc,order=polorder2,max_par=[PAinput3[1],INCLinput3[1]],min_par=[PAinput3[2],INCLinput3[2]],gdlidl=gdlidl,log=log,/extending,ring_spacing=ring_spacing
+           endif
            tmp2=PAang2
            PAang2=dblarr(n_elements(RADarr))
            PAang2[0:n_elements(PAang2)-2]=tmp2
-           PAang2[n_elements(PAang2)-1]=comin[n_elements(comin[*,0])-1,0]
+           IF fix_pa EQ 1 then PAang2[n_elements(PAang2)-1]=comin[n_elements(comin[*,0])-1,0] else  PAang2[n_elements(PAang)-1]=PAang2[0]
            tmp2=INCLang2
            INCLang2=dblarr(n_elements(RADarr))
            INCLang2[0:n_elements(INCLang2)-2]=tmp2
-           INCLang2[n_elements(INCLang2)-1]=comin[n_elements(comin[*,1])-1,1]
+           IF fix_incl EQ 1 then INCLang2[n_elements(INCLang2)-1]=comin[n_elements(comin[*,1])-1,1] else INCLang2[n_elements(INCLang)-1]=INCLang2[0]
 
            PAang[0:fixedrings]=(PAang[0]+PAang2[0])/2.
            PAang2[0:fixedrings]=(PAang[0]+PAang2[0])/2.
@@ -5003,6 +5381,8 @@ noconfig:
            ENDIF ELSE BEGIN
                                 ;update INCL and PA
               set_warp_slopev3,SBRarr,SBRarr2,cutoff,INCLinput2,PAinput2,INCLinput3,PAinput3,norings,log=log,innerfix=innerfix,sloped=slopedrings
+              if fix_pa eq 0 then PAinput1[0]='PA 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+' PA_2 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)
+              if fix_incl EQ 0. then INCLinput1[0]='INCL 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+' INCL_2 1:' +strtrim(strcompress(string(norings[0],format='(F7.4)')),1)
            ENDELSE
                                 ;Updating surface brightness settings
            set_sbr,SBRinput1,SBRinput2,SBRinput3,SBRinput4,SBRinput5,SBRinput6,SBRarr,cutoff,norings,finishafter,log=log,doubled=doubled
@@ -5015,23 +5395,54 @@ noconfig:
                          ' YPOS_2 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)
            vsysinput1[0]=' VSYS 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+$
                          ' VSYS_2 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)
-           sdisinput1[0]=' SDIS 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+$
-                         ' SDIS_2 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)
-                                ;Rotation settings
+                               ;Rotation settings
            set_vrotv6,vrotinput1,VROTarr,velconstused,vrotmax,vrotmin,norings,channelwidth,avinner=avinner,centralexclude=centralexclude,finish_after=finishafter
-                                ;Write the parameters to the tirific array
-           IF norings[0] LE 4 or finishafter EQ 1.1 then begin
-              Writefittingvariables,tirificsecond,inclinput1,painput1,vrotinput1,$
-                                    sbrinput1,sbrinput2,sbrinput4,sbrinput3,z0input1,xposinput1,yposinput1,vsysinput1 ,sdisinput1
-           ENDIF ELSE BEGIN
-              IF norings[0] LE 6 then begin
-                 Writefittingvariables,tirificsecond,inclinput1,inclinput2,inclinput3,painput1,painput2,painput3,vrotinput1,$
-                                       sbrinput1,sbrinput2,sbrinput4,sbrinput3,z0input1,xposinput1,yposinput1,vsysinput1 ,sdisinput1
-              ENDIF else begin
-                 Writefittingvariables,tirificsecond,inclinput1,inclinput2,inclinput3,painput1,painput2,painput3,vrotinput1,$
-                                       sbrinput5,sbrinput1,sbrinput6,sbrinput2,sbrinput4,sbrinput3,z0input1,xposinput1,yposinput1,vsysinput1 ,sdisinput1
-              ENDELSE
-           ENDELSE
+           set_sdis,sdisinput1,SDISarr,velconstused,sdismax,sdismin,norings,channelwidth,finish_after=finishafter,slope=slope,fix=fix_sdis
+
+                                ;Write the parameters to the tirific
+                                ;array
+           case 1 of
+              norings[0] LE 4 OR finishafter EQ 1.1 OR (fix_incl EQ 0. and fix_pa EQ 0.): begin
+                 Writefittingvariables,tirificsecond,inclinput1,painput1,vrotinput1,sdisinput1, $
+                                       sbrinput1,sbrinput2,sbrinput4,sbrinput3,z0input1,xposinput1,yposinput1,vsysinput1,INIMODE=inimode
+              end
+              fix_incl EQ 0. and fix_pa EQ 1.: begin
+                 IF norings[0] LE 6 then begin
+                    Writefittingvariables,tirificsecond,inclinput1,painput1,painput2,painput3,$
+                                          vrotinput1,sdisinput1,sbrinput1,sbrinput2,sbrinput4,sbrinput3,z0input1,$
+                                          xposinput1,yposinput1,vsysinput1,INIMODE=inimode
+                 ENDIF ELSE BEGIN
+                    Writefittingvariables,tirificsecond,inclinput1,painput1,painput2,painput3,$
+                                          vrotinput1,sdisinput1,sbrinput5,sbrinput1,sbrinput6,sbrinput2,sbrinput4,sbrinput3,z0input1,$
+                                          xposinput1,yposinput1,vsysinput1,INIMODE=inimode
+                 ENDELSE
+              end
+              fix_incl EQ 1. and fix_pa EQ 0.: begin
+                 IF norings[0] LE 6 then begin
+                    Writefittingvariables,tirificsecond,inclinput1,inclinput2,inclinput3,painput1,painput2,painput3,$
+                                          vrotinput1,sdisinput1,sbrinput1,sbrinput2,sbrinput4,sbrinput3,z0input1,$
+                                          xposinput1,yposinput1,vsysinput1,INIMODE=inimode
+                 ENDIF ELSE BEGIN
+                    Writefittingvariables,tirificsecond,inclinput1,inclinput2,inclinput3,painput1,painput2,painput3,$
+                                          vrotinput1,sdisinput1,sbrinput5,sbrinput1,sbrinput6,sbrinput2,sbrinput4,sbrinput3,z0input1,$
+                                          xposinput1,yposinput1,vsysinput1,INIMODE=inimode
+                 ENDELSE
+
+              end
+              else: begin
+                 IF norings[0] LE 6 then begin
+                    Writefittingvariables,tirificsecond,inclinput1,inclinput2,inclinput3,painput1,painput2,painput3,$
+                                          vrotinput1,sdisinput1,sbrinput1,sbrinput2,sbrinput4,sbrinput3,z0input1,$
+                                          xposinput1,yposinput1,vsysinput1,INIMODE=inimode
+                 ENDIF ELSE BEGIN
+                    Writefittingvariables,tirificsecond,inclinput1,inclinput2,inclinput3,painput1,painput2,painput3,$
+                                          vrotinput1,sdisinput1,sbrinput5,sbrinput1,sbrinput6,sbrinput2,sbrinput4,sbrinput3,z0input1,$
+                                          xposinput1,yposinput1,vsysinput1,INIMODE=inimode
+                 ENDELSE
+
+              end
+           endcase
+
                                 ;Update counters and go back to the fitting proces
            sbrmodify++
            finalsmooth=0.
@@ -5063,6 +5474,8 @@ noconfig:
         ENDIF ELSE BEGIN
                                 ;update INCL and PA
            set_warp_slopev3,SBRarr,SBRarr2,cutoff,INCLinput2,PAinput2,INCLinput3,PAinput3,norings,log=log,innerfix=innerfix,sloped=slopedrings
+           if fix_pa eq 0 then PAinput1[0]='PA 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+' PA_2 1:'+strtrim(strcompress(string(norings[0]-1,format='(F7.4)')),1)
+           if fix_incl eq 0. then INCLinput1[0]='INCL 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+' INCL_2 1:' +strtrim(strcompress(string(norings[0],format='(F7.4)')),1)
         ENDELSE
                                 ;set the SBR fitting parameters
         set_sbr,SBRinput1,SBRinput2,SBRinput3,SBRinput4,SBRinput5,SBRinput6,SBRarr,cutoff,norings,finishafter,log=log,doubled=doubled
@@ -5075,25 +5488,59 @@ noconfig:
                       ' YPOS_2 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)
         vsysinput1[0]=' VSYS 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+$
                       ' VSYS_2 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)
-        sdisinput1[0]=' SDIS 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+$
-                      ' SDIS_2 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)
+       ; sdisinput1[0]=' SDIS 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+$
+        ;              ' SDIS_2 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)
         set_vrotv6,vrotinput1,VROTarr,velconstused,vrotmax,vrotmin,norings,channelwidth,avinner=avinner,centralexclude=centralexclude,finish_after=finishafter
+        set_sdis,sdisinput1,SDISarr,velconstused,sdismax,sdismin,norings,channelwidth,finish_after=finishafter,slope=slope,fix=fix_sdis
+
                                 ;But we need to reset all the fitting parameters
         IF trytwo LT 2. then begin
            IF AC1 NE 1 then begin
               ;If the first estimate is not accepted either
-              IF norings[0] LE 4 OR finishafter EQ 1.1  then begin
-                 Writefittingvariables,tirificsecond,inclinput1,painput1,z0input1,xposinput1,yposinput1,$
-                                       vsysinput1,vrotinput1,sbrinput1,sbrinput2,sbrinput4,sbrinput3,sdisinput1
-              ENDIF ELSE BEGIN
-                 IF norings[0] LE 6 then begin
-                    Writefittingvariables,tirificsecond,inclinput1,inclinput2,inclinput3,painput1,painput2,painput3,z0input1,xposinput1,yposinput1,$
-                                          vsysinput1,vrotinput1,sbrinput1,sbrinput2,sbrinput4,sbrinput3,sdisinput1
-                 ENDIF else begin
-                    Writefittingvariables,tirificsecond,inclinput1,inclinput2,inclinput3,painput1,painput2,painput3,z0input1,xposinput1,yposinput1,$
-                                          vsysinput1,vrotinput1,sbrinput5,sbrinput1,sbrinput6,sbrinput2,sbrinput4,sbrinput3,sdisinput1
-                 ENDELSE
-              ENDELSE
+
+              case 1 of
+                 norings[0] LE 4 OR finishafter EQ 1.1 OR (fix_incl EQ 0. and fix_pa EQ 0.): begin
+                    Writefittingvariables,tirificsecond,inclinput1,painput1,$
+                                          vrotinput1,sdisinput1,sbrinput1,sbrinput2,sbrinput4,sbrinput3,z0input1,$
+                                          xposinput1,yposinput1,vsysinput1,INIMODE=inimode
+
+                 end
+                 fix_incl EQ 0. and fix_pa EQ 1.: begin
+                    IF norings[0] LE 6 then begin
+                       Writefittingvariables,tirificsecond,inclinput1,painput1,painput2,painput3,$
+                                             vrotinput1,sdisinput1,sbrinput1,sbrinput2,sbrinput4,sbrinput3,z0input1,$
+                                             xposinput1,yposinput1,vsysinput1,INIMODE=inimode
+                    ENDIF ELSE BEGIN
+                       Writefittingvariables,tirificsecond,inclinput1,painput1,painput2,painput3,$
+                                             vrotinput1,sdisinput1,sbrinput5,sbrinput1,sbrinput6,sbrinput2,sbrinput4,sbrinput3,z0input1,$
+                                             xposinput1,yposinput1,vsysinput1,INIMODE=inimode
+                    ENDELSE
+                 end
+                 fix_incl EQ 1. and fix_pa EQ 0.: begin
+                    IF norings[0] LE 6 then begin
+                       Writefittingvariables,tirificsecond,inclinput1,inclinput2,inclinput3,painput1,painput2,painput3,$
+                                             vrotinput1,sdisinput1,sbrinput1,sbrinput2,sbrinput4,sbrinput3,z0input1,$
+                                             xposinput1,yposinput1,vsysinput1,INIMODE=inimode
+                    ENDIF ELSE BEGIN
+                       Writefittingvariables,tirificsecond,inclinput1,inclinput2,inclinput3,painput1,painput2,painput3,$
+                                             vrotinput1,sdisinput1,sbrinput5,sbrinput1,sbrinput6,sbrinput2,sbrinput4,sbrinput3,z0input1,$
+                                             xposinput1,yposinput1,vsysinput1,INIMODE=inimode
+                    ENDELSE
+
+                 end
+                 else: begin
+                    IF norings[0] LE 6 then begin
+                       Writefittingvariables,tirificsecond,inclinput1,inclinput2,inclinput3,painput1,painput2,painput3,$
+                                             vrotinput1,sdisinput1,sbrinput1,sbrinput2,sbrinput4,sbrinput3,z0input1,$
+                                             xposinput1,yposinput1,vsysinput1,INIMODE=inimode
+                    ENDIF ELSE BEGIN
+                       Writefittingvariables,tirificsecond,inclinput1,inclinput2,inclinput3,painput1,painput2,painput3,$
+                                             vrotinput1,sdisinput1,sbrinput5,sbrinput1,sbrinput6,sbrinput2,sbrinput4,sbrinput3,z0input1,$
+                                             xposinput1,yposinput1,vsysinput1,INIMODE=inimode
+                    ENDELSE
+
+                 end
+              endcase
               IF size(log,/TYPE) EQ 7 then begin
                  openu,66,log,/APPEND
                  printf,66,linenumber()+"Both the first and the second estimate weren't accepted, retrying."
@@ -5102,15 +5549,42 @@ noconfig:
            endif else begin
                                 ;IF only the second model is not
                                 ;accepted try without fitting the center
-              IF norings[0] LE 4  OR finishafter EQ 1.1  then begin
-                 Writefittingvariables,tirificsecond,inclinput1,painput1,vrotinput1,sbrinput1,sbrinput2,sbrinput4,sbrinput3 ,sdisinput1
-              ENDIF ELSE BEGIN
-                 IF norings[0] LE 6 then begin
-                    Writefittingvariables,tirificsecond,inclinput1,inclinput2,inclinput3,painput1,painput2,painput3,vrotinput1,sbrinput1,sbrinput2,sbrinput4,sbrinput3,sdisinput1
-                 ENDIF ELSE begin
-                    Writefittingvariables,tirificsecond,inclinput1,inclinput2,inclinput3,painput1,painput2,painput3,vrotinput1,sbrinput5,sbrinput1,sbrinput6,sbrinput2,sbrinput4,sbrinput3,sdisinput1
-                 ENDELSE
-              ENDELSE
+
+              case 1 of
+                 norings[0] LE 4 OR finishafter EQ 1.1 OR (fix_incl EQ 0. and fix_pa EQ 0.): begin
+                    Writefittingvariables,tirificsecond,inclinput1,painput1,$
+                                          vrotinput1,sdisinput1,sbrinput1,sbrinput2,sbrinput4,sbrinput3,z0input1,INIMODE=inimode
+                 end
+                 fix_incl EQ 0. and fix_pa EQ 1.: begin
+                    IF norings[0] LE 6 then begin
+                       Writefittingvariables,tirificsecond,inclinput1,painput1,painput2,painput3,$
+                                             vrotinput1,sdisinput1,sbrinput1,sbrinput2,sbrinput4,sbrinput3,z0input1,INIMODE=inimode
+                    ENDIF ELSE BEGIN
+                       Writefittingvariables,tirificsecond,inclinput1,painput1,painput2,painput3,$
+                                             vrotinput1,sdisinput1,sbrinput5,sbrinput1,sbrinput6,sbrinput2,sbrinput4,sbrinput3,z0input1,INIMODE=inimode
+                    ENDELSE
+                 end
+                 fix_incl EQ 1. and fix_pa EQ 0.: begin
+                    IF norings[0] LE 6 then begin
+                       Writefittingvariables,tirificsecond,inclinput1,inclinput2,inclinput3,painput1,painput2,painput3,$
+                                             vrotinput1,sdisinput1,sbrinput1,sbrinput2,sbrinput4,sbrinput3,z0input1,INIMODE=inimode
+                    ENDIF ELSE BEGIN
+                       Writefittingvariables,tirificsecond,inclinput1,inclinput2,inclinput3,painput1,painput2,painput3,$
+                                             vrotinput1,sdisinput1,sbrinput5,sbrinput1,sbrinput6,sbrinput2,sbrinput4,sbrinput3,z0input1,INIMODE=inimode
+                    ENDELSE
+
+                 end
+                 else: begin
+                    IF norings[0] LE 6 then begin
+                       Writefittingvariables,tirificsecond,inclinput1,inclinput2,inclinput3,painput1,painput2,painput3,$
+                                             vrotinput1,sdisinput1,sbrinput1,sbrinput2,sbrinput4,sbrinput3,z0input1,INIMODE=inimode
+                    ENDIF ELSE BEGIN
+                       Writefittingvariables,tirificsecond,inclinput1,inclinput2,inclinput3,painput1,painput2,painput3,$
+                                             vrotinput1,sdisinput1,sbrinput5,sbrinput1,sbrinput6,sbrinput2,sbrinput4,sbrinput3,z0input1,INIMODE=inimode
+                    ENDELSE
+
+                 end
+              endcase
               IF size(log,/TYPE) EQ 7 then begin
                  openu,66,log,/APPEND
                  printf,66,linenumber()+"The second estimate wasn't accepted. Running with fixed center."
@@ -5125,7 +5599,7 @@ noconfig:
               xposinput1[3]='1E3'
               yposinput1[3]='1E3'
               vsysinput1[3]='4'
-              Writefittingvariables,tirificsecond,xposinput1,yposinput1,vsysinput1
+              Writefittingvariables,tirificsecond,xposinput1,yposinput1,vsysinput1,INIMODE=inimode
               IF size(log,/TYPE) EQ 7 then begin
                  openu,66,log,/APPEND
                  printf,66,linenumber()+"Last try on the second fit."
@@ -5158,20 +5632,13 @@ noconfig:
      IF newindrings[1] LT 4 then newindrings[1]=4
      IF size(log,/TYPE) EQ 7 then begin
         openu,66,log,/APPEND
-        printf,66,linenumber()+"We'll fit from "+strtrim(strcompress(string(newindrings,format='(F7.4)')),1)
+        printf,66,linenumber()+"We'll fit from "+strtrim(strcompress(STRJOIN(string(newindrings,format='(F7.1)'),' ')),1)
         close,66
      ENDIF
                                 ;set the parameters for single fitting
-     SBRinput1=['SBR '+strtrim(strcompress(string(newindrings[0],format='(F7.4)')),1)+':1','1',strtrim(strcompress(string(cutoff[n_elements(cutoff)-1]/2.,format='(E12.5)')),1),'1E-6','1E-7','1E-5','1E-7','3','70','70']
+     SBRinput1=['SBR '+strtrim(strcompress(string(newindrings[0],format='(F7.4)')),1)+':1','3',strtrim(strcompress(string(cutoff[n_elements(cutoff)-1]/2.,format='(E12.5)')),1),'1E-6','1E-7','1E-5','1E-7','3','70','70']
      SBRinput2=SBRinput1
-     SBRinput2[0]='SBR_2 '+strtrim(strcompress(string(newindrings[1],format='(F7.4)')),1)+':1'
-;     SBRinput3=SBRinput1
-;     SBRinput3[0]='SBR 1 SBR_2 1'
-;     SBRinput3[1]=strtrim(strcompress(string(SBRarr[1],format='(E12.5)')),1)
-;     SBRinput3[2]=strtrim(strcompress(string(cutoff[n_elements(cutoff)-1],format='(E12.5)')),1)
-;     SBRinput4=SBRinput1
-;     SBRinput4[0]='SBR 2 SBR_2 2'
-;     SBRinput4[2]=strtrim(strcompress(string(cutoff[n_elements(cutoff)-1],format='(E12.5)')),1)
+     SBRinput2[0]='SBR_2 '+strtrim(strcompress(string(newindrings[1],format='(F7.4)')),1)+':3'
      IF norings GT 4 and finishafter NE 1.1 then begin
                                 ;PA
         PAinput1=['PA 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+' '+$
@@ -5185,8 +5652,13 @@ noconfig:
         VROTinput1=['VROT 2:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+' VROT_2 2:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)$
                     ,'500',string(channelwidth),string(channelwidth*0.5),string(0.1*channelwidth),string(0.5*channelwidth),string(0.1*channelwidth),'3','70','70',' ']
                                 ;SDIS
-        SDISinput1=['SDIS 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+' SDIS_2 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1),$
-                    '40','3','1','0.1','0.5','0.05','3','70','70']
+        If INCLang[0] GT 60 then begin
+           SDISinput1=['SDIS 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+' SDIS_2 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1),$
+                       string(MAX(SDISarr)),'3.',string(channelwidth*0.5),string(0.1*channelwidth),string(0.5*channelwidth),string(0.1*channelwidth),'3','70','70']
+        ENDIF ELSE BEGIN
+          SDISinput1=['SDIS 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+' SDIS_2 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1),$
+                      '40','3.',string(channelwidth*0.5),string(0.1*channelwidth),string(0.5*channelwidth),string(0.1*channelwidth),'3','70','70']
+       ENDELSE
                                 ;Z0
         Z0input1=['Z0 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+$
                   ' Z0_2 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1),$
@@ -5206,22 +5678,25 @@ noconfig:
                                 ;30 kpc which means that
                                 ;0.5=norings[0]/60. and so on
            IF catinc[i] GT 80 then begin
-              Z0input1[1]=string(MAX([catmajbeam[i]*norings[0]/60.,catmajbeam[i]/2.]))
-           ENDIF ELSE  Z0input1[1]=string(catmajbeam[i]*norings[0]/60.)
+              Z0input1[1]=string(MAX([catmajbeam[i]*ring_spacing*norings[0]/60.,catmajbeam[i]/2.]))
+           ENDIF ELSE  Z0input1[1]=string(catmajbeam[i]*ring_spacing*norings[0]/60.)
            Z0input1[2]='0.'
-           Z0input1[3]=string(-1*catmajbeam[i]*norings[0]/6E4)
-           Z0input1[4]=string(catmajbeam[i]*norings[0]/6E5)
-           Z0input1[5]=string(catmajbeam[i]*norings[0]/60.)
-           Z0input1[6]=string(catmajbeam[i]*norings[0]/6E5)
+           Z0input1[3]=string(-1*catmajbeam[i]*ring_spacing*norings[0]/6E4)
+           Z0input1[4]=string(catmajbeam[i]*ring_spacing*norings[0]/6E5)
+           Z0input1[5]=string(catmajbeam[i]*ring_spacing*norings[0]/60.)
+           Z0input1[6]=string(catmajbeam[i]*ring_spacing*norings[0]/6E5)
         ENDIF
      ENDIF ELSE BEGIN
         VROTinput1=['VROT 2:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+' VROT_2 2:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)$
                     ,'500',string(channelwidth),string(channelwidth*0.1),string(0.05*channelwidth),string(0.5*channelwidth),string(0.1*channelwidth),'3','70','70',' ']
      ENDELSE
                                 ;write the parameters to the tirific array
-     Writefittingvariables,tirificsecond,PAinput1,INCLinput1,VROTinput1,SBRinput1,SBRinput2,SDISinput1,Z0input1
+     Writefittingvariables,tirificsecond,PAinput1,INCLinput1,VROTinput1,SDISinput1,SBRinput1,SBRinput2,Z0input1,INIMODE=inimode
      IF testing GE 2 OR finalsmooth EQ 2. then goto,testing2check
                                 ;Write to file
+     restart_counter++
+     tmppos=where('RESTARTID' EQ tirificsecondvars)
+     tirificsecond[tmppos]='RESTARTID= '+string(fix(restart_counter))
      openw,1,maindir+'/'+catdirname[i]+'/tirific.def'
      for index=0,n_elements(tirificsecond)-1 do begin
         printf,1,tirificsecond[index]
@@ -5240,13 +5715,15 @@ noconfig:
         stop
      ENDIF
      print,linenumber()+"Starting tirific check of second estimate in "+catDirname[i]+" which is galaxy # "+strtrim(string(fix(i)),2)+" at "+systime()
-     rename,'2ndfit.','2ndfitunsmooth.'
-     gipsyfirst=strarr(1)
-     gipsyfirst='tirific DEFFILE=tirific.def ACTION=1'
-     spawn,gipsyfirst,isthere2
+     run_tirific, continue_tirific, curr_run_id,bookkeeping,output_name='2ndfit.', $
+                  store_name='2ndfitunsmooth.',log=log,loops=loops,nopoints=nopoints,AC=AC2, $
+                  toymodels=toymodels,run_unit=run_unit
+
+
+     spawn,'cp tirific.def the_last_input.def'
      finalsmooth=2.
      overwrite=0.
-     get_progress,maindir+'/'+catdirname[i]+'/progress2.txt',AC2,nopoints,loops,toymodels
+
      IF size(log,/TYPE) EQ 7 then begin
         openu,66,log,/APPEND
         IF AC2 EQ 1 then begin
@@ -5277,15 +5754,22 @@ noconfig:
         SBRarr=firstfitvalues[*,tmp]
         tmp=WHERE(firstfitvaluesnames EQ 'SBR_2')
         SBRarr2=firstfitvalues[*,tmp]
-;                                ;We always want to smooth the surface brightnes. Added 16-06-2017
-        SBRarr=fat_hanning(SBRarr)
-        SBRarr2=fat_hanning(SBRarr2)
+        get_newringsv9,SBRarr,SBRarr2,cutoff,finalrings,/individual
+        IF finalrings[0]+1 LT n_elements(SBRarr) then SBRarr[finalrings[0]+1:n_elements(SBRarr)-1]=1e-16
+        IF finalrings[1]+1 LT n_elements(SBRarr2) then SBRarr2[finalrings[1]+1:n_elements(SBRarr2)-1]=1e-16
+
+        SBRarr[0:1]=(SBRarr[0:1]+SBRarr2[0:1])/2.
+        SBRarr2[0:1]=SBRarr[0:1]
+
+        stringSBR='SBR= '+STRJOIN(string(SBRarr),' ')
+        tmppos=where('SBR' EQ tirificsecondvars)
+        tirificsecond[tmppos]=stringSBR
+        stringSBR='SBR_2= '+STRJOIN(string(SBRarr2),' ')
+        tmppos=where('SBR_2' EQ tirificsecondvars)
+        tirificsecond[tmppos]=stringSBR
+
                                 ;In this case we want to add them back
                                 ;in
-        tmppos=WHERE(tirificsecondvars EQ 'SBR')
-        tirificsecond[tmppos]='SBR= '+STRJOIN(SBRarr,' ')
-        tmppos=WHERE(tirificsecondvars EQ 'SBR_2')
-        tirificsecond[tmppos]='SBR_2= '+STRJOIN(SBRarr2,' ')
         tmpSBR=(SBRarr+SBRarr2)/2.
         IF finishafter EQ 1.1 then begin
            get_newringsv9,tmpSBR,tmpSBR,cutoff,newend
@@ -5294,9 +5778,9 @@ noconfig:
            tmp=WHERE(firstfitvaluesnames EQ 'NUR')
            rings=firstfitvalues[0,tmp]
            IF newend LT rings then begin
-              changeradii,tirificsecond,newend
+              changeradii,tirificsecond,newend,continue_tirific
               INCLinput1=['INCL 1','90','89',string(0.5),string(0.1),string(0.5),string(0.1),'3','70','70',' ']
-              writefittingvariables,tirificsecond,INCLinput1
+              writefittingvariables,tirificsecond,INCLinput1,INIMODE=inimode
               newrings=newend
            ENDIF ELSE newrings=rings
         ENDIF
@@ -5307,23 +5791,33 @@ noconfig:
               tmppos=where('INSET' EQ tirificsecondvars)
               tirificsecond[tmppos]='INSET=  '+strtrim(strcompress(string(currentfitcube+'.fits')))
            ENDIF
+
         ENDIF
         tmp1=WHERE(SBRarr LT 1.1E-16)
         tmp2=WHERE(SBRarr2 LT 1.1E-16)
         IF n_elements(tmp1) GT 1 AND n_elements(tmp2) GT 1 then begin
            IF tmp1[0] GT tmp2[0] then newrings=tmp1[0]+1 else newrings=tmp2[0]+1
            IF newrings LT 4 then newrings=4
-           changeradii,tirificsecond,newrings
+           changeradii,tirificsecond,newrings,continue_tirific
         ENDIF ELSE BEGIN
            IF finishafter NE 1.1 then newrings=n_elements(SBRarr)
         ENDELSE
         tmppos=where('LOOPS' EQ tirificsecondvars)
         tirificsecond[tmppos]='LOOPS=  0'
-        errorsadd=['VROT','VROT_2','PA','PA_2','INCL','INCL_2']
-        tmpfile=strarr(n_elements(tirificsecond)+6)
+        tmppos=where('RESTARTNAME' EQ tirificsecondvars)
+        tirificsecond[tmppos]='RESTARTNAME= '
+        print,'!!!!!!!!! Rhis is being weird'
+        print,  tirificsecond[tmppos]
+        print,tirificsecondvars[tmppos]
+        continue_tirific = 'optimized'
+        tmppos=where('INIMODE' EQ tirificsecondvars)
+        tirificsecond[tmppos]='INIMODE=  0'
+        errorsadd=['VROT','VROT_2','PA','PA_2','INCL','INCL_2','SDIS','SDIS_2']
+        tmpfile=strarr(n_elements(tirificsecond)+8)
         added=0
                                 ;Add the errors to the final tirific
                                 ;file
+
         for j=0,n_elements(tirificsecond)-1 do begin
            tmp=str_sep(strtrim(strcompress(tirificsecond[j]),2),'=')
            tmpex=WHERE(tmp[0] EQ errorsadd)
@@ -5371,32 +5865,51 @@ noconfig:
                      IF n_elements(sigmaincl2) LT newrings then   sigmaincl2=replicate(4,newrings)
                     tmpfile[j+added]='# '+tmp[0]+'_ERR='+STRJOIN(strtrim(strcompress(string(sigmaincl2[0:newrings-1]))),' ')
                  end
+                 6: begin
+                    IF n_elements(sigmasdis) LT newrings then   sigmasdis=replicate(channelwidth/2.,newrings)
+                    tmpfile[j+added]='# '+tmp[0]+'_ERR='+STRJOIN(strtrim(strcompress(string(sigmasdis[0:newrings-1]))),' ')
+                 end
+                 7: begin
+                     IF n_elements(sigmasdis) LT newrings then   sigmasdis=replicate(channelwidth/2.,newrings)
+                    tmpfile[j+added]='# '+tmp[0]+'_ERR='+STRJOIN(strtrim(strcompress(string(sigmasdis[0:newrings-1]))),' ')
+                 end
                  else:print,'odd'
               endcase
            endif else tmpfile[j+added]=tirificsecond[j]
         endfor
         tirificsecond=tmpfile
                                 ;write the final file and produce the final model
+        restart_counter++
+        tmppos=where('RESTARTID' EQ tirificsecondvars)
+        tirificsecond[tmppos]='RESTARTID= '+string(fix(restart_counter))
         openw,1,maindir+'/'+catdirname[i]+'/tirific.def'
         for index=0,n_elements(tirificsecond)-1 do begin
            printf,1,tirificsecond[index]
         endfor
         close,1
         if optimized then begin
-           rename,'2ndfit.','2ndfit_opt.'
-        endif
-        gipsyfirst=strarr(1)
-        gipsyfirst='tirific DEFFILE=tirific.def ACTION=1'
-        spawn,gipsyfirst,isthere2
+           output_name= '2ndfit.'
+           store_name = '2ndfit_opt.'
+        endif else BEGIN
+           output_name= '2ndfit.'
+           store_name = '2ndfitold.'
+        ENDELSE
+        run_tirific, continue_tirific, curr_run_id,bookkeeping,output_name=output_name, $
+                     store_name=store_name,log=log,run_unit=run_unit
+
+
+
         spawn,'cp tirific.def 2ndfit.def',isthere
         finalsmooth=3
         secondtime=1
-        openu,66,log,/APPEND
-        printf,66,linenumber()+"This should be the very last thing and not happening again."
-        close,66
+        IF size(log,/TYPE) EQ 7 then begin
+          openu,66,log,/APPEND
+          printf,66,linenumber()+"This should be the very last thing and not happening again."
+          close,66
+        ENDIF
      ENDIF
                                 ;Write the final info and pv-diagrams
-     Basicinfovars=['XPOS','YPOS','VSYS','PA','INCL','VROT']
+     Basicinfovars=['XPOS','YPOS','VSYS','PA','INCL','VROT','SDIS']
      writenewtotemplate,tirificsecond,maindir+'/'+catdirname[i]+'/2ndfit.def',Arrays=Basicinfovalues,VariableChange=Basicinfovars,Variables=tirificsecondvars,/EXTRACT
      RAhr=Basicinfovalues[0,0]
      RAdiff=maxchangeRA*3600./15.
@@ -5424,6 +5937,9 @@ noconfig:
      hedtmp1stv=hedtmp1stcube
      momentsv2,tmpmask,tmpmapv,hedtmp1stv,1.,gdlidl=gdlidl
      writefits,maindir+'/'+catdirname[i]+'/2ndfit_mom1.fits',float(tmpmapv),hedtmp1stv
+     hedtmp1stw=hedtmp1stcube
+     momentsv2,tmpmask,tmpmapw,hedtmp1stw,2.,gdlidl=gdlidl
+     writefits,maindir+'/'+catdirname[i]+'/2ndfit_mom2.fits',float(tmpmapw),hedtmp1stw
      getDHI,tmpmap,hedtmp1st,Basicinfovalues[0,3],[RAhr,DEChr,Basicinfovalues[0,4]],DHI
      VSYSdiff=maxchangevel
      HIMASS=2.36E5*catDistance[i]^2*totflux*ABS(channelwidth)
@@ -5465,19 +5981,25 @@ noconfig:
                                 ;the inclination is below 20 the fit
                                 ;is failed
         case 1 of
-           norings[0] LE 5:begin
+           norings[0]*ring_spacing LE 5:begin
+              comment = 'The finalmodel is less than 8 beams in diameter. FAT is not necessarily reliable in this range.'
+              commentlen='A'+strtrim(string(strlen(comment)),2)
               openu,1,outputcatalogue,/APPEND
-              printf,1,format='(A60,2A12,A120)',catDirname[i],AC1,0.,' The finalmodel is less than 8 beams in diameter. FAT is not necessarily reliable in this range.'
+              printf,1,catDirname[i],strtrim(string(fix(AC1)),2),strtrim(string(2),2),comment,format='("",('+dirformat+')," ",2(A6),"  ",('+commentlen+'))'
               close,1
            end
            Basicinfovalues[0,4] LT 20:begin
+              comment = 'The final inclination is below 20 degrees. FAT is not necessarily reliable in this range.'
+              commentlen='A'+strtrim(string(strlen(comment)),2)
               openu,1,outputcatalogue,/APPEND
-              printf,1,format='(A60,2A12,A120)',catDirname[i],AC1,0.,' The final inclination is below 20 degrees. FAT is not necessarily reliable in this range.'
+              printf,1,catDirname[i],strtrim(string(fix(AC1)),2),strtrim(string(2),2),comment,format='("",('+dirformat+')," ",2(A6),"  ",('+commentlen+'))'
               close,1
            end
            else:begin
+              comment = ' You have chosen to skip the fitting process after the second fit'
+              commentlen='A'+strtrim(string(strlen(comment)),2)
               openu,1,outputcatalogue,/APPEND
-              printf,1,format='(A60,2A12,A120)',catDirname[i],AC1,AC2,' You have chosen to skip the fitting process after the second fit'
+              printf,1,catDirname[i],strtrim(string(fix(AC1)),2),strtrim(string(fix(AC2)),2),comment,format='("",('+dirformat+')," ",2(A6),"  ",('+commentlen+'))'
               close,1
            end
         endcase
@@ -5489,19 +6011,25 @@ noconfig:
                                 ;the inclination is below 20 the fit
                                 ;is failed
            case 1 of
-              norings[0] LE 9:begin
+              norings[0]*ring_spacing LE 5:begin
+                 comment = 'The finalmodel is less than 8 beams in diameter. FAT is not necessarily reliable in this range.'
+                 commentlen='A'+strtrim(string(strlen(comment)),2)
                  openu,1,outputcatalogue,/APPEND
-                 printf,1,format='(A60,2A12,A120)',catDirname[i],AC1,0.,'The finalmodel is less than 8 beams in diameter. FAT is not necessarily reliable in this range.'
+                 printf,1,catDirname[i],strtrim(string(fix(AC1)),2),strtrim(string(2),2),comment,format='("",('+dirformat+')," ",2(A6),"  ",('+commentlen+'))'
                  close,1
               end
               Basicinfovalues[0,4] LT 20:begin
+                 comment = 'The final inclination is below 20 degrees. FAT is not necessarily reliable in this range.'
+                 commentlen='A'+strtrim(string(strlen(comment)),2)
                  openu,1,outputcatalogue,/APPEND
-                 printf,1,format='(A60,2A12,A120)',catDirname[i],AC1,0.,'The final inclination is below 20 degrees. FAT is not necessarily reliable in this range.'
+                 printf,1,catDirname[i],strtrim(string(fix(AC1)),2),strtrim(string(2),2),comment,format='("",('+dirformat+')," ",2(A6),"  ",('+commentlen+'))'
                  close,1
               end
               else:begin
+                 comment = 'As the galaxy radius is already halved we stop here'
+                 commentlen='A'+strtrim(string(strlen(comment)),2)
                  openu,1,outputcatalogue,/APPEND
-                 printf,1,format='(A60,2A12,A120)',catDirname[i],AC1,AC2,'As the galaxy radius is already halved we stop here'
+                 printf,1,catDirname[i],strtrim(string(fix(AC1)),2),strtrim(string(fix(AC2)),2),comment,format='("",('+dirformat+')," ",2(A6),"  ",('+commentlen+'))'
                  close,1
               end
            endcase
@@ -5519,8 +6047,10 @@ noconfig:
         ENDELSE
      ENDELSE
      IF AC1 EQ 0 AND AC2 EQ 0 then begin
+        comment = 'Both AC1 and AC2 could not get accepted. Aborting the fit.'
+        commentlen='A'+strtrim(string(strlen(comment)),2)
         openu,1,outputcatalogue,/APPEND
-        printf,1,format='(A60,2A12,A80)',catDirname[i],AC1,AC2,'Both AC1 and AC2 could not get accepted. Aborting the fit.'
+        printf,1,catDirname[i],strtrim(string(fix(AC1)),2),strtrim(string(fix(AC2)),2),comment,format='("",('+dirformat+')," ",2(A6),"  ",('+commentlen+'))'
         close,1
         goto,finishthisgalaxy
      ENDIF
@@ -5541,7 +6071,8 @@ noconfig:
 
 
      finishthisgalaxy:
-
+     ; Make sure all tirifics are dead
+     kill_tirific,curr_run_id,run_unit
      IF optimized then begin
         catcubename[i]= noptname[0]
         tmp=str_sep(strtrim(strcompress(currentfitcube),2),'_opt')
@@ -5568,6 +6099,9 @@ noconfig:
         writenewtotemplate,tirificfirst,'2ndfit.def',Arrays=Basicinfovalues,VariableChange=Basicinfovars,/EXTRACT
         get_fixedringsv9,[[Basicinfovalues[*,3]],[Basicinfovalues[*,4]],[Basicinfovalues[*,7]],[Basicinfovalues[*,8]]],fixedrings,/warp_output,radii=[Basicinfovalues[*,0]],SBR=[[Basicinfovalues[*,1]],[Basicinfovalues[*,2]]]
      ENDIF ELSE BEGIN
+
+
+
         IF  warpoutput and finishafter EQ 1.1 then begin
            IF size(log,/TYPE) EQ 7 then begin
               openu,66,log,/APPEND
@@ -5583,14 +6117,23 @@ noconfig:
            ENDIF
         ENDIF
      ENDELSE
+     ; We should add some standard errors to the 1st fit as well
+
+
+
+
 
 
                                 ;Clearing up the direcory and
                                 ;organizing the output in proper names
                                 ;and such
-
-     names=[currentfitcube,catMom0name[i],catMom1name[i],catmaskname[i],noisemapname,catCatalogname[i],basicinfo]
-     book_keeping,names,bookkeeping,catdistance[i],gdlidl,log=log,noise=catnoise[i],finishafter=finishafter
+     if finishafter LT 1.75 then begin
+        fix_pa = 0
+        fix_incl = 0.
+        fix_sdis = 0
+     ENDIF
+     names=[currentfitcube,catMom0name[i],catMom1name[i],catmaskname[i],noisemapname,catCatalogname[i],basicinfo,catMom2name[i]]
+     book_keeping,names,bookkeeping,catdistance[i],gdlidl,log=log,noise=catnoise[i],finishafter=finishafter,fixedpars=[fix_pa,fix_incl,fix_sdis]
      IF size(log,/TYPE) EQ 7 then begin
         openu,66,log,/APPEND
         printf,66,linenumber()+"Finished "+catDirname[i]+" which is galaxy # "+strtrim(string(fix(i)),2)+" at "+systime()
@@ -5598,7 +6141,13 @@ noconfig:
      ENDIF
      IF bookkeeping EQ 5 then print,linenumber()+'FAT did not run the full fitting routines. Please check your output log or screen messages carefully.'
      CD,old_dir
-     print,'These are peculiar conversion errors'
+     if KEYWORD_SET(timing) then BEGIN
+        openu,22,maindir+'/Timing_Result.txt',/APPEND
+        printf,22,"The galaxy in directory  "+catDirname[i]+" started at"+starttime
+        printf,22,"Finished the first step at "+endtime_firststep
+        printf,22,"And finished the whole process at "+systime()
+        close,22
+     ENDIF
   endfor
   CD,originaldir
   close,3
@@ -5653,11 +6202,10 @@ noconfig:
            print,'!!!!---------------------------------------------!!!!!'
         end
      endcase
-                                ;We always will want to clean up the
-                                ;directory
-     print,'These are peculiar conversion errors'
+                                ;We always will want to clean up the directory
   endif
 end
+
 '''
 if __name__ == '__main__':
     error_message = '''
