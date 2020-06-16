@@ -1,0 +1,291 @@
+(141)   (131)   This file is a log of the fitting process run at 2020-06-16 19:16:58.770469.
+        This is version pyFAT 1.0.0 of the program.
+(168)   We are in loop 0. This is catalogue number 0 and the directory ./.(192)   CLEAN_HEADER: The channels in your input cube are in km/s. This sometimes leads to problems with wcs lib, hence we change it to m/s.'
+(192)   CLEAN_HEADER: Your cube has a significant history attached we are removing it for easier interpretation.
+(192)   PREPROCESSING: Your cube contains values exactly 0. If this is padding these should be blanks.
+        PREPROCESSING: We have changed them to blanks.
+(192)   PREPROCESSING: We are cutting the cube as clearly the noise statistics are off.
+        PREPROCESSING: Noise in the first channel is 0.007502617780119181
+        PREPROCESSING: Noise in the last channel is 0.0027553963009268045
+        PREPROCESSING: Noise in the corners is 0.003271019086241722
+(192)   PREPROCESSING: We are cutting the cube as clearly the noise statistics are off.
+        PREPROCESSING: Noise in the first channel is 0.004452874418348074
+        PREPROCESSING: Noise in the last channel is 0.0027553963009268045
+        PREPROCESSING: Noise in the corners is 0.0032157879322767258
+(192)   PREPROCESSING: We are cutting the cube as clearly the noise statistics are off.
+        PREPROCESSING: Noise in the first channel is 0.004038029350340366
+        PREPROCESSING: Noise in the last channel is 0.0027553963009268045
+        PREPROCESSING: Noise in the corners is 0.0031998860649764538
+(192)   PREPROCESSING: Your cube had values below -10*sigma. If you do not have a central absorption source there is something seriously wrong with the cube.
+        PREPROCESSING: We blanked these values.
+(192)   CREATE_FAT_CUBE: We are writing a FAT modfied cube to be used for the fitting. This cube is called /home/peter/FAT_Main/FAT_Source_Dev/Installation_Check/NGC_2903_FAT.fits
+(216)   RUN_SOFIA: Adding an extra kernel scale as the cube is more than 30 beams across.
+(216)   RUN_SOFIA: Adding an extra kernel scale as the cube has more than 52 channels.
+(216)   RUN_SOFIA: Running SoFiA.(216)   [36m____________________________________________________________________________[0;1m
+
+ Pipeline started
+[0;36m____________________________________________________________________________[0m
+
+  Using:    Source Finding Application (SoFiA)
+  Version:  2.1.1 (15-Apr-2020)
+  CPU:      8 cores available
+  Time:     Tue Jun 16 19:16:59 2020
+
+[36m____________________________________________________________________________[0;1m
+
+ Loading parameter settings
+[0;36m____________________________________________________________________________[0m
+
+  Activating SoFiA default parameter settings.
+  Loading user parameter file: 'sofia_input.par'.
+
+  Using all 8 available CPU cores.
+
+[36m____________________________________________________________________________[0;1m
+
+ Loading data cube
+[0;36m____________________________________________________________________________[0m
+
+  Opening FITS file 'NGC_2903_FAT.fits'.
+  Reading FITS data with the following specifications:
+    Data type:    -32
+    No. of axes:  3
+    Axis sizes:   256, 256, 113
+    Region:       0-255, 0-255, 0-112
+    Memory used:  28.2 MB
+  Searching for values of infinity.
+    No infinite pixel values found.
+
+[36m  Elapsed time: 00:00:00 h
+  CPU time:     00:00:00 h[0m
+
+[36m____________________________________________________________________________[0;1m
+
+ Measuring global noise level
+[0;36m____________________________________________________________________________[0m
+
+  Global RMS:  3.229e-03  (using stride of 7)
+
+[36m  Elapsed time: 00:00:00 h
+  CPU time:     00:00:00 h[0m
+
+[36m____________________________________________________________________________[0;1m
+
+ Running S+C finder
+[0;36m____________________________________________________________________________[0m
+
+  Using the following parameters:
+  - Kernels
+    - spatial:        0,3,6,9
+    - spectral:       0,3,6,12,16
+  - Flux threshold:   5.0 * rms
+  - Noise statistic:  median absolute deviation
+  - Flux range:       negative
+
+  Using a stride of 7 in noise measurement.
+
+  Smoothing kernel:  [0.0] x [0]
+  Noise level:       3.229e-03
+
+[36m  Elapsed time: 00:00:00 h
+  CPU time:     00:00:00 h[0m
+
+  Smoothing kernel:  [0.0] x [3]
+  Noise level:       2.088e-03
+
+[36m  Elapsed time: 00:00:00 h
+  CPU time:     00:00:00 h[0m
+
+  Smoothing kernel:  [0.0] x [6]
+  Noise level:       1.655e-03
+
+[36m  Elapsed time: 00:00:00 h
+  CPU time:     00:00:01 h[0m
+
+  Smoothing kernel:  [0.0] x [12]
+  Noise level:       1.472e-03
+
+[36m  Elapsed time: 00:00:00 h
+  CPU time:     00:00:01 h[0m
+
+  Smoothing kernel:  [0.0] x [16]
+  Noise level:       1.409e-03
+
+[36m  Elapsed time: 00:00:00 h
+  CPU time:     00:00:01 h[0m
+
+  Smoothing kernel:  [3.0] x [0]
+  Noise level:       1.692e-03
+
+[36m  Elapsed time: 00:00:00 h
+  CPU time:     00:00:02 h[0m
+
+  Smoothing kernel:  [3.0] x [3]
+  Noise level:       1.095e-03
+
+[36m  Elapsed time: 00:00:00 h
+  CPU time:     00:00:02 h[0m
+
+  Smoothing kernel:  [3.0] x [6]
+  Noise level:       8.664e-04
+
+[36m  Elapsed time: 00:00:00 h
+  CPU time:     00:00:02 h[0m
+
+  Smoothing kernel:  [3.0] x [12]
+  Noise level:       7.708e-04
+
+[36m  Elapsed time: 00:00:00 h
+  CPU time:     00:00:03 h[0m
+
+  Smoothing kernel:  [3.0] x [16]
+  Noise level:       7.366e-04
+
+[36m  Elapsed time: 00:00:00 h
+  CPU time:     00:00:03 h[0m
+
+  Smoothing kernel:  [6.0] x [0]
+  Noise level:       9.752e-04
+
+[36m  Elapsed time: 00:00:00 h
+  CPU time:     00:00:04 h[0m
+
+  Smoothing kernel:  [6.0] x [3]
+  Noise level:       6.326e-04
+
+[36m  Elapsed time: 00:00:00 h
+  CPU time:     00:00:04 h[0m
+
+  Smoothing kernel:  [6.0] x [6]
+  Noise level:       5.031e-04
+
+[36m  Elapsed time: 00:00:00 h
+  CPU time:     00:00:04 h[0m
+
+  Smoothing kernel:  [6.0] x [12]
+  Noise level:       4.480e-04
+
+[36m  Elapsed time: 00:00:00 h
+  CPU time:     00:00:05 h[0m
+
+  Smoothing kernel:  [6.0] x [16]
+  Noise level:       4.291e-04
+
+[36m  Elapsed time: 00:00:00 h
+  CPU time:     00:00:05 h[0m
+
+  Smoothing kernel:  [9.0] x [0]
+  Noise level:       5.289e-04
+
+[36m  Elapsed time: 00:00:01 h
+  CPU time:     00:00:06 h[0m
+
+  Smoothing kernel:  [9.0] x [3]
+  Noise level:       3.472e-04
+
+[36m  Elapsed time: 00:00:01 h
+  CPU time:     00:00:06 h[0m
+
+  Smoothing kernel:  [9.0] x [6]
+  Noise level:       2.812e-04
+
+[36m  Elapsed time: 00:00:01 h
+  CPU time:     00:00:07 h[0m
+
+  Smoothing kernel:  [9.0] x [12]
+  Noise level:       2.533e-04
+
+[36m  Elapsed time: 00:00:01 h
+  CPU time:     00:00:07 h[0m
+
+  Smoothing kernel:  [9.0] x [16]
+  Noise level:       2.430e-04
+
+[36m  Elapsed time: 00:00:01 h
+  CPU time:     00:00:08 h[0m
+
+  1.130% of all pixels detected.
+
+[36m____________________________________________________________________________[0;1m
+
+ Running Linker
+[0;36m____________________________________________________________________________[0m
+
+  Linker settings:
+    - Merging radii:  3, 3, 3
+    - Minimum size:   6 x 6 x 8
+    - Keep negative:  no
+
+  Progress:  |[33m==                                                [0m| 4%  Progress:  |[32m==================================================[0m| 100%
+
+  Linker status:
+   - No. of objects:  1
+   - Memory usage:    0.12 kB
+
+
+[36m  Elapsed time: 00:00:01 h
+  CPU time:     00:00:08 h[0m
+
+[36m____________________________________________________________________________[0;1m
+
+ Mask dilation
+[0;36m____________________________________________________________________________[0m
+
+
+[36m  Elapsed time: 00:00:01 h
+  CPU time:     00:00:08 h[0m
+
+[36m____________________________________________________________________________[0;1m
+
+ Measuring source parameters
+[0;36m____________________________________________________________________________[0m
+
+  Found 1 source in need of parameterisation.
+  WCS setup successful.
+
+  Progress:  |[32m==================================================[0m| 100%
+
+
+[36m  Elapsed time: 00:00:01 h
+  CPU time:     00:00:08 h[0m
+
+[36m____________________________________________________________________________[0;1m
+
+ Creating moment maps
+[0;36m____________________________________________________________________________[0m
+
+  WCS setup successful.
+
+  Creating FITS file: NGC_2903_FAT_mom0.fits
+  Creating FITS file: NGC_2903_FAT_mom1.fits
+  Creating FITS file: NGC_2903_FAT_mom2.fits
+  Creating FITS file: NGC_2903_FAT_chan.fits
+
+[36m  Elapsed time: 00:00:01 h
+  CPU time:     00:00:08 h[0m
+
+[36m____________________________________________________________________________[0;1m
+
+ Writing mask cube
+[0;36m____________________________________________________________________________[0m
+
+  Creating FITS file: NGC_2903_FAT_mask.fits
+
+[36m  Elapsed time: 00:00:01 h
+  CPU time:     00:00:08 h[0m
+
+[36m____________________________________________________________________________[0;1m
+
+ Writing source catalogue
+[0;36m____________________________________________________________________________[0m
+
+  Writing ASCII file:   NGC_2903_FAT_cat.txt
+
+[36m  Elapsed time: 00:00:01 h
+  CPU time:     00:00:08 h[0m
+
+[36m____________________________________________________________________________[0;1m
+
+ Pipeline finished.
+[0;36m____________________________________________________________________________[0m
+

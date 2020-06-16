@@ -5,15 +5,10 @@ number|distance|directoryname|cubename
 Or for SofiA pre-processed input
 
 number|distance|directoryname|cubename|basename
-0|27|TheSingleGalaxyDirectory|TheNameoftheCubetobefitted(without .fits extension) |TheNamefor Sofia file(Only important when allnew=2)
-1|14|TheSecondGalaxyDirectory|TheNameoftheCubetobefitted(without .fits extension) |TheNamefor Sofia file(Only important when allnew=2)
+0|27|TheSingleGalaxyDirectory|TheNameoftheCubetobefitted(without .fits extension) |The basename for Sofia products (Only important when start_point=2)
+1|14|TheSecondGalaxyDirectory|TheNameoftheCubetobefitted(without .fits extension) |The basename for Sofia products (Only important when start_point=2)
 
-
-If the output of sofia does not have a basename the catalog can be configured as
-
-number|distance|directoryname|cubename|moment0|moment1|mask|catlog
-0|27|TheSingleGalaxyDirectory|TheNameoftheCubetobefitted(without .fits extension) |TheNamefor Sofia file(Only important when allnew=2)
-1|14|TheSecondGalaxyDirectory|TheNameoftheCubetobefitted(without .fits extension) |TheNamefor Sofia file(Only important when allnew=2)
-
+Preprocessed Sofia2 output should be present in the galaxy fitting directory in a directory called Sofia_Output
+Please note that Fat will always fit the brightest source in the sofia catalogue. The best way to make sure that the right object is fitted is to present a catalogue with a single object.
 
 The header lines are important for FAT to recognize the correct column. Only their order can be changed.

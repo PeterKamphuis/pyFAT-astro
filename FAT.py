@@ -4,60 +4,19 @@
 __version__ = 'pyFAT 1.0.0'
 import sys
 import os
+import copy
+import numpy as np
 from optparse import OptionParser
 import traceback
-
-'''
-;+
-; NAME:
-;      FAT
-; PURPOSE:
-;      Fit Tilted Ring Models with Tirific in a fully automated manner
-; CATEGORY:
-;      Main for fitting galaxies. Tirific still requires interactive fitting this code attempts
-;      to remedy that
-;
-; CALLING SEQUENCE:
-;      FAT,support='supportdir',configuration_file='configfile'
-;
-; INPUTS:
-;      -
-; OPTIONAL INPUTS:
-;      SUPPORT  = path to the directory where FAT's support
-;      routines are located. The default location is ./Support/
-;      CONFIGURATION_FILE = A configuration file for FAT. This file
-;      should contain the locations of the galaxies to be fitted. See
-;      readme for more detailed info.
-;
-; OPTIONAL INPUT KEYWORDS
-;     /INSTALLATION_CHECK = Flag to run the Installation check.
-; ---------------------------------------------------------------------------------
-;     The following input keywords are only meant to be used by
-;     developers. Except for the /debug flag they will not work for
-;     the common user. If you want to know about these please contact Peter
-;     Kamphuis.
-; ---------------------------------------------------------------------------------
-;     /DEBUG = Flag to print debugging information in several routines
-;     /LVHIS_TEST = Flag to run the LVHIS Test.
-;     /PAPER_TEST = Flag to run the paper artificial galaxies.
-;     /RESOLUTION_TEST = Flag to run the additional resolution tests
-; OPTIONAL KEYWORD OUTPUT:
-;      -
-;
-; OUTPUTS:
-;     See Readme or just run the code
-;
-; EXAMPLE:
-;     python3 FAT.py --cf /home/your_computer/FAT_dir/FAT_INPUT.config'
-'''
+from datetime import datetime
+from astropy.io import fits
+from astropy.wcs import WCS
 
 
 def FAT(argv):
     #Get the directory we are running from
-    original_dir = os.getcwd()
-    #Ad the support dir to the system path and read the functions from there
-    sys.path.insert(1, original_dir+'/Support')
-    import read_functions as rf
+    start_dir = os.getcwd()
+
     #Constants that are used in the code
     H_0 = 70. #km/s/Mpc #Hubble constant
 
@@ -65,6 +24,7 @@ def FAT(argv):
     parser  = OptionParser()
     parser.add_option('-c','--cf','--configuration_file', action ="store" ,dest = "configfile", default = 'FAT_INPUT.config', help = 'Define the input configuration file.',metavar='CONFIGURATION_FILE')
     parser.add_option('-d','--debug', action ="store_true" ,dest = "debug", default = False, help = 'Print debug messages',metavar = '')
+    parser.add_option('-s','--sd','--support_directory', action ="store" ,dest = "supportdir", default=f'{start_dir}/Support', help = 'location where the support files reside.',metavar='SUPPORT_DIR')
     parser.add_option('-i','--ic','--installation_check', action ="store_true" ,dest = "installation_check", default = False, help = 'Run the installation _check.',metavar = '')
     parser.add_option('--LVT','--LVHIS_TEST', action ="store_true" ,dest = "lvhis_test", default = False, help = 'Run the LVHIS Test. Developer Only.')
     parser.add_option('--PT','--PAPER_TEST', action ="store_true" ,dest = "paper_test", default = False, help = 'Run the PAPER Test. Developer Only.')
@@ -72,7 +32,7 @@ def FAT(argv):
     parser.add_option('-p','--problems', action ="store_true" ,dest = "problems", default = False, help = 'Run the Problem test set. Developer Only.')
     parser.add_option('-t','--timing', action ="store_true" ,dest = "timing", default = False, help = 'Create a file in the maindir that provides start and stop times for each galaxy.')
     input_parameters,args = parser.parse_args()
-    input_parameters.original_dir = original_dir
+
     basic_info  = 'BasicInfo'
     if input_parameters.installation_check:
         input_parameters.configfile = 'Installation_Check/FAT_INPUT.config'
@@ -88,14 +48,26 @@ def FAT(argv):
     if input_parameters.problems:
         fat_main_test_dir = os.environ["FAT_TEST_DIR"]
         input_parameters.configfile=fat_main_test_dir+'/Problems/FAT_INPUT.config'
-    #Then get the directory we are running from
 
-
+    #Add the support dir to the system path and read the functions from there
+    sys.path.insert(1, input_parameters.supportdir)
+    # Functions that read files
+    import read_functions as rf
+    # functions that are used often for menial tasks
+    import support_functions as sf
+    # function that keep things orderly and nicely
+    import clean_functions as cf
+    # Functions that modify or produce fat fits file
+    import fits_functions as ff
+    # Functions that run external programs such as tirific and sofia
+    import run_functions as runf
+    # Functions that check on the presence of output or input
+    import exist_check as ec
     #Check the existence of the config file and read it
     read_succes = False
     while not read_succes:
         try:
-            Original_Configuration = rf.config_file(input_parameters)
+            Original_Configuration = rf.config_file(input_parameters,start_dir)
             read_succes = True
         except:
             print(traceback.print_exc())
@@ -104,616 +76,187 @@ def FAT(argv):
                     If you want to provide a config file please give the correct name.
                     Else press CTRL-C to abort.
             ''')
+    # Add the starting directory to the Configuration
+    Original_Configuration['START_DIR'] = start_dir
+    # Also add the timing input and some other recurring parameters
+    Original_Configuration['TIMING'] = input_parameters.timing
+    Original_Configuration['DEBUG'] = input_parameters.debug
+    Original_Configuration['FINAL_COMMENT'] = "This fitting stopped with an unregistered exit."
+    Original_Configuration['CONVERGENCE_1'] = 'Not converged'
+    Original_Configuration['AC1'] = 0
+    Original_Configuration['AC2'] = 0
     #Then read the input Catalogue
     Catalogue = rf.catalogue(Original_Configuration['CATALOGUE'])
     # Get the longest directory name to format the output directory properly
     dirname = 'Directory Name'
     maximum_directory_length = len(dirname)
     for directory in Catalogue['DIRECTORYNAME']:
+        if directory == './':
+            maximum_directory_length = len(Original_Configuration['MAINDIR'].split('/')[-2])
         if len(directory) > maximum_directory_length:
             maximum_directory_length = len(directory)
+
     # Create a file to write the results to if if required
     if not os.path.exists(Original_Configuration['OUTPUTCATALOGUE']) or Original_Configuration['NEW_OUTPUT']:
         output_catalogue = open(Original_Configuration['OUTPUTCATALOGUE'],'w')
         comment = 'Comments on Fit Result'
         AC1 = 'AC1'
         AC2 = 'AC2'
-        output_catalogue.write(f'{dirname:{maximum_directory_length}s} {AC1:6s} {AC2:6s} {comment}')
+        output_catalogue.write(f"{dirname:<{maximum_directory_length}s} {AC1:>6s} {AC2:>6s}   {comment}\n")
         output_catalogue.close()
 
-    if input_parameters.timing:
+    if Original_Configuration['TIMING']:
         timing_result = open(Original_Configuration['MAINDIR']+'/Timing_Result.txt','w')
         timing_result.write("This file contains the system start and end times for the fitting of each galaxy")
-        timing_result.close
-
+        timing_result.close()
+    #  Negative start galaxy is not allowed
+    if Original_Configuration['STARTGALAXY'] < 0:
+        Original_Configuration['STARTGALAXY'] = 0
     # If the end galaxy is -1 fit the whole catalogue
     if Original_Configuration['ENDGALAXY'] == -1:
         Original_Configuration['ENDGALAXY'] = len(Catalogue['NUMBER'])
-
+    # start the main fitting loop
     for i in range(Original_Configuration['STARTGALAXY'],Original_Configuration['ENDGALAXY']):
+        # First check the starttime
+        Configuration = copy.deepcopy(Original_Configuration)
+        Configuration['START_TIME'] = datetime.now()
+        doubled = 0
+        ini_mode_factor =25
+        #Make a dictionary for the fitsfiles we use
+        Fits_Files = {'ORIGINAL_CUBE': f"{Catalogue['CUBENAME'][i]}.fits"}
+
+        # If we have a fitting log we start writing
+        log_statement = f'''{sf.linenumber():7s} This file is a log of the fitting process run at {Configuration ['START_TIME']}.
+{"":7s} This is version {__version__} of the program.
+'''
+        # Adapt configuration to hold some specifics to this galaxy
+        if Configuration['OUTPUTLOG']:
+            if Catalogue['DIRECTORYNAME'][i] == './':
+                Configuration['OUTPUTLOG'] = f"{Configuration['MAINDIR']}/{Configuration['OUTPUTLOG']}"
+            else:
+                Configuration['OUTPUTLOG'] = f"{Configuration['MAINDIR']}/{Catalogue['DIRECTORYNAME'][i]}/{Configuration['OUTPUTLOG']}"
+            #If it exists move the previous Log
+            if os.path.exists(Configuration['OUTPUTLOG']):
+                os.rename(Configuration['OUTPUTLOG'],f"{Configuration['MAINDIR']}/{Catalogue['DIRECTORYNAME'][i]}/Prev_Log.txt")
+        sf.print_log(log_statement,Configuration['OUTPUTLOG'])
+
+        # Adapt configuration to hold some specifics to this galaxy
+        #Never use the original cube only a fat modified one
+        if 'BASENAME' in Catalogue['ENTRIES']:
+            Configuration['BASE_NAME'] = Catalogue['BASENAME'][i]
+        else:
+            Configuration['BASE_NAME'] = Catalogue['CUBENAME'][i]+'_FAT'
+        Fits_Files['NOISEMAP'] = f"{Configuration['BASE_NAME']}_noisemap.fits"
+        Fits_Files['FITTING_CUBE'] = f"{Catalogue['CUBENAME'][i]}_FAT.fits"
+        Fits_Files['MOMENT0'] = f"{Configuration['BASE_NAME']}_mom0.fits"
+        Fits_Files['MOMENT1'] = f"{Configuration['BASE_NAME']}_mom1.fits"
+        Fits_Files['MOMENT2'] = f"{Configuration['BASE_NAME']}_mom2.fits"
+        Fits_Files['MASK'] = f"{Configuration['BASE_NAME']}_mask.fits"
 
 
+        #Add our fitting directory to the Configuration
+        if Catalogue['DIRECTORYNAME'][i] == './':
+            Configuration['FITTING_DIR'] = f"{Configuration['MAINDIR']}/"
+        else:
+            Configuration['FITTING_DIR'] = f"{Configuration['MAINDIR']}/{Catalogue['DIRECTORYNAME'][i]}/"
+        if Configuration['FITTING_DIR'][-2:] == '//':
+            Configuration['FITTING_DIR'] = Configuration['FITTING_DIR'][:-2]+'/'
+        # then we want to read the template
+        Tirific_Template = rf.tirific_template(f'{input_parameters.supportdir}/template.def')
 
-        '''
+        log_statement = f'''We are in loop {i}. This is catalogue number {Catalogue['NUMBER'][i]} and the directory {Catalogue['DIRECTORYNAME'][i]}.'''
+        sf.print_log(log_statement,Configuration['OUTPUTLOG'], screen =True)
+        #Run cleanup
+        cf.cleanup(Configuration)
 
+        # Check if the input cube exists
+        if not os.path.exists(f"{Configuration['FITTING_DIR']}/{Fits_Files['ORIGINAL_CUBE']}"):
+            log_statement = f'''We cannot find the cube {Fits_Files['ORIGINAL_CUBE']} in the directory {Configuration['FITTING_DIR']}.
+         We skip this galaxy.
+'''
+            sf.print_log(log_statement,Configuration['OUTPUTLOG'], screen =True)
+            Configuration['FINAL_COMMENT'] = "This galaxy has no fits cube to work with, it is skipped."
+            cf.finish_galaxy(Configuration,maximum_directory_length)
+            traceback.print_exc()
+            continue
 
+        #Define a dictionary with a set of tracking triggers
+        Tracking = {'MAX_RINGS' : 0,
+                    'OPTIMIZED' : False,
+                    'TOO_SMALL' : False
+                    }
 
-                                ;if our end galaxy is -1 then we want
-                                ;to fit the full catalog
-  IF startgalaxy LT 0 then startgalaxy = 0
-  IF endgalaxy EQ -1 then begin
-     endgalaxy=filelength-1-counter
-  ENDIF
-                                ;start the main galaxy fitting loop
-  for i=startgalaxy,endgalaxy do begin
-                                ;To ensure using the right template we
-                                ;read them everytime we start a new galaxy
-     starttime=systime()
-     finishafter=finishafterold
-     allnew=allnewin
-     bookkeeping=bookkeepingin
-     ring_spacing = ring_spacing_in
-     fix_incl= fix_incl_in
-     fix_pa= fix_pa_in
-     fix_sdis= fix_sdis_in
+        # Let's see if our base cube exists, Note that cleanup removes it if we want to start from the original dir so no need to check start_point
+        if not os.path.exists(f"{Configuration['FITTING_DIR']}/{Fits_Files['FITTING_CUBE']}"):
+            try:
+                ff.create_fat_cube(Configuration, Fits_Files)
+            except Exception as e:
+                Configuration['FINAL_COMMENT'] = e
+                Configuration['MAPS_OUTPUT'] = 5
+                cf.finish_galaxy(Configuration,maximum_directory_length)
+                traceback.print_exc()
+                continue
+        # We open the header of the fitting cube and get some parameters and make a header wcs structure
+        cube_hdr = fits.getheader(f"{Configuration['FITTING_DIR']}/{Fits_Files['FITTING_CUBE']}")
+        cube_wcs = WCS(cube_hdr)
+        #If we have Sofia Preprocessed Output request make sure it all exists
+        if Configuration['START_POINT'] == 3:
+            try:
+                ec.sofia_output(Configuration,Fits_Files)
+            except Exception as e:
+                Configuration['FINAL_COMMENT'] = e + 'Please make sure your Sofia input is in the right location'
+                Configuration['MAPS_OUTPUT'] = 5
+                cf.finish_galaxy(Configuration,maximum_directory_length)
+                traceback.print_exc()
+                continue
 
-     doubled=0
-     ini_mode_factor=25.
-     currentfitcube=catcubename[i]
-     noisemapname=currentfitcube+'_noisemap'
-     close,1
-                                ;Start a galaxy specific fitting log
-     IF size(olog,/TYPE) EQ 7 then begin
-        if catdirname[i] EQ './' then log=maindir+'/'+olog else $
-           log=maindir+'/'+catdirname[i]+'/'+olog
-        prevlog=maindir+'/'+catdirname[i]+'/Prev_Log.txt'
-        spawn,'mv '+log+' '+prevlog
-        IF not FILE_TEST(log) OR strupcase(newlog) EQ 'Y' then begin
-           openw,66,log
-           printf,66,linenumber()+"This file is a log of the fitting process run at "+systime()
-           printf,66,linenumber()+"This is version "+version[0]+" of the program."
-           IF gdlidl then begin
-              printf,66,linenumber()+"You are using GDL"
-           endif else begin
-              printf,66,linenumber()+"You are using IDL"
-           endelse
-           close,66
-        ENDIF ELSE BEGIN
-           openu,66,log,/APPEND
-           printf,66,linenumber()+"This file is a log of the fitting process continued at "+systime()
-           printf,66,linenumber()+"This is version "+version[0]+" of the program."
-           close,66
-        ENDELSE
-     ENDIF
+        if Configuration['START_POINT'] != 3:
+            # Run sofia2
+            try:
+                runf.sofia(Configuration, Fits_Files,cube_hdr,input_parameters.supportdir)
+                # check that all is well
+                ec.sofia_output(Configuration,Fits_Files)
+            except Exception as e:
+                Configuration['FINAL_COMMENT'] = e
+                Configuration['MAPS_OUTPUT'] = 5
+                cf.finish_galaxy(Configuration,maximum_directory_length)
+                traceback.print_exc()
+                continue
+            # We assume sofia is ran and created the proper files
+        try:
+            # These come out as strings
+            name,x,x_min,x_max,y,y_min,y_max,z,z_min,z_max,ra,dec,v_app,f_sum,kin_pa = rf.sofia_catalogue(Configuration,header=cube_hdr)
 
-                                ;Read the template for the first
-                                ;tirific fit
-     read_template,supportdir+'/1stfit.def', tirificfirst, tirificfirstvars
-                                ;Read the template for the second
-                                ;tirific fit
-     read_template,supportdir+'/2ndfit.def', tirificsecond, tirificsecondvars
-                                ;Read the template sofia input file
-                                ;print which galaxy we are at
-     print,linenumber()+"We're at galaxy number "+strtrim(string(i,format='(I10)'),2)+". Which is catalogue id number "+catnumber[i]
-     IF size(log,/TYPE) EQ 7 then begin
-        openu,66,log,/APPEND
-        printf,66,linenumber()+"We're at galaxy number "+strtrim(string(i,format='(I10)'),2)+". Which is catalogue id number "+catnumber[i]
-        close,66
-     ENDIF
-                                ; And the directory
-     new_dir=maindir+'/'+catdirname[i]+'/'
+        except Exception as e:
+            Configuration['FINAL_COMMENT'] = e
+            Configuration['MAPS_OUTPUT'] = 5
+            cf.finish_galaxy(Configuration,maximum_directory_length)
+            traceback.print_exc()
+            continue
+        print([x,x_min,x_max,y,y_min,y_max,z,z_min,z_max])
+        x_min,x_max,y_min,y_max,z_min,z_max = sf.convert_type([x_min,x_max,y_min,y_max,z_min,z_max], type = 'int')
+        x,y,z,ra,dec,v_app,f_sum,kin_pa = sf.convert_type([x,y,z,ra,dec,v_app,f_sum,kin_pa])
+        #How does sofia 2 deal with the fully flagged channels?
+        # Need to check for that here if NaNs are included
 
-     CD,new_dir,CURRENT=old_dir
-                                ;To avoid confusion we remove all
-                                ;initial fits and subsequent fits that
-                                ;are present if we want to start all
-                                ;over again
-     IF allnewin EQ 1 then begin
-        IF testing LT 1 then cleanup,currentfitcube
-     ENDIF
-     CD,OLD_DIR
-                                ;See if we already cut the initial cube to something more accesible
+        # convert the boundaries to real coordinates
+        ralow,declow,vellow = cube_wcs.wcs_pix2world(x_min,y_min,z_min,0.)
+        rahigh,dechigh,velhigh = cube_wcs.wcs_pix2world(x_max,y_max,z_max,0.)
+        DECboun = np.sort([float(declow),float(dechigh)])
+        RAboun = np.sort([float(ralow),float(rahigh)])
+        VELboun = np.sort([float(vellow),float(velhigh)])
+        # If the provided distance  = -1 we assume a Hubble follow
+        if Catalogue['DISTANCE'][i] == -1:
+            Catalogue['DISTANCE'][i] == v_app/(1000.*H_0)
+        if Catalogue['DISTANCE'][i] < 0.5:
+            Catalogue['DISTANCE'][i] == 0.5
 
-                                ;Let's go to the right directory
-     IF size(log,/TYPE) EQ 7 then begin
-        openu,66,log,/APPEND
-        printf,66,linenumber()+"Working in Directory "+new_dir
-        close,66
-     ENDIF ELSE BEGIN
-        print,linenumber()+"Working in Directory "+new_dir
-     ENDELSE
-                                ;Break if the cube cannot be found
-     cubeext='.fits'
-     fitsexists=FILE_TEST(maindir+'/'+catdirname[i]+'/'+currentfitcube+cubeext)
-     IF fitsexists EQ 0 then begin
-        cubext='.FITS'
-        fitsexists=FILE_TEST(maindir+'/'+catdirname[i]+'/'+currentfitcube+cubeext)
-     ENDIF
-
-     if fitsexists EQ 0 then begin
-        comment='This galaxy has no fits cube to work with, it is skipped.'
-        commentlen='A'+strtrim(string(strlen(comment)),2)
-        openu,1,outputcatalogue,/APPEND
-        printf,1,catDirname[i],strtrim(string(0),2),strtrim(string(0),2),comment,format='("",('+dirformat+')," ",2(A6),"  ",('+commentlen+'))'
-        close,1
-        IF size(log,/TYPE) EQ 7 then begin
-           openu,66,log,/APPEND
-           printf,66,linenumber()+catDirname[i]+" This galaxy has no fits cube to work with, it is skipped."
-           close,66
-        ENDIF ELSE BEGIN
-           print,linenumber()+catDirname[i]+" This galaxy has no fits to work with, it is skipped."
-        ENDELSE
-        bookkeeping=5
-        optimized=0
-        goto,finishthisgalaxy
-     endif
-                                ;set some triggers at 0
-     maxrings=0.
-     propermom0=0
-     propermom1=0
-     propermom2=0
-     propermomnoise=0
-     optimized=0
-     wroteblank=0
-
-                                ;Let's see if a pre-processed
-                                ;cube exists and if we want to
-                                ;use that
-     precube=FILE_TEST(maindir+'/'+catdirname[i]+'/'+currentfitcube+'_preprocessed'+cubeext)
-     IF NOT precube OR allnew EQ -1 then begin
-                                ;read in the cube and check
-                                ;it's header
-        dummy=readfits(maindir+'/'+catdirname[i]+'/'+currentfitcube+cubeext,header,/NOSCALE,/SILENT)
-                                ;if the cube is in integer format we
-                                ;should scale the values in order to
-                                ;not mess thing up
-        IF sxpar(header,'BITPIX') EQ 16 then dummy=readfits(maindir+'/'+catdirname[i]+'/'+currentfitcube+cubeext,header,/SILENT)
+        print(DECboun)
+        print(RAboun)
+        print(VELboun)
+'''
 
 
-        IF n_elements(catmajbeam) GT 0 then begin
-           beam=[catmajbeam[i],catminbeam[i]]
-        ENDIF ELSE beam=[1,1]
-        noise=1
-        clean_header,header,writecube,beam,log=log,catalogue=outputcatalogue,directory=catdirname[i],dir_format=dirformat
-        IF writecube EQ 2 then begin
-           bookkeeping=5
-           GOTO,FINISHTHISGALAXY
-        ENDIF
-        preprocessing,dummy,header,writecube,catalogue=outputcatalogue,noise=noise,name=currentfitcube,directory=catdirname[i],log=log,dir_format=dirformat
-        Case 1 of
-           writecube EQ 0:begin
-              IF size(log,/TYPE) EQ 7 then begin
-                 openu,66,log,/APPEND
-                 printf,66,linenumber()+"The input cube is correctly organized and does not need to be modified."
-                 close,66
-              ENDIF
-           end
-           writecube EQ 1:begin
-                                ;If we changed something we rewrite the cube
-              writefits,maindir+'/'+catdirname[i]+'/'+currentfitcube+'_preprocessed'+cubeext,float(dummy),header
-              currentfitcube=currentfitcube+'_preprocessed'
-              if allnew EQ 0 then allnew=1
-           end
-           writecube EQ 2:begin
-                                ;If we encountered a problem we abort
-              bookkeeping=5
-              GOTO,FINISHTHISGALAXY
-           end
-           writecube EQ 3:begin
-                                ;If we have changed more than just the
-                                ;header we need new moment maps even
-                                ;if they already exists and user does
-                                ;not ask for them. Only not when sofia
-                                ;pre-prepared output is used.
-              writefits,maindir+'/'+catdirname[i]+'/'+currentfitcube+'_preprocessed'+cubeext,float(dummy),header
-              currentfitcube=currentfitcube+'_preprocessed'
-              if allnew EQ 0 then allnew=1
-           end
-           else:begin
-              IF size(log,/TYPE) EQ 7 then begin
-                 openu,66,log,/APPEND
-                 printf,66,linenumber()+"This should never happen."
-                 close,66
-              ENDIF
-              print,linenumber()+"This should never happen."
-              stop
-           end
-        endcase
-     ENDIF ELSE BEGIN
-        currentfitcube=currentfitcube+'_preprocessed'
-        dummy=readfits(maindir+'/'+catdirname[i]+'/'+currentfitcube+cubeext,header,/NOSCALE,/SILENT)
-        tmpnoblank=dummy[0:5,0:5,*]
-        rmsbottoml=STDDEV(tmpnoblank[WHERE(FINITE(tmpnoblank))])
-        tmpnoblank=dummy[n_elements(dummy[*,0,0])-6:n_elements(dummy[*,0,0])-1,0:5,*]
-        rmsbottomr=STDDEV(tmpnoblank[WHERE(FINITE(tmpnoblank))])
-        tmpnoblank=dummy[n_elements(dummy[*,0,0])-6:n_elements(dummy[*,0,0])-1,n_elements(dummy[0,*,0])-6:n_elements(dummy[0,*,0])-1,*]
-        rmstopr=STDDEV(tmpnoblank[WHERE(FINITE(tmpnoblank))])
-        tmpnoblank=dummy[0:5,n_elements(dummy[0,*,0])-6:n_elements(dummy[0,*,0])-1,*]
-        rmstopl=STDDEV(tmpnoblank[WHERE(FINITE(tmpnoblank))])
-        noise=(rmsbottoml+rmsbottomr+rmstopl+rmstopr)/4.
-        beam=[sxpar(header,'BMAJ')*3600,sxpar(header,'BMIN')*3600]
-     ENDELSE
-     cubecrvalRA=sxpar(header,'CRVAL1')
-     cubecdelt=(ABS(sxpar(header,'CDELT1'))+ABS(sxpar(header,'CDELT2')))/2.
-     cubecrvalDEC=sxpar(header,'CRVAL2')
-     channelwidth=ABS(sxpar(header,'CDELT3'))
-     veltype=STRUPCASE(strtrim(strcompress(sxpar(header,'CUNIT3'))))
-     pixfwhm=beam[0]/(cubecdelt*3600.)
-     catmajbeam[i]=beam[0]
-     catminbeam[i]=beam[1]
-     catnoise[i]=noise
-     sizex=sxpar(header,'NAXIS1')
-     sizey=sxpar(header,'NAXIS2')
-     writecube=0.
-     IF sxpar(header,'BPA') then catbpa[i]=sxpar(header,'BPA')
-
-     createmoment=0
-     smallexists=0
-     propermask=0
-     propercat=0
-                                ;if we have preprepared sofia files we will skip all the sofia steps
-     case allnew of
-        2:begin
-           names=[catmaskname[i],catcatalogname[i]]
-           pre_ran_sofia,names,new_dir,supportdirchecked,pixfwhm,header,errormessage,VSYSpix,RApix,DECpix,Totflux,log=log
-           propermom1=FILE_TEST(maindir+'/'+catdirname[i]+'/'+catmom1name[i]+'.fits')
-           propermom0=FILE_TEST(maindir+'/'+catdirname[i]+'/'+catmom0name[i]+'.fits')
-           propermom2=FILE_TEST(maindir+'/'+catdirname[i]+'/'+catmom2name[i]+'.fits')
-           IF propermom1 then print,'Moment 1 = '+catmom1name[i]+'.fits'
-           IF propermom0 then print,'Moment 0 = '+catmom0name[i]+'.fits'
-           IF propermom2 then print,'Moment 2 = '+catmom0name[i]+'.fits'
-           goto,skipallsofia
-        end
-        1:begin
-           IF size(log,/TYPE) EQ 7 then begin
-              openu,66,log,/APPEND
-              printf,66,linenumber()+"We have started from the preprocesssed or original cube."
-              close,66
-           ENDIF
-           print,linenumber()+"We have started from the preprocesssed or original cube."
-        end
-        0:begin
-                                ;if we want to use the existing output
-                                ;then we need to make sure that moment
-                                ;maps and the sofia catalogue exist
-           smallexists=FILE_TEST(maindir+'/'+catdirname[i]+'/'+currentfitcube+'_small.fits')
-           IF smallexists then begin
-              propermask=FILE_TEST(maindir+'/'+catdirname[i]+'/Sofia_Output/'+currentfitcube+'_binmask_small.fits')
-              IF propermask then begin
-                                ;If we have a mask we also need the catalogue
-                 propercat=FILE_TEST(maindir+'/'+catdirname[i]+'/Sofia_Output/'+currentfitcube+'_cat.ascii')
-                 IF propercat then begin
-
-                    catCatalogname[i]='Sofia_Output/'+currentfitcube+'_cat.ascii'
-                    catmaskname[i]='Sofia_Output/'+currentfitcube+'_binmask_small'
-                                ;let's check the existence of the moment maps
-                    propermom0=FILE_TEST(maindir+'/'+catdirname[i]+'/Moments/'+currentfitcube+'_mom0_small.fits')
-                    catMom0name[i]='Moments/'+currentfitcube+'_mom0_small' ;reset the mom0 map to the one just found
-                    propermom1=FILE_TEST(maindir+'/'+catdirname[i]+'/Moments/'+currentfitcube+'_mom1_small.fits')
-                    catMom1name[i]='Moments/'+currentfitcube+'_mom1_small' ;reset the mom0 map to the one just found
-                    propermom2=FILE_TEST(maindir+'/'+catdirname[i]+'/Moments/'+currentfitcube+'_mom1_small.fits')
-                    catMom2name[i]='Moments/'+currentfitcube+'_mom2_small' ;reset the mom0 map to the one just found
-                    propermomnoise=FILE_TEST(maindir+'/'+catdirname[i]+'/Moments/'+currentfitcube+'_noisemap_small.fits')
-                    noisemapname='Moments/'+currentfitcube+'_noisemap_small'
-                    currentfitcube=currentfitcube+'_small'
-                    dummy=readfits(maindir+'/'+catdirname[i]+'/'+currentfitcube+cubeext,header,/NOSCALE,/SILENT)
-                    sizex=sxpar(header,'NAXIS1')
-                    sizey=sxpar(header,'NAXIS2')
-                    allnew=3
-                ENDIF
-              ENDIF ELSE BEGIN
-                 allnew=1
-                 goto,mismatchedmoments
-              ENDELSE
-           ENDIF ELSE BEGIN
-                                ;Maybe no cutting was required so let's check for a mask
-              propermask=FILE_TEST(maindir+'/'+catdirname[i]+'/Sofia_Output/'+currentfitcube+'_binmask.fits')
-              IF propermask then begin
-                                ;If we have a mask we also need the catalogue
-                 propercat=FILE_TEST(maindir+'/'+catdirname[i]+'/Sofia_Output/'+currentfitcube+'_cat.ascii')
-                 IF propercat then begin
-                    catCatalogname[i]='Sofia_Output/'+currentfitcube+'_cat.ascii'
-                    catmaskname[i]='Sofia_Output/'+currentfitcube+'_binmask'
-                    propermom0=FILE_TEST(maindir+'/'+catdirname[i]+'/Moments/'+currentfitcube+'_mom0.fits')
-                    catMom0name[i]='Moments/'+currentfitcube+'_mom0' ;reset the mom0 map to the one just found
-                    propermom1=FILE_TEST(maindir+'/'+catdirname[i]+'/Moments/'+currentfitcube+'_mom1.fits')
-                    catMom1name[i]='Moments/'+currentfitcube+'_mom1' ;reset the mom0 map to the one just found
-                    propermom2=FILE_TEST(maindir+'/'+catdirname[i]+'/Moments/'+currentfitcube+'_mom2.fits')
-                    catMom2name[i]='Moments/'+currentfitcube+'_mom2' ;reset the mom0 map to the one just found
-                    propermomnoise=FILE_TEST(maindir+'/'+catdirname[i]+'/Moments/'+currentfitcube+'_noisemap.fits')
-                    noisemapname='Moments/'+currentfitcube+'_noisemap'
-                    allnew=2
-                 ENDIF
-              ENDIF ELSE BEGIN
-                 allnew=1
-                 goto,mismatchedmoments
-              ENDELSE
-           ENDELSE
-        end
-        -1:begin
-           IF size(log,/TYPE) EQ 7 then begin
-              openu,66,log,/APPEND
-              printf,66,linenumber()+"We have started from the original cube."
-              close,66
-           ENDIF
-           print,linenumber()+"We have started from the original cube."
-        end
-        else:begin
-           IF size(log,/TYPE) EQ 7 then begin
-              openu,66,log,/APPEND
-              printf,66,linenumber()+"This should never happen."
-              close,66
-           ENDIF
-           print,linenumber()+"This should never happen."
-           stop
-        end
-     endcase
-     mismatchedmoments:
-     ;Identify fully flagged channels in the cube
-     tmp_channels=dblarr(n_elements(dummy[0,0,*]))
-     for j=0,n_elements(dummy[0,0,*])-1 do begin
-       tmp = WHERE(FINITE(dummy[*,*,j]) NE 1.)
-       if n_elements(tmp) EQ n_elements(dummy[*,*,j]) then begin
-            IF size(log,/TYPE) EQ 7 then begin
-              openu,66,log,/APPEND
-              printf,66,linenumber()+"Channel "+strtrim(string(j))+" is fully flagged, blanking it in SoFiA."
-              close,66
-            ENDIF
-            tmp_channels[j]=1.
-       ENDIF
-     ENDFOR
-     IF TOTAL(tmp_channels) NE 0. then blank_channels = WHERE(tmp_channels EQ 1) else blank_channels = -1
-     beams_in_cube = (n_elements(dummy[*,0,0])+n_elements(dummy[0,*,0]))/(2.*pixfwhm)
-     channels_in_cube =  n_elements(dummy[0,0,*])
-     IF size(log,/TYPE) EQ 7 then begin
-       openu,66,log,/APPEND
-       printf,66,linenumber()+"This cube fits on average "+strtrim(string(fix(beams_in_cube)))+" beams and has "+strtrim(string(channels_in_cube))+" channels"
-       close,66
-     ENDIF
-     run_sofia,allnew,new_dir,currentfitcube,catcatalogname[i],supportdirchecked,pixfwhm,header,errormessage,VSYSpix,RApix,DECpix,Totflux,log=log,beams_in_cube = beams_in_cube,channels_in_cube = channels_in_cube
-
-     catCatalogname[i]=currentfitcube+'_cat.ascii'
-     catmaskname[i]=currentfitcube+'_binmask'
-     IF blank_channels[0] NE -1 then begin
-       mask=readfits(maindir+'/'+catdirname[i]+'/'+catmaskname[i]+'.fits',headermask,/NOSCALE,/SILENT)
-       for j=0,n_elements(blank_channels)-1 do begin
-          mask[*,*,blank_channels[j]] = 0.
-       ENDFOR
-       writefits,maindir+'/'+catdirname[i]+'/'+catmaskname[i]+'.fits',mask,headermask
-     ENDIF
-     skipallsofia:
-     if fix(errormessage[0]) EQ 5 then begin
-        IF size(log,/TYPE) EQ 7 then begin
-           openu,66,log,/APPEND
-           printf,66,linenumber()+errormessage[1]
-           close,66
-        ENDIF
-        commentlen='A'+strtrim(string(strlen(errormessage[1])),2)
-        openu,1,outputcatalogue,/APPEND
-        printf,1,catDirname[i],strtrim(string(0),2),strtrim(string(0),2),errormessage[1],format='("",('+dirformat+')," ",2(A6),"  ",('+commentlen+'))'
-        close,1
-        bookkeeping=5
-        goto,finishthisgalaxy
-     endif
-                                ;Convert pixel coordinates to Degrees
-                                ;Use the more accurate astrolib functions
-     xyad,header,RApix[0],DECpix[0],RAdeg,DECdeg
-     xyad,header,RApix[1],DECpix[1],RAlow,DEClow
-     xyad,header,RApix[2],DECpix[2],RAhigh,DEChigh
-     DECboundeg=[DEClow,DEChigh]
-     RAboundeg=[RAlow,RAhigh]
-     ;DECdeg=sxpar(header,'CRVAL2')+(DECpix[0]-sxpar(header,'CRPIX2')+1)*sxpar(header,'CDELT2')
-     ;RAdeg=sxpar(header,'CRVAL1')+(RApix[0]-sxpar(header,'CRPIX1')+1)*sxpar(header,'CDELT1')/COS(DECdeg*(!pi/180.))
-     ;DECboundeg=sxpar(header,'CRVAL2')+(DECpix[1:2]-sxpar(header,'CRPIX2')+1)*sxpar(header,'CDELT2')
-     ;RAboundeg=sxpar(header,'CRVAL1')+((RApix[1:2]-sxpar(header,'CRPIX1')+1)*sxpar(header,'CDELT1'))/COS(DECboundeg*(!pi/180.))
-     RAboundeg=RAboundeg[SORT(RAboundeg)]
-     DECboundeg=DECboundeg[SORT(DECboundeg)]
-     IF strupcase(veltype) EQ 'M/S' then begin
-        catVSYS[i]=sxpar(header,'CRVAL3')/1000.+(VSYSpix[0]-sxpar(header,'CRPIX3')+1)*sxpar(header,'CDELT3')/1000.
-        ROTboun=sxpar(header,'CRVAL3')/1000.+(VSYSpix[1:2]-sxpar(header,'CRPIX3')+1)*sxpar(header,'CDELT3')/1000.
-        ROTboun=ROTboun[SORT(ROTboun)]
-     ENDIF else begin
-        catVSYS[i]=sxpar(header,'CRVAL3')+(VSYSpix[0]-sxpar(header,'CRPIX3')+1)*sxpar(header,'CDELT3')
-        ROTboun=sxpar(header,'CRVAL3')+(VSYSpix[1:2]-sxpar(header,'CRPIX3')+1)*sxpar(header,'CDELT3')
-        ROTboun=ROTboun[SORT(ROTboun)]
-     ENDELSE
-     ;if the distance is -1 we assume Hubble follow
-     if catDistance[i] EQ -1 then catDistance[i] = catVSYS[i]/H_0
-     ;Let.s ensure it is not less than 0.5 Mpc to  avoid crashes
-     if catDistance[i] LT 0.5 then catDistance[i] = 0.5
-
-     mask=readfits(maindir+'/'+catdirname[i]+'/'+catmaskname[i]+'.fits',headermask,/NOSCALE,/SILENT)
-                                ;let's make sure our cube and mask have the same size
-     IF sxpar(header,'NAXIS1') NE sxpar(headermask,'NAXIS1') OR  sxpar(header,'NAXIS2') NE sxpar(headermask,'NAXIS2') $
-        OR  sxpar(header,'NAXIS3') NE sxpar(headermask,'NAXIS3') then begin
-        allnew=1
-        currentfitcube=catcubename[i]
-        propermomnoise=0
-        propermom0=0
-        propermom1=0
-        propermom2=0
-        IF size(log,/TYPE) EQ 7 then begin
-           openu,66,log,/APPEND
-           printf,66,linenumber()+"The size of the mask and the cube is not the same. Remaking all derived maps and masks."
-           close,66
-        ENDIF ELSE BEGIN
-           print,linenumber()+"The size of the mask and the cube is not the same. Remaking all derived maps and masks."
-        Endelse
-        goto,mismatchedmoments
-     ENDIF
-
-     tmp=WHERE(mask GT 1)
-     IF tmp[0] NE -1 then begin
-        tmp=WHERE(mask NE 0.)
-        mask[tmp]=1.
-     ENDIF
-     if not propermomnoise then begin
-                                ;If we do not have a noise map we make
-                                ;one
-        IF veltype EQ 'M/S' then channelwidthkm=channelwidth/1000. else channelwidthkm=channelwidth
-        noisemap=fltarr(n_elements(mask[*,0,0]),n_elements(mask[0,*,0]))
-        for j=0,n_elements(mask[0,0,*])-1 do begin
-           noisemap=noisemap+mask[*,*,j]
-        endfor
-        noisemap=SQRT(noisemap)*catnoise[i]*channelwidthkm
-        headernoisemap=header
-        sxdelpar,headernoisemap,'CUNIT3'
-        sxdelpar,headernoisemap,'CTYPE3'
-        sxdelpar,headernoisemap,'CRVAL3'
-        sxdelpar,headernoisemap,'CDELT3'
-        sxdelpar,headernoisemap,'NAXIS3'
-        sxdelpar,headernoisemap,'CRPIX3'
-        sxaddpar,headernoisemap,'NAXIS',2
-        writefits,maindir+'/'+catdirname[i]+'/'+currentfitcube+'_noisemap.fits',float(noisemap),headernoisemap
-        noisemapname=currentfitcube+'_noisemap'
-        tmp=WHERE(noisemap NE 0.)
-        momnoise=TOTAL(noisemap[tmp])/n_elements(tmp)
-        IF size(log,/TYPE) EQ 7 then begin
-           openu,66,log,/APPEND
-           printf,66,linenumber()+"We have created the noise moment  map."
-           close,66
-        ENDIF ELSE BEGIN
-           print,linenumber()+"We have created the noise moment map."
-        Endelse
-     ENDIF ELSE BEGIN
-                                ;Else we read it in
-        noisemap=readfits(noisemapname+'.fits',headernoisemap,/NOSCALE,/SILENT)
-        tmp=WHERE(noisemap NE 0.)
-        momnoise=TOTAL(noisemap[tmp])/n_elements(tmp)
-     ENDELSE
-     mom0ext='.fits'
-     mom1ext='.fits'
-     mom2ext='.fits'
-     if not propermom0 then begin
-                                ;if we have no proper moment0 we make it
-        tmpmask=fltarr(n_elements(dummy[*,0,0]),n_elements(dummy[0,*,0]),n_elements(dummy[0,0,*]))
-        tmpmask[WHERE(mask GT 0.)]=dummy[WHERE(mask GT 0.)]
-        headermap=header
-                                ;Same as in gipsy
-        writefits,maindir+'/'+catdirname[i]+'/'+currentfitcube+'_testcub.fits',float(tmpmask),header
-        momentsv2,tmpmask,moment0map,headermap,0.
-        writefits,maindir+'/'+catdirname[i]+'/'+currentfitcube+'_mom0.fits',float(moment0map),headermap
-                                ;reset the mom0 map to the one just created
-        catMom0name[i]=currentfitcube+'_mom0'
-        IF size(log,/TYPE) EQ 7 then begin
-           openu,66,log,/APPEND
-           printf,66,linenumber()+"We have created the moment 0 map."
-           close,66
-        ENDIF ELSE BEGIN
-           print,linenumber()+"We have created the moment 0 map."
-        Endelse
-     ENDIF ELSE BEGIN
-        moment0map=readfits(maindir+'/'+catdirname[i]+'/'+catMom0name[i]+mom0ext,headermap,/NOSCALE,/SILENT)
-        IF sxpar(headermap,'CDELT1') NE sxpar(header,'CDELT1') OR sxpar(headermap,'CDELT2') NE sxpar(header,'CDELT2') then begin
-           IF size(log,/TYPE) EQ 7 then begin
-              openu,66,log,/APPEND
-              printf,66,linenumber()+"the pixel scale in your cube and moment 0 map do not correspond."
-              printf,66,linenumber()+"recreating the moment maps."
-              close,66
-           ENDIF
-           propermom0=0.
-           propermom1=0.
-           propermom2=0.
-           propermomnoise=0.
-           allnew=1
-           goto,mismatchedmoments
-        ENDIF
-        IF NOT sxpar(headermap,'BMAJ') then sxaddpar,headermap,'BMAJ',catmajbeam[i]
-        IF NOT sxpar(headermap,'BMIN') then sxaddpar,headermap,'BMIN',catminbeam[i]
-     ENDELSE
-     if not propermom1 then begin
-                                ;if we have no proper moment 1 we make it
-        tmpmask=fltarr(n_elements(dummy[*,0,0]),n_elements(dummy[0,*,0]),n_elements(dummy[0,0,*]))
-        tmpmask[WHERE(mask GT 0.)]=dummy[WHERE(mask GT 0.)]
-        headervel=header
-                                ;Same as in gipsy
-        momentsv2,tmpmask,moment1map,headervel,1.,gdlidl=gdlidl
-        writefits,maindir+'/'+catdirname[i]+'/'+currentfitcube+'_mom1.fits',float(moment1map),headervel
-                                ;reset the mom 1 map to the one just created
-        catMom1name[i]=currentfitcube+'_mom1'
-        IF size(log,/TYPE) EQ 7 then begin
-           openu,66,log,/APPEND
-           printf,66,linenumber()+"We have created the moment 1 map."
-           close,66
-        ENDIF ELSE BEGIN
-           print,linenumber()+"We have created the moment 1 map."
-        Endelse
-     ENDIF ELSE BEGIN
-        moment1map=readfits(maindir+'/'+catdirname[i]+'/'+catMom1name[i]+mom1ext,headervel,/NOSCALE,/SILENT)
-        IF sxpar(headervel,'CDELT1') NE sxpar(header,'CDELT1') OR sxpar(headervel,'CDELT2') NE sxpar(header,'CDELT2') then begin
-           IF size(log,/TYPE) EQ 7 then begin
-              openu,66,log,/APPEND
-              printf,66,linenumber()+"the pixel scale in your cube and moment 1 map do not correspond."
-              printf,66,linenumber()+"recreating the moment maps."
-              close,66
-           ENDIF
-           allnew=1
-           propermom0=0.
-           propermom1=0.
-           propermom2=0.
-           propermomnoise=0.
-           goto,mismatchedmoments
-        ENDIF
-        IF NOT sxpar(headermap,'BMAJ') then sxaddpar,headervel,'BMAJ',catmajbeam[i]
-        IF NOT sxpar(headermap,'BMIN') then sxaddpar,headervel,'BMIN',catminbeam[i]
-     ENDELSE
-     if not propermom2 then begin
-                                ;if we have no proper moment 2 we make it
-        tmpmask=fltarr(n_elements(dummy[*,0,0]),n_elements(dummy[0,*,0]),n_elements(dummy[0,0,*]))
-        tmpmask[WHERE(mask GT 0.)]=dummy[WHERE(mask GT 0.)]
-        headerwidth=header
-                                ;Same as in gipsy
-        momentsv2,tmpmask,moment2map,headerwidth,2.,gdlidl=gdlidl
-        writefits,maindir+'/'+catdirname[i]+'/'+currentfitcube+'_mom2.fits',float(moment2map),headerwidth
-                                ;reset the mom 1 map to the one just created
-        catMom2name[i]=currentfitcube+'_mom2'
-        IF size(log,/TYPE) EQ 7 then begin
-           openu,66,log,/APPEND
-           printf,66,linenumber()+"We have created the moment 2 map."
-           close,66
-        ENDIF ELSE BEGIN
-           print,linenumber()+"We have created the moment 2 map."
-        Endelse
-     ENDIF ELSE BEGIN
-        moment2map=readfits(maindir+'/'+catdirname[i]+'/'+catMom2name[i]+mom2ext,headerwidth,/NOSCALE,/SILENT)
-        IF sxpar(headerwidth,'CDELT1') NE sxpar(header,'CDELT1') OR sxpar(headerwidth,'CDELT2') NE sxpar(header,'CDELT2') then begin
-           IF size(log,/TYPE) EQ 7 then begin
-              openu,66,log,/APPEND
-              printf,66,linenumber()+"the pixel scale in your cube and moment 2 map do not correspond."
-              printf,66,linenumber()+"recreating the moment maps."
-              close,66
-           ENDIF
-           allnew=1
-           propermom0=0.
-           propermom1=0.
-           propermom2=0.
-           propermomnoise=0.
-           goto,mismatchedmoments
-        ENDIF
-        IF NOT sxpar(headermap,'BMAJ') then sxaddpar,headervel,'BMAJ',catmajbeam[i]
-        IF NOT sxpar(headermap,'BMIN') then sxaddpar,headervel,'BMIN',catminbeam[i]
-     ENDELSE
-     CD,old_dir
-                                ;Check that all our maps and cube line up in size
-     IF  sxpar(header,'NAXIS1') NE sxpar(headermap,'NAXIS1') OR  sxpar(header,'NAXIS2') NE sxpar(headermap,'NAXIS2') $
-        OR  sxpar(header,'NAXIS1') NE sxpar(headervel,'NAXIS1') OR  sxpar(header,'NAXIS2') NE sxpar(headervel,'NAXIS2') $
-        OR  sxpar(header,'NAXIS1') NE sxpar(headerwidth,'NAXIS1') OR  sxpar(header,'NAXIS2') NE sxpar(headerwidth,'NAXIS2') $
-        OR  sxpar(header,'NAXIS1') NE sxpar(headernoisemap,'NAXIS1') OR  sxpar(header,'NAXIS2') NE sxpar(headernoisemap,'NAXIS2') then begin
-        allnew=1
-        currentfitcube=catcubename[i]
-        propermomnoise=0
-        propermom0=0
-        propermom1=0
-        propermom2=0
-        IF size(log,/TYPE) EQ 7 then begin
-           openu,66,log,/APPEND
-           printf,66,linenumber()+"The size of the moment maps and the cube is not the same. Remaking all derived maps and masks."
-           close,66
-        ENDIF ELSE BEGIN
-           print,linenumber()+"The size of the moment maps and the cube is not the same. Remaking all derived maps and masks."
-        Endelse
-        goto,mismatchedmoments
-     ENDIF
 
 
 
@@ -6207,6 +5750,52 @@ def FAT(argv):
 end
 
 '''
+
+FAT.__doc__ = '''
+;+
+; NAME:
+;      FAT
+; PURPOSE:
+;      Fit Tilted Ring Models with Tirific in a fully automated manner
+; CATEGORY:
+;      Main for fitting galaxies. Tirific still requires interactive fitting this code attempts
+;      to remedy that
+;
+; CALLING SEQUENCE:
+;      FAT,support='supportdir',configuration_file='configfile'
+;
+; INPUTS:
+;      -
+; OPTIONAL INPUTS:
+;      SUPPORT  = path to the directory where FAT's support
+;      routines are located. The default location is ./Support/
+;      CONFIGURATION_FILE = A configuration file for FAT. This file
+;      should contain the locations of the galaxies to be fitted. See
+;      readme for more detailed info.
+;
+; OPTIONAL INPUT KEYWORDS
+;     /INSTALLATION_CHECK = Flag to run the Installation check.
+; ---------------------------------------------------------------------------------
+;     The following input keywords are only meant to be used by
+;     developers. Except for the /debug flag they will not work for
+;     the common user. If you want to know about these please contact Peter
+;     Kamphuis.
+; ---------------------------------------------------------------------------------
+;     /DEBUG = Flag to print debugging information in several routines
+;     /LVHIS_TEST = Flag to run the LVHIS Test.
+;     /PAPER_TEST = Flag to run the paper artificial galaxies.
+;     /RESOLUTION_TEST = Flag to run the additional resolution tests
+; OPTIONAL KEYWORD OUTPUT:
+;      -
+;
+; OUTPUTS:
+;     See Readme or just run the code
+;
+; EXAMPLE:
+;     python3 FAT.py --cf /home/your_computer/FAT_dir/FAT_INPUT.config'
+'''
+
+
 if __name__ == '__main__':
     error_message = '''
                     Your code has crashed for some reason. If this message completely baffles you then please submit the trace back as a bug report to: \n
@@ -6216,7 +5805,7 @@ if __name__ == '__main__':
     try:
         FAT(sys.argv[1:])
     except Exception as exc:
-        print('------------When filing a bug report please copy all out put  below this line------------')
+        print('------------When filing a bug report please copy all output  below this line------------')
         traceback.print_exc()
         print(error_message)
         sys.exit(1)
