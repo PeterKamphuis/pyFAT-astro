@@ -1,0 +1,7 @@
+#This file contains the basic parameters of the Galaxy
+#The total flux is determined by the source finder in the initial estimates and the total emission in the masked cube of the final model in the fits
+#D_HI is determined as the diameter where the major axis with given PA cuts the 10^20 column of the moment0 map
+#                        RA                       DEC                 VSYS                   PA          Inclination             Max VRot               V_mask             Tot FLux                 D_HI             Distance              HI Mass                 D_HI
+#                  hh:mm:ss                  dd:mm:ss                 km/s                  deg                  deg                 km/s                 km/s                   Jy               arcsec                  Mpc              M_solar                  kpc
+# The initial input
+          9h29m21.68+/-0.39         21d43m8.14+/-0.58        548.94+/-0.23       201.36+/-27.91         67.13+/-2.34      200.01+/-118.78        437.77+/-8.26        260.47+/-0.50               782.48                 8.70             4.65e+09                33.00

@@ -60,10 +60,16 @@ def cleanup(Configuration):
         directories=['Intermediate','Finalmodel','No_Warp','Moments','PV-Diagrams','Def_Files']
         files = ['tirific.def',Configuration['BASE_NAME']+'-BasicInfo.txt']
 
+    print_log(f'''CLEANUP: We are cleaning the following directories:
+{"":8s}CLEANUP: {','.join(directories)}
+{"":8s}CLEANUP: and the following files:
+{"":8s}CLEANUP: {','.join(files)}
+''',Configuration['OUTPUTLOG'], screen =True)
+
+
     ext=['.fits','.log','.ps','.def']
     moments = ['mom0','mom1','mom2']
     #then specific files in the working directory
-    files = [Configuration['BASE_NAME']+'.fits', 'tirific.def',Configuration['BASE_NAME']+'-BasicInfo.txt']
     os.chdir(Configuration['FITTING_DIR'])
 
     for dir in directories:
@@ -92,7 +98,11 @@ def cleanup(Configuration):
                 except FileNotFoundError:
                     pass
                 try:
-                    os.remove(f'{dir}/{Configuration["BASE_NAME"]}_xv.fits')
+                    os.remove(f'{dir}/{Configuration["BASE_NAME"]}_sofia_xv.fits')
+                except FileNotFoundError:
+                    pass
+                try:
+                    os.remove(f'{dir}/{Configuration["BASE_NAME"]}_cc_xv.fits')
                 except FileNotFoundError:
                     pass
             elif dir == 'Sofia_Output':

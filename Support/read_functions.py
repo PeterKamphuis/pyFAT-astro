@@ -1,12 +1,18 @@
 #!/usr/local/bin/ python3
 # This module contains a set of functions and classes that are used in FAT to read input files
-import os
+
 from support_functions import Proper_Dictionary,print_log
+from astropy.io import fits
+from scipy import ndimage
+
+import matplotlib.pyplot as plt
+import os
 import copy
 import numpy as np
 #Function to read a FAT input Catalogue
 class BadCatalogueError(Exception):
     pass
+
 def catalogue(filename):
     Catalogue = Proper_Dictionary({})
     tmpfile = open(filename,'r')
@@ -25,6 +31,43 @@ def catalogue(filename):
             else:
                 Catalogue[key].append(input[i])
     return Catalogue
+catalogue.__doc__ ='''
+;+
+; NAME:
+;       catalogue(filename)
+;
+; PURPOSE:
+;       Read the FAT input catalogue and write into the a dictionary
+;
+; CATEGORY:
+;       read
+;
+;
+; INPUTS:
+;       Configuration
+;
+; OPTIONAL INPUTS:
+;
+;
+; KEYWORD PARAMETERS:
+;       -
+;
+; OUTPUTS:
+;          result = dictionary with the read file
+;
+; OPTIONAL OUTPUTS:
+;       -
+;
+; PROCEDURES CALLED:
+;      split, strip, open
+;
+; EXAMPLE:
+;
+;
+'''
+
+
+
 
 #Function to read FAT configuration file into a dictionary
 def config_file(input_parameters, start_dir):
@@ -130,8 +173,298 @@ def config_file(input_parameters, start_dir):
         Configuration['MAPS_OUTPUT'] = 4
     return Configuration
 
+config_file.__doc__ ='''
+;+
+; NAME:
+;       config_file(input_parameters, start_dir)
+;
+; PURPOSE:
+;       Read the FAT config file and write into the a dictionary
+;
+; CATEGORY:
+;       read
+;
+;
+; INPUTS:
+;       Configuration
+;
+; OPTIONAL INPUTS:
+;
+;
+; KEYWORD PARAMETERS:
+;       -
+;
+; OUTPUTS:
+;          result = dictionary with the config file
+;
+; OPTIONAL OUTPUTS:
+;       -
+;
+; PROCEDURES CALLED:
+;      split, strip, open
+;
+; EXAMPLE:
+;
+;
+'''
+
+
+
+# Function to get the PA and inclination from the moment 0 for initial estimates
+
+def guess_orientation(Configuration,Fits_Files, center = None):
+    #open the moment 0
+
+    Image = fits.open(Configuration['FITTING_DIR']+'Sofia_Output/'+Fits_Files['MOMENT0'],\
+            uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
+    map = Image[0].data/1000.
+    hdr = Image[0].header
+    Image.close()
+    if not center:
+        center = [hdr['NAXIS1']/2.,hdr['NAXIS2']/2]
+    Image = fits.open(Configuration['FITTING_DIR']+'Sofia_Output/'+Fits_Files['CHANNEL_MAP'],\
+            uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
+    noise_map = np.sqrt(Image[0].data)*Configuration['NOISE']*Configuration['CHANNEL_WIDTH']
+    noise_hdr = Image[0].header
+    Image.close()
+    median_noise_in_map = np.nanmedian(noise_map[noise_map > 0.])
+    minimum_noise_in_map = np.nanmin(noise_map[noise_map > 0.])
+    map[3*minimum_noise_in_map > noise_map] = 0.
+
+    # now we need to get profiles under many angles let's say 100
+    #extract the profiles under a set of angles
+    angles = np.linspace(0, 180, 180)
+
+    ratios, maj_extent = obtain_ratios(map, hdr, center, angles)
+
+    max_index = np.where(ratios == np.nanmax(ratios))[0]
+    if max_index.size > 1:
+        max_index =max_index[0]
+    min_index = np.where(ratios == np.nanmin(ratios))[0]
+    if min_index.size > 1:
+        min_index =min_index[0]
+    #get a 10% bracket
+
+    tenp_max_index = np.where(ratios > np.nanmax(ratios)*0.9)[0]
+    tenp_min_index = np.where(ratios < np.nanmin(ratios)*1.1)[0]
+    if tenp_max_index.size <= 1:
+        tenp_max_index= [max_index-2,max_index+2]
+    if tenp_min_index.size <= 1:
+        tenp_min_index= [min_index-2,min_index+2]
+    pa = np.mean([angles[min_index],angles[max_index]-90.])
+    pa_error = np.mean([abs(angles[tenp_min_index[0]]-angles[min_index]),\
+                        abs(angles[tenp_min_index[-1]]-angles[min_index]),\
+                        abs(angles[tenp_max_index[0]]-angles[max_index]), \
+                        abs(angles[tenp_min_index[-1]]-angles[max_index])])
+    ratios[ratios < 0.204] = 0.204
+    ratios[1./ratios < 0.204] = 1./0.204
+    inclination = np.mean([np.degrees(np.arccos(np.sqrt((ratios[min_index]**2-0.2**2)/0.96))) \
+                          ,np.degrees(np.arccos(np.sqrt(((1./ratios[max_index])**2-0.2**2)/0.96))) ])
+
+    inclination_error = np.mean([abs(np.degrees(np.arccos(np.sqrt((ratios[min_index]**2-0.2**2)/0.96))) - np.degrees(np.arccos(np.sqrt((ratios[tenp_min_index[0]]**2-0.2**2)/0.96)))),\
+                                 abs(np.degrees(np.arccos(np.sqrt((ratios[min_index]**2-0.2**2)/0.96))) - np.degrees(np.arccos(np.sqrt((ratios[tenp_min_index[-1]]**2-0.2**2)/0.96)))),\
+                                 abs(np.degrees(np.arccos(np.sqrt(((1./ratios[max_index])**2-0.2**2)/0.96))) - np.degrees(np.arccos(np.sqrt(((1./ratios[tenp_max_index[0]])**2-0.2**2)/0.96)))),\
+                                 abs(np.degrees(np.arccos(np.sqrt(((1./ratios[max_index])**2-0.2**2)/0.96))) - np.degrees(np.arccos(np.sqrt(((1./ratios[tenp_max_index[0]])**2-0.2**2)/0.96))))])
+    # From these estimates we also get an initial SBR
+    x1,x2,y1,y2 = obtain_border_pix(hdr,pa,center)
+    linex,liney = np.linspace(x1,x2,1000), np.linspace(y1,y2,1000)
+    maj_resolution = abs((abs(x2-x1)/1000.)*np.sin(np.radians(pa)))+abs(abs(y2-y1)/1000.*np.cos(np.radians(pa)))
+    maj_profile = ndimage.map_coordinates(map, np.vstack((linex,liney)),order=1)
+    maj_axis =  np.linspace(0,1000*maj_resolution,1000)- (abs((abs(center[0]))*np.sin(np.radians(pa)))+abs(abs(center[1])*np.cos(np.radians(pa))))
+    neg_index = np.where(maj_axis < 0.)[0]
+    pos_index = np.where(maj_axis > 0.)[0]
+
+    avg_profile = []
+    new_axis = []
+    for i in range(np.nanmin([neg_index.size,pos_index.size])):
+        avg_profile.append(np.nanmean([maj_profile[neg_index[neg_index.size-i-1]],maj_profile[pos_index[i]]]))
+        new_axis.append(maj_profile[pos_index[i]])
+    ring_size_req = Configuration['RING_SIZE']*hdr['BMAJ']/np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])
+
+    SBR_initial = avg_profile[0::int(ring_size_req)]/Configuration['PIX_PER_BEAM'] # Jy/beam*km/s
+
+    #We need to know which is the approaching side and which is receding
+
+    Image = fits.open(Configuration['FITTING_DIR']+'Sofia_Output/'+Fits_Files['MOMENT1'],\
+            uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
+    map = Image[0].data/1000.
+    hdr = Image[0].header
+    Image.close()
+    map[3*minimum_noise_in_map > noise_map] = float('NaN')
+    noise_map = []
+
+    x1,x2,y1,y2 = obtain_border_pix(hdr,pa,center)
+    linex,liney = np.linspace(x1,x2,1000), np.linspace(y1,y2,1000)
+    maj_resolution = abs((abs(x2-x1)/1000.)*np.sin(np.radians(pa)))+abs(abs(y2-y1)/1000.*np.cos(np.radians(pa)))
+    maj_profile = ndimage.map_coordinates(map, np.vstack((liney,linex)),order=1)
+    maj_axis =  np.linspace(0,1000*maj_resolution,1000)- (abs((abs(center[0]))*np.sin(np.radians(pa)))+abs(abs(center[1])*np.cos(np.radians(pa))))
+    map= []
+    if maj_axis[np.where(maj_profile == np.nanmax(maj_profile))[0]] > 0:
+            pa = pa+180
+            print_log(f'''GUESS_ORIENTATION: We have modified the pa by 180 deg as we found the maximum velocity west of the center.
+''' , Configuration['OUTPUTLOG'])
+    return [pa,pa_error],[inclination,inclination_error],SBR_initial,maj_extent
+guess_orientation.__doc__ ='''
+;+
+; NAME:
+;       guess_orientation(Configuration, Fits_Files,center = None)
+;
+; PURPOSE:
+;       Read the moment map and noise map and estimate the the pa and inclination from axis ratios
+;
+; CATEGORY:
+;       read
+;
+;
+; INPUTS:
+;       Configuration
+;
+; OPTIONAL INPUTS:
+;
+;
+; KEYWORD PARAMETERS:
+;       -
+;
+; OUTPUTS:
+;          result = dictionary with the config file
+;
+; OPTIONAL OUTPUTS:
+;       -
+;
+; PROCEDURES CALLED:
+;      np.mean, astropy.io.fits, obtain_ratios, np.linspace
+;
+; EXAMPLE:
+;
+;
+'''
+
+
+
+def obtain_ratios(map, hdr, center, angles):
+    ratios = []
+    max_extent = 0.
+    for angle in angles:
+        #major axis
+
+        x1,x2,y1,y2 = obtain_border_pix(hdr,angle,center)
+        linex,liney = np.linspace(x1,x2,1000), np.linspace(y1,y2,1000)
+        maj_resolution = abs((abs(x2-x1)/1000.)*np.sin(np.radians(angle)))+abs(abs(y2-y1)/1000.*np.cos(np.radians(angle)))
+        maj_profile = ndimage.map_coordinates(map, np.vstack((liney,linex)),order=1)
+        maj_axis =  np.linspace(0,1000*maj_resolution,1000)
+        tmp = np.where(maj_profile > 0.25*np.nanmax(maj_profile))[0]
+        #gauss =fit_gaussian(maj_axis[tmp], maj_profile[tmp])
+        #maj_gaus = gaussian_function(maj_profile, *gauss)
+        #tmp = np.where(maj_gaus > 0.2*np.nanmax(maj_gaus))[0]
+        width_maj = (tmp[-1]-tmp[0])*maj_resolution
+        width_maj = np.sqrt(width_maj**2 - (hdr['BMAJ']/(np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])))**2)
+        if width_maj > max_extent:
+            max_extent = width_maj
+        #minor axis
+        if angle < 90:
+            x1,x2,y1,y2 = obtain_border_pix(hdr,angle+90,center)
+        else:
+            x1,x2,y1,y2 = obtain_border_pix(hdr,angle-90,center)
+        linex,liney = np.linspace(x1,x2,1000), np.linspace(y1,y2,1000)
+        min_resolution =abs((abs(x2-x1)/1000.)*np.sin(np.radians(angle+90)))+abs(abs(y2-y1)/1000.*np.cos(np.radians(angle+90)))
+        min_axis =  np.linspace(0,1000*min_resolution,1000)
+        min_profile = ndimage.map_coordinates(map, np.vstack((liney,linex)),order=1)
+        tmp = np.where(min_profile > 0.25*np.nanmax(min_profile))[0]
+        #gauss =fit_gaussian(min_axis[tmp], maj_profile[tmp])
+        #min_gaus = gaussian_function(min_profile,*gauss)
+        #tmp = np.where(min_gaus > 0.2*np.nanmax(min_gaus))[0]
+        width_min = (tmp[-1]-tmp[0])*min_resolution
+        width_min = np.sqrt(width_min**2 - (hdr['BMAJ']/(np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])))**2)
+        if width_min > max_extent:
+            max_extent = width_min
+        ratios.append(width_maj/width_min)
+    #as the extend is at 25% let's take 2 time the sigma of that
+    max_extent = (max_extent/(2.*np.sqrt(2*np.log(2))))*2.
+    return np.array(ratios,dtype=float), max_extent*np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])
+
+obtain_ratios.__doc__ = '''
+;+
+; NAME:
+;       obtain_ratios(map, hdr, center, angles)
+;
+; PURPOSE:
+;       Obtain the ratio between an axis along the specified angle as well as one rotated 90 degrees to determine the pa and inclination.
+;       Additionally keep track of the maximum width.
+; CATEGORY:
+;       read
+;
+;
+; INPUTS:
+;       Configuration
+;
+; OPTIONAL INPUTS:
+;
+;
+; KEYWORD PARAMETERS:
+;       -
+;
+; OUTPUTS:
+;          ratios =  ratios corresponding to the input angles
+;         maj_width = the maximum extend of any profile analysed (in degree)
+; OPTIONAL OUTPUTS:
+;       -
+;
+; PROCEDURES CALLED:
+;      np.mean, ndimage.map_coordinates, np.linspace, np.vstack, np.cos, np.radians, np.sin
+;
+; EXAMPLE:
+;
+;
+'''
+
+
+
+
+
+def obtain_border_pix(hdr,angle,center):
+
+    if angle < 90.:
+        x1 = center[0]-(hdr['NAXIS2']-center[1])*np.tan(np.radians(angle))
+        x2 = center[0]+(center[1])*np.tan(np.radians(angle))
+        if x1 < 0:
+            x1 = 0
+            y1 = center[1]+(center[0])*np.tan(np.radians(90-angle))
+        else:
+            y1 = hdr['NAXIS2']
+        if x2 > hdr['NAXIS1']:
+            x2 = hdr['NAXIS1']
+            y2 = center[1]-(center[0])*np.tan(np.radians(90-angle))
+        else:
+            y2 = 0
+    elif angle == 90:
+        x1 = 0 ; y1 = center[1] ; x2 = hdr['NAXIS1'] ; y2 = center[1]
+    else:
+        x1 = center[0]-(center[1])*np.tan(np.radians(180.-angle))
+        x2 = center[0]+(hdr['NAXIS2']-center[1])*np.tan(np.radians(180-angle))
+        if x1 < 0:
+            x1 = 0
+            y1 = center[1]-(center[0])*np.tan(np.radians(angle-90))
+        else:
+            y1 = 0
+        if x2 > hdr['NAXIS1']:
+            x2 = hdr['NAXIS1']
+            y2 = center[1]+(center[0])*np.tan(np.radians(angle-90))
+        else:
+            y2 = hdr['NAXIS2']
+
+    return x1,x2,y1,y2
+
+
+
+
+
+
+
+
+
 # function to read the sofia catalogue
-def sofia_catalogue(Configuration, Variables =['name','x','x_min','x_max','y','y_min','y_max','z','z_min','z_max','ra','dec','v_app','f_sum','kin_pa'], header = None ):
+def sofia_catalogue(Configuration, Variables =['name','x','x_min','x_max','y','y_min','y_max','z','z_min','z_max','ra',\
+                    'dec','v_app','f_sum','kin_pa','w50','err_f_sum','err_x','err_y','err_z'], header = None ):
     outlist = [[] for x in Variables]
     with open(Configuration['FITTING_DIR']+'Sofia_Output/'+Configuration['BASE_NAME']+'_cat.txt') as sof_cat:
         for line in sof_cat.readlines():
@@ -168,6 +501,21 @@ def sofia_catalogue(Configuration, Variables =['name','x','x_min','x_max','y','y
                         start = column_locations[input_columns.index(col)-1]
                     end = column_locations[input_columns.index(col)]
                     outlist[Variables.index(col)].append(line[start:end].strip())
+    #if we have a header we convert w50 or w20
+    if ('w50' in Variables or 'w20' in Variables or 'f_sum' in Variables or 'err_f_sum' in Variables) and header:
+        if 'w50' in Variables:
+            for i in range(len(outlist[0])):
+                outlist[Variables.index('w50')][i] = float(outlist[Variables.index('w50')][i])*header['CDELT3']
+        if 'w20' in Variables:
+            for i in range(len(outlist[0])):
+                outlist[Variables.index('w20')][i] = float(outlist[Variables.index('w20')][i])*header['CDELT3']
+        if 'f_sum' in Variables:
+            for i in range(len(outlist[0])):
+                outlist[Variables.index('f_sum')][i] = float(outlist[Variables.index('f_sum')][i])/Configuration['PIX_PER_BEAM']*header['CDELT3']/1000.
+        if 'err_f_sum' in Variables:
+            for i in range(len(outlist[0])):
+                outlist[Variables.index('err_f_sum')][i] = float(outlist[Variables.index('err_f_sum')][i])/Configuration['PIX_PER_BEAM']*header['CDELT3']/1000.
+
     # we want to fit a specific source
     if len(outlist[0]) > 1 and 'f_sum' in Variables and header:
         many_sources  = copy.deepcopy(outlist)

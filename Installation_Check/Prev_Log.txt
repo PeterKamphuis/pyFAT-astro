@@ -1,27 +1,48 @@
-(141)   (131)   This file is a log of the fitting process run at 2020-06-16 19:16:58.770469.
+(156)   This file is a log of the fitting process run at 2020-06-24 18:32:22.940805.
         This is version pyFAT 1.0.0 of the program.
-(168)   We are in loop 0. This is catalogue number 0 and the directory ./.(192)   CLEAN_HEADER: The channels in your input cube are in km/s. This sometimes leads to problems with wcs lib, hence we change it to m/s.'
-(192)   CLEAN_HEADER: Your cube has a significant history attached we are removing it for easier interpretation.
-(192)   PREPROCESSING: Your cube contains values exactly 0. If this is padding these should be blanks.
+(184)   We are in loop 0. This is catalogue number 0 and the directory ./.In the function cleanup at line 67 in file clean_functions.py
+        CLEANUP: We are cleaning the following directories:
+        CLEANUP: Optimized,Intermediate,Finalmodel,No_Warp,Moments,PV-Diagrams,Sofia_Output,Def_Files
+        CLEANUP: and the following files:
+        CLEANUP: NGC_2903_FAT.fits,NGC_2903_FAT_opt.fits,tirific.def,NGC_2903_FAT-BasicInfo.txt
+In the function clean_header at line 64 in file fits_functions.py, In the function create_fat_cube at line 189 in file fits_functions.py
+        CLEAN_HEADER: The channels in your input cube are in km/s. This sometimes leads to problems with wcs lib, hence we change it to m/s.'
+In the function clean_header at line 122 in file fits_functions.py, In the function create_fat_cube at line 189 in file fits_functions.py
+        CLEAN_HEADER: Your cube has a significant history attached we are removing it for easier interpretation.
+In the function prep_cube at line 605 in file fits_functions.py, In the function create_fat_cube at line 190 in file fits_functions.py
+        PREPROCESSING: Your cube contains values exactly 0. If this is padding these should be blanks.
         PREPROCESSING: We have changed them to blanks.
-(192)   PREPROCESSING: We are cutting the cube as clearly the noise statistics are off.
+In the function prep_cube at line 658 in file fits_functions.py, In the function create_fat_cube at line 190 in file fits_functions.py
+        PREPROCESSING: We are cutting the cube as clearly the noise statistics are off.
         PREPROCESSING: Noise in the first channel is 0.007502617780119181
         PREPROCESSING: Noise in the last channel is 0.0027553963009268045
         PREPROCESSING: Noise in the corners is 0.003271019086241722
-(192)   PREPROCESSING: We are cutting the cube as clearly the noise statistics are off.
+In the function prep_cube at line 658 in file fits_functions.py, In the function create_fat_cube at line 190 in file fits_functions.py
+        PREPROCESSING: We are cutting the cube as clearly the noise statistics are off.
         PREPROCESSING: Noise in the first channel is 0.004452874418348074
         PREPROCESSING: Noise in the last channel is 0.0027553963009268045
         PREPROCESSING: Noise in the corners is 0.0032157879322767258
-(192)   PREPROCESSING: We are cutting the cube as clearly the noise statistics are off.
+In the function prep_cube at line 658 in file fits_functions.py, In the function create_fat_cube at line 190 in file fits_functions.py
+        PREPROCESSING: We are cutting the cube as clearly the noise statistics are off.
         PREPROCESSING: Noise in the first channel is 0.004038029350340366
         PREPROCESSING: Noise in the last channel is 0.0027553963009268045
         PREPROCESSING: Noise in the corners is 0.0031998860649764538
-(192)   PREPROCESSING: Your cube had values below -10*sigma. If you do not have a central absorption source there is something seriously wrong with the cube.
+In the function prep_cube at line 704 in file fits_functions.py, In the function create_fat_cube at line 190 in file fits_functions.py
+        PREPROCESSING: Your cube had values below -10*sigma. If you do not have a central absorption source there is something seriously wrong with the cube.
         PREPROCESSING: We blanked these values.
-(192)   CREATE_FAT_CUBE: We are writing a FAT modfied cube to be used for the fitting. This cube is called /home/peter/FAT_Main/FAT_Source_Dev/Installation_Check/NGC_2903_FAT.fits
-(216)   RUN_SOFIA: Adding an extra kernel scale as the cube is more than 30 beams across.
-(216)   RUN_SOFIA: Adding an extra kernel scale as the cube has more than 52 channels.
-(216)   RUN_SOFIA: Running SoFiA.(216)   [36m____________________________________________________________________________[0;1m
+In the function create_fat_cube at line 195 in file fits_functions.py
+        CREATE_FAT_CUBE: We are writing a FAT modfied cube to be used for the fitting. This cube is called /home/peter/FAT_Main/FAT_Source_Dev/Installation_Check/NGC_2903_FAT.fits
+In the function optimized_cube at line 540 in file fits_functions.py, In the function create_fat_cube at line 199 in file fits_functions.py
+        OPTIMIZED_CUBE: Your input cube has 2.0 pixels along the minor FWHM.
+        OPTIMIZED_CUBE: You requested 1 therefore we regridded the cube into a new cube.
+        OPTIMIZED_CUBE: We are using the pixel size of 0.01342092461328889.
+In the function sofia at line 933 in file run_functions.py
+        RUN_SOFIA: Adding an extra kernel scale as the cube is more than 30 beams across.
+In the function sofia at line 940 in file run_functions.py
+        RUN_SOFIA: Adding an extra kernel scale as the cube has more than 52 channels.
+In the function sofia at line 948 in file run_functions.py
+        RUN_SOFIA: Running SoFiA.In the function sofia at line 951 in file run_functions.py
+        [36m____________________________________________________________________________[0;1m
 
  Pipeline started
 [0;36m____________________________________________________________________________[0m
@@ -29,7 +50,7 @@
   Using:    Source Finding Application (SoFiA)
   Version:  2.1.1 (15-Apr-2020)
   CPU:      8 cores available
-  Time:     Tue Jun 16 19:16:59 2020
+  Time:     Wed Jun 24 18:32:23 2020
 
 [36m____________________________________________________________________________[0;1m
 
@@ -100,7 +121,7 @@
   Noise level:       1.655e-03
 
 [36m  Elapsed time: 00:00:00 h
-  CPU time:     00:00:01 h[0m
+  CPU time:     00:00:00 h[0m
 
   Smoothing kernel:  [0.0] x [12]
   Noise level:       1.472e-03
@@ -118,13 +139,13 @@
   Noise level:       1.692e-03
 
 [36m  Elapsed time: 00:00:00 h
-  CPU time:     00:00:02 h[0m
+  CPU time:     00:00:01 h[0m
 
   Smoothing kernel:  [3.0] x [3]
   Noise level:       1.095e-03
 
 [36m  Elapsed time: 00:00:00 h
-  CPU time:     00:00:02 h[0m
+  CPU time:     00:00:01 h[0m
 
   Smoothing kernel:  [3.0] x [6]
   Noise level:       8.664e-04
@@ -136,73 +157,73 @@
   Noise level:       7.708e-04
 
 [36m  Elapsed time: 00:00:00 h
-  CPU time:     00:00:03 h[0m
+  CPU time:     00:00:02 h[0m
 
   Smoothing kernel:  [3.0] x [16]
   Noise level:       7.366e-04
 
 [36m  Elapsed time: 00:00:00 h
-  CPU time:     00:00:03 h[0m
+  CPU time:     00:00:02 h[0m
 
   Smoothing kernel:  [6.0] x [0]
   Noise level:       9.752e-04
 
 [36m  Elapsed time: 00:00:00 h
-  CPU time:     00:00:04 h[0m
+  CPU time:     00:00:03 h[0m
 
   Smoothing kernel:  [6.0] x [3]
   Noise level:       6.326e-04
 
 [36m  Elapsed time: 00:00:00 h
-  CPU time:     00:00:04 h[0m
+  CPU time:     00:00:03 h[0m
 
   Smoothing kernel:  [6.0] x [6]
   Noise level:       5.031e-04
 
 [36m  Elapsed time: 00:00:00 h
-  CPU time:     00:00:04 h[0m
+  CPU time:     00:00:03 h[0m
 
   Smoothing kernel:  [6.0] x [12]
   Noise level:       4.480e-04
 
 [36m  Elapsed time: 00:00:00 h
-  CPU time:     00:00:05 h[0m
+  CPU time:     00:00:04 h[0m
 
   Smoothing kernel:  [6.0] x [16]
   Noise level:       4.291e-04
 
 [36m  Elapsed time: 00:00:00 h
-  CPU time:     00:00:05 h[0m
+  CPU time:     00:00:04 h[0m
 
   Smoothing kernel:  [9.0] x [0]
   Noise level:       5.289e-04
 
-[36m  Elapsed time: 00:00:01 h
-  CPU time:     00:00:06 h[0m
+[36m  Elapsed time: 00:00:00 h
+  CPU time:     00:00:04 h[0m
 
   Smoothing kernel:  [9.0] x [3]
   Noise level:       3.472e-04
 
-[36m  Elapsed time: 00:00:01 h
-  CPU time:     00:00:06 h[0m
+[36m  Elapsed time: 00:00:00 h
+  CPU time:     00:00:05 h[0m
 
   Smoothing kernel:  [9.0] x [6]
   Noise level:       2.812e-04
 
 [36m  Elapsed time: 00:00:01 h
-  CPU time:     00:00:07 h[0m
+  CPU time:     00:00:05 h[0m
 
   Smoothing kernel:  [9.0] x [12]
   Noise level:       2.533e-04
 
 [36m  Elapsed time: 00:00:01 h
-  CPU time:     00:00:07 h[0m
+  CPU time:     00:00:05 h[0m
 
   Smoothing kernel:  [9.0] x [16]
   Noise level:       2.430e-04
 
 [36m  Elapsed time: 00:00:01 h
-  CPU time:     00:00:08 h[0m
+  CPU time:     00:00:06 h[0m
 
   1.130% of all pixels detected.
 
@@ -224,7 +245,7 @@
 
 
 [36m  Elapsed time: 00:00:01 h
-  CPU time:     00:00:08 h[0m
+  CPU time:     00:00:06 h[0m
 
 [36m____________________________________________________________________________[0;1m
 
@@ -233,7 +254,7 @@
 
 
 [36m  Elapsed time: 00:00:01 h
-  CPU time:     00:00:08 h[0m
+  CPU time:     00:00:06 h[0m
 
 [36m____________________________________________________________________________[0;1m
 
@@ -247,7 +268,7 @@
 
 
 [36m  Elapsed time: 00:00:01 h
-  CPU time:     00:00:08 h[0m
+  CPU time:     00:00:06 h[0m
 
 [36m____________________________________________________________________________[0;1m
 
@@ -262,7 +283,7 @@
   Creating FITS file: NGC_2903_FAT_chan.fits
 
 [36m  Elapsed time: 00:00:01 h
-  CPU time:     00:00:08 h[0m
+  CPU time:     00:00:06 h[0m
 
 [36m____________________________________________________________________________[0;1m
 
@@ -272,7 +293,7 @@
   Creating FITS file: NGC_2903_FAT_mask.fits
 
 [36m  Elapsed time: 00:00:01 h
-  CPU time:     00:00:08 h[0m
+  CPU time:     00:00:06 h[0m
 
 [36m____________________________________________________________________________[0;1m
 
@@ -282,10 +303,40 @@
   Writing ASCII file:   NGC_2903_FAT_cat.txt
 
 [36m  Elapsed time: 00:00:01 h
-  CPU time:     00:00:08 h[0m
+  CPU time:     00:00:06 h[0m
 
 [36m____________________________________________________________________________[0;1m
 
  Pipeline finished.
 [0;36m____________________________________________________________________________[0m
 
+In the function cut_cubes at line 275 in file fits_functions.py, In the function check_source at line 54 in file run_functions.py
+        CUT_CUBES: Your input cube is significantly larger than the detected source.
+        CUT_CUBES: we will cut to x-axis = [93,163] y-axis = [81,170]
+        CUT_CUBES: z-axis = [93,163].
+        CUT_CUBES: We will cut the following files:
+        CUT_CUBES: NGC_2903_FAT.fits, Sofia_Output/NGC_2903_FAT_mask.fits, Sofia_Output/NGC_2903_FAT_mom0.fits, Sofia_Output/NGC_2903_FAT_mom1.fits, Sofia_Output/NGC_2903_FAT_mom2.fits, Sofia_Output/NGC_2903_FAT_chan.fits, NGC_2903_FAT_opt.fits
+In the function check_source at line 86 in file run_functions.py
+        CHECK_SOURCE: The source finder found the following center in pixels.
+        CHECK_SOURCE: RA center = 33.757733 with boundaries 9, 61
+        CHECK_SOURCE: DEC center = 46.458157 with boundaries 9, 80
+        CHECK_SOURCE: V_sys center = 53.932368 with boundaries 2, 108
+        CHECK_SOURCE: This should correspond to the WCS coordinates:
+        CHECK_SOURCE: RA center = 142.340328 with boundaries 142.17724089573093,142.48813287666357
+        CHECK_SOURCE: DEC center = 21.718929 with boundaries 21.50934263507087,21.90398904530215
+        CHECK_SOURCE: V_sys center = 548.94 with boundaries 334.46686477525674,772.2355268308166
+In the function check_source at line 98 in file run_functions.py
+        CHECK_SOURCE: In the center we find 0.018611842766404152 Jy/beam at the location:
+        CHECK_SOURCE: x,y,z = 34, 46, 54.
+In the function guess_orientation at line 305 in file read_functions.py, In the function check_source at line 117 in file run_functions.py
+        GUESS_ORIENTATION: We have modified the pa by 180 deg as we found the maximum velocity west of the center.
+In the function check_source at line 139 in file run_functions.py
+        CHECK_SOURCE: From the original Configuration and SoFiA we find:
+        CHECK_SOURCE: The Maximum amount of rings possible 18
+        CHECK_SOURCE: We start with 15 Rings in the model.
+        CHECK_SOURCE: SoFiA found a PA of 202.26 and we use a PA = 201.36 +/- 27.91
+        CHECK_SOURCE: We start with an inclination of 67.13 +/- 2.34        
+        CHECK_SOURCE: SoFiA found a W50 of 368.58 km/s
+        CHECK_SOURCE: We will now check whether the size of the galaxy is sufficient.
+(258)   The source is well defined and we will now setup the initial tirific file
+(262)   The initial def file is written we will now start fitting.
