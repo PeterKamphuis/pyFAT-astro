@@ -94,8 +94,10 @@ def FAT(argv):
     Original_Configuration['MAX_RINGS'] = 0
     Original_Configuration['OPTIMIZED'] = False
     Original_Configuration['OUTER_RINGS_DOUBLED'] = False
-
-
+    Original_Configuration['TIRIFIC_RUNNING'] = False
+    Original_Configuration['CURRENT_RUN_ID'] = 0
+    Original_Configuration['RUN_COUNTER'] = 0
+    Original_Configuration['LIMIT_MODIFIER'] = 1.
     #Then read the input Catalogue
     Full_Catalogue = rf.catalogue(Original_Configuration['CATALOGUE'])
     # Get the longest directory name to format the output directory properly
@@ -245,7 +247,7 @@ def FAT(argv):
 
         try:
             # Process the found source in sofia to set up the proper fitting and make sure source can be fitted
-            SBR_initial,pa,inclination = runf.check_source(Configuration, Fits_Files, Catalogue, cube_hdr)
+            Initial_Parameters = runf.check_source(Configuration, Fits_Files, Catalogue, cube_hdr)
 
             sf.print_log(f'''The source is well defined and we will now setup the initial tirific file
 ''' ,Configuration['OUTPUTLOG'], screen =True)
@@ -254,7 +256,7 @@ def FAT(argv):
                 cf.finish_galaxy(Configuration,maximum_directory_length)
                 continue
             # setup the first def file to be used in the first loop
-            wf.initial_def_file(Configuration, Fits_Files,Tirific_Template, Catalogue, cube_hdr,SBR_initial,pa,inclination)
+            wf.initial_def_file(Configuration, Fits_Files,Tirific_Template, Catalogue, cube_hdr,Initial_Parameters)
             sf.print_log(f'''The initial def file is written and we will now start fitting.
 ''' ,Configuration['OUTPUTLOG'], screen =True)
             while not Configuration['AC1']:

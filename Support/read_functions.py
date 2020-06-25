@@ -269,19 +269,16 @@ def guess_orientation(Configuration,Fits_Files, center = None):
     x1,x2,y1,y2 = obtain_border_pix(hdr,pa,center)
     linex,liney = np.linspace(x1,x2,1000), np.linspace(y1,y2,1000)
     maj_resolution = abs((abs(x2-x1)/1000.)*np.sin(np.radians(pa)))+abs(abs(y2-y1)/1000.*np.cos(np.radians(pa)))
-    maj_profile = ndimage.map_coordinates(map, np.vstack((linex,liney)),order=1)
+    maj_profile = ndimage.map_coordinates(map, np.vstack((liney,linex)),order=1)
     maj_axis =  np.linspace(0,1000*maj_resolution,1000)- (abs((abs(center[0]))*np.sin(np.radians(pa)))+abs(abs(center[1])*np.cos(np.radians(pa))))
     neg_index = np.where(maj_axis < 0.)[0]
     pos_index = np.where(maj_axis > 0.)[0]
 
     avg_profile = []
-    new_axis = []
     for i in range(np.nanmin([neg_index.size,pos_index.size])):
         avg_profile.append(np.nanmean([maj_profile[neg_index[neg_index.size-i-1]],maj_profile[pos_index[i]]]))
-        new_axis.append(maj_profile[pos_index[i]])
-    ring_size_req = Configuration['RING_SIZE']*hdr['BMAJ']/np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])
-
-    SBR_initial = avg_profile[0::int(ring_size_req)]/Configuration['PIX_PER_BEAM'] # Jy/beam*km/s
+    ring_size_req = Configuration['RING_SIZE']*hdr['BMAJ']/(np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])*maj_resolution)
+    SBR_initial = avg_profile[0::int(ring_size_req)]/(np.pi*abs(hdr['BMAJ']*3600.*hdr['BMIN']*3600.)/(4.*np.log(2.))) # Jy*km/s
 
     #We need to know which is the approaching side and which is receding
 

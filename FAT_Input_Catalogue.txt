@@ -10,5 +10,5 @@ number|distance|directoryname|cubename|basename
 
 Preprocessed Sofia2 output should be present in the galaxy fitting directory in a directory called Sofia_Output
 Please note that Fat will always fit the brightest source in the sofia catalogue. The best way to make sure that the right object is fitted is to present a catalogue with a single object.
-
+If the distance is -1 it will be inferred from the VSYS through a hubble flow. the minimum distance is 0.5 Mpc to avoid run away arguments
 The header lines are important for FAT to recognize the correct column. Only their order can be changed.

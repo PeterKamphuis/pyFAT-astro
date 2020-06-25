@@ -371,6 +371,11 @@ def sbr_limits(Configuration,hdr, systemic= 100.):
     sbr_ring_limits=9e-4*(ringarea/beamsolid)**(-0.82)*ratio
     if ringarea[0] == 0.:
          sbr_ring_limits[0]=0.
+    if len(Configuration['LIMIT_MODIFIER']) == 1:
+        sbr_ring_limits= sbr_ring_limits*Configuration['LIMIT_MODIFIER']
+    else:
+        sbr_ring_limits=[x*y for x,y in zip(sbr_ring_limits,Configuration['LIMIT_MODIFIER'])]
+
     return radii,sbr_ring_limits
 
 
@@ -449,6 +454,21 @@ set_limits.__doc__ = '''
 ;
 
 '''
+#simple function keep track of how to modify the edge limits
+def set_limit_modifier(Configuration,Inclination):
+    modifier_list = []
+    for inc in Inclination:
+        if 40 < inc < 50:
+            modifier_list.append(set_limits(1.+(50-(Initial_Parameters['INCL'][0])*0.05),1,2.5))
+        elif Initial_Parameters['INCL'][0] < 40:
+            modifier_list.append(set_limits(np.sin(np.radians(75.))/np.sin(np.radians(Initial_Parameters['INCL'][0]))),1.,2.5)
+        else:
+            modifier_list.append(1.)
+    if Configuration['OUTER_RINGS_DOUBLED']:
+        if len(modifier_list) > 10:
+            modifier_list[10:]= np.sqrt(modifier_list[10:])
+
+    Configuration['LIMIT_MODIFIER'] = np.array(modifier_list,dtype=float)
 
 def set_rings(Configuration,hdr):
     if Configuration['OUTER_RINGS_DOUBLED']:

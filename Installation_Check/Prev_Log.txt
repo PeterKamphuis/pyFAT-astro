@@ -1,6 +1,6 @@
-(156)   This file is a log of the fitting process run at 2020-06-24 18:32:22.940805.
+(158)   This file is a log of the fitting process run at 2020-06-25 13:36:36.881581.
         This is version pyFAT 1.0.0 of the program.
-(184)   We are in loop 0. This is catalogue number 0 and the directory ./.In the function cleanup at line 67 in file clean_functions.py
+(186)   We are in loop 0. This is catalogue number 0 and the directory ./.In the function cleanup at line 67 in file clean_functions.py
         CLEANUP: We are cleaning the following directories:
         CLEANUP: Optimized,Intermediate,Finalmodel,No_Warp,Moments,PV-Diagrams,Sofia_Output,Def_Files
         CLEANUP: and the following files:
@@ -9,39 +9,39 @@ In the function clean_header at line 64 in file fits_functions.py, In the functi
         CLEAN_HEADER: The channels in your input cube are in km/s. This sometimes leads to problems with wcs lib, hence we change it to m/s.'
 In the function clean_header at line 122 in file fits_functions.py, In the function create_fat_cube at line 189 in file fits_functions.py
         CLEAN_HEADER: Your cube has a significant history attached we are removing it for easier interpretation.
-In the function prep_cube at line 605 in file fits_functions.py, In the function create_fat_cube at line 190 in file fits_functions.py
+In the function prep_cube at line 604 in file fits_functions.py, In the function create_fat_cube at line 190 in file fits_functions.py
         PREPROCESSING: Your cube contains values exactly 0. If this is padding these should be blanks.
         PREPROCESSING: We have changed them to blanks.
-In the function prep_cube at line 658 in file fits_functions.py, In the function create_fat_cube at line 190 in file fits_functions.py
+In the function prep_cube at line 657 in file fits_functions.py, In the function create_fat_cube at line 190 in file fits_functions.py
         PREPROCESSING: We are cutting the cube as clearly the noise statistics are off.
         PREPROCESSING: Noise in the first channel is 0.007502617780119181
         PREPROCESSING: Noise in the last channel is 0.0027553963009268045
         PREPROCESSING: Noise in the corners is 0.003271019086241722
-In the function prep_cube at line 658 in file fits_functions.py, In the function create_fat_cube at line 190 in file fits_functions.py
+In the function prep_cube at line 657 in file fits_functions.py, In the function create_fat_cube at line 190 in file fits_functions.py
         PREPROCESSING: We are cutting the cube as clearly the noise statistics are off.
         PREPROCESSING: Noise in the first channel is 0.004452874418348074
         PREPROCESSING: Noise in the last channel is 0.0027553963009268045
         PREPROCESSING: Noise in the corners is 0.0032157879322767258
-In the function prep_cube at line 658 in file fits_functions.py, In the function create_fat_cube at line 190 in file fits_functions.py
+In the function prep_cube at line 657 in file fits_functions.py, In the function create_fat_cube at line 190 in file fits_functions.py
         PREPROCESSING: We are cutting the cube as clearly the noise statistics are off.
         PREPROCESSING: Noise in the first channel is 0.004038029350340366
         PREPROCESSING: Noise in the last channel is 0.0027553963009268045
         PREPROCESSING: Noise in the corners is 0.0031998860649764538
-In the function prep_cube at line 704 in file fits_functions.py, In the function create_fat_cube at line 190 in file fits_functions.py
+In the function prep_cube at line 703 in file fits_functions.py, In the function create_fat_cube at line 190 in file fits_functions.py
         PREPROCESSING: Your cube had values below -10*sigma. If you do not have a central absorption source there is something seriously wrong with the cube.
         PREPROCESSING: We blanked these values.
 In the function create_fat_cube at line 195 in file fits_functions.py
         CREATE_FAT_CUBE: We are writing a FAT modfied cube to be used for the fitting. This cube is called /home/peter/FAT_Main/FAT_Source_Dev/Installation_Check/NGC_2903_FAT.fits
-In the function optimized_cube at line 540 in file fits_functions.py, In the function create_fat_cube at line 199 in file fits_functions.py
+In the function optimized_cube at line 539 in file fits_functions.py, In the function create_fat_cube at line 199 in file fits_functions.py
         OPTIMIZED_CUBE: Your input cube has 2.0 pixels along the minor FWHM.
         OPTIMIZED_CUBE: You requested 1 therefore we regridded the cube into a new cube.
         OPTIMIZED_CUBE: We are using the pixel size of 0.01342092461328889.
-In the function sofia at line 933 in file run_functions.py
+In the function sofia at line 272 in file run_functions.py
         RUN_SOFIA: Adding an extra kernel scale as the cube is more than 30 beams across.
-In the function sofia at line 940 in file run_functions.py
+In the function sofia at line 279 in file run_functions.py
         RUN_SOFIA: Adding an extra kernel scale as the cube has more than 52 channels.
-In the function sofia at line 948 in file run_functions.py
-        RUN_SOFIA: Running SoFiA.In the function sofia at line 951 in file run_functions.py
+In the function sofia at line 287 in file run_functions.py
+        RUN_SOFIA: Running SoFiA.In the function sofia at line 290 in file run_functions.py
         [36m____________________________________________________________________________[0;1m
 
  Pipeline started
@@ -50,7 +50,7 @@ In the function sofia at line 948 in file run_functions.py
   Using:    Source Finding Application (SoFiA)
   Version:  2.1.1 (15-Apr-2020)
   CPU:      8 cores available
-  Time:     Wed Jun 24 18:32:23 2020
+  Time:     Thu Jun 25 13:36:37 2020
 
 [36m____________________________________________________________________________[0;1m
 
@@ -210,13 +210,13 @@ In the function sofia at line 948 in file run_functions.py
   Smoothing kernel:  [9.0] x [6]
   Noise level:       2.812e-04
 
-[36m  Elapsed time: 00:00:01 h
+[36m  Elapsed time: 00:00:00 h
   CPU time:     00:00:05 h[0m
 
   Smoothing kernel:  [9.0] x [12]
   Noise level:       2.533e-04
 
-[36m  Elapsed time: 00:00:01 h
+[36m  Elapsed time: 00:00:00 h
   CPU time:     00:00:05 h[0m
 
   Smoothing kernel:  [9.0] x [16]
@@ -328,15 +328,11 @@ In the function check_source at line 86 in file run_functions.py
 In the function check_source at line 98 in file run_functions.py
         CHECK_SOURCE: In the center we find 0.018611842766404152 Jy/beam at the location:
         CHECK_SOURCE: x,y,z = 34, 46, 54.
-In the function guess_orientation at line 305 in file read_functions.py, In the function check_source at line 117 in file run_functions.py
-        GUESS_ORIENTATION: We have modified the pa by 180 deg as we found the maximum velocity west of the center.
-In the function check_source at line 139 in file run_functions.py
-        CHECK_SOURCE: From the original Configuration and SoFiA we find:
-        CHECK_SOURCE: The Maximum amount of rings possible 18
-        CHECK_SOURCE: We start with 15 Rings in the model.
-        CHECK_SOURCE: SoFiA found a PA of 202.26 and we use a PA = 201.36 +/- 27.91
-        CHECK_SOURCE: We start with an inclination of 67.13 +/- 2.34        
-        CHECK_SOURCE: SoFiA found a W50 of 368.58 km/s
-        CHECK_SOURCE: We will now check whether the size of the galaxy is sufficient.
-(258)   The source is well defined and we will now setup the initial tirific file
-(262)   The initial def file is written we will now start fitting.
+In the function check_source at line 121 in file run_functions.py
+        CHECK_SOURCE: We could not establish proper initial estimates from the moment maps.
+         None
+In the function finish_galaxy at line 170 in file clean_functions.py
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        FAT did not run the full fitting routines on this galaxy.
+        Please check this log and output_catalogue carefully for what went wrong.
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
