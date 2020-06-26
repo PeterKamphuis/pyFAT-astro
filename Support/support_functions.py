@@ -10,6 +10,7 @@ import os
 import traceback
 import numpy as np
 import copy
+import warnings
 
 class SupportRunError(Exception):
     pass
@@ -367,8 +368,9 @@ def sbr_limits(Configuration,hdr, systemic= 100.):
                          [np.pi*(((y+z)/2.)**2-((y+x)/2.)**2) for x,y,z in zip(radii,radii[1:],radii[2:])],
                          [np.pi*((radii[-1]+0.5*(radii[-1]-radii[-2]))**2-((radii[-1]+radii[-2])/2.)**2)]
                          ))
-
-    sbr_ring_limits=9e-4*(ringarea/beamsolid)**(-0.82)*ratio
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        sbr_ring_limits=9e-4*(ringarea/beamsolid)**(-0.82)*ratio
     if ringarea[0] == 0.:
          sbr_ring_limits[0]=0.
     if len(Configuration['LIMIT_MODIFIER']) == 1:
@@ -456,12 +458,15 @@ set_limits.__doc__ = '''
 '''
 #simple function keep track of how to modify the edge limits
 def set_limit_modifier(Configuration,Inclination):
+
+    if not Inclination.shape:
+        Inclination = [Inclination]
     modifier_list = []
     for inc in Inclination:
         if 40 < inc < 50:
-            modifier_list.append(set_limits(1.+(50-(Initial_Parameters['INCL'][0])*0.05),1,2.5))
-        elif Initial_Parameters['INCL'][0] < 40:
-            modifier_list.append(set_limits(np.sin(np.radians(75.))/np.sin(np.radians(Initial_Parameters['INCL'][0]))),1.,2.5)
+            modifier_list.append(set_limits(1.+(50-(inc)*0.05),1,2.5))
+        elif inc < 40:
+            modifier_list.append(set_limits(np.sin(np.radians(75.))/np.sin(np.radians(inc))),1.,2.5)
         else:
             modifier_list.append(1.)
     if Configuration['OUTER_RINGS_DOUBLED']:
@@ -471,16 +476,17 @@ def set_limit_modifier(Configuration,Inclination):
     Configuration['LIMIT_MODIFIER'] = np.array(modifier_list,dtype=float)
 
 def set_rings(Configuration,hdr):
+    bmaj = float(hdr['BMAJ'])*3600.
     if Configuration['OUTER_RINGS_DOUBLED']:
-        radii = [0,1./5*hdr['BMAJ']*3600.]
-        radii = np.hstack((radii,(np.linspace(hdr['BMAJ']*Configuration['RING_SIZE']*3600.,hdr['BMAJ']*3600*10.*Configuration['RING_SIZE'], \
-                                        10)+1./5*hdr['BMAJ']*3600.)))
-        radii = np.hstack((radii,(np.linspace(hdr['BMAJ']*3600*11.*Configuration['RING_SIZE'],hdr['BMAJ']*3600 \
-                                      *Configuration['NO_RINGS']*Configuration['RING_SIZE'],int((Configuration['NO_RINGS']-9)/2.))+1./5*hdr['BMAJ']*3600.)))
+        radii = [0.,1./5.*bmaj]
+        radii = np.hstack((radii,(np.linspace(bmaj*Configuration['RING_SIZE'],bmaj*10.*Configuration['RING_SIZE'], \
+                                        10)+1./5*bmaj)))
+        radii = np.hstack((radii,(np.linspace(bmaj*11.*Configuration['RING_SIZE'],bmaj \
+                                      *Configuration['NO_RINGS']*Configuration['RING_SIZE'],int((Configuration['NO_RINGS']-9)/2.))+1./5*bmaj)))
     else:
-        radii = [0,1./5*hdr['BMAJ']*3600.]
-        radii = np.hstack((radii,(np.linspace(hdr['BMAJ']*Configuration['RING_SIZE']*3600.,hdr['BMAJ']*3600*Configuration['NO_RINGS']*Configuration['RING_SIZE'], \
-                                        Configuration['NO_RINGS'])+1./5*hdr['BMAJ']*3600.)))
+        radii = [0.,1./5.*bmaj]
+        radii = np.hstack((radii,(np.linspace(bmaj*Configuration['RING_SIZE'],bmaj*Configuration['NO_RINGS']*Configuration['RING_SIZE'], \
+                                        Configuration['NO_RINGS'])+1./5.*bmaj)))
     return np.array(radii,dtype = float)
 
 

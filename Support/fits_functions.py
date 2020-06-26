@@ -393,7 +393,9 @@ def extract_pv(cube_in,angle,center=[-1,-1,-1],finalsize=[-1,-1],convert=-1):
         center = [hdr['CRVAL1'],hdr['CRVAL2'],hdr['CRVAL3']]
         xcenter,ycenter,zcenter = hdr['CRPIX1'],hdr['CRPIX2'],hdr['CRPIX3']
     else:
-        coordinate_frame = WCS(hdr)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            coordinate_frame = WCS(hdr)
         xcenter,ycenter,zcenter = coordinate_frame.wcs_world2pix(center[0], center[1], center[2], 0.)
 
     nz, ny, nx = data.shape

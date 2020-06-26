@@ -5,7 +5,6 @@ from support_functions import Proper_Dictionary,print_log
 from astropy.io import fits
 from scipy import ndimage
 
-import matplotlib.pyplot as plt
 import os
 import copy
 import numpy as np

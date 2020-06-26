@@ -20,7 +20,7 @@ import os
 import subprocess
 import numpy as np
 import traceback
-
+import warnings
 
 
 def central_converge(Configuration, Fits_Files,Tirific_Template, Catalogue):
@@ -67,7 +67,9 @@ def check_source(Configuration, Fits_Files, Catalogue, header):
     header = Cube[0].header
 
     Configuration['CHANNEL_WIDTH'] = header['CDELT3']/1000.
-    cube_wcs = WCS(header)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        cube_wcs = WCS(header)
     # convert the boundaries to real coordinates
     ralow,declow,vellow = cube_wcs.wcs_pix2world(x_min,y_min,z_min,0.)
     rahigh,dechigh,velhigh = cube_wcs.wcs_pix2world(x_max,y_max,z_max,0.)
@@ -197,7 +199,6 @@ def check_source(Configuration, Fits_Files, Catalogue, header):
 
     if Configuration['MAPS_OUTPUT'] < 4:
         # extract a PV-Diagram
-        print(z_max,z_min)
         PV =extract_pv(Cube, pa[0], center=[ra,dec,v_app], convert = 1000.,
                        finalsize = [int(round(maj_extent/np.mean([abs(header['CDELT1']),abs(header['CDELT2'])])*1.25+header['NAXIS1']*0.2)),
                                     int(round(z_max-z_min)+10.)])
@@ -213,7 +214,7 @@ def check_source(Configuration, Fits_Files, Catalogue, header):
     Initial_Parameters['VROT'] = [max_vrot/1000.,max_vrot_dev/1000.]
     Initial_Parameters['PA'] = pa
     Initial_Parameters['INCL'] = inclination
-
+    Initial_Parameters['FLUX'] = [f_sum,f_sum_err]
     return Initial_Parameters
 
 check_source.__doc__='''
@@ -284,7 +285,7 @@ def sofia(Configuration, Fits_Files, hdr, supportdir):
         clean_before_sofia(Configuration)
         sofia_template['scfind.threshold'] = str(threshold)
         wf.sofia(sofia_template,'sofia_input.par')
-        print_log("RUN_SOFIA: Running SoFiA.",Configuration['OUTPUTLOG'],screen = True)
+        print_log("RUN_SOFIA: Running SoFiA. \n",Configuration['OUTPUTLOG'],screen = True)
         sfrun = subprocess.Popen(["sofia2",'sofia_input.par'], stdout = subprocess.PIPE, stderr = subprocess.PIPE)
         sofia_run, sofia_warnings_are_annoying = sfrun.communicate()
         print_log(sofia_run.decode("utf-8"), Configuration['OUTPUTLOG'])
