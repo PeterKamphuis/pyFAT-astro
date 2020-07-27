@@ -1,23 +1,27 @@
 #!/usr/local/bin/ python3
 # This module contains a set of functions and classes that are used in FAT to read input files
 
-from support_functions import Proper_Dictionary,print_log
+from support_functions import Proper_Dictionary,print_log,convertRADEC
 from astropy.io import fits
 from scipy import ndimage
 
 import os
 import copy
 import numpy as np
+import traceback
 #Function to read a FAT input Catalogue
 class BadCatalogueError(Exception):
     pass
-
+class BadConfigurationError(Exception):
+    pass
+class NoConfigFile(Exception):
+    pass
 def catalogue(filename):
     Catalogue = Proper_Dictionary({})
     tmpfile = open(filename,'r')
     #Define the exsiting catalogue input()
     input_columns = [x.strip().upper() for x in tmpfile.readline().split('|')]
-    Catalogue['ENTRIES'] = ['COLUMNS']
+    Catalogue['ENTRIES'] = ['ENTRIES']
     Catalogue['ENTRIES'].extend(input_columns)
     for key in input_columns:
         Catalogue[key] = []
@@ -29,6 +33,8 @@ def catalogue(filename):
                 Catalogue[key].append(float(input[i]))
             else:
                 Catalogue[key].append(input[i])
+    if 'NUMBER' in Catalogue['ENTRIES']:
+        Catalogue['NUMBER'] = np.array(Catalogue['NUMBER'],dtype=int)
     return Catalogue
 catalogue.__doc__ ='''
 ;+
@@ -70,9 +76,20 @@ catalogue.__doc__ ='''
 
 #Function to read FAT configuration file into a dictionary
 def config_file(input_parameters, start_dir):
-    tmpfile = open(input_parameters.configfile, 'r')
+    No_File = True
+    while No_File:
+        try:
+            tmpfile = open(input_parameters.configfile, 'r')
+            No_File = False
+        except:
+            print(traceback.print_exc())
+            input_parameters.configfile = input('''
+                        You have provided a config file but it can't be found.
+                        If you want to provide a config file please give the correct name.
+                        Else press CTRL-C to abort.
+                ''')
     Configuration = Proper_Dictionary({})
-    boolean_keys = ['NEW_OUTPUT', 'HANNING','FIX_INCLINATION','FIX_PA','FIX_SDIS','WARP_OUTPUT']
+    boolean_keys = ['NEW_OUTPUT', 'HANNING','FIX_INCLINATION','FIX_PA','FIX_SDIS','FIX_Z0','WARP_OUTPUT']
     string_keys = ['OUTPUTLOG', 'OUTPUTCATALOGUE','MAINDIR','CATALOGUE']
     integer_keys = ['STARTGALAXY','ENDGALAXY','MAPS_OUTPUT','OPT_PIXELBEAM','FINISHAFTER']
     # Separate the keyword names
@@ -103,6 +120,10 @@ def config_file(input_parameters, start_dir):
     #if we are checking the installation then the maindir, outputcatalogue and
     #Log go into the original_dir+installation_check.
     if input_parameters.installation_check:
+        if Configuration['CATALOGUE'] != 'Installation_Check/FAT_Input_Catalogue.txt' or \
+           Configuration['MAINDIR'] != 'Installation_Check/' or \
+           Configuration['OUTPUTCATALOGUE'] != 'Installation_Check/Output_N2903.txt':
+           raise BadConfigurationError('You can not modify the Installation Check input. It is solely for checking the Installation. Aborting')
         Configuration['CATALOGUE'] = start_dir+'/Installation_Check/FAT_Input_Catalogue.txt'
         Configuration['MAINDIR'] = start_dir+'/Installation_Check/'
         Configuration['OUTPUTCATALOGUE'] = start_dir+'/Installation_Check/Output_N2903.txt'
@@ -132,7 +153,7 @@ def config_file(input_parameters, start_dir):
             Configuration['OUTPUTCATALOGUE'] = check_dir+'/'+output_catalogue_dir[-1]
 
 
-    required_configuration_keys = ['FIX_INCLINATION','FIX_PA','FIX_SDIS','HANNING','STARTGALAXY', 'ENDGALAXY', 'TESTING', 'START_POINT','RING_SIZE', 'FINISHAFTER', 'CATALOGUE', 'MAINDIR', 'OUTPUTCATALOGUE', 'OUTPUTLOG', 'NEW_OUTPUT', 'OPT_PIXELBEAM', 'MAPS_OUTPUT','WARP_OUTPUT']
+    required_configuration_keys = ['FIX_INCLINATION','FIX_PA','FIX_SDIS','FIX_Z0','HANNING','STARTGALAXY', 'ENDGALAXY', 'TESTING', 'START_POINT','RING_SIZE', 'FINISHAFTER', 'CATALOGUE', 'MAINDIR', 'OUTPUTCATALOGUE', 'OUTPUTLOG', 'NEW_OUTPUT', 'OPT_PIXELBEAM', 'MAPS_OUTPUT','WARP_OUTPUT']
 
     for key in required_configuration_keys:
         if key not in Configuration:
@@ -158,6 +179,8 @@ def config_file(input_parameters, start_dir):
                 Configuration[key] = False
             if key == 'FIX_SDIS':
                 Configuration[key] = False
+            if key == 'FIX_Z0':
+                Configuration[key] = True
             if key == 'OPT_PIXELBEAM':
                 Configuration[key] = 4
             if key == 'MAPS_OUTPUT': # Previously called bookkeeping
@@ -216,7 +239,7 @@ def guess_orientation(Configuration,Fits_Files, center = None):
 
     Image = fits.open(Configuration['FITTING_DIR']+'Sofia_Output/'+Fits_Files['MOMENT0'],\
             uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
-    map = Image[0].data/1000.
+    map = Image[0].data
     hdr = Image[0].header
     Image.close()
     if not center:
@@ -278,7 +301,7 @@ def guess_orientation(Configuration,Fits_Files, center = None):
         avg_profile.append(np.nanmean([maj_profile[neg_index[neg_index.size-i-1]],maj_profile[pos_index[i]]]))
     ring_size_req = Configuration['RING_SIZE']*hdr['BMAJ']/(np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])*maj_resolution)
     SBR_initial = avg_profile[0::int(ring_size_req)]/(np.pi*abs(hdr['BMAJ']*3600.*hdr['BMIN']*3600.)/(4.*np.log(2.))) # Jy*km/s
-
+    SBR_initial[0] = SBR_initial[1]
     #We need to know which is the approaching side and which is receding
 
     Image = fits.open(Configuration['FITTING_DIR']+'Sofia_Output/'+Fits_Files['MOMENT1'],\
@@ -334,8 +357,99 @@ guess_orientation.__doc__ ='''
 ;
 ;
 '''
+# load the basic info file to get the Sofia FAT Initial_Estimates
+def load_basicinfo(filename, Variables = ['RA','DEC','VSYS','PA','Inclination','Max VRot','V_mask','Tot FLux','D_HI','Distance','HI_Mass' ,'D_HI' ], unpack = True):
+    outputarray = np.zeros((2,len(Variables)), dtype=float)
+    try:
+        tmp = open(filename, 'r')
+    except FileNotFoundError:
+        print("That Basic info file does not exist. Returning empty array.")
+        if unpack:
+            return (*outputarray.T,)
+        else:
+            return outputarray
+    fileline = tmp.readlines()
+    Var_inFile = [f.strip() for f in fileline[3].split('  ') if f != '']
+    del Var_inFile[0]
+    invalues = [f.strip() for f in fileline[6].split('  ') if f != '']
+    for i,var in enumerate(Variables):
+        if var == 'RA' or var == 'DEC':
+            tmp_str = invalues[Var_inFile.index('RA')].split('+/-')
+            tmp_str2 = invalues[Var_inFile.index('DEC')].split('+/-')
+            RA, DEC = convertRADEC(tmp_str[0],tmp_str2[0],invert=True)
+            if var == 'RA':
+                outputarray[:,i] = [RA,float(tmp_str[1])]
+            if var == 'DEC':
+                outputarray[:,i] = [DEC,float(tmp_str2[1])]
+        else:
+            outputarray[:,i] = invalues[Var_inFile.index(var)].split('+/-')
+    if unpack:
+        return (*outputarray.T,)
+    else:
+        return outputarray
 
 
+#Function for loading the variables of a tirific def file into a set of variables to be used
+def load_template(Template,Variables = ['BMIN','BMAJ','BPA','RMS','DISTANCE','NUR','RADI','VROT',
+                 'Z0', 'SBR', 'INCL','PA','XPOS','YPOS','VSYS','SDIS','VROT_2',  'Z0_2','SBR_2',
+                 'INCL_2','PA_2','XPOS_2','YPOS_2','VSYS_2','SDIS_2','CONDISP','CFLUX','CFLUX_2'],
+                 unpack = True  ):
+    Variables = np.array([e.upper() for e in Variables],dtype=str)
+    numrings = int(Template['NUR'])
+    outputarray=np.zeros((numrings,len(Variables)),dtype=float)
+    counter = 0
+    for var in Variables:
+        tmp =  np.array(Template[var].rsplit(),dtype=float)
+        outputarray[0:len(tmp),counter] = tmp[0:len(tmp)]
+        counter +=1
+
+    if unpack:
+        return (*outputarray.T,)
+    else:
+        return outputarray
+
+
+
+#Function for loading the variables of a tirific def file into a set of variables to be used
+def load_tirific(filename,Variables = ['BMIN','BMAJ','BPA','RMS','DISTANCE','NUR','RADI','VROT',
+                 'Z0', 'SBR', 'INCL','PA','XPOS','YPOS','VSYS','SDIS','VROT_2',  'Z0_2','SBR_2',
+                 'INCL_2','PA_2','XPOS_2','YPOS_2','VSYS_2','SDIS_2','CONDISP','CFLUX','CFLUX_2'],
+                 unpack = True  ):
+    Variables = np.array([e.upper() for e in Variables],dtype=str)
+
+    tmp = open(filename, 'r')
+
+    numrings = [int(e.split('=')[1].strip()) for e in tmp.readlines() if e.split('=')[0].strip().upper() == 'NUR']
+    tmp.seek(0)
+    outputarray=np.zeros((numrings[0],len(Variables)),dtype=float)
+    unarranged = tmp.readlines()
+    # Separate the keyword names
+    for line in unarranged:
+        var_concerned = str(line.split('=')[0].strip().upper())
+        if len(var_concerned) < 1:
+            var_concerned = 'xxx'
+        varpos = np.where(Variables == var_concerned)[0]
+        if varpos.size > 0:
+            tmp =  np.array(line.split('=')[1].rsplit(),dtype=float)
+            if len(outputarray[:,0]) < len(tmp):
+                tmp_out=outputarray
+                outputarray = np.zeros((len(tmp), len(Variables)), dtype=float)
+                outputarray[0:len(tmp_out),:] = tmp_out
+            outputarray[0:len(tmp),int(varpos)] = tmp[0:len(tmp)]
+        else:
+            if var_concerned[0] == '#':
+                varpos = np.where(var_concerned[2:] == Variables)[0]
+                if varpos.size > 0:
+                    tmp = np.array(line.split('=')[1].rsplit(),dtype=float)
+                    if len(outputarray[:, 0]) < len(tmp):
+                        tmp_out = outputarray
+                        outputarray = np.zeros((len(tmp), len(Variables)), dtype=float)
+                        outputarray[0:len(tmp_out), :] = tmp_out
+                    outputarray[0:len(tmp),int(varpos)] = tmp[:]
+    if unpack:
+        return (*outputarray.T,)
+    else:
+        return outputarray
 
 def obtain_ratios(map, hdr, center, angles):
     ratios = []
@@ -449,14 +563,6 @@ def obtain_border_pix(hdr,angle,center):
             y2 = hdr['NAXIS2']
 
     return x1,x2,y1,y2
-
-
-
-
-
-
-
-
 
 # function to read the sofia catalogue
 def sofia_catalogue(Configuration, Variables =['name','x','x_min','x_max','y','y_min','y_max','z','z_min','z_max','ra',\

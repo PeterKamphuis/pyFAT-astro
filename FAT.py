@@ -65,19 +65,14 @@ def FAT(argv):
     import exist_check as ec
     #functions that write files
     import write_functions as wf
+    from modify_template import write_new_to_template
     #Check the existence of the config file and read it
-    read_succes = False
-    while not read_succes:
-        try:
-            Original_Configuration = rf.config_file(input_parameters,start_dir)
-            read_succes = True
-        except:
-            print(traceback.print_exc())
-            input_parameters.configfile = input('''
-                    You have provided a config file but it can't be found.
-                    If you want to provide a config file please give the correct name.
-                    Else press CTRL-C to abort.
-            ''')
+
+    try:
+        Original_Configuration = rf.config_file(input_parameters,start_dir)
+    except Exception as e:
+        print(e)
+        exit()
     # Add the starting directory to the Configuration
     Original_Configuration['START_DIR'] = start_dir
     # Also add the timing input and some other recurring parameters
@@ -86,10 +81,14 @@ def FAT(argv):
     # if the number of beam across the major axis is less than this size we will only fit a flat disc
     Original_Configuration['MINIMUM_WARP_SIZE'] = 6
     Original_Configuration['FINAL_COMMENT'] = "This fitting stopped with an unregistered exit."
-    Original_Configuration['CONVERGENCE_1'] = 'Not converged'
-    Original_Configuration['AC1'] = 0
-    Original_Configuration['AC2'] = 0
-
+    Original_Configuration['PREP_END_TIME'] = 'Not completed'
+    Original_Configuration['CC_END_TIME'] = 'Not completed'
+    Original_Configuration['EC_END_TIME'] = 'Not completed'
+    Original_Configuration['CC_LOOPS'] = 0
+    Original_Configuration['EC_LOOPS'] = 0
+    Original_Configuration['CC_ACCEPTED'] = False
+    Original_Configuration['EC_ACCEPTED'] = False
+    Original_Configuration['CURRENT_STAGE'] = 'initial'
     #Add some tracking paramaters
     Original_Configuration['MAX_RINGS'] = 0
     Original_Configuration['OPTIMIZED'] = False
@@ -122,13 +121,16 @@ def FAT(argv):
         timing_result = open(Original_Configuration['MAINDIR']+'/Timing_Result.txt','w')
         timing_result.write("This file contains the system start and end times for the fitting of each galaxy")
         timing_result.close()
-    #  Negative start galaxy is not allowed
-    if Original_Configuration['STARTGALAXY'] < 0:
+    #if start_galaxy not negative then it is catalogue ID
+    if 0 <= Original_Configuration['STARTGALAXY']:
+        Original_Configuration['STARTGALAXY'] = np.where(Original_Configuration['STARTGALAXY'] == Full_Catalogue['NUMBER'])[0][0]
+    else:
         Original_Configuration['STARTGALAXY'] = 0
     # If the end galaxy is -1 fit the whole catalogue
     if Original_Configuration['ENDGALAXY'] == -1:
         Original_Configuration['ENDGALAXY'] = len(Full_Catalogue['NUMBER'])
     # start the main fitting loop
+
     for i in range(Original_Configuration['STARTGALAXY'],Original_Configuration['ENDGALAXY']):
         # First check the starttime
         Catalogue = {}
@@ -139,6 +141,11 @@ def FAT(argv):
         Configuration['DISTANCE'] = Catalogue['DISTANCE']
         doubled = 0
         ini_mode_factor =25
+        # We initially set the variations to fixed for all parameters
+        Configuration['FIX_INCLINATION'] = True
+        Configuration['FIX_SDIS'] = True
+        Configuration['FIX_PA'] = True
+        Configuration['FIX_Z0'] = True
         #Make a dictionary for the fitsfiles we use
         Fits_Files = {'ORIGINAL_CUBE': f"{Catalogue['CUBENAME']}.fits"}
 
@@ -146,15 +153,22 @@ def FAT(argv):
         log_statement = f'''This file is a log of the fitting process run at {Configuration ['START_TIME']}.
 {"":8s}This is version {__version__} of the program.
 '''
+
         # Adapt configuration to hold some specifics to this galaxy
         if Configuration['OUTPUTLOG']:
             if Catalogue['DIRECTORYNAME'] == './':
-                Configuration['OUTPUTLOG'] = f"{Configuration['MAINDIR']}/{Configuration['OUTPUTLOG']}"
+                if not os.path.isdir(f"{Configuration['MAINDIR']}Logs/"):
+                    os.mkdir(f"{Configuration['MAINDIR']}Logs/")
+                Configuration['OUTPUTLOG'] = f"{Configuration['MAINDIR']}Logs/{Configuration['OUTPUTLOG']}"
+                Configuration['LOG_DIR'] = f"{Configuration['MAINDIR']}Logs/"
             else:
-                Configuration['OUTPUTLOG'] = f"{Configuration['MAINDIR']}/{Catalogue['DIRECTORYNAME']}/{Configuration['OUTPUTLOG']}"
+                if not os.path.isdir(f"{Configuration['MAINDIR']}Logs/"):
+                    os.mkdir(f"{Configuration['MAINDIR']}{Catalogue['DIRECTORYNAME']}/Logs/")
+                Configuration['OUTPUTLOG'] = f"{Configuration['MAINDIR']}{Catalogue['DIRECTORYNAME']}/Logs/{Configuration['OUTPUTLOG']}"
+                Configuration['LOG_DIR'] = f"{Configuration['MAINDIR']}{Catalogue['DIRECTORYNAME']}/Logs/"
             #If it exists move the previous Log
             if os.path.exists(Configuration['OUTPUTLOG']):
-                os.rename(Configuration['OUTPUTLOG'],f"{Configuration['MAINDIR']}/{Catalogue['DIRECTORYNAME']}/Prev_Log.txt")
+                os.rename(Configuration['OUTPUTLOG'],f"{Configuration['LOG_DIR']}/Previous_Log.txt")
         sf.print_log(log_statement,Configuration['OUTPUTLOG'])
 
         # Adapt configuration to hold some specifics to this galaxy
@@ -185,9 +199,9 @@ def FAT(argv):
         log_statement = f'''We are in loop {i}. This is catalogue number {Catalogue['NUMBER']} and the directory {Catalogue['DIRECTORYNAME']}.'''
         sf.print_log(log_statement,Configuration['OUTPUTLOG'], screen =True)
         #Run cleanup
-        test = 1
-        if test != 0:
-            cf.cleanup(Configuration)
+
+
+        cf.cleanup(Configuration,Fits_Files)
 
         # Check if the input cube exists
         if not os.path.exists(f"{Configuration['FITTING_DIR']}/{Fits_Files['ORIGINAL_CUBE']}"):
@@ -214,60 +228,117 @@ def FAT(argv):
                 continue
         # We open the header of the fitting cube and get some parameters and make a header wcs structure
         cube_hdr = fits.getheader(f"{Configuration['FITTING_DIR']}/{Fits_Files['FITTING_CUBE']}")
+        Configuration['NOISE'] = cube_hdr['FATNOISE']
         # We write the pixels per beam info to Configuration such that it is easily accesible
         beamarea=(np.pi*abs(cube_hdr['BMAJ']*cube_hdr['BMIN']))/(4.*np.log(2.))
         Configuration['PIX_PER_BEAM'] = beamarea/(abs(cube_hdr['CDELT1'])*abs(cube_hdr['CDELT2']))
 
         #If we have Sofia Preprocessed Output request make sure it all exists
 
-        if test != 0:
-            if Configuration['START_POINT'] == 3:
-                try:
-                    ec.sofia_output(Configuration,Fits_Files)
-                except Exception as e:
-                    Configuration['FINAL_COMMENT'] = e + 'Please make sure your Sofia input is in the right location'
-                    Configuration['MAPS_OUTPUT'] = 5
-                    cf.finish_galaxy(Configuration,maximum_directory_length)
-                    traceback.print_exc()
-                    continue
-
-            if Configuration['START_POINT'] != 3:
-                # Run sofia2
-                try:
-                    runf.sofia(Configuration, Fits_Files,cube_hdr,input_parameters.supportdir)
-                    # check that all is well
-                    ec.sofia_output(Configuration,Fits_Files)
-                except Exception as e:
-                    Configuration['FINAL_COMMENT'] = e
-                    Configuration['MAPS_OUTPUT'] = 5
-                    cf.finish_galaxy(Configuration,maximum_directory_length)
-                    traceback.print_exc()
-                    continue
+        if Configuration['START_POINT'] == 3:
+            try:
+                ec.sofia_output(Configuration,Fits_Files)
+            except Exception as e:
+                Configuration['FINAL_COMMENT'] = e + 'Please make sure your Sofia input is in the right location'
+                Configuration['MAPS_OUTPUT'] = 5
+                cf.finish_galaxy(Configuration,maximum_directory_length)
+                traceback.print_exc()
+                continue
+        else:
+            # Run sofia2
+            try:
+                runf.sofia(Configuration, Fits_Files,cube_hdr,input_parameters.supportdir)
+                # check that all is well
+                ec.sofia_output(Configuration,Fits_Files)
+            except Exception as e:
+                Configuration['FINAL_COMMENT'] = e
+                Configuration['MAPS_OUTPUT'] = 5
+                cf.finish_galaxy(Configuration,maximum_directory_length)
+                traceback.print_exc()
+                continue
                 # We assume sofia is ran and created the proper files
 
         try:
+            current_run = 'Not Initialized'
             # Process the found source in sofia to set up the proper fitting and make sure source can be fitted
             Initial_Parameters = runf.check_source(Configuration, Fits_Files, Catalogue, cube_hdr)
 
             sf.print_log(f'''The source is well defined and we will now setup the initial tirific file
-''' ,Configuration['OUTPUTLOG'], screen =True)
+''' ,Configuration['OUTPUTLOG'], screen =True, debug = Configuration['DEBUG'])
             if Configuration['FINISHAFTER'] == 0:
                 Configuration['FINAL_COMMENT'] = 'You have chosen to end the fitting after preprocessing and sofia.'
                 cf.finish_galaxy(Configuration,maximum_directory_length)
                 continue
-            # setup the first def file to be used in the first loop
-            wf.initial_def_file(Configuration, Fits_Files,Tirific_Template, Catalogue, cube_hdr,Initial_Parameters)
-            sf.print_log(f'''The initial def file is written and we will now start fitting.
-''' ,Configuration['OUTPUTLOG'], screen =True)
-            while not Configuration['AC1']:
-                Configuration['AC1'] = runf.central_converge(Configuration, Fits_Files,Tirific_Template, Catalogue)
-            while not Configuration['AC2']:
-                Configuration['AC2'] = runf.extent_converge(Configuration, Fits_Files,Tirific_Template, Catalogue)
+            if Configuration['START_POINT'] < 4:
+                # setup the first def file to be used in the first loop
+                wf.initialize_def_file(Configuration, Fits_Files,Tirific_Template, \
+                                        cube_hdr,Initial_Parameters= Initial_Parameters,fit_stage='Centre_Convergence')
+                sf.print_log(f'''The initial def file is written and we will now start fitting.
+    ''' ,Configuration['OUTPUTLOG'], screen =True, debug = Configuration['DEBUG'])
+                Configuration['PREP_END_TIME'] = datetime.now()
+                current_run = 'Not Initialized'
+                # If we have no directory to put the output we create it
+                if not os.path.isdir(Configuration['FITTING_DIR']+'/Centre_Convergence'):
+                    os.mkdir(Configuration['FITTING_DIR']+'/Centre_Convergence')
+                #We skip the first fit atm
+                #Configuration['CC_ACCEPTED'] = True
+                #write_new_to_template(Configuration,f"{Configuration['FITTING_DIR']}Cen_Conv.def", Tirific_Template)
+                #Upto here should be removed for real code
+                while not Configuration['CC_ACCEPTED'] and Configuration['CC_LOOPS'] < 10:
+                    Configuration['CC_LOOPS'] = Configuration['CC_LOOPS']+1
+                    sf.print_log(f'''We are starting loop {Configuration['CC_LOOPS']} of trying to converge the center.
+    ''',Configuration['OUTPUTLOG'],screen =True, debug = Configuration['DEBUG'])
+                    current_run = runf.central_converge(Configuration, Fits_Files,Tirific_Template, Catalogue,current_run,cube_hdr,Initial_Parameters, debug = Configuration['DEBUG'])
+                if Configuration['CC_ACCEPTED']:
+                    sf.print_log(f''' The center has converged and we will adjust the smoothed profile and start to adjust the size of the galaxy.
+    ''',Configuration['OUTPUTLOG'])
+                else:
+                    sf.print_log(f''' We could not find a stable center for the the initial stages. We will now try while adapting the the size of the model.
+    ''',Configuration['OUTPUTLOG'])
 
+                #Then we want to make a smoothed version that can be adapted
+                current_run = runf.fit_smoothed_check(Configuration, Fits_Files,Tirific_Template, Catalogue,current_run,cube_hdr,stage = 'after_cc', fit_stage = 'Centre_Convergence')
+                if Configuration['OPTIMIZED']:
+                    try:
+                        current_run.kill()
+                        Configuration['TIRIFIC_RUNNING'] = False
+                    except AttributeError:
+                        pass
+                    runf.make_full_resolution(Configuration,Tirific_Template,Fits_Files,fit_stage = 'Centre_Convergence')
+            else:
+                current_run = 'Not initialized'
+            Configuration['CC_END_TIME'] = datetime.now()
+            #If we only care about a centrally converged galaxy we stop here
+
+            # if our current run is not broken then we want to stop it
+            try:
+                current_run.kill()
+                Configuration['TIRIFIC_RUNNING'] = False
+            except AttributeError:
+                pass
+
+            if Configuration['FINISHAFTER'] == 1:
+                Configuration['FINAL_COMMENT'] = 'You have chosen to end the fitting after preprocessing and sofia.'
+                cf.finish_galaxy(Configuration,maximum_directory_length,current_run =current_run, Fits_Files =Fits_Files)
+                continue
+            # Now set our variations to the original values but only if the galaxy is large enough
+            if Configuration['RING_SIZE']*Configuration['NO_RINGS'] > 3:
+                Configuration['FIX_INCLINATION'] = Original_Configuration['FIX_INCLINATION']
+                Configuration['FIX_SDIS'] = Original_Configuration['FIX_SDIS']
+                Configuration['FIX_PA'] = Original_Configuration['FIX_PA']
+                Configuration['FIX_Z0'] = Original_Configuration['FIX_Z0']
+
+            #Then we want to setup for the next fit.
+            wf.initialize_def_file(Configuration, Fits_Files,Tirific_Template, \
+                                    cube_hdr,fit_stage='Extend_Convergence')
+
+            while not Configuration['EC_ACCEPTED']:
+                current_run = runf.extent_converge(Configuration, Fits_Files,Tirific_Template)
+            Configuration['EC_END_TIME'] = datetime.now()
         except Exception as e:
             Configuration['FINAL_COMMENT'] = e
             Configuration['MAPS_OUTPUT'] = 5
-            cf.finish_galaxy(Configuration,maximum_directory_length)
+            cf.finish_galaxy(Configuration,maximum_directory_length,current_run =current_run)
             traceback.print_exc()
             continue
 
@@ -275,369 +346,9 @@ def FAT(argv):
 
 
 
-        cf.finish_galaxy(Configuration,maximum_directory_length)
+        cf.finish_galaxy(Configuration,maximum_directory_length,current_run)
 
 '''
-
-
-                                ;get the values from these adapted
-
-
-
-                                ;write new values to overall arrays
-    te the paramter to the array based
-                                ;on inclination
-     if not keepcenter and not fixedcenter and not cfluxadjusted then begin
-        case 1 of
-           catinc[i] LT 30: Writefittingvariables,tirificfirst,xposinput1,yposinput1,vsysinput1,painput1,vrotinput1,sbrinput1,sbrinput2,inclinput1,INIMODE=inimode
-           catinc[i] LT 50:Writefittingvariables,tirificfirst,xposinput1,yposinput1,vsysinput1,painput1,vrotinput1,inclinput1,sbrinput1,sbrinput2,INIMODE=inimode
-           catinc[i] GT 75:Writefittingvariables,tirificfirst,xposinput1,yposinput1,vsysinput1,painput1,vrotinput1,sbrinput1,sbrinput2,inclinput1,z0input1,INIMODE=inimode
-           else:Writefittingvariables,tirificfirst,xposinput1,yposinput1,vsysinput1,painput1,inclinput1,vrotinput1,sbrinput1,sbrinput2,INIMODE=inimode
-        endcase
-    ENDIF ELSE BEGIN
-        case 1 of
-           catinc[i] LT 30:Writefittingvariables,tirificfirst,painput1,vrotinput1,sbrinput1,sbrinput2,inclinput1,INIMODE=inimode
-           catinc[i] LT 50:Writefittingvariables,tirificfirst,painput1,vrotinput1,inclinput1,sbrinput1,sbrinput2,INIMODE=inimode
-           catinc[i] GT 75:Writefittingvariables,tirificfirst,painput1,vrotinput1,sbrinput1,sbrinput2,inclinput1,z0input1,INIMODE=inimode
-           else:Writefittingvariables,tirificfirst,painput1,inclinput1,vrotinput1,sbrinput1,sbrinput2,INIMODE=inimode
-        endcase
-     ENDELSE
-                                ;If we tried fifty times and have not
-                                ;found a reasonable solution then we
-                                ;give up
-     IF counter GT 30 then begin
-        IF size(log,/TYPE) EQ 7 then begin
-           openu,66,log,/APPEND
-           printf,66,linenumber()+"We have rerun "+string(counter)+" times and still haven't found an acceptable solution."
-           printf,66,linenumber()+"We have modified the rings "+string(countsbr)+" times."
-           printf,66,linenumber()+"We are aborting this galaxy."
-           close,66
-        ENDIF
-        comment = 'We could not find a proper center.'
-        commentlen='A'+strtrim(string(strlen(comment)),2)
-        openu,1,outputcatalogue,/APPEND
-        printf,1,catDirname[i],strtrim(string(0),2),strtrim(string(0),2),comment,format='("",('+dirformat+')," ",2(A6),"  ",('+commentlen+'))'
-        close,1
-        bookkeeping=5
-        goto,finishthisgalaxy
-     ENDIF
-     ;Write the current array to the def file
-     restart_counter++
-     tmppos=where('RESTARTID' EQ tirificfirstvars)
-     tirificfirst[tmppos]='RESTARTID= '+string(fix(restart_counter))
-     print,linenumber()+'We used '+tirificfirst[tmppos]+' to restart'
-     openw,1,maindir+'/'+catdirname[i]+'/tirific.def'
-     for index=0,n_elements(tirificfirst)-1 do begin
-        printf,1,tirificfirst[index]
-     endfor
-     close,1
-                                ;And starting the first fit while
-                                ;moving any previous fits to old.
-                                ;if this is the second fit we do want
-                                ;to keep the first one not being old
-     IF testing GE 1 then goto,testing1
-     IF size(log,/TYPE) EQ 7 then begin
-        openu,66,log,/APPEND
-        printf,66,linenumber()+"Starting tirific first estimate in  "+catDirname[i]+"  which is galaxy #  "+strtrim(string(fix(i)),2)+" at "+systime()
-        printf,66,linenumber()+"We have rerun "+string(counter)+" times."
-        printf,66,linenumber()+"We have modified the rings "+string(countsbr)+" times."
-        close,66
-     ENDIF
-     print,linenumber()+"Starting tirific first estimate in  "+catDirname[i]+"  which is galaxy #  "+strtrim(string(fix(i)),2)+" at "+systime()
-     IF tryone EQ 1 then begin
-        output_name = '1stfit.'
-        store_name = '1stfitall.'
-     ENDIF ELSE BEGIN
-        output_name = '1stfit.'
-        store_name = '1stfitold.'
-     ENDELSE
-     counter++
-     run_tirific, continue_tirific, curr_run_id, bookkeeping, output_name=output_name, $
-                  store_name=store_name, log=log, loops=loops,nopoints=nopoints,AC=AC1, $
-                  toymodels=toymodels,run_unit=run_unit
-
-     testing1:
-
-     IF size(log,/TYPE) EQ 7 then begin
-        openu,66,log,/APPEND
-        IF AC1 EQ 1 then begin
-           printf,66,linenumber()+"The first estimate was accepted in this run."
-           printf,66,linenumber()+"Tirific ran through "+strtrim(strcompress(string(loops)))+" loops and produced "+strtrim(strcompress(string(toymodels)))+" models."
-           printf,66,linenumber()+"Disk 1 had "+strtrim(strcompress(string(nopoints[0])))+" point sources and Disk 2 "+strtrim(strcompress(string(nopoints[1])))
-        ENDIF ELSE BEGIN
-           printf,66,linenumber()+"The First estimate was not accepted."
-           printf,66,linenumber()+"Tirific ran through "+strtrim(strcompress(string(loops)))+" loops and produced "+strtrim(strcompress(string(toymodels)))+" models."
-           printf,66,linenumber()+"Disk 1 had "+strtrim(strcompress(string(nopoints[0])))+" point sources and Disk 2 "+strtrim(strcompress(string(nopoints[1])))
-        ENDELSE
-        close,66
-     ENDIF
-     IF AC1 EQ 1 then begin
-        print,linenumber()+"The first estimate is accepted."
-     ENDIF ELSE begin
-        print,linenumber()+"The first estimate is not accepted."
-     ENDELSE
-                                ;Check the number of points in the models
-     check_cflux,nopoints,norings[0],tirificfirst,tirificfirstvars,cfluxadjusted,log=log
-     IF  cfluxadjusted then goto,notacceptedone
-
-     IF testing GE 1 then begin
-        maxchangeRA=ABS(0.15*catmajbeam[i])/3600.
-        maxchangeDEC=ABS(0.15*catmajbeam[i])/3600.
-        IF maxchangeRA LT ABS(0.5*pixelsizeRA) then maxchangeRA=ABS(pixelsizeRA)
-        IF maxchangeDEC LT ABS(0.5*pixelsizeDEC) then maxchangeDEC=ABS(pixelsizeDEC)
-        maxchangevel=ABS(0.5*channelwidth)
-        IF maxchangeRA LT  1./3600. then maxchangeRA=1./3600.
-        IF maxchangeDEC LT  1./3600. then maxchangeDEC=1./3600.
-        IF maxchangevel LT 2.5 then  maxchangevel=2.5
-        goto,testing1skip
-     ENDIF
-                               ;Let's extract some fitting parameters from the file we just fitted
-     VariablesWanted=['INCL','PA','SBR','XPOS','YPOS','VSYS','CFLUX','VROT','SBR_2','RADI','Z0']
-     firstfitvalues=0.
-     writenewtotemplate,tirificfirst,maindir+'/'+catdirname[i]+'/1stfit.def',Arrays=firstfitvalues,VariableChange=VariablesWanted,/EXTRACT
-     tmppos=where('SBR' EQ VariablesWanted)
-     SBRarr=firstfitvalues[*,tmppos]
-     tmppos=where('SBR_2' EQ VariablesWanted)
-     SBRarr2=firstfitvalues[*,tmppos]
-                                ;We always want to smooth the surface
-                                ;brightnes. Added 16-06-2017
-     tmppos=where('RADI' EQ VariablesWanted)
-     ;To judge whether we want extend we want to use the non-smoothed profiles
-     SBRarrunmod=SBRarr
-     SBRarr2unmod=SBRarr2
-     SBRarr=fat_savgol(SBRarr,firstfitvalues[*,tmppos],/half)
-     SBRarr2=fat_savgol(SBRarr2,firstfitvalues[*,tmppos],/half)
-
-     tmppos=where('VROT' EQ VariablesWanted)
-     VROTarr=firstfitvalues[*,tmppos]
-     stringvelocities='VROT= 0. '+STRJOIN(VROTarr[1:n_elements(VROTarr)-1],' ')
-     IF size(log,/TYPE) EQ 7 then begin
-        openu,66,log,/APPEND
-        printf,66,linenumber()+"SBRs before they are checked."
-        printf,66,SBRarr,SBRarr2
-        close,66
-     endif
-     sbr_check,tirificfirst, tirificfirstvars,sbrarr,sbrarr2,cutoff
-     IF size(log,/TYPE) EQ 7 then begin
-        openu,66,log,/APPEND
-        printf,66,linenumber()+"SBRs after they are checked."
-        printf,66,SBRarr,SBRarr2
-        close,66
-     endif
-                                ; Let's see if the values are too close to the boundaries or not
-                                ;First the inclination
-     diffmax=ABS(double(inclinput1[1])-firstfitvalues[0,0])
-     diffmin=ABS(firstfitvalues[0,0]-double(inclinput1[2]))
-     IF inclinput1[2] EQ 5. then diffmin = 0.2*catincdev[i]
-     IF inclinput1[1] EQ 90 then diffmax = 0.2*catincdev[i]
-     oldinc=catinc[i]
-     oldpa=catpa[i]
-     paraised=0.
-     inclraised=0
-     IF (diffmax GT 0.1*catincdev[i] and diffmin GT 0.1*catincdev[i]) then begin
-                                ; if the  value is  more than 10% of
-                                ; the error removed from the boundary
-                                ; values it is ok and we update the
-                                ; inclination or we have high
-                                ; inclination
-        catinc[i]=ABS(firstfitvalues[0,0])
-        inclraised=1
-        IF catinc[i] GT 90. then catinc[i]=90.-(catinc[i]-90.)
-        tmppos=where('INCL' EQ tirificfirstvars)
-        tirificfirst[tmppos]='INCL= '+strtrim(string(catinc[i]))
-        tmppos=where('INCL_2' EQ tirificfirstvars)
-        tirificfirst[tmppos]='INCL_2= '+strtrim(string(catinc[i]))
-        catmaxrot[i]=W50/2./SIN(catinc[i]*!pi/180.)
-        catmaxrotdev[i]=(VSYSdiff/4.)/SIN(catinc[i]*!pi/180.)
-        tmppos=where('VROT' EQ tirificfirstvars)
-        tirificfirst[tmppos]=stringvelocities
-        tmp=str_sep(strtrim(strcompress(stringvelocities),2),'=')
-        tmppos=where('VROT_2' EQ tirificfirstvars)
-        tirificfirst[tmppos]='VROT_2='+tmp[1]
-        IF size(log,/TYPE) EQ 7 then begin
-           openu,66,log,/APPEND
-           printf,66,linenumber()+"The incl was adjusted to"+string(catinc[i])
-           close,66
-        ENDIF ELSE BEGIN
-           print,linenumber()+"The incl was adjusted to"+string(catinc[i])
-        ENDELSE
-     ENDIF ELSE Begin
-        ; Otherwise we will adjust the boundaries if they are insecure
-        IF ceil(norings[0]*ring_spacing*COS(firstfitvalues[0,0]*!DtoR)) GT 4 OR (norings[0]*ring_spacing GT 6. AND catinc[i] GT 80.) then begin
-                                ;If we are on the boundary we reject
-                                ;the new value unless we are in very
-                                ;uncertain conditions
-           IF size(log,/TYPE) EQ 7 then begin
-              openu,66,log,/APPEND
-              printf,66,linenumber()+"The incl was on the boundary"+string(firstfitvalues[0,0])+'+'+string(inclinput1[1])+'-'+string(inclinput1[2])
-              close,66
-           ENDIF ELSE BEGIN
-              print,linenumber()+"The incl was on the boundary"+string(firstfitvalues[0,0])+'+'+string(inclinput1[1])+'-'+string(inclinput1[2])
-           ENDELSE
-                                ;However if this is due to high
-                                ;inclination we still want to reset vrot
-           IF  (norings[0]*ring_spacing GT 6. AND catinc[i] GT 80.) then begin
-              catmaxrot[i]=W50/2./SIN(catinc[i]*!pi/180.)
-              catmaxrotdev[i]=(VSYSdiff/4.)/SIN(catinc[i]*!pi/180.)
-              tmppos=where('VROT' EQ tirificfirstvars)
-              tirificfirst[tmppos]=stringvelocities
-              tmp=str_sep(strtrim(strcompress(stringvelocities),2),'=')
-              tmppos=where('VROT_2' EQ tirificfirstvars)
-              tirificfirst[tmppos]='VROT_2='+tmp[1]
-          ENDIF ELSE AC1=0
-        ENDIF ELSE BEGIN
-                                ; Otherwise we will adjust the boundaries if they are insecure
-           inclraised=1
-           catinc[i]=ABS(firstfitvalues[0,0])
-           AC1=0
-           IF catinc[i] GT 90. then catinc[i]=90.-(catinc[i]-90.)
-           tmppos=where('INCL' EQ tirificfirstvars)
-           tirificfirst[tmppos]='INCL= '+strtrim(string(catinc[i]))
-           tmppos=where('INCL_2' EQ tirificfirstvars)
-           tirificfirst[tmppos]='INCL_2= '+strtrim(string(catinc[i]))
-           catmaxrot[i]=W50/2./SIN(catinc[i]*!pi/180.)
-           catmaxrotdev[i]=(VSYSdiff/4.)/SIN(catinc[i]*!pi/180.)
-           tmppos=where('VROT' EQ tirificfirstvars)
-           tirificfirst[tmppos]=stringvelocities
-           tmp=str_sep(strtrim(strcompress(stringvelocities),2),'=')
-           tmppos=where('VROT_2' EQ tirificfirstvars)
-           tirificfirst[tmppos]='VROT_2='+tmp[1]
-           IF size(log,/TYPE) EQ 7 then begin
-              openu,66,log,/APPEND
-              printf,66,linenumber()+"Although the incl hit its boundary we adjusted to"+string(catinc[i])+"due to the small ring size. "
-              close,66
-           ENDIF ELSE BEGIN
-              print,linenumber()+"Although the incl hit its boundary we adjusted to"+string(catinc[i])+"due to the small ring size. "
-           ENDELSE
-           VROTmax=catmaxrot[i]+catmaxrotdev[i]
-           INCLmin=catinc[i]-catincdev[i]-20
-                                ;We base the minimum vrot max on
-                                ;inclination however the maximum of
-                                ;600 is a physical limit.
-           IF VROTmax LT 80 then VROTmax=80.
-           IF VROTmax GT 600. then VROTmax=600.
-           VROTinput1[1]=strtrim(strcompress(string(VROTmax)),2)
-           INCLinput1=['INCL 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+$
-                       ' INCL_2 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1),$
-                       string(90.),string(INCLmin),string(1.0),string(0.1),string(1.),string(0.1),'5','70','70']
-        ENDELSE
-     ENDELSE
-                                ;when we get a new inclination we need
-                                ;to reset our cutoff values.
-     cutoffcorrection=SIN(75.*!DtoR)/SIN((catinc[i]+newinclination[1]/2.)*!DtoR)
-     IF newinclination[0] GT 80. then cutoffcorrection=0.9
-     IF catinc[i]+newinclination[1]/2. GT 50 then cutoffcorrection=1.
-     IF catinc[i]+newinclination[1]/2. LT 50 AND catinc[i]+newinclination[1]/2. GT 40  then cutoffcorrection=1.+(50-(catinc[i]+newinclination[1]/2.))*0.05
-
-     IF cutoffcorrection GT 2.5 then cutoffcorrection=2.5
-     IF doubled and cutoffcorrection GT 1. then cutoffcorrection=SQRT(cutoffcorrection)
-
-     IF size(log,/TYPE) EQ 7 then begin
-        openu,66,log,/APPEND
-        printf,66,linenumber()+"Cutoff values will be adjusted for inclination by multiplying them with "+string(cutoffcorrection)
-        close,66
-     ENDIF
-     cutoff=cutoffor*cutoffcorrection
-                                ;Then we look at the PA
-     diffmax=ABS(firstfitvalues[0,1]-double(painput1[1]))
-     diffmin=ABS(firstfitvalues[0,1]-double(painput1[2]))
-     IF diffmax GT 0.1*catpadev[i] and diffmin GT 0.1*catpadev[i] then begin
-        catpa[i]=firstfitvalues[0,1]
-        paraised=1
-        ;if not between -360 and 360 adapt
-        WHILE ABS(catpa[i])/360. GT 1. DO BEGIN
-           IF catpa[i] GT 360. then catpa[i]=catpa[i]-360.
-           IF catpa[i] LT -360. then catpa[i]=catpa[i]+360.
-        ENDWHILE
-        IF catpa[i] LT 0. then catpa[i]=catpa[i]+360.
-        tmppos=where('PA' EQ tirificfirstvars)
-        tirificfirst[tmppos]='PA= '+strtrim(string(catpa[i]))
-        tmppos=where('PA_2' EQ tirificfirstvars)
-        tirificfirst[tmppos]='PA_2= '+strtrim(string(catpa[i]))
-        IF size(log,/TYPE) EQ 7 then begin
-           openu,66,log,/APPEND
-           printf,66,linenumber()+"The pa was adjusted to "+string(catpa[i])
-           close,66
-        ENDIF ELSE BEGIN
-           print,linenumber()+"The pa was adjusted to "+string(catpa[i])
-        ENDELSE
-     ENDIF ELSE begin
-        IF shiftcentercounter EQ 1. then begin
-           IF UndatedPA LT 180 then begin
-              firstfitvalues[*,1]=firstfitvalues[*,1]+180.
-              catpa[i]=catpa[i]+180.
-              UndatedPA=UndatedPA+180.
-           endif else begin
-              firstfitvalues[*,1]=firstfitvalues[*,1]-180.
-              catpa[i]=catpa[i]-180.
-              UndatedPA=UndatedPA-180.
-           endelse
-
-        ENDIF ELSE BEGIN
-           IF oldinc LT 50 AND UndatedINCL LT 65 AND catinc[i] LT 55 then begin
-
-              paraised=1
-              catpa[i]=firstfitvalues[0,1]
-              AC1=0
-              WHILE ABS(catpa[i])/360. GT 1. DO BEGIN
-                 IF catpa[i] GT 360. then catpa[i]=catpa[i]-360.
-                 IF catpa[i] LT -360. then catpa[i]=catpa[i]+360.
-              ENDWHILE
-              IF catpa[i] LT 0. then catpa[i]=catpa[i]+360.
-              tmppos=where('PA' EQ tirificfirstvars)
-              tirificfirst[tmppos]='PA= '+strtrim(string(catpa[i]))
-              tmppos=where('PA_2' EQ tirificfirstvars)
-              tirificfirst[tmppos]='PA_2= '+strtrim(string(catpa[i]))
-              IF size(log,/TYPE) EQ 7 then begin
-                 openu,66,log,/APPEND
-                 printf,66,linenumber()+"Although the pa hit its boundary we adjusted to"+string(catpa[i])+"because of low inclination."
-                 close,66
-              ENDIF ELSE BEGIN
-                 print,linenumber()+"Although the pa hit its boundary we adjusted to"+string(catpa[i])+"because of low inclination."
-              ENDELSE
-              IF PAest LT 5 then begin
-                 PAinput1=['PA 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+$
-                           ' PA_2 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1),$
-                           string((catPA[i])+catPAdev[i]+30.),string((catPA[i])-catPAdev[i]-30),string(5),string(0.1),string(0.05),string(0.01),'3','70','70']
-                 IF PAfixboun NE 'n' then begin
-                    IF PAfixboun EQ 'w' then begin
-                       IF catPA[i]+catPAdev[i]+30. GT 360 then PAinput1[1]='360'
-                       IF catPA[i]-catPAdev[i]-30. LT 180 then PAinput1[2]='180'
-                    ENDIF
-                    IF PAfixboun EQ 'e' then begin
-                       IF catPA[i]+catPAdev[i]+30. GT 180. then PAinput1[1]='180'
-                       IF catPA[i]-catPAdev[i]-30. LT 0. then PAinput1[2]='0'
-                    ENDIF
-                 ENDIF
-                 Writefittingvariables,tirificfirst,painput1,INIMODE=inimode
-                 PAest++
-                 goto,againPAestimate
-              ENDIF else begin
-                 PAinput1=['PA 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1)+$
-                           ' PA_2 1:'+strtrim(strcompress(string(norings[0],format='(F7.4)')),1),$
-                           string((catPA[i])+catPAdev[i]+30.),string((catPA[i])-catPAdev[i]-30),string(2.5),string(0.1),string(0.05),string(0.01),'3','70','70']
-                 IF PAfixboun NE 'n' then begin
-                    IF PAfixboun EQ 'w' then begin
-                       IF catPA[i]+catPAdev[i]+30. GT 360 then PAinput1[1]='360'
-                       IF catPA[i]-catPAdev[i]-30. LT 180 then PAinput1[2]='180'
-                    ENDIF
-                    IF PAfixboun EQ 'e' then begin
-                       IF catPA[i]+catPAdev[i]+30. GT 180. then PAinput1[1]='180'
-                       IF catPA[i]-catPAdev[i]-30. LT 0. then PAinput1[2]='0'
-                    ENDIF
-                 ENDIF
-              ENDELSE
-           ENDIF
-        ENDELSE
-        IF size(log,/TYPE) EQ 7 then begin
-           openu,66,log,/APPEND
-           printf,66,linenumber()+"The pa was on the boundary"+string(firstfitvalues[0,1])+'+'+string(painput1[1])+'-'+string(painput1[2])
-           close,66
-        ENDIF ELSE BEGIN
-           print,linenumber()+"The pa was on the boundary"+string(firstfitvalues[0,1])+'+'+string(painput1[1])+'-'+string(painput1[2])
-        ENDELSE
-        AC1=0
-     ENDELSE
 
      tmppos=where('Z0' EQ tirificfirstvars)
      tirificfirst[tmppos]='Z0= '+strtrim(string(firstfitvalues[0,10]))

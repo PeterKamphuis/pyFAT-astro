@@ -48,17 +48,17 @@ pipeline.threads           =  0
 # Input
 
 input.data                 =  Template.fits
-input.region               =  
-input.gain                 =  
-input.noise                =  
-input.weights              =  
-input.mask                 =  
+input.region               =
+input.gain                 =
+input.noise                =
+input.weights              =
+input.mask                 =
 input.invert               =  false
 
 
 # Flagging
 
-flag.region                =  
+flag.region                =
 flag.auto                  =  false
 flag.threshold             =  5.0
 flag.radiusSpatial         =  0
@@ -137,8 +137,8 @@ parameter.offset           =  false
 
 # Output
 
-output.directory           =  
-output.filename            =  
+output.directory           =
+output.filename            =
 output.writeCatASCII       =  true
 output.writeCatXML         =  false
 output.writeCatSQL         =  false
@@ -147,7 +147,7 @@ output.writeFiltered       =  false
 output.writeMask           =  true
 output.writeMask2d         =  false
 output.writeRawMask        =  false
-output.writeMoments        =  true
+output.writeMoments        =  false
 output.writeCubelets       =  false
 output.marginCubelets      =  0
 output.overwrite           =  true

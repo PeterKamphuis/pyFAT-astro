@@ -11,6 +11,7 @@ import traceback
 import numpy as np
 import copy
 import warnings
+import re
 
 class SupportRunError(Exception):
     pass
@@ -293,7 +294,7 @@ def fit_gaussian(x,y, covariance = False):
         return gauss_parameters
 
 # A simple function to return the line numbers in the stack from where the functions are called
-def linenumber():
+def linenumber(debug=False):
     line = []
     for key in stack():
         if key[1] == 'FAT.py':
@@ -302,7 +303,10 @@ def linenumber():
             file = key[1].split('/')
             line.append(f"In the function {key[3]} at line {key[2]} in file {file[-1]}")
     if len(line) > 0:
-        line = ', '.join(line)+f'\n{"":8s}'
+        if debug:
+            line = ', '.join(line)+f'\n{"":8s}'
+        else:
+            line = f'{"":8s}'
     else:
         for key in stack():
             if key[1] == 'FAT.py':
@@ -311,14 +315,13 @@ def linenumber():
     return line
 
 
-def print_log(log_statement,log, screen = False):
-    log_statement = f"{linenumber()}{log_statement}"
+def print_log(log_statement,log, screen = False,debug = False):
+    log_statement = f"{linenumber(debug=debug)}{log_statement}"
     if screen or not log:
         print(log_statement)
     if log:
-        log_file = open(log,'a')
-        log_file.write(log_statement)
-        log_file.close()
+        with open(log,'a') as log_file:
+            log_file.write(log_statement)
 
 print_log.__doc__ = '''
 ;+
@@ -355,6 +358,56 @@ print_log.__doc__ = '''
 ;
 
 '''
+
+def rename_fit_products(Configuration,stage = 'initial', fit_stage='Undefined_Stage'):
+    extensions = ['def','log','ps','fits']
+    for filetype in extensions:
+        if filetype == 'log':
+            if os.path.exists(f"{Configuration['FITTING_DIR']}{fit_stage}/{fit_stage}.{filetype}"):
+                os.system(f"cp {Configuration['FITTING_DIR']}{fit_stage}/{fit_stage}.{filetype} {Configuration['FITTING_DIR']}{fit_stage}/{fit_stage}_Prev.{filetype} ")
+        else:
+            if filetype == 'def':
+                if os.path.exists(f"{Configuration['FITTING_DIR']}{fit_stage}/{fit_stage}_Prev.{filetype}"):
+                    os.system(f"mv {Configuration['FITTING_DIR']}{fit_stage}/{fit_stage}_Prev.{filetype} {Configuration['FITTING_DIR']}{fit_stage}/{fit_stage}_Prev2.{filetype} ")
+            if os.path.exists(f"{Configuration['FITTING_DIR']}{fit_stage}/{fit_stage}.{filetype}"):
+                os.system(f"mv {Configuration['FITTING_DIR']}{fit_stage}/{fit_stage}.{filetype} {Configuration['FITTING_DIR']}{fit_stage}/{fit_stage}_Prev.{filetype}")
+
+
+rename_fit_products.__doc__ = '''
+;+
+; NAME:
+;       rename_fit_products(Configuration,stage)
+;
+; PURPOSE:
+;       rename the tirific product from the previous stage.
+;
+; CATEGORY:
+;       Support
+;
+;
+; INPUTS:
+;     Configuration, and the cube header
+;
+; OPTIONAL INPUTS:
+;
+;
+; KEYWORD PARAMETERS:
+;       -
+;
+; OUTPUTS:
+;
+; OPTIONAL OUTPUTS:
+;       -
+;
+; MODULES CALLED:
+;
+;
+; EXAMPLE:
+;
+
+'''
+
+
 def sbr_limits(Configuration,hdr, systemic= 100.):
     radii = set_rings(Configuration, hdr)
     level = hdr['FATNOISE']*1000

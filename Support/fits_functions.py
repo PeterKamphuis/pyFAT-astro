@@ -8,6 +8,7 @@ from scipy import ndimage
 import numpy as np
 import copy
 import warnings
+import os
 
 class BadHeaderError(Exception):
     pass
@@ -45,7 +46,7 @@ def clean_header(hdr,log):
 {"":8s} We have set it to {hdr['CUNIT3']}. Please ensure that is correct.'
 '''
         print_log(log_statement,log)
-    vel_types = ['VELO-HEL','VELO-LSR','FELO-HEL','FELO-LSR','VELO', 'VELOCITY']
+    vel_types = ['VELO-HEL','VELO-LSR','VELO', 'VELOCITY']
     if hdr['CTYPE3'].upper() not in vel_types:
         if hdr['CTYPE3'].split('-')[0].upper() in ['RA','DEC']:
             log_statement = f'''CLEAN_HEADER: Your zaxis is a spatial axis not a velocity axis.
@@ -114,12 +115,14 @@ def clean_header(hdr,log):
 '''
             print_log(log_statement,log)
             hdr['BMIN'] = hdr['BMAJ']
-
-    if len(hdr['HISTORY']) > 10:
-        del hdr['HISTORY']
-        log_statement = f'''CLEAN_HEADER: Your cube has a significant history attached we are removing it for easier interpretation.
-'''
-        print_log(log_statement,log)
+    try:
+        if len(hdr['HISTORY']) > 10:
+            del hdr['HISTORY']
+            log_statement = f'''CLEAN_HEADER: Your cube has a significant history attached we are removing it for easier interpretation.
+    '''
+            print_log(log_statement,log)
+    except KeyError:
+        pass
 
     if abs(hdr['BMAJ']/hdr['CDELT1']) < 2:
         log_statement = f'''CLEAN_HEADER: !!!!!!!!!!Your cube has less than two pixels per beam major axis.!!!!!!!!!!!!!!!!!
@@ -188,15 +191,12 @@ def create_fat_cube(Configuration, Fits_Files):
     # clean the header
     clean_header(hdr,Configuration["OUTPUTLOG"])
     data = prep_cube(hdr,data,Configuration["OUTPUTLOG"])
-    Configuration['NOISE'] = hdr['FATNOISE']
     # and write our new cube
     log_statement = f'''CREATE_FAT_CUBE: We are writing a FAT modfied cube to be used for the fitting. This cube is called {Configuration['FITTING_DIR']+Fits_Files['FITTING_CUBE']}
 '''
     print_log(log_statement,Configuration["OUTPUTLOG"])
     fits.writeto(Configuration['FITTING_DIR']+Fits_Files['FITTING_CUBE'],data,hdr)
     # Release the arrays
-    #We want to check if the cube has a decent number of pixels per beam.
-    optimized_cube(hdr,data,Configuration, Fits_Files,log = Configuration["OUTPUTLOG"])
 
     Cube.close()
     data = []
@@ -257,17 +257,16 @@ def cut_cubes(Configuration, Fits_Files, galaxy_box,hdr):
             new_cube[i,1] = limit[1]+int(cube_edge[i])
 
 
-    if cut and Configuration['START_POINT'] != 2:
+    if cut and Configuration['START_POINT'] < 2:
         files_to_cut = [Fits_Files['FITTING_CUBE'],'Sofia_Output/'+Fits_Files['MASK'],\
                         'Sofia_Output/'+Fits_Files['MOMENT0'],\
                         'Sofia_Output/'+Fits_Files['MOMENT1'],\
                         'Sofia_Output/'+Fits_Files['MOMENT2'],\
                         'Sofia_Output/'+Fits_Files['CHANNEL_MAP'],\
                         ]
-        if Configuration['OPTIMIZED']:
-            files_to_cut.append(Fits_Files['OPTIMIZED_CUBE'])
 
-            print_log(f'''CUT_CUBES: Your input cube is significantly larger than the detected source.
+
+        print_log(f'''CUT_CUBES: Your input cube is significantly larger than the detected source.
 {"":8s}CUT_CUBES: we will cut to x-axis = [{new_cube[2,0]},{new_cube[2,1]}] y-axis = [{new_cube[1,0]},{new_cube[1,1]}]
 {"":8s}CUT_CUBES: z-axis = [{new_cube[2,0]},{new_cube[2,1]}].
 {"":8s}CUT_CUBES: We will cut the following files:
@@ -276,7 +275,12 @@ def cut_cubes(Configuration, Fits_Files, galaxy_box,hdr):
 
         for file in files_to_cut:
             cutout_cube(Configuration['FITTING_DIR']+file,new_cube)
-        return new_cube
+
+    #We want to check if the cube has a decent number of pixels per beam.
+    if not os.path.exists(f"{Configuration['FITTING_DIR']}/{Fits_Files['OPTIMIZED_CUBE']}"):
+        optimized_cube(hdr,Configuration, Fits_Files,log = Configuration["OUTPUTLOG"])
+
+    return new_cube
 cut_cubes.__doc__ = '''
 
 ;+
@@ -383,11 +387,14 @@ def extract_pv(cube_in,angle,center=[-1,-1,-1],finalsize=[-1,-1],convert=-1):
     hdr = copy.deepcopy(cube[0].header)
     data = copy.deepcopy(cube[0].data)
     #Because astro py is even dumber than Python
-    if hdr['CUNIT3'].lower() == 'km/s':
-        hdr['CUNIT3'] = 'm/s'
-        hdr['CDELT3'] = hdr['CDELT3']*1000.
-        hdr['CRVAL3'] = hdr['CRVAL3']*1000.
-    elif hdr['CUNIT3'].lower() == 'm/s':
+    try:
+        if hdr['CUNIT3'].lower() == 'km/s':
+            hdr['CUNIT3'] = 'm/s'
+            hdr['CDELT3'] = hdr['CDELT3']*1000.
+            hdr['CRVAL3'] = hdr['CRVAL3']*1000.
+        elif hdr['CUNIT3'].lower() == 'm/s':
+            hdr['CUNIT3'] = 'm/s'
+    except KeyError:
         hdr['CUNIT3'] = 'm/s'
     if center[0] == -1:
         center = [hdr['CRVAL1'],hdr['CRVAL2'],hdr['CRVAL3']]
@@ -435,15 +442,15 @@ def extract_pv(cube_in,angle,center=[-1,-1,-1],finalsize=[-1,-1],convert=-1):
         xstart = set_limits(int(xcenter-finalsize[0]/2.),0,int(nx))
         xend = set_limits(int(xcenter+finalsize[0]/2.),0,int(nx))
         PV =  PV[zstart:zend, xstart:xend]
-        hdr['NAXIS2'] = int(finalsize[0])
-        hdr['NAXIS1'] = int(finalsize[1])
-        hdr['CRPIX2'] = hdr['CRPIX3']-int(nz/2.-finalsize[0]/2.)
+        hdr['NAXIS2'] = int(finalsize[1])
+        hdr['NAXIS1'] = int(finalsize[0])
+        hdr['CRPIX2'] = hdr['CRPIX3']-int(nz/2.-finalsize[1]/2.)
         if convert !=-1:
             hdr['CRVAL2'] = hdr['CRVAL3']/convert
         else:
             hdr['CRVAL2'] = hdr['CRVAL3']
 
-        hdr['CRPIX1'] = int(finalsize[1]/2.)+1
+        hdr['CRPIX1'] = int(finalsize[0]/2.)+1
     if convert !=-1:
         hdr['CDELT2'] = hdr['CDELT3']/convert
     else:
@@ -518,7 +525,7 @@ extract_pv.__doc__ = '''
 
 
 #Create an optimized cube if required
-def optimized_cube(hdr,data,Configuration,Fits_Files, log =None):
+def optimized_cube(hdr,Configuration,Fits_Files, log =None):
     pix_per_beam = round(hdr['BMIN']/(np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])))
     if abs(hdr['CDELT1']) != abs(hdr['CDELT2']):
         log_statement = f'''OPTIMIZED_CUBE: Your input cube does not have square pixels.
@@ -526,6 +533,10 @@ def optimized_cube(hdr,data,Configuration,Fits_Files, log =None):
 '''
         print_log(log_statement, log)
     elif pix_per_beam > Configuration['OPT_PIXELBEAM']:
+        cube = fits.open(Configuration['FITTING_DIR']+Fits_Files['FITTING_CUBE'])
+        data = cube[0].data
+        hdr = cube[0].header
+        cube.close()
         Configuration['OPTIMIZED'] = True
         required_cdelt = hdr['BMIN']/int(Configuration['OPT_PIXELBEAM'])
         ratio = required_cdelt/abs(hdr['CDELT2'])
@@ -749,8 +760,68 @@ prep_cube.__doc__ = '''
 ;
 ; EXAMPLE:
 '''
+def make_moments(filename = 'Input_Cube.fits', basename = 'Finalmodel', directory = './', mask_cube = None,moments = [0,1,2],overwrite = False, log= None, level=None, vel_unit= None):
+    cube = fits.open(filename)
+    if vel_unit:
+        cube[0].header['CUNIT3'] = vel_unit
+    if mask_cube:
+        mask = fits.open(mask_cube)
+        with np.errstate(invalid='ignore', divide='ignore'):
+            cube[0].data[mask[0].data < 0.5] = float('NaN')
+    else:
+        if not level:
+            level = 3.*np.mean([np.nanstd(cube[0].data[0:2,:,:]),np.nanstd(cube[0].data[-3:-1,:,:])])
+        with np.errstate(invalid='ignore', divide='ignore'):
+            cube[0].data[cube[0].data < level] = float('NaN')
+    try:
+        if cube[0].header['CUNIT3'].lower().strip() == 'm/s':
+            print_log(f"We convert your m/s to km/s", log)
+            cube[0].header['CUNIT3'] = 'km/s'
+            cube[0].header['CDELT3'] = cube[0].header['CDELT3']/1000.
+            cube[0].header['CRVAL3'] = cube[0].header['CRVAL3']/1000.
+        elif cube[0].header['CUNIT3'].lower().strip() == 'km/s':
+            pass
+        else:
+            print_log(f"Your Velocity unit {cube[0].header['CUNIT3']} is weird. Your units could be off", log)
+    except KeyError:
+        print_log(f"Your CUNIT3 is missing, that is bad practice. We'll add a blank one but we're not guessing the value",log)
+        cube[0].header['CUNIT3'] = 'Unknown'
+    #Make a 2D header to use
+    hdr2D = copy.deepcopy(cube[0].header)
+    hdr2D.remove('NAXIS3')
+    hdr2D['NAXIS'] = 2
+    # removing the third axis means we cannot correct for varying platescale, Sofia does so this is and issue so let's not do this
+    hdr2D.remove('CDELT3')
+    hdr2D.remove('CTYPE3')
+    hdr2D.remove('CUNIT3')
+    hdr2D.remove('CRPIX3')
+    hdr2D.remove('CRVAL3')
 
-
+    # we need a moment 0 for the moment 2 as well
+    if 0 in moments:
+        hdr2D['BUNIT'] = f"{cube[0].header['BUNIT']}*{cube[0].header['CUNIT3']}"
+        moment0 = np.nansum(cube[0].data, axis=0) * cube[0].header['CDELT3']
+        if 0 in moments:
+            fits.writeto(f"{directory}/{basename}_mom0.fits",moment0,hdr2D,overwrite = overwrite)
+    if 1 in moments or 2 in moments:
+        zaxis = cube[0].header['CRVAL3'] + (np.arange(cube[0].header['NAXIS3']) \
+              - cube[0].header['CRPIX3']) * cube[0].header['CDELT3']
+        c=np.transpose(np.resize(zaxis,[cube[0].header['NAXIS1'],cube[0].header['NAXIS2'],len(zaxis)]),(2,1,0))
+        hdr2D['BUNIT'] = f"{cube[0].header['CUNIT3']}"
+        # Remember Python is stupid so z,y,x
+        with np.errstate(invalid='ignore', divide='ignore'):
+            moment1 = np.nansum(cube[0].data*c, axis=0)/ np.nansum(cube[0].data, axis=0)
+        hdr2D['DATAMAX'] = np.nanmax(moment1)
+        hdr2D['DATAMIN'] = np.nanmin(moment1)
+        if 1 in moments:
+            fits.writeto(f"{directory}/{basename}_mom1.fits",moment1,hdr2D,overwrite = overwrite)
+        if 2 in moments:
+            d = c - np.resize(moment1,[len(zaxis),cube[0].header['NAXIS2'],cube[0].header['NAXIS1']])
+            with np.errstate(invalid='ignore', divide='ignore'):
+                moment2 = np.sqrt(np.nansum(cube[0].data*d**2, axis=0)/ np.nansum(cube[0].data, axis=0))
+            hdr2D['DATAMAX'] = np.nanmax(moment2)
+            hdr2D['DATAMIN'] = np.nanmin(moment2)
+            fits.writeto(f"{directory}/{basename}_mom2.fits",moment2,hdr2D,overwrite = overwrite)
 
 def regrid_cube(data,hdr,ratio):
     regrid_hdr = copy.deepcopy(hdr)

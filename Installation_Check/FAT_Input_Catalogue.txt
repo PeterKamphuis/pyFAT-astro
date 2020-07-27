@@ -1,2 +1,2 @@
 number|distance|directoryname|cubename
-0|8.7|./|NGC_2903
+3|8.7|./|NGC_2903

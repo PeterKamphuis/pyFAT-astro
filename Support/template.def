@@ -5,7 +5,7 @@ INSET= recentered-s30cl.fits
 BOX=
 OUTSET=  1stfit.fits
 OUTCUBUP=  10000000.0
-PROGRESSLOG=progress.txt
+PROGRESSLOG=
 
 BMIN= 16.100000
 BMAJ= 37.900000
