@@ -48,7 +48,8 @@ CFLUX_2= 1e-5
 PENALTY= 1
 WEIGHT= 0
 RADSEP= 0.1
-INTY= 0
+INTY= 1
+INDINTY = 1
 ISEED= 8981
 INIMODE= 3
 
@@ -58,8 +59,9 @@ MAXITER=
 CALLITE=70
 SIZE= 10
 
-VARINDX=
+
 VARY=  XPOS 1:8 XPOS_2 1:8,  YPOS 1:8 YPOS_2 1:8, VSYS 1:8 VSYS_2 1:8, PA 1:8 PA_2 1:8, INCL 1:8 INCL_2 1:8, !SBR 2:8, !SBR_2 2:8, VROT 2:8, VROT_2 2:8, Z0 1:8  Z0_2 1:8
+VARINDX=
 PARMAX=		       360		     360		 5000		   360			 90	    1	        1	500	    500                30
 PARMIN=       	         0         	       0         	    0    	  -360         		 90	    0	    	0	  0	      0		        0
 MODERATE=     		 3 		       3 	  	    3       	     3 	       		  3 	    3	    	3	  3	      3			3

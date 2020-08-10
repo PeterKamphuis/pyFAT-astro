@@ -1,12 +1,13 @@
 #!/usr/local/bin/ python3
 # This module contains a set of functions and classes that are used to write text files to Disk
 
-from support_functions import convert_type, print_log,convertRADEC,convertskyangle,set_limit_modifier,columndensity,set_limits
-from modify_template import set_model_parameters, set_overall_parameters, set_fitting_parameters
+from support_functions import convert_type, print_log,convertRADEC,convertskyangle,set_limit_modifier,columndensity,set_limits,get_inner_fix
+from modify_template import set_model_parameters, set_overall_parameters, set_fitting_parameters,check_size,get_warp_slope
 from fits_functions import extract_pv
 from read_functions import load_tirific,load_basicinfo, load_template
 import numpy as np
 import warnings
+import datetime
 import os
 with warnings.catch_warnings():
     warnings.simplefilter("ignore")
@@ -17,7 +18,7 @@ with warnings.catch_warnings():
 from astropy.io import fits
 from astropy.wcs import WCS
 # create or append to the basic ifo file
-def basicinfo(Configuration,initialize = False,first_fit = False, second_fit = False,
+def basicinfo(Configuration,initialize = False,first_fit = False, second_fit = False, debug = False,
               RA=[0.,0.], DEC=[0.,0.], VSYS =[0.,0.],
               PA=[0,0], Inclination = [0,0], Max_Vrot = [0,0], Tot_Flux = [0,0], V_mask = [0,0],
               Distance = 0 , DHI = 0):
@@ -89,38 +90,41 @@ basicinfo.__doc__ = '''
 
 
 # Function to write the first def file for a galaxy
-def initialize_def_file(Configuration, Fits_Files,Tirific_Template, cube_hdr,Initial_Parameters = {}, fit_stage = 'Undefined_Stage'):
+def initialize_def_file(Configuration, Fits_Files,Tirific_Template, cube_hdr,Initial_Parameters = {}, fit_stage = 'Undefined_Stage',debug = False):
     #First we set some basic parameters that will hardly change
-    if fit_stage = 'Centre_Convergence':
+    if fit_stage == 'Centre_Convergence':
         if 'VSYS' in Initial_Parameters:
             Initial_Parameters['VSYS'] = [x/1000. for x in Initial_Parameters['VSYS']]
-        set_overall_parameters(Configuration, Fits_Files,Tirific_Template,loops=10,fit_stage=fit_stage,hdr=cube_hdr, flux = Initial_Parameters['FLUX'][0])
+        set_overall_parameters(Configuration, Fits_Files,Tirific_Template,loops=10,fit_stage=fit_stage,hdr=cube_hdr, flux = Initial_Parameters['FLUX'][0], debug=debug)
         # Then set the values for the various parameters of the model
-        set_model_parameters(Configuration, Tirific_Template,Initial_Parameters, hdr=cube_hdr)
-        set_limit_modifier(Configuration,Initial_Parameters['INCL'][0] )
-        set_fitting_parameters(Configuration, Tirific_Template, hdr = cube_hdr,stage = fit_stage,\
-                           systemic =  Initial_Parameters['VSYS'], \
+        set_model_parameters(Configuration, Tirific_Template,Initial_Parameters, hdr=cube_hdr, debug=debug)
+        set_limit_modifier(Configuration,Initial_Parameters['INCL'][0], debug=debug )
+        set_fitting_parameters(Configuration, Tirific_Template, hdr = cube_hdr,stage = 'initial',
+                           systemic =  Initial_Parameters['VSYS'],
                            inclination = Initial_Parameters['INCL'],
                            pa = Initial_Parameters['PA'],
                            rotation =Initial_Parameters['VROT'],
-                           ra = Initial_Parameters['RA'], dec = Initial_Parameters['DEC'])
+                           ra = Initial_Parameters['RA'], dec = Initial_Parameters['DEC'], debug=debug)
         if 'VSYS' in Initial_Parameters:
             Initial_Parameters['VSYS'] = [x*1000. for x in Initial_Parameters['VSYS']]
-    elif fit_stage = 'Extend_Convergence':
-        set_overall_parameters(Configuration, Fits_Files,Tirific_Template,loops=10,fit_stage=fit_stage,hdr=cube_hdr)
+    elif fit_stage == 'Extent_Convergence':
+        accepted = check_size(Configuration,Tirific_Template,cube_hdr, debug=debug)
+        set_overall_parameters(Configuration, Fits_Files,Tirific_Template,loops = 7 ,fit_stage=fit_stage,hdr=cube_hdr, debug=debug,stage='initialize_ec')
         Vars_to_Set =  ['XPOS','YPOS','VSYS','VROT','INCL','PA','SDIS','SBR','SBR_2','Z0']
-        FAT_Model = load_template(Tirific_Template,Variables= Vars_to_Set,unpack=False)
+        FAT_Model = load_template(Tirific_Template,Variables= Vars_to_Set,unpack=False, debug=debug)
         # Finally we set how these parameters are fitted.
-        set_limit_modifier(Configuration,FAT_Model[0,Vars_to_Set.index('INCL')])
-        set_fitting_parameters(Configuration, Tirific_Template, hdr = cube_hdr,stage = fit_stage,\
-                               systemic =  [FAT_Model[0,Vars_to_Set.index('VSYS')], Configuration['CHANNEL_WIDTH']], \
-                               inclination = [FAT_Model[0,Vars_to_Set.index('INCL')], 10.],
-                               pa = [FAT_Model[0,Vars_to_Set.index('PA')], 10],
-                               rotation =[np.mean(FAT_Model[:,Vars_to_Set.index('VROT')]),np.max(FAT_Model[:,Vars_to_Set.index('VROT')])-np.min(FAT_Model[1:,Vars_to_Set.index('VROT')]) ]],
-                               ra = [FAT_Model[0,Vars_to_Set.index('XPOS')], cube_hdr['BMAJ']]\,
-                               dec = [FAT_Model[0,Vars_to_Set.index('YPOS')],cube_hdr['BMAJ'] ])
+        set_limit_modifier(Configuration,FAT_Model[0,Vars_to_Set.index('INCL')], debug=debug)
+        Configuration['INNER_FIX'] = get_inner_fix(Configuration,Tirific_Template, debug=debug)
+        Configuration['WARP_SLOPE'] = get_warp_slope(Configuration,Tirific_Template,cube_hdr, debug=debug)
+        set_fitting_parameters(Configuration, Tirific_Template, hdr = cube_hdr,stage = 'initialize_ec',
+                               systemic =  [FAT_Model[0,Vars_to_Set.index('VSYS')], Configuration['CHANNEL_WIDTH']],
+                               inclination = [FAT_Model[0,Vars_to_Set.index('INCL')], 3.],
+                               pa = [FAT_Model[0,Vars_to_Set.index('PA')], 3.],
+                               rotation =[np.mean(FAT_Model[:,Vars_to_Set.index('VROT')]),np.max(FAT_Model[:,Vars_to_Set.index('VROT')])-np.min(FAT_Model[1:,Vars_to_Set.index('VROT')]) ],
+                               ra = [FAT_Model[0,Vars_to_Set.index('XPOS')], cube_hdr['BMAJ']],
+                               dec = [FAT_Model[0,Vars_to_Set.index('YPOS')],cube_hdr['BMAJ'] ], debug=debug)
 
-    tirific(Configuration,Tirific_Template,name = f'{fit_stage}_In.def')
+    tirific(Configuration,Tirific_Template,name = f'{fit_stage}_In.def', debug=debug)
 
 
 initialize_def_file.__doc__ = '''
@@ -156,7 +160,7 @@ initialize_def_file.__doc__ = '''
 ;
 ;
 '''
-def make_overview_plot(Configuration,Fits_Files):
+def make_overview_plot(Configuration,Fits_Files, debug = False):
         # open the cube
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
@@ -188,7 +192,6 @@ def make_overview_plot(Configuration,Fits_Files):
         size_ratio = 11.6/8.2
         #stupid pythonic layout for grid spec
         gs = Overview.add_gridspec(int(20*size_ratio),20)
-        print(int(20*size_ratio))
         labelfont = {'family': 'Times New Roman',
                  'weight': 'normal',
                  'size': 8}
@@ -417,7 +420,7 @@ def make_overview_plot(Configuration,Fits_Files):
             angleb  = moment2[0].header['BPA']
         except:
             angleb = 0.
-        print(xmin,xmax,convertRADEC(ghxloc,ghyloc))
+
         beam = Ellipse(xy=localoc, width=widthb, height=heightb, angle=angleb, transform = ax_moment2.get_transform('fk4'),
                edgecolor='k', lw=1, facecolor='none', hatch='/////',zorder=15)
         ax_moment2.add_patch(beam)
@@ -661,10 +664,10 @@ def make_overview_plot(Configuration,Fits_Files):
         plt.savefig(f"{Configuration['FITTING_DIR']}Overview.png", bbox_inches='tight')
         plt.close()
 
-def plot_parameters(Vars_to_plot,FAT_Model,Input_Model,location,Figure,parameter, legend = ['Empty','Empty','Empty','Empty'],initial = 'No Value'):
+def plot_parameters(Vars_to_plot,FAT_Model,Input_Model,location,Figure,parameter, legend = ['Empty','Empty','Empty','Empty'],initial = 'No Value', debug = False):
     ax = Figure.add_subplot(location)
     try:
-        yerr = FAT_Model[:,Vars_to_plot.index(f'{parameter}_ERR')]
+        yerr = FAT_Model[:,Vars_to_plot.index(f'# {parameter}_ERR')]
     except:
         yerr =np.zeros(len(FAT_Model[:,Vars_to_plot.index('RADI')]))
     ax.errorbar(FAT_Model[:,Vars_to_plot.index('RADI')],FAT_Model[:,Vars_to_plot.index(f'{parameter}')],yerr= yerr, c ='k', label=f'{legend[0]}')
@@ -673,7 +676,7 @@ def plot_parameters(Vars_to_plot,FAT_Model,Input_Model,location,Figure,parameter
         diff = np.sum(abs(FAT_Model[:,Vars_to_plot.index(f'{parameter}_2')]-FAT_Model[:,Vars_to_plot.index(f'{parameter}')]))
         if diff != 0.:
             try:
-                yerr = FAT_Model[:,Vars_to_plot.index(f'{parameter}_2_ERR')]
+                yerr = FAT_Model[:,Vars_to_plot.index(f'# {parameter}_2_ERR')]
             except:
                 yerr =np.zeros(len(FAT_Model[:,Vars_to_plot.index('RADI')]))
             ax.errorbar(FAT_Model[:,Vars_to_plot.index('RADI')],FAT_Model[:,Vars_to_plot.index(f'{parameter}_2')],yerr= yerr, c ='r', label=f'{legend[1]}')
@@ -681,7 +684,7 @@ def plot_parameters(Vars_to_plot,FAT_Model,Input_Model,location,Figure,parameter
 
     if len(Input_Model) > 0:
         try:
-            yerr = Input_Model[:,Vars_to_plot.index(f'{parameter}_ERR')]
+            yerr = Input_Model[:,Vars_to_plot.index(f'# {parameter}_ERR')]
         except:
             yerr =np.zeros(len(Input_Model[:,Vars_to_plot.index('RADI')]))
         ax.errorbar(Input_Model[:,Vars_to_plot.index('RADI')],Input_Model[:,Vars_to_plot.index(f'{parameter}')],yerr= yerr, c ='b',linestyle='-', label=f'{legend[2]}')
@@ -690,7 +693,7 @@ def plot_parameters(Vars_to_plot,FAT_Model,Input_Model,location,Figure,parameter
             diff = np.sum(abs(Input_Model[:,Vars_to_plot.index(f'{parameter}_2')]-Input_Model[:,Vars_to_plot.index(f'{parameter}')]))
             if diff != 0.:
                 try:
-                    yerr = Input_Model[:,Vars_to_plot.index(f'{parameter}_2_ERR')]
+                    yerr = Input_Model[:,Vars_to_plot.index(f'# {parameter}_2_ERR')]
                 except:
                     yerr =np.zeros(len(Input_Model[:,Vars_to_plot.index('RADI')]))
                 ax.errorbar(Input_Model[:,Vars_to_plot.index('RADI')],Input_Model[:,Vars_to_plot.index(f'{parameter}_2')],yerr= yerr, c ='yellow', label=f'{legend[3]}')
@@ -702,7 +705,93 @@ def plot_parameters(Vars_to_plot,FAT_Model,Input_Model,location,Figure,parameter
     return ax
 
 
-def sofia(template,name):
+def plot_usage_stats(Configuration,debug = False):
+    with open(f"{Configuration['FITTING_DIR']}Logs/Usage_Statistics.txt") as file:
+        lines = file.readlines()
+    labels = []
+    label_times = []
+    times = []
+    CPU = []
+    mem = []
+    labelfont = {'family': 'Times New Roman',
+             'weight': 'normal',
+             'size': 4}
+    current_stage = 'Not_Found'
+    startdate = 0
+    for line in lines:
+        line = line.strip()
+        if line[0] == '#':
+            tmp = line.split('=')
+            if len(tmp) == 2:
+                current_stage = tmp[1].strip()
+                labels.append(f'Initializing {current_stage}')
+                label_times.append('No Time')
+            else:
+                tmp = line.split(' ')
+                if tmp[1].lower() == 'finished':
+                    labels.append(f'Ended {current_stage}')
+                    label_times.append('No Time')
+                elif tmp[3].lower() == 'actual':
+                    labels.append(f'Started {current_stage}')
+                    label_times.append('No Time')
+                    times.append('No Time')
+                    CPU.append(CPU[-1])
+                    mem.append(mem[-1])
+        else:
+            tmp = line.split(' ')
+            tmp2 = tmp[0].split('-')
+            if len(tmp2) == 3:
+                date =  datetime.datetime.strptime(f"{tmp[0]} {tmp[1]}", '%Y-%m-%d %H:%M:%S.%f')
+                if startdate == 0:
+                    startdate  =  datetime.datetime.strptime(f"{tmp[0]} {tmp[1]}", '%Y-%m-%d %H:%M:%S.%f')
+                diff = date - startdate
+                if len(times) > 0 :
+                    if times[-1] == 'No Time':
+                        times[-1] = diff.total_seconds()/60.
+                times.append(diff.total_seconds()/60.)
+                if label_times[-1] == 'No Time':
+                    label_times[-1] = diff.total_seconds()/60.
+                CPU.append(tmp[4])
+                mem.append(tmp[8])
+    # Below thanks to P. Serra
+    # Make single-PID figures and total figure
+
+
+    fig, ax1 = plt.subplots(figsize = (8,4))
+    fig.subplots_adjust(left = 0.1, right = 0.9, bottom = 0.15, top = 0.8)
+    #fig.suptitle('file: {0:s}, PID: {1:s}, command: {2:s}'.format(sys.argv[1].split('/')[-1],jj,jobs_dict[jj][0]),x=0.07,ha='left')
+    times = np.array(times, dtype = float)
+    mem = np.array(mem, dtype = float)
+    CPU = np.array(CPU, dtype = float)
+
+    ax1.plot(times,mem,'b-',lw=0.5)
+    ax1.set_ylim(0,np.max(mem))
+    #ax1.set_xlim(times.min()-times[0],times.max()-times[0]) # to have all plots on the same time axis
+      #ax1.set_xlim(time.min(),time.max())                     # to have each plot on its own time axis
+      #ax1.set_xlim(0,1.5)
+    ax1.set_ylabel('RAM (Mb) ', color='b')
+    #ax1.axhline(y=expmemfrac,color='k',linestyle='--')
+    ax1.tick_params(axis='y', labelcolor='b')
+    ax1.set_xlabel('time (min)', color='k')
+    ax2 = ax1.twinx()
+    ax2.plot(times,CPU,'r-',lw=0.5)
+    #for xx in range(1,expcpu): ax2.axhline(y=xx, color='r', linestyle=':', linewidth=0.1)
+    #ax2.set_ylim(0,expcpu)
+    ax2.set_ylabel('CPUs (%)',color='r')
+    #ax2.axhline(y=expcpu,color='r',linestyle='--')
+    ax2.tick_params(axis='y', labelcolor='r')
+
+    for label,time in zip(labels,label_times):
+        ax2.text(time,np.max(CPU)+20.,label, va='bottom',ha='left',rotation= 60, color='black',
+              bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7)
+    fig.savefig(f"{Configuration['FITTING_DIR']}Logs/ram_cpu.pdf")
+    plt.close()
+
+
+
+
+
+def sofia(template,name, debug = False):
     with open(name,'w') as file:
         for key in template:
             if key[0] == 'E' or key [0] == 'H':
@@ -744,7 +833,7 @@ sofia.__doc__ = '''
 ;
 ;
 '''
-def tirific(Configuration,Tirific_Template, name = 'tirific.def'):
+def tirific(Configuration,Tirific_Template, name = 'tirific.def', debug = False):
     #IF we're writing we bump up the restart_ID
     Tirific_Template['RESTARTID'] = str(int(Tirific_Template['RESTARTID'])+1)
     with open(Configuration['FITTING_DIR']+name, 'w') as file:
@@ -752,7 +841,7 @@ def tirific(Configuration,Tirific_Template, name = 'tirific.def'):
             if key[0:5] == 'EMPTY':
                 file.write('\n')
             else:
-                file.write((f"{key} = {Tirific_Template[key]} \n"))
+                file.write((f"{key}= {Tirific_Template[key]} \n"))
 
 tirific.__doc__ = '''
 

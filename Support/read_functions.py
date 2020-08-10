@@ -16,7 +16,7 @@ class BadConfigurationError(Exception):
     pass
 class NoConfigFile(Exception):
     pass
-def catalogue(filename):
+def catalogue(filename, debug = False):
     Catalogue = Proper_Dictionary({})
     tmpfile = open(filename,'r')
     #Define the exsiting catalogue input()
@@ -75,7 +75,7 @@ catalogue.__doc__ ='''
 
 
 #Function to read FAT configuration file into a dictionary
-def config_file(input_parameters, start_dir):
+def config_file(input_parameters, start_dir, debug = False):
     No_File = True
     while No_File:
         try:
@@ -194,7 +194,6 @@ def config_file(input_parameters, start_dir):
     if Configuration['MAPS_OUTPUT'] == 5:
         Configuration['MAPS_OUTPUT'] = 4
     return Configuration
-
 config_file.__doc__ ='''
 ;+
 ; NAME:
@@ -234,7 +233,7 @@ config_file.__doc__ ='''
 
 # Function to get the PA and inclination from the moment 0 for initial estimates
 
-def guess_orientation(Configuration,Fits_Files, center = None):
+def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
     #open the moment 0
 
     Image = fits.open(Configuration['FITTING_DIR']+'Sofia_Output/'+Fits_Files['MOMENT0'],\
@@ -301,7 +300,7 @@ def guess_orientation(Configuration,Fits_Files, center = None):
         avg_profile.append(np.nanmean([maj_profile[neg_index[neg_index.size-i-1]],maj_profile[pos_index[i]]]))
     ring_size_req = Configuration['RING_SIZE']*hdr['BMAJ']/(np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])*maj_resolution)
     SBR_initial = avg_profile[0::int(ring_size_req)]/(np.pi*abs(hdr['BMAJ']*3600.*hdr['BMIN']*3600.)/(4.*np.log(2.))) # Jy*km/s
-    SBR_initial[0] = SBR_initial[1]
+    SBR_initial =np.hstack((SBR_initial[0],SBR_initial,SBR_initial[-1]))
     #We need to know which is the approaching side and which is receding
 
     Image = fits.open(Configuration['FITTING_DIR']+'Sofia_Output/'+Fits_Files['MOMENT1'],\
@@ -358,7 +357,7 @@ guess_orientation.__doc__ ='''
 ;
 '''
 # load the basic info file to get the Sofia FAT Initial_Estimates
-def load_basicinfo(filename, Variables = ['RA','DEC','VSYS','PA','Inclination','Max VRot','V_mask','Tot FLux','D_HI','Distance','HI_Mass' ,'D_HI' ], unpack = True):
+def load_basicinfo(filename, Variables = ['RA','DEC','VSYS','PA','Inclination','Max VRot','V_mask','Tot FLux','D_HI','Distance','HI_Mass' ,'D_HI' ], unpack = True, debug = False):
     outputarray = np.zeros((2,len(Variables)), dtype=float)
     try:
         tmp = open(filename, 'r')
@@ -393,12 +392,18 @@ def load_basicinfo(filename, Variables = ['RA','DEC','VSYS','PA','Inclination','
 def load_template(Template,Variables = ['BMIN','BMAJ','BPA','RMS','DISTANCE','NUR','RADI','VROT',
                  'Z0', 'SBR', 'INCL','PA','XPOS','YPOS','VSYS','SDIS','VROT_2',  'Z0_2','SBR_2',
                  'INCL_2','PA_2','XPOS_2','YPOS_2','VSYS_2','SDIS_2','CONDISP','CFLUX','CFLUX_2'],
-                 unpack = True  ):
+                 unpack = True  ,debug = False):
     Variables = np.array([e.upper() for e in Variables],dtype=str)
+    if debug:
+        print_log(f'''LOAD_TEMPLATE: We get the following number of rings from the template {Template['NUR']}
+''',None, debug=debug)
     numrings = int(Template['NUR'])
     outputarray=np.zeros((numrings,len(Variables)),dtype=float)
     counter = 0
     for var in Variables:
+        if debug:
+            print_log(f'''LOAD_TEMPLATE: We are processing {var}.
+{'':8s}LOAD_TEMPLATE: With the following values {Template[var]}''',None, debug=debug)
         tmp =  np.array(Template[var].rsplit(),dtype=float)
         outputarray[0:len(tmp),counter] = tmp[0:len(tmp)]
         counter +=1
@@ -408,13 +413,11 @@ def load_template(Template,Variables = ['BMIN','BMAJ','BPA','RMS','DISTANCE','NU
     else:
         return outputarray
 
-
-
 #Function for loading the variables of a tirific def file into a set of variables to be used
 def load_tirific(filename,Variables = ['BMIN','BMAJ','BPA','RMS','DISTANCE','NUR','RADI','VROT',
                  'Z0', 'SBR', 'INCL','PA','XPOS','YPOS','VSYS','SDIS','VROT_2',  'Z0_2','SBR_2',
                  'INCL_2','PA_2','XPOS_2','YPOS_2','VSYS_2','SDIS_2','CONDISP','CFLUX','CFLUX_2'],
-                 unpack = True  ):
+                 unpack = True , debug = False ):
     Variables = np.array([e.upper() for e in Variables],dtype=str)
 
     tmp = open(filename, 'r')
@@ -451,7 +454,7 @@ def load_tirific(filename,Variables = ['BMIN','BMAJ','BPA','RMS','DISTANCE','NUR
     else:
         return outputarray
 
-def obtain_ratios(map, hdr, center, angles):
+def obtain_ratios(map, hdr, center, angles, debug = False):
     ratios = []
     max_extent = 0.
     for angle in angles:
@@ -491,7 +494,6 @@ def obtain_ratios(map, hdr, center, angles):
     #as the extend is at 25% let's take 2 time the sigma of that
     max_extent = (max_extent/(2.*np.sqrt(2*np.log(2))))*2.
     return np.array(ratios,dtype=float), max_extent*np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])
-
 obtain_ratios.__doc__ = '''
 ;+
 ; NAME:
@@ -531,7 +533,7 @@ obtain_ratios.__doc__ = '''
 
 
 
-def obtain_border_pix(hdr,angle,center):
+def obtain_border_pix(hdr,angle,center, debug = False):
 
     if angle < 90.:
         x1 = center[0]-(hdr['NAXIS2']-center[1])*np.tan(np.radians(angle))
@@ -566,7 +568,7 @@ def obtain_border_pix(hdr,angle,center):
 
 # function to read the sofia catalogue
 def sofia_catalogue(Configuration, Variables =['name','x','x_min','x_max','y','y_min','y_max','z','z_min','z_max','ra',\
-                    'dec','v_app','f_sum','kin_pa','w50','err_f_sum','err_x','err_y','err_z'], header = None ):
+                    'dec','v_app','f_sum','kin_pa','w50','err_f_sum','err_x','err_y','err_z'], header = None , debug = False):
     outlist = [[] for x in Variables]
     with open(Configuration['FITTING_DIR']+'Sofia_Output/'+Configuration['BASE_NAME']+'_cat.txt') as sof_cat:
         for line in sof_cat.readlines():
@@ -690,9 +692,9 @@ sofia_catalogue.__doc__ ='''
 
 
 
-def tirific_template(filename):
+def tirific_template(filename, debug = False):
     tmp = open(filename, 'r')
-    result = {}
+    result = Proper_Dictionary()
     counter = 0
     # Separate the keyword names
     for line in tmp.readlines():
@@ -739,7 +741,7 @@ tirific_template.__doc__ ='''
 ;
 '''
 
-def sofia_template(filename):
+def sofia_template(filename, debug = False):
     tmp = open(filename, 'r')
     result = {}
     counter = 0

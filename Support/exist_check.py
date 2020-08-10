@@ -8,7 +8,7 @@ class FileNotFoundError(Exception):
 from support_functions import print_log
 import os
 
-def sofia_output(Configuration,Fits_Files):
+def sofia_output(Configuration,Fits_Files, debug = False):
 
     req_files= ['MOMENT1','MOMENT0','MOMENT2','MASK']
     for file in req_files:

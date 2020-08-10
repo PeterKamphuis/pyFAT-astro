@@ -12,10 +12,11 @@ import numpy as np
 import copy
 import warnings
 import re
-
+import subprocess
 class SupportRunError(Exception):
     pass
-
+class SmallSourceError(Exception):
+    pass
 # A class of ordered dictionary where keys can be inserted in at specified locations or at the end.
 class Proper_Dictionary(OrderedDict):
     def insert(self, existing_key, new_key, key_value):
@@ -90,14 +91,17 @@ convert_type.__doc__ = '''
 
 #Function to convert column densities
 # levels should be n mJy/beam when flux is given
-def columndensity(levels,systemic = 100.,beam=[1.,1.],channel_width=1.,column= False,arcsquare=False,solar_mass_input =False,solar_mass_output=False):
+def columndensity(levels,systemic = 100.,beam=[1.,1.],channel_width=1.,column= False,arcsquare=False,solar_mass_input =False,solar_mass_output=False, debug = False):
     beam=np.array(beam)
     f0 = 1.420405751786E9 #Hz rest freq
     c = 299792.458 # light speed in km / s
     pc = 3.086e+18 #parsec in cm
     solarmass = 1.98855e30 #Solar mass in kg
     mHI = 1.6737236e-27 #neutral hydrogen mass in kg
-
+    if debug:
+                print_log(f'''COLUMNDENSITY: We have the following input for calculating the columns.
+{'':8s}COLUMNDENSITY: level = {levels}, channel_width = {channel_width}, beam = {beam}, systemic = {systemic})
+''',None,debug=debug)
     if systemic > 10000:
         systemic = systemic/1000.
     f = f0 * (1 - (systemic / c)) #Systemic frequency
@@ -111,6 +115,7 @@ def columndensity(levels,systemic = 100.,beam=[1.,1.],channel_width=1.,column= F
             #levels=levels/(HIconv*channel_width)
             levels = levels/(HIconv*channel_width)
         else:
+
             levels = HIconv*levels*channel_width
             if solar_mass_output:
                 levels=levels*mHI/solarmass*pc*pc
@@ -292,7 +297,64 @@ def fit_gaussian(x,y, covariance = False):
         return gauss_parameters, gauss_covariance
     else:
         return gauss_parameters
+#Put template values in a list !!!!!!!! This is very similar to load_template in read_funtcions maybe use one?
+def get_from_template(Tirific_Template,Variables, debug = False):
+    out = []
+    if debug:
+        print(f'''{'':8s}GET_FROM_TEMPLATE: Trying to get the following profiles {Variables}
+''')
+    for key in Variables:
+        out.append([float(x) for x  in Tirific_Template[key].split()])
+    #Because lists are stupid i.e. sbr[0][0] = SBR[0], sbr[1][0] = SBR_2[0] but  sbr[:][0] = SBR[:] not SBR[0],SBR_2[0] as logic would demand
+    if debug:
+        print(f'''{'':8s}GET_FROM_TEMPLATE: We extracted the following profiles from the Template.
+{'':8s}GET_FROM_TEMPLATE: {out}
+''' )
+    #Beware that lists are stupid i.e. sbr[0][0] = SBR[0], sbr[1][0] = SBR_2[0] but  sbr[:][0] = SBR[:] not SBR[0],SBR_2[0] as logic would demand
+    # However if you make a np. array from it make sure that you specify float  or have lists of the same length else you get an array of lists which behave just as dumb
+    return out
 
+# Function to get the amount of inner rings to fix
+def get_inner_fix(Configuration,Tirific_Template, debug =False):
+    if debug:
+        print_log(f'''GET_INNER_FIX: Attempting to get the inner rings to be fixed.
+''',Configuration['OUTPUTLOG'], debug = debug, screen = True)
+    sbr_av = np.array([(float(x)+float(y))/2. for x,y  in zip(Tirific_Template['SBR'].split(),Tirific_Template['SBR_2'].split())],dtype = float)
+    column_levels = columndensity(sbr_av, arcsquare = True, debug = debug)
+    column_levels[0]= 1e21
+    tmp = np.where(column_levels > 1e20)[0]
+    return set_limits(int(np.floor(tmp[-1]/1.5-1)), 4, int(Configuration['NO_RINGS']*0.9))
+
+def get_usage_statistics(process_id, debug = False):
+    result = subprocess.check_output(['top',f'-p {process_id}','-d 1','-n 1'])
+    #result = subprocess.check_output(['ps','u'])
+    lines = result.decode('utf8').split('\n')
+    column_names = [x.upper() for x in lines[6].strip().split()]
+    if debug:
+        print(f'''{'':8s}GET_usage_statistics: We extracted the following column names {column_names}
+''')
+    CPU = float(0.)
+    mem=float(0.)
+    column_var = [x for x in lines[7].strip().split()]
+    if debug:
+        print(f'''{'':8s}GET_usage_statistics: We extracted the following variables {column_var}
+''')
+    CPU = float(column_var[column_names.index('%CPU')])
+    mem = float(column_var[column_names.index('RES')])/1024**2
+    try:
+        if int(column_var[column_names.index('PID')]) == int(process_id):
+            CPU = float(column_var[column_names.index('%CPU')])
+            mem = float(column_var[column_names.index('RES')])/1024**2
+    except:
+        #if the PID is not numeric it got merged with the crap in shiftcentercounter
+        try:
+            if column_var[column_names.index('COMMAND')-1] == 'tirific':
+                CPU = float(column_var[column_names.index('%CPU')-1])
+                mem = float(column_var[column_names.index('RES')-1])/1024**2
+        except:
+            pass
+
+    return CPU,mem
 # A simple function to return the line numbers in the stack from where the functions are called
 def linenumber(debug=False):
     line = []
@@ -408,8 +470,11 @@ rename_fit_products.__doc__ = '''
 '''
 
 
-def sbr_limits(Configuration,hdr, systemic= 100.):
-    radii = set_rings(Configuration, hdr)
+def sbr_limits(Configuration,hdr, systemic= 100. , debug = False):
+    radii = set_rings(Configuration, bmaj= hdr['BMAJ']*3600.)
+    if debug:
+        print_log(f'''SBR_LIMITS: Got {len(radii)} radii
+''',Configuration['OUTPUTLOG'], debug=debug,screen =True)
     level = hdr['FATNOISE']*1000
     bm = [hdr['BMAJ']*3600.,hdr['BMIN']*3600.]
     noise_in_column = columndensity(level,beam = bm,systemic = systemic,channel_width=hdr['CDELT3']/1000.)
@@ -510,7 +575,7 @@ set_limits.__doc__ = '''
 
 '''
 #simple function keep track of how to modify the edge limits
-def set_limit_modifier(Configuration,Inclination):
+def set_limit_modifier(Configuration,Inclination, debug= False):
 
     if not Inclination.shape:
         Inclination = [Inclination]
@@ -525,12 +590,57 @@ def set_limit_modifier(Configuration,Inclination):
     if Configuration['OUTER_RINGS_DOUBLED']:
         if len(modifier_list) > 10:
             modifier_list[10:]= np.sqrt(modifier_list[10:])
-
     Configuration['LIMIT_MODIFIER'] = np.array(modifier_list,dtype=float)
+    print_log(f'''SET_LIMIT_MODIFIER: We updated the LIMIT_MODIFIER to {Configuration['LIMIT_MODIFIER']}.
+''', Configuration['OUTPUTLOG'], debug=debug)
 
-def set_rings(Configuration,hdr):
-    bmaj = float(hdr['BMAJ'])*3600.
-    if Configuration['OUTER_RINGS_DOUBLED']:
+
+def set_ring_size(Configuration, debug = False, no_rings = 0., check_set_rings = True):
+    if no_rings == 0.:
+        check_set_rings = False
+        no_rings = Configuration['NO_RINGS']
+        ring_size = Configuration['RING_SIZE']
+        size_in_beams =  Configuration['SIZE_IN_BEAMS']
+    else:
+        ring_size = Configuration['RING_SIZE']
+        size_in_beams = (no_rings-2)*ring_size
+
+    while ring_size > 0.5 and  no_rings < Configuration['MINIMUM_RINGS']:
+        previous_ringsize = ring_size
+        ring_size = set_limits(ring_size/1.5,0.5,float('NaN'))
+        if ring_size <= 2.:
+            no_rings = int(round(size_in_beams/ring_size)+2)
+        else:
+            no_rings = int(round(size_in_beams/ring_size-0.66)+2)
+        print_log(f'''SET_RING_SIZE: Because we had less than four rings we have reduced the ring size from {previous_ringsize} to {ring_size}
+''',Configuration['OUTPUTLOG'],debug = Configuration['DEBUG'])
+
+    while no_rings < Configuration['MINIMUM_RINGS'] and size_in_beams !=  Configuration['MAX_SIZE_IN_BEAMS']:
+        size_in_beams = set_limits(size_in_beams+1,1, Configuration['MAX_SIZE_IN_BEAMS'])
+        no_rings = int(round(size_in_beams/ring_size)+2)
+        print_log(f'''SET_RING_SIZE: The initial estimate is too small to fit adding a ring to it.
+''',Configuration['OUTPUTLOG'],debug = Configuration['DEBUG'])
+
+    if check_set_rings:
+        return no_rings,ring_size
+    else:
+        Configuration['NO_RINGS'] = int(no_rings)
+        Configuration['SIZE_IN_BEAMS'] = int(size_in_beams)
+        Configuration['RING_SIZE'] = ring_size
+        if Configuration['NO_RINGS'] < Configuration['MINIMUM_RINGS']:
+            print_log(f'''SET_RING_SIZE: With a ring size of {Configuration['RING_SIZE']} we still only find {Configuration['NO_RINGS']}.
+    {"":8s}SET_RING_SIZE: This is not enough for a fit.
+    ''',Configuration['OUTPUTLOG'],debug = Configuration['DEBUG'])
+            raise SmallSourceError('This source is too small to reliably fit')
+
+
+def set_rings(Configuration, bmaj = 15., debug = False):
+    Configuration['NO_RINGS'] = Configuration['SIZE_IN_BEAMS']/Configuration['RING_SIZE']
+    set_ring_size(Configuration)
+    if Configuration['NO_RINGS'] > 20 and Configuration['MAX_RINGS'] > 25:
+        Configuration['OUTER_RINGS_DOUBLED'] = True
+        print_log(f'''SET_RINGS: This is a large galaxy (# Rings = {Configuration['NO_RINGS']}) Therefore we use twice the ring size in the outer parts.
+''',Configuration['OUTPUTLOG'],debug = Configuration['DEBUG'])
         radii = [0.,1./5.*bmaj]
         radii = np.hstack((radii,(np.linspace(bmaj*Configuration['RING_SIZE'],bmaj*10.*Configuration['RING_SIZE'], \
                                         10)+1./5*bmaj)))
@@ -540,9 +650,9 @@ def set_rings(Configuration,hdr):
         radii = [0.,1./5.*bmaj]
         radii = np.hstack((radii,(np.linspace(bmaj*Configuration['RING_SIZE'],bmaj*Configuration['NO_RINGS']*Configuration['RING_SIZE'], \
                                         Configuration['NO_RINGS'])+1./5.*bmaj)))
+    Configuration['NO_RINGS'] = len(radii)
+    Configuration['SIZE_IN_BEAMS']= int((radii[-1]-1./5.*bmaj)/bmaj)
     return np.array(radii,dtype = float)
-
-
 set_rings.__doc__ = '''
 ;+
 ; NAME:

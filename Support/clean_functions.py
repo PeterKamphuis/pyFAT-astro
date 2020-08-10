@@ -6,9 +6,9 @@ import os,signal
 from datetime import datetime
 from support_functions import print_log
 from fits_functions import make_moments
-from write_functions import make_overview_plot
+from write_functions import make_overview_plot,plot_usage_stats
 
-def clean_before_sofia(Configuration):
+def clean_before_sofia(Configuration, debug = False):
     files =['_mask.fits','_mom0.fits','_mom1.fits','_chan.fits','_mom2.fits','_cat.txt']
 
     for file in files:
@@ -33,7 +33,7 @@ clean_before_sofia.__doc__ = '''
 Clean up the sofia out put files before running SoFiA
 '''
 
-def clean_after_sofia(Configuration):
+def clean_after_sofia(Configuration, debug = False):
     files =['_mask.fits','_chan.fits','_cat.txt']
 
     for file in files:
@@ -46,27 +46,28 @@ def clean_after_sofia(Configuration):
     except:
         pass
 
-        
+
 
 clean_after_sofia.__doc__ = '''
 Clean up the sofia output files by putting them in a dedicated directory.
 '''
 # cleanup dirty files before starting fitting
-def cleanup(Configuration,Fits_Files):
+def cleanup(Configuration,Fits_Files, debug = False):
 
     if Configuration['START_POINT'] == 1:
-        directories=['Finalmodel','Sofia_Output','Centre_Convergence','Def_Files']
+        directories=['Finalmodel','Sofia_Output','Centre_Convergence','Def_Files','Extent_Convergence']
         files = [Fits_Files['FITTING_CUBE'],Fits_Files['OPTIMIZED_CUBE'], \
-                'Centre_Convergence_In.def',Configuration['BASE_NAME']+'-BasicInfo.txt','Centre_Convergence/Centre_Convergence_In_Before_Smooth.def']
+                'Centre_Convergence_In.def',Configuration['BASE_NAME']+'-BasicInfo.txt','Centre_Convergence/Centre_Convergence_In_Before_Smooth.def',\
+                'Extent_Convergence_In.def','Extent_Convergence/Extent_Convergence_In_Before_Smooth.def']
     elif Configuration['START_POINT'] == 2:
-        directories=['Finalmodel','Sofia_Output','Centre_Convergence','Def_Files']
+        directories=['Finalmodel','Sofia_Output','Centre_Convergence','Def_Files','Extent_Convergence']
         files = ['Centre_Convergence_In.def',Configuration['BASE_NAME']+'-BasicInfo.txt','Centre_Convergence/Centre_Convergence_In_Before_Smooth.def']
     elif Configuration['START_POINT'] == 3:
-        directories=['Finalmodel','Centre_Convergence','Def_Files']
+        directories=['Finalmodel','Centre_Convergence','Def_Files','Extent_Convergence']
         files = ['Centre_Convergence_In.def','Centre_Convergence/Centre_Convergence_In_Before_Smooth.def']
     elif Configuration['START_POINT'] == 4 and Configuration['FINISHAFTER'] > 1:
-        directories=['Finalmodel','Def_Files']
-        files = ['Centre_Convergence_In.def']
+        directories=['Finalmodel','Def_Files','Extent_Convergence']
+        files = ['Centre_Convergence_In.def',]
     else:
         directories= None
         file =  None
@@ -161,7 +162,7 @@ cleanup.__doc__ = '''
 
 
 
-def finish_galaxy(Configuration,maximum_directory_length,current_run = 'Not initialized', Fits_Files= None):
+def finish_galaxy(Configuration,maximum_directory_length,current_run = 'Not initialized', Fits_Files= None, debug = False):
     #make sure we are not leaving stuff
     try:
         current_run.kill()
@@ -175,7 +176,8 @@ def finish_galaxy(Configuration,maximum_directory_length,current_run = 'Not init
     output_catalogue = open(Configuration['OUTPUTCATALOGUE'],'a')
     output_catalogue.write(f"{Configuration['FITTING_DIR'].split('/')[-2]:{maximum_directory_length}s} {Configuration['CC_ACCEPTED']} {Configuration['EC_ACCEPTED']}   {Configuration['FINAL_COMMENT']} \n")
     output_catalogue.close()
-
+    if Configuration['TIMING']:
+        plot_usage_stats(Configuration,debug = debug)
     if Configuration['MAPS_OUTPUT'] == 5:
         log_statement = f'''!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 {"":8s}FAT did not run the full fitting routines on this galaxy.
@@ -194,8 +196,8 @@ def finish_galaxy(Configuration,maximum_directory_length,current_run = 'Not init
                 os.symlink(f"{Configuration['FITTING_DIR']}/Centre_Convergence/Centre_Convergence.fits",f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel.fits")
                 os.symlink(f"{Configuration['FITTING_DIR']}/Centre_Convergence/Centre_Convergence.def",f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel.def")
             elif Configuration['FINISHAFTER'] == 2:
-                os.symlink(f"{Configuration['FITTING_DIR']}/Extend_Convergence/Extend_Convergence.fits",f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel.fits")
-                os.symlink(f"{Configuration['FITTING_DIR']}/Extend_Convergence/Extend_Convergence.def",f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel.def")
+                os.symlink(f"{Configuration['FITTING_DIR']}/Extent_Convergence/Extent_Convergence.fits",f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel.fits")
+                os.symlink(f"{Configuration['FITTING_DIR']}/Extent_Convergence/Extent_Convergence.def",f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel.def")
             # We need to produce a FinalModel Directory with moment maps and an XV-Diagram of the model.
             if Fits_Files:
                 if Configuration['FINISHAFTER'] == 1 and Configuration['START_POINT'] == 4:

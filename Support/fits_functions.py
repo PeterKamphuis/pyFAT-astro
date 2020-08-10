@@ -17,7 +17,7 @@ class BadCubeError(Exception):
 
 
 # clean the header
-def clean_header(hdr,log):
+def clean_header(hdr,log, debug = False):
     if not 'EPOCH' in hdr:
         if 'EQUINOX' in hdr:
             log_statement = f'''CLEAN_HEADER: Your cube has no EPOCH keyword but we found EQUINOX.
@@ -179,7 +179,7 @@ clean_header.__doc__ = '''
 ;-
 '''
 # Create a cube suitable for FAT
-def create_fat_cube(Configuration, Fits_Files):
+def create_fat_cube(Configuration, Fits_Files, debug = False):
     #First get the cubes
     Cube = fits.open(Configuration['FITTING_DIR']+Fits_Files['ORIGINAL_CUBE'],uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
     data = Cube[0].data
@@ -242,7 +242,7 @@ create_fat_cube.__doc__ = '''
 ;
 '''
 
-def cut_cubes(Configuration, Fits_Files, galaxy_box,hdr):
+def cut_cubes(Configuration, Fits_Files, galaxy_box,hdr, debug = False):
 
     cube_edge= [5.,3.*round(hdr['BMAJ']/(np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])]))),3.*round(hdr['BMAJ']/(np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])))]
     cube_size = [hdr['NAXIS3'],hdr['NAXIS2'],hdr['NAXIS1']]
@@ -319,7 +319,7 @@ cut_cubes.__doc__ = '''
 ;
 '''
 
-def cutout_cube(filename,sub_cube):
+def cutout_cube(filename,sub_cube, debug = False):
     Cube = fits.open(filename,uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
     hdr = Cube[0].header
 
@@ -382,9 +382,10 @@ cut_cubes.__doc__ = '''
 '''
 
 # Extract a PV-Diagrams
-def extract_pv(cube_in,angle,center=[-1,-1,-1],finalsize=[-1,-1],convert=-1):
+def extract_pv(cube_in,angle,center=[-1,-1,-1],finalsize=[-1,-1],convert=-1, debug = False):
     cube = copy.deepcopy(cube_in)
     hdr = copy.deepcopy(cube[0].header)
+    TwoD_hdr= copy.deepcopy(cube[0].header)
     data = copy.deepcopy(cube[0].data)
     #Because astro py is even dumber than Python
     try:
@@ -427,61 +428,61 @@ def extract_pv(cube_in,angle,center=[-1,-1,-1],finalsize=[-1,-1],convert=-1):
     if finalsize[0] == -1:
         # then lets update the header
         # As python is stupid making a simple copy will mean that these changes are still applied to hudulist
-        hdr['NAXIS2'] = nz
-        hdr['NAXIS1'] = nx
+        TwoD_hdr['NAXIS2'] = nz
+        TwoD_hdr['NAXIS1'] = nx
 
-        hdr['CRPIX2'] = hdr['CRPIX3']
+        TwoD_hdr['CRPIX2'] = hdr['CRPIX3']
         if convert !=-1:
-            hdr['CRVAL2'] = hdr['CRVAL3']/convert
+            TwoD_hdr['CRVAL2'] = hdr['CRVAL3']/convert
         else:
-            hdr['CRVAL2'] = hdr['CRVAL3']
-        hdr['CRPIX1'] = xcenter+1
+            TwoD_hdr['CRVAL2'] = hdr['CRVAL3']
+        TwoD_hdr['CRPIX1'] = xcenter+1
     else:
         zstart = set_limits(int(zcenter-finalsize[1]/2.),0,int(nz))
         zend = set_limits(int(zcenter+finalsize[1]/2.),0,int(nz))
         xstart = set_limits(int(xcenter-finalsize[0]/2.),0,int(nx))
         xend = set_limits(int(xcenter+finalsize[0]/2.),0,int(nx))
         PV =  PV[zstart:zend, xstart:xend]
-        hdr['NAXIS2'] = int(finalsize[1])
-        hdr['NAXIS1'] = int(finalsize[0])
-        hdr['CRPIX2'] = hdr['CRPIX3']-int(nz/2.-finalsize[1]/2.)
+        TwoD_hdr['NAXIS2'] = int(finalsize[1])
+        TwoD_hdr['NAXIS1'] = int(finalsize[0])
+        TwoD_hdr['CRPIX2'] = hdr['CRPIX3']-int(nz/2.-finalsize[1]/2.)
         if convert !=-1:
-            hdr['CRVAL2'] = hdr['CRVAL3']/convert
+            TwoD_hdr['CRVAL2'] = hdr['CRVAL3']/convert
         else:
-            hdr['CRVAL2'] = hdr['CRVAL3']
+            TwoD_hdr['CRVAL2'] = hdr['CRVAL3']
 
-        hdr['CRPIX1'] = int(finalsize[0]/2.)+1
+        TwoD_hdr['CRPIX1'] = int(finalsize[0]/2.)+1
     if convert !=-1:
-        hdr['CDELT2'] = hdr['CDELT3']/convert
+        TwoD_hdr['CDELT2'] = hdr['CDELT3']/convert
     else:
-        hdr['CDELT2'] = hdr['CDELT3']
-    hdr['CTYPE2'] = hdr['CTYPE3']
+        TwoD_hdr['CDELT2'] = hdr['CDELT3']
+    TwoD_hdr['CTYPE2'] = hdr['CTYPE3']
     try:
         if hdr['CUNIT3'].lower() == 'm/s' and convert == -1:
-            hdr['CDELT2'] = hdr['CDELT3']/1000.
-            hdr['CRVAL2'] = hdr['CRVAL3']/1000.
-            hdr['CUNIT2'] = 'km/s'
-            del (hdr['CUNIT3'])
+            TwoD_hdr['CDELT2'] = hdr['CDELT3']/1000.
+            TwoD_hdr['CRVAL2'] = hdr['CRVAL3']/1000.
+            TwoD_hdr['CUNIT2'] = 'km/s'
+            del (TwoD_hdr['CUNIT3'])
         elif  convert != -1:
-            del (hdr['CUNIT3'])
-            del (hdr['CUNIT2'])
+            del (TwoD_hdr['CUNIT3'])
+            del (TwoD_hdr['CUNIT2'])
         else:
-            hdr['CUNIT2'] = hdr['CUNIT3']
-            del (hdr['CUNIT3'])
+            TwoD_hdr['CUNIT2'] = hdr['CUNIT3']
+            del (TwoD_hdr['CUNIT3'])
     except:
         print("No units")
-    del (hdr['CRPIX3'])
-    del (hdr['CRVAL3'])
-    del (hdr['CDELT3'])
-    del (hdr['CTYPE3'])
+    del (TwoD_hdr['CRPIX3'])
+    del (TwoD_hdr['CRVAL3'])
+    del (TwoD_hdr['CDELT3'])
+    del (TwoD_hdr['CTYPE3'])
 
-    del (hdr['NAXIS3'])
-    hdr['CRVAL1'] = 0.
-    hdr['CDELT1'] = abs(((abs(x2-x1)*abs(hdr['CDELT1']))/nx)*np.sin(np.radians(angle)))+abs((abs(y2-y1)*abs(hdr['CDELT2']))/ny*np.cos(np.radians(angle)))
-    hdr['CTYPE1'] = 'OFFSET'
-    hdr['CUNIT1'] = 'ARCSEC'
+    del (TwoD_hdr['NAXIS3'])
+    TwoD_hdr['CRVAL1'] = 0.
+    TwoD_hdr['CDELT1'] = abs(((abs(x2-x1)*abs(hdr['CDELT1']))/nx)*np.sin(np.radians(angle)))+abs((abs(y2-y1)*abs(hdr['CDELT2']))/ny*np.cos(np.radians(angle)))
+    TwoD_hdr['CTYPE1'] = 'OFFSET'
+    TwoD_hdr['CUNIT1'] = 'ARCSEC'
     # Then we change the cube and rteturn the PV construct
-    cube[0].header = hdr
+    cube[0].header = TwoD_hdr
     cube[0].data = PV
 
     return cube
@@ -525,7 +526,7 @@ extract_pv.__doc__ = '''
 
 
 #Create an optimized cube if required
-def optimized_cube(hdr,Configuration,Fits_Files, log =None):
+def optimized_cube(hdr,Configuration,Fits_Files, log =None, debug = False):
     pix_per_beam = round(hdr['BMIN']/(np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])))
     if abs(hdr['CDELT1']) != abs(hdr['CDELT2']):
         log_statement = f'''OPTIMIZED_CUBE: Your input cube does not have square pixels.
@@ -599,7 +600,7 @@ optimized_cube.__doc__ = '''
 
 #preprocess the cube
 
-def prep_cube(hdr,data,log):
+def prep_cube(hdr,data,log, debug = False):
 
     if hdr['CDELT3'] < -1:
         log_statement = f'''PREPROCESSING: Your velocity axis is declining with increasing channels
@@ -760,7 +761,7 @@ prep_cube.__doc__ = '''
 ;
 ; EXAMPLE:
 '''
-def make_moments(filename = 'Input_Cube.fits', basename = 'Finalmodel', directory = './', mask_cube = None,moments = [0,1,2],overwrite = False, log= None, level=None, vel_unit= None):
+def make_moments(filename = 'Input_Cube.fits', basename = 'Finalmodel', directory = './', mask_cube = None,moments = [0,1,2],overwrite = False, log= None, level=None, vel_unit= None, debug = False):
     cube = fits.open(filename)
     if vel_unit:
         cube[0].header['CUNIT3'] = vel_unit
@@ -823,7 +824,7 @@ def make_moments(filename = 'Input_Cube.fits', basename = 'Finalmodel', director
             hdr2D['DATAMIN'] = np.nanmin(moment2)
             fits.writeto(f"{directory}/{basename}_mom2.fits",moment2,hdr2D,overwrite = overwrite)
 
-def regrid_cube(data,hdr,ratio):
+def regrid_cube(data,hdr,ratio, debug = False):
     regrid_hdr = copy.deepcopy(hdr)
     # First get the shape of the data
     shape = np.array(data.shape, dtype=float)
@@ -896,7 +897,7 @@ regrid_cube.__doc__= '''
 ; EXAMPLE:
 '''
 
-def regridder(oldarray, newshape):
+def regridder(oldarray, newshape, debug = False):
     oldshape = np.array(oldarray.shape)
     newshape = np.array(newshape, dtype=float)
     ratios = oldshape/newshape
