@@ -33,10 +33,7 @@ def clean_header(hdr,log, debug = False):
             print_log(log_statement,log)
             hdr['EPOCH'] = 2000.
 
-    if hdr['CUNIT3'].upper() == 'HZ' or hdr['CTYPE3'].upper() == 'FREQ':
-        print_log('CLEAN_HEADER: FREQUENCY IS NOT A SUPPORTED VELOCITY AXIS.',log)
-        raise BadHeaderError('The Cube has frequency as a velocity axis this is not supported')
-
+    
     if not 'CUNIT3' in hdr:
         if hdr['CDELT3'] > 500:
             hdr['CUNIT3'] = 'm/s'
@@ -46,6 +43,11 @@ def clean_header(hdr,log, debug = False):
 {"":8s} We have set it to {hdr['CUNIT3']}. Please ensure that is correct.'
 '''
         print_log(log_statement,log)
+
+    if hdr['CUNIT3'].upper() == 'HZ' or hdr['CTYPE3'].upper() == 'FREQ':
+        print_log('CLEAN_HEADER: FREQUENCY IS NOT A SUPPORTED VELOCITY AXIS.',log)
+        raise BadHeaderError('The Cube has frequency as a velocity axis this is not supported')
+
     vel_types = ['VELO-HEL','VELO-LSR','VELO', 'VELOCITY']
     if hdr['CTYPE3'].upper() not in vel_types:
         if hdr['CTYPE3'].split('-')[0].upper() in ['RA','DEC']:
@@ -686,7 +688,7 @@ def prep_cube(hdr,data,log, debug = False):
                 hdr['NAXIS3'] = hdr['NAXIS3'] - 1
             else:
                 if times_cut_last_channel < 0.1*hdr['CRPIX3'] or \
-                    ~np.finite(noise_last_channel):
+                    ~np.isfinite(noise_last_channel):
                     prev_last_comparison = last_comparison
                     times_cut_last_channel += 1
                     data=data[:-1,:,:]
@@ -757,7 +759,7 @@ prep_cube.__doc__ = '''
 ;       -
 ;
 ; PROCEDURES CALLED:
-;       np.where(), np.finite(), np.isnan()
+;       np.where(), np.isfinite(), np.isnan()
 ;
 ; EXAMPLE:
 '''

@@ -23,7 +23,7 @@ def FAT(argv):
     parser  = OptionParser()
     parser.add_option('-c','--cf','--configuration_file', action ="store" ,dest = "configfile", default = 'FAT_INPUT.config', help = 'Define the input configuration file.',metavar='CONFIGURATION_FILE')
     parser.add_option('-d','--debug', action ="store_true" ,dest = "debug", default = False, help = 'Print debug messages',metavar = '')
-    parser.add_option('-s','--sd','--support_directory', action ="store" ,dest = "supportdir", default=f'{start_dir}/Support', help = 'location where the support files reside.',metavar='SUPPORT_DIR')
+    parser.add_option('-s','--sd','--support_directory', action ="store" ,dest = "supportdir", default=f'{start_dir}/Support', help = 'location where the support files reside. Only required when FAT is not started in the directory where the Support dir resides.',metavar='SUPPORT_DIR')
     parser.add_option('-i','--ic','--installation_check', action ="store_true" ,dest = "installation_check", default = False, help = 'Run the installation _check.',metavar = '')
     parser.add_option('--LVT','--LVHIS_TEST', action ="store_true" ,dest = "lvhis_test", default = False, help = 'Run the LVHIS Test. Developer Only.')
     parser.add_option('--PT','--PAPER_TEST', action ="store_true" ,dest = "paper_test", default = False, help = 'Run the PAPER Test. Developer Only.')
@@ -130,7 +130,7 @@ def FAT(argv):
         Original_Configuration['STARTGALAXY'] = 0
     # If the end galaxy is -1 fit the whole catalogue
     if Original_Configuration['ENDGALAXY'] == -1:
-        Original_Configuration['ENDGALAXY'] = len(Full_Catalogue['NUMBER'])
+        Original_Configuration['ENDGALAXY'] = len(Full_Catalogue['NUMBER'])-1
     # start the main fitting loop
 
     for i in range(Original_Configuration['STARTGALAXY'],Original_Configuration['ENDGALAXY']):
@@ -164,7 +164,7 @@ def FAT(argv):
                 Configuration['OUTPUTLOG'] = f"{Configuration['MAINDIR']}Logs/{Configuration['OUTPUTLOG']}"
                 Configuration['LOG_DIR'] = f"{Configuration['MAINDIR']}Logs/"
             else:
-                if not os.path.isdir(f"{Configuration['MAINDIR']}Logs/"):
+                if not os.path.isdir(f"{Configuration['MAINDIR']}{Catalogue['DIRECTORYNAME']}/Logs/"):
                     os.mkdir(f"{Configuration['MAINDIR']}{Catalogue['DIRECTORYNAME']}/Logs/")
                 Configuration['OUTPUTLOG'] = f"{Configuration['MAINDIR']}{Catalogue['DIRECTORYNAME']}/Logs/{Configuration['OUTPUTLOG']}"
                 Configuration['LOG_DIR'] = f"{Configuration['MAINDIR']}{Catalogue['DIRECTORYNAME']}/Logs/"

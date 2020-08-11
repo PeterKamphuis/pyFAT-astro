@@ -584,7 +584,7 @@ def set_limit_modifier(Configuration,Inclination, debug= False):
         if 40 < inc < 50:
             modifier_list.append(set_limits(1.+(50-(inc)*0.05),1,2.5))
         elif inc < 40:
-            modifier_list.append(set_limits(np.sin(np.radians(75.))/np.sin(np.radians(inc))),1.,2.5)
+            modifier_list.append(set_limits(np.sin(np.radians(75.))/np.sin(np.radians(inc)),1.,2.5))
         else:
             modifier_list.append(1.)
     if Configuration['OUTER_RINGS_DOUBLED']:

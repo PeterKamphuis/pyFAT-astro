@@ -180,7 +180,7 @@ def finish_galaxy(Configuration,maximum_directory_length,current_run = 'Not init
         plot_usage_stats(Configuration,debug = debug)
     if Configuration['MAPS_OUTPUT'] == 5:
         log_statement = f'''!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-{"":8s}FAT did not run the full fitting routines on this galaxy.
+{"":8s}FAT did not run the full fitting routines for the galaxy in directory {Configuration['FITTING_DIR']}.
 {"":8s}Please check this log and output_catalogue carefully for what went wrong.
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 '''

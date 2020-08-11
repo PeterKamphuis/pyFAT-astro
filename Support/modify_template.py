@@ -360,7 +360,7 @@ def regularise_profile(Configuration,Tirific_Template, key ,hdr,min_error= 0.,de
 
     #Check that we have two profiles
     diff = np.sum(profile[0]-profile[1])
-    if stage in ['SDIS','VROT']:
+    if key in ['SDIS','VROT']:
         diff = False
     if diff:
         if debug:
@@ -377,7 +377,12 @@ def regularise_profile(Configuration,Tirific_Template, key ,hdr,min_error= 0.,de
         #check that these are not flat.
         if not check_flat(profile[i],error[i]):
             if key == 'SDIS':
-                fit_profile,fit_err = fit_arc(Configuration,radii,profile[i],sm_profile[i],error[i],debug= debug)
+                try:
+                    fit_profile,fit_err = fit_arc(Configuration,radii,profile[i],sm_profile[i],error[i],debug= debug)
+                except:
+                    fit_profile = np.mean(sm_profile[i])
+                    fit_err = np.zeros(len(fit_profile))
+                    fit_err[:] = min_error
             else:
                 fit_profile,fit_err = fit_polynomial(Configuration,radii,profile[i],sm_profile[i],error[i],key, Tirific_Template, hdr,debug= debug)
             profile[i] = fit_profile
