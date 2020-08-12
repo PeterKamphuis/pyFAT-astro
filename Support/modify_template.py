@@ -1387,8 +1387,10 @@ def set_vrot_fitting(Configuration,Tirific_Template,hdr = None,systemic = 100., 
             forvarindex = 'VROT 2 VROT_2 2'
         if Configuration['NO_RINGS'] > 5:
             inner_slope =  int(round(set_limits(check_size(Configuration,Tirific_Template,hdr, debug = debug,fix_rc = True),round(NUR/2.),NUR-1)))
-            if Configuration['NO_RINGS'] > 15 and inner_slope > int(Configuration['NO_RINGS']*4./5.) :
-                inner_slope = int(Configuration['NO_RINGS']*4./5.)
+        else:
+            inner_slope = NUR
+        if Configuration['NO_RINGS'] > 15 and inner_slope > int(Configuration['NO_RINGS']*4./5.) :
+            inner_slope = int(Configuration['NO_RINGS']*4./5.)
         if stage in ['initial','run_cc']:
                 #inner_slope = int(round(set_limits(NUR*(4.-Configuration['LIMIT_MODIFIER'][0])/4.,round(NUR/2.),NUR-2)))
             if inner_slope >= NUR-1:
