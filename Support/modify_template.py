@@ -79,8 +79,7 @@ def check_size(Configuration,Tirific_Template,hdr, debug = False,fix_rc = False)
     if len(sbr[0]) != len(sbr_ring_limits):
         #Check what the appropriate size should be
         while len(sbr[0]) < Configuration['NO_RINGS']:
-            sbr[0] = np.hstack([sbr[0],sbr[0][-1]])
-            sbr[1] = np.hstack([sbr[1],sbr[1][-1]])
+            sbr = np.append(sbr,[[sbr[0,-1]],[sbr[1,-1]]],1)
         while len(sbr[0]) > Configuration['NO_RINGS']:
             sbr = np.delete(sbr,-1,axis = 1)
         while len(sbr_ring_limits) < Configuration['NO_RINGS']:
@@ -380,9 +379,9 @@ def regularise_profile(Configuration,Tirific_Template, key ,hdr,min_error= 0.,de
                 try:
                     fit_profile,fit_err = fit_arc(Configuration,radii,profile[i],sm_profile[i],error[i],debug= debug)
                 except:
-                    fit_profile = np.mean(sm_profile[i])
-                    fit_err = np.zeros(len(fit_profile))
-                    fit_err[:] = min_error
+                    fit_profile = np.full(len(sm_profile[i]), np.mean(sm_profile[i]))
+                    fit_err = np.full(len(sm_profile[i]), min_error)
+
             else:
                 fit_profile,fit_err = fit_polynomial(Configuration,radii,profile[i],sm_profile[i],error[i],key, Tirific_Template, hdr,debug= debug)
             profile[i] = fit_profile
@@ -1495,6 +1494,21 @@ def smooth_profile(Configuration,Tirific_Template,key,hdr,debug=False ,no_apply 
 ''',Configuration['OUTPUTLOG'],screen=True,debug = True)
 
     return profile
+
+def update_disk_angles(Tirific_Template,debug = False):
+    debug=True
+    extension = ['','_2']
+    for ext in extension:
+        PA = np.array(get_from_template(Tirific_Template,[f'PA{ext}'],debug=debug))[0]
+        inc = np.array(get_from_template(Tirific_Template,[f'INCL{ext}'],debug=debug))[0]
+        angle_adjust=np.array(np.tan((PA[0]-PA)*np.cos(inc*np.pi/180.)*np.pi/180.)*180./np.pi,dtype = float)
+        if ext == '_2':
+            angle_adjust[:] +=180.
+        if debug:
+            print_log(f'''UPDATE_DISK_ANGLES: adusting AZ1P{ext} with these angles
+{'':8s}{angle_adjust}
+''', None,screen = True)
+        Tirific_Template.insert(f'AZ1W{ext}',f'AZ1P{ext}',f"{' '.join([f'{x:.2f}' for x in angle_adjust])}")
 
 def write_new_to_template(Configuration, filename,Tirific_Template, Variables = ['VROT',
                  'Z0', 'SBR', 'INCL','PA','XPOS','YPOS','VSYS','SDIS','VROT_2',  'Z0_2','SBR_2',

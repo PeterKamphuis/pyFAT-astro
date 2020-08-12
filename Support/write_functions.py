@@ -2,7 +2,7 @@
 # This module contains a set of functions and classes that are used to write text files to Disk
 
 from support_functions import convert_type, print_log,convertRADEC,convertskyangle,set_limit_modifier,columndensity,set_limits,get_inner_fix
-from modify_template import set_model_parameters, set_overall_parameters, set_fitting_parameters,check_size,get_warp_slope
+from modify_template import set_model_parameters, set_overall_parameters, set_fitting_parameters,check_size,get_warp_slope, update_disk_angles
 from fits_functions import extract_pv
 from read_functions import load_tirific,load_basicinfo, load_template
 import numpy as np
@@ -836,7 +836,8 @@ sofia.__doc__ = '''
 ;
 '''
 def tirific(Configuration,Tirific_Template, name = 'tirific.def', debug = False):
-    #IF we're writing we bump up the restart_ID
+    #IF we're writing we bump up the restart_ID and adjust the AZ1P angles to the current warping
+    update_disk_angles(Tirific_Template, debug= debug)
     Tirific_Template['RESTARTID'] = str(int(Tirific_Template['RESTARTID'])+1)
     with open(Configuration['FITTING_DIR']+name, 'w') as file:
         for key in Tirific_Template:

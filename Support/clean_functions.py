@@ -205,8 +205,8 @@ def finish_galaxy(Configuration,maximum_directory_length,current_run = 'Not init
                 else:
                     make_moments(filename = f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel.fits",\
                              basename = 'Finalmodel', directory = f"{Configuration['FITTING_DIR']}/Finalmodel/",\
-                             mask_cube = f"{Configuration['FITTING_DIR']}/Sofia_Output/{Fits_Files['MASK']}",vel_unit = 'm/s')
-                make_overview_plot(Configuration,Fits_Files)
+                             mask_cube = f"{Configuration['FITTING_DIR']}/Sofia_Output/{Fits_Files['MASK']}",vel_unit = 'm/s',debug=debug)
+                make_overview_plot(Configuration,Fits_Files,debug=debug)
 
 
     # Need to organize the fitting output orderly

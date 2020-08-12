@@ -393,13 +393,13 @@ def FAT(argv):
                         Configuration['TIRIFIC_RUNNING'] = False
                     except AttributeError:
                         pass
-                    runf.make_full_resolution(Configuration,Tirific_Template,Fits_Files,fit_stage = 'Extent_Convergence')
+                    runf.make_full_resolution(Configuration,Tirific_Template,Fits_Files,fit_stage = 'Extent_Convergence',debug=Configuration['DEBUG'])
 
             Configuration['EC_END_TIME'] = datetime.now()
         except Exception as e:
             Configuration['FINAL_COMMENT'] = e
             Configuration['MAPS_OUTPUT'] = 5
-            cf.finish_galaxy(Configuration,maximum_directory_length,current_run =current_run)
+            cf.finish_galaxy(Configuration,maximum_directory_length,current_run =current_run,debug=Configuration['DEBUG'])
             traceback.print_exc()
             continue
 
@@ -408,7 +408,7 @@ def FAT(argv):
             Configuration['FINAL_COMMENT'] = 'The galaxy has succesfully been fitted'
         else:
             Configuration['FINAL_COMMENT'] = 'We could not converge the size of this galaxy.'
-        cf.finish_galaxy(Configuration,maximum_directory_length,current_run =current_run, Fits_Files =Fits_Files)
+        cf.finish_galaxy(Configuration,maximum_directory_length,current_run =current_run, Fits_Files =Fits_Files,debug = Configuration['DEBUG'])
 
 
 FAT.__doc__ = '''

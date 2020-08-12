@@ -18,6 +18,15 @@ class BadCubeError(Exception):
 
 # clean the header
 def clean_header(hdr,log, debug = False):
+    if hdr['NAXIS'] > 3:
+        for i in range(4, hdr['NAXIS']+1):
+            keywords = ['CDELT','CUNIT','CRPIX','CRVAL']
+            for key in keywords:
+                try:
+                    del hdr[f'{key}_{i}']
+                except:
+                    pass
+        hdr['NAXIS'] = 3
     if not 'EPOCH' in hdr:
         if 'EQUINOX' in hdr:
             log_statement = f'''CLEAN_HEADER: Your cube has no EPOCH keyword but we found EQUINOX.
@@ -33,7 +42,7 @@ def clean_header(hdr,log, debug = False):
             print_log(log_statement,log)
             hdr['EPOCH'] = 2000.
 
-    
+
     if not 'CUNIT3' in hdr:
         if hdr['CDELT3'] > 500:
             hdr['CUNIT3'] = 'm/s'
@@ -804,8 +813,10 @@ def make_moments(filename = 'Input_Cube.fits', basename = 'Finalmodel', director
     if 0 in moments:
         hdr2D['BUNIT'] = f"{cube[0].header['BUNIT']}*{cube[0].header['CUNIT3']}"
         moment0 = np.nansum(cube[0].data, axis=0) * cube[0].header['CDELT3']
-        if 0 in moments:
-            fits.writeto(f"{directory}/{basename}_mom0.fits",moment0,hdr2D,overwrite = overwrite)
+        moment0[np.invert(np.isfinite(moment0))] = 0.
+        hdr2D['DATAMAX'] = np.nanmax(moment0)
+        hdr2D['DATAMIN'] = np.nanmin(moment0)
+        fits.writeto(f"{directory}/{basename}_mom0.fits",moment0,hdr2D,overwrite = overwrite)
     if 1 in moments or 2 in moments:
         zaxis = cube[0].header['CRVAL3'] + (np.arange(cube[0].header['NAXIS3']) \
               - cube[0].header['CRPIX3']) * cube[0].header['CDELT3']
@@ -814,6 +825,7 @@ def make_moments(filename = 'Input_Cube.fits', basename = 'Finalmodel', director
         # Remember Python is stupid so z,y,x
         with np.errstate(invalid='ignore', divide='ignore'):
             moment1 = np.nansum(cube[0].data*c, axis=0)/ np.nansum(cube[0].data, axis=0)
+        moment1[np.invert(np.isfinite(moment1))] = 0.
         hdr2D['DATAMAX'] = np.nanmax(moment1)
         hdr2D['DATAMIN'] = np.nanmin(moment1)
         if 1 in moments:
@@ -822,6 +834,7 @@ def make_moments(filename = 'Input_Cube.fits', basename = 'Finalmodel', director
             d = c - np.resize(moment1,[len(zaxis),cube[0].header['NAXIS2'],cube[0].header['NAXIS1']])
             with np.errstate(invalid='ignore', divide='ignore'):
                 moment2 = np.sqrt(np.nansum(cube[0].data*d**2, axis=0)/ np.nansum(cube[0].data, axis=0))
+            moment2[np.invert(np.isfinite(moment1))] = 0.
             hdr2D['DATAMAX'] = np.nanmax(moment2)
             hdr2D['DATAMIN'] = np.nanmin(moment2)
             fits.writeto(f"{directory}/{basename}_mom2.fits",moment2,hdr2D,overwrite = overwrite)
