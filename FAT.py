@@ -133,11 +133,19 @@ def FAT(argv):
         Original_Configuration['ENDGALAXY'] = len(Full_Catalogue['NUMBER'])-1
     # start the main fitting loop
 
-    for i in range(Original_Configuration['STARTGALAXY'],Original_Configuration['ENDGALAXY']):
+    for current_galaxy_index in range(Original_Configuration['STARTGALAXY'],Original_Configuration['ENDGALAXY']):
         # First check the starttime
         Catalogue = {}
         for key in Full_Catalogue:
-            Catalogue[key] = Full_Catalogue[key][i]
+            if key != 'ENTRIES':
+                Catalogue[key] = Full_Catalogue[key][current_galaxy_index]
+            else:
+                Catalogue[key] = Full_Catalogue[key]
+        if Original_Configuration['DEBUG']:
+                print(current_galaxy_index)
+                sf.print_log(f'''Catalogue:
+{'':8s}{Catalogue}
+''',None,screen=True, debug = True )
         Configuration = copy.deepcopy(Original_Configuration)
         Configuration['START_TIME'] = datetime.now()
         Configuration['DISTANCE'] = Catalogue['DISTANCE']
@@ -198,7 +206,7 @@ def FAT(argv):
         # then we want to read the template
         Tirific_Template = rf.tirific_template(f'{input_parameters.supportdir}/template.def')
 
-        log_statement = f'''We are in loop {i}. This is catalogue number {Catalogue['NUMBER']} and the directory {Catalogue['DIRECTORYNAME']}.'''
+        log_statement = f'''We are in loop {current_galaxy_index}. This is catalogue number {Catalogue['NUMBER']} and the directory {Catalogue['DIRECTORYNAME']}.'''
         sf.print_log(log_statement,Configuration['OUTPUTLOG'], screen =True)
         #Run cleanup
 
