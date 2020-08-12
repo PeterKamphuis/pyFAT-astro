@@ -18,15 +18,14 @@ class BadCubeError(Exception):
 
 # clean the header
 def clean_header(hdr,log, debug = False):
-    if hdr['NAXIS'] > 3:
-        for i in range(4, hdr['NAXIS']+1):
-            keywords = ['CDELT','CUNIT','CRPIX','CRVAL']
-            for key in keywords:
-                try:
-                    del hdr[f'{key}_{i}']
-                except:
-                    pass
-        hdr['NAXIS'] = 3
+
+    keywords = ['CDELT','CUNIT','CRPIX','CRVAL']
+    for key in keywords:
+        try:
+            del hdr[f'{key}_4']
+        except:
+            pass
+    hdr['NAXIS'] = 3
     if not 'EPOCH' in hdr:
         if 'EQUINOX' in hdr:
             log_statement = f'''CLEAN_HEADER: Your cube has no EPOCH keyword but we found EQUINOX.
