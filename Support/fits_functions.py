@@ -19,7 +19,7 @@ class BadCubeError(Exception):
 # clean the header
 def clean_header(hdr,log, debug = False):
 
-    keywords = ['CDELT','CUNIT','CRPIX','CRVAL']
+    keywords = ['CDELT','CUNIT','CRPIX','CRVAL','CTYPE']
     for key in keywords:
         try:
             del hdr[f'{key}4']
