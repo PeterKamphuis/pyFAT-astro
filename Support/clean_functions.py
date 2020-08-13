@@ -176,8 +176,7 @@ def finish_galaxy(Configuration,maximum_directory_length,current_run = 'Not init
     output_catalogue = open(Configuration['OUTPUTCATALOGUE'],'a')
     output_catalogue.write(f"{Configuration['FITTING_DIR'].split('/')[-2]:{maximum_directory_length}s} {Configuration['CC_ACCEPTED']} {Configuration['EC_ACCEPTED']}   {Configuration['FINAL_COMMENT']} \n")
     output_catalogue.close()
-    if Configuration['TIMING']:
-        plot_usage_stats(Configuration,debug = debug)
+
     if Configuration['MAPS_OUTPUT'] == 5:
         log_statement = f'''!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 {"":8s}FAT did not run the full fitting routines for the galaxy in directory {Configuration['FITTING_DIR']}.
@@ -188,6 +187,9 @@ def finish_galaxy(Configuration,maximum_directory_length,current_run = 'Not init
     elif Configuration['MAPS_OUTPUT'] == 4:
         print("We just want def files but this aint working yet")
     else:
+        log_statement = f'''{"":8s}Producing final output in {Configuration['FITTING_DIR']}.
+'''
+        print_log(log_statement,Configuration['OUTPUTLOG'], screen = True)
         # We need to produce a FinalModel Directory with moment maps and an XV-Diagram of the model.
         if Configuration['FINISHAFTER'] > 0:
             if not os.path.isdir(Configuration['FITTING_DIR']+'/Finalmodel'):
@@ -208,10 +210,13 @@ def finish_galaxy(Configuration,maximum_directory_length,current_run = 'Not init
                              mask_cube = f"{Configuration['FITTING_DIR']}/Sofia_Output/{Fits_Files['MASK']}",vel_unit = 'm/s',debug=debug)
                 make_overview_plot(Configuration,Fits_Files,debug=debug)
 
-
+    log_statement = f'''Finished final output in {Configuration['FITTING_DIR']}.
+'''
+    print_log(log_statement,Configuration['OUTPUTLOG'], screen = True)
     # Need to organize the fitting output orderly
     # Need to write date and Time to timing log
     if Configuration['TIMING']:
+        plot_usage_stats(Configuration,debug = debug)
         timing_result = open(Configuration['MAINDIR']+'/Timing_Result.txt','w')
         timing_result.write(f'''The galaxy in directory {Configuration['FITTING_DIR']} started at {Configuration['START_TIME']}.
 Finished preparations at {Configuration['PREP_END_TIME']}
@@ -220,6 +225,9 @@ Converged to a galaxy size at {Configuration['EC_END_TIME']}.
 It finished the whole process at {datetime.now()}
 ''')
         timing_result.close()
+        log_statement = f'''Finished timing stattistics for the galaxy in {Configuration['FITTING_DIR']}.
+'''
+        print_log(log_statement,Configuration['OUTPUTLOG'], screen = True)
 finish_galaxy.__doc__ = '''
     ;+
 ; NAME:

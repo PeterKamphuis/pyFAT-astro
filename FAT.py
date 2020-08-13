@@ -134,6 +134,8 @@ def FAT(argv):
     # start the main fitting loop
 
     for current_galaxy_index in range(Original_Configuration['STARTGALAXY'],Original_Configuration['ENDGALAXY']):
+        Configuration = copy.deepcopy(Original_Configuration)
+        Configuration['START_TIME'] = datetime.now()
         # First check the starttime
         Catalogue = {}
         for key in Full_Catalogue:
@@ -141,13 +143,11 @@ def FAT(argv):
                 Catalogue[key] = Full_Catalogue[key][current_galaxy_index]
             else:
                 Catalogue[key] = Full_Catalogue[key]
-        if Original_Configuration['DEBUG']:
+        if Configuration['DEBUG']:
                 print(current_galaxy_index)
                 sf.print_log(f'''Catalogue:
 {'':8s}{Catalogue}
 ''',None,screen=True, debug = True )
-        Configuration = copy.deepcopy(Original_Configuration)
-        Configuration['START_TIME'] = datetime.now()
         Configuration['DISTANCE'] = Catalogue['DISTANCE']
         doubled = 0
         ini_mode_factor =25
@@ -474,6 +474,10 @@ if __name__ == '__main__':
         FAT(sys.argv[1:])
     except Exception as exc:
         print('------------When filing a bug report please copy all output  below this line------------')
+        try:
+            print(f"For the galaxy in directory {Configuration['FITTING_DIR']} we got the following error")
+        except:
+            pass
         traceback.print_exc()
         print(error_message)
         sys.exit(1)
