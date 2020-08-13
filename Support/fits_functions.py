@@ -22,7 +22,7 @@ def clean_header(hdr,log, debug = False):
     keywords = ['CDELT','CUNIT','CRPIX','CRVAL']
     for key in keywords:
         try:
-            del hdr[f'{key}_4']
+            del hdr[f'{key}4']
         except:
             pass
     hdr['NAXIS'] = 3
