@@ -3,12 +3,17 @@
 
 
 import os,signal
+import traceback
 from datetime import datetime
-from support_functions import print_log
+from support_functions import print_log,finish_current_run
 from fits_functions import make_moments
-from write_functions import make_overview_plot,plot_usage_stats
+from write_functions import make_overview_plot,plot_usage_stats,tirific
+from read_functions import tirific_template,load_tirific
 
 def clean_before_sofia(Configuration, debug = False):
+    if debug:
+        print_log(f'''CLEAN_BEFORE_SOFIA: Starting.
+''',Configuration['OUTPUTLOG'],debug = debug)
     files =['_mask.fits','_mom0.fits','_mom1.fits','_chan.fits','_mom2.fits','_cat.txt']
 
     for file in files:
@@ -164,14 +169,8 @@ cleanup.__doc__ = '''
 
 def finish_galaxy(Configuration,maximum_directory_length,current_run = 'Not initialized', Fits_Files= None, debug = False):
     #make sure we are not leaving stuff
-    try:
-        current_run.kill()
-    except AttributeError:
-        if Configuration['TIRIFIC_RUNNING']:
-            os.kill(Configuration['TIRIFIC_PID'], signal.SIGINT)
+    finish_current_run(Configuration,current_run,debug=debug)
 
-        print(f"FINISH_GALAXY: No current run detected {current_run}")
-        pass
     # Need to write to results catalog
     output_catalogue = open(Configuration['OUTPUTCATALOGUE'],'a')
     output_catalogue.write(f"{Configuration['FITTING_DIR'].split('/')[-2]:{maximum_directory_length}s} {Configuration['CC_ACCEPTED']} {Configuration['EC_ACCEPTED']}   {Configuration['FINAL_COMMENT']} \n")
@@ -181,23 +180,30 @@ def finish_galaxy(Configuration,maximum_directory_length,current_run = 'Not init
         log_statement = f'''!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 {"":8s}FAT did not run the full fitting routines for the galaxy in directory {Configuration['FITTING_DIR']}.
 {"":8s}Please check this log and output_catalogue carefully for what went wrong.
+{"":8s}The detected exit reason is {Configuration['FINAL_COMMENT']}.
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 '''
         print_log(log_statement,Configuration['OUTPUTLOG'], screen = True)
+        sys.exit(1)
     elif Configuration['MAPS_OUTPUT'] == 4:
         print("We just want def files but this aint working yet")
     else:
-        log_statement = f'''{"":8s}Producing final output in {Configuration['FITTING_DIR']}.
+        log_statement = f'''Producing final output in {Configuration['FITTING_DIR']}.
 '''
+        #
         print_log(log_statement,Configuration['OUTPUTLOG'], screen = True)
         # We need to produce a FinalModel Directory with moment maps and an XV-Diagram of the model.
         if Configuration['FINISHAFTER'] > 0:
             if not os.path.isdir(Configuration['FITTING_DIR']+'/Finalmodel'):
                 os.mkdir(Configuration['FITTING_DIR']+'/Finalmodel')
             if Configuration['FINISHAFTER'] == 1 and Configuration['START_POINT'] < 4:
+                # As tirific does not transfer the errors we have to do This
+                transfer_errors(Configuration,fit_stage='Centre_Convergence')
                 os.symlink(f"{Configuration['FITTING_DIR']}/Centre_Convergence/Centre_Convergence.fits",f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel.fits")
                 os.symlink(f"{Configuration['FITTING_DIR']}/Centre_Convergence/Centre_Convergence.def",f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel.def")
             elif Configuration['FINISHAFTER'] == 2:
+                # As tirific does not transfer the errors we have to do This
+                transfer_errors(Configuration,fit_stage='Extent_Convergence')
                 os.symlink(f"{Configuration['FITTING_DIR']}/Extent_Convergence/Extent_Convergence.fits",f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel.fits")
                 os.symlink(f"{Configuration['FITTING_DIR']}/Extent_Convergence/Extent_Convergence.def",f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel.def")
             # We need to produce a FinalModel Directory with moment maps and an XV-Diagram of the model.
@@ -217,7 +223,7 @@ def finish_galaxy(Configuration,maximum_directory_length,current_run = 'Not init
     # Need to write date and Time to timing log
     if Configuration['TIMING']:
         plot_usage_stats(Configuration,debug = debug)
-        timing_result = open(Configuration['MAINDIR']+'/Timing_Result.txt','w')
+        timing_result = open(Configuration['MAINDIR']+'/Timing_Result.txt','a')
         timing_result.write(f'''The galaxy in directory {Configuration['FITTING_DIR']} started at {Configuration['START_TIME']}.
 Finished preparations at {Configuration['PREP_END_TIME']}
 Converged to a central position at {Configuration['CC_END_TIME']}.
@@ -225,7 +231,7 @@ Converged to a galaxy size at {Configuration['EC_END_TIME']}.
 It finished the whole process at {datetime.now()}
 ''')
         timing_result.close()
-        log_statement = f'''Finished timing stattistics for the galaxy in {Configuration['FITTING_DIR']}.
+        log_statement = f'''Finished timing statistics for the galaxy in {Configuration['FITTING_DIR']}.
 '''
         print_log(log_statement,Configuration['OUTPUTLOG'], screen = True)
 finish_galaxy.__doc__ = '''
@@ -264,3 +270,19 @@ finish_galaxy.__doc__ = '''
 ; EXAMPLE:
 ;
 '''
+def transfer_errors(Configuration,fit_stage='Not Initialized',debug = False):
+    # Load the final file
+    Tirific_Template = tirific_template(f"{Configuration['FITTING_DIR']}{fit_stage}/{fit_stage}.def",debug= debug)
+    # Get the errors from the input
+    errors_to_transfer= ['VROT_ERR','VROT_2_ERR','INCL_ERR','INCL_2_ERR','PA_ERR','PA_2_ERR','SDIS_ERR','SDIS_2_ERR']
+    FAT_Model = load_tirific(f"{Configuration['FITTING_DIR']}{fit_stage}_In.def",Variables=errors_to_transfer,unpack=False,debug=debug)
+    # add to the templatethere
+    Tirific_Template.insert('GR_CONT','RESTARTID','0')
+    for key in errors_to_transfer:
+        if key[:-4] in ['SBR','SBR_2']:
+            format = '.2e'
+        else:
+            format= '.2f'
+        Tirific_Template.insert(key[:-4],f"# {key}",f"{' '.join([f'{x:{format}}' for x in FAT_Model[:,errors_to_transfer.index(key)]])}")
+    # write back to the File
+    tirific(Configuration,Tirific_Template, name = f"{fit_stage}/{fit_stage}.def", debug = debug)

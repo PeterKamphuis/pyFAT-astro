@@ -5,8 +5,12 @@
 from collections import OrderedDict #used in Proper_Dictionary
 from inspect import getframeinfo,stack
 from scipy.optimize import curve_fit
+from scipy import ndimage
+from astropy.wcs import WCS
+from astropy.io import fits
 
 import os
+import signal
 import traceback
 import numpy as np
 import copy
@@ -17,6 +21,11 @@ class SupportRunError(Exception):
     pass
 class SmallSourceError(Exception):
     pass
+class FileNotFoundError(Exception):
+    pass
+
+
+
 # A class of ordered dictionary where keys can be inserted in at specified locations or at the end.
 class Proper_Dictionary(OrderedDict):
     def insert(self, existing_key, new_key, key_value):
@@ -44,11 +53,35 @@ class Proper_Dictionary(OrderedDict):
 
 
 
+#Calculate the actual number of rings in the model from ring size and the size in beams:
 
-
+def calc_rings(Configuration,size_in_beams = 0., ring_size  = 0.,debug=False):
+    if ring_size == 0.:
+        ring_size = Configuration['RING_SIZE']
+    if size_in_beams == 0.:
+        size_in_beams = Configuration['SIZE_IN_BEAMS']
+    if debug:
+        print_log(f'''CALC_RINGS: Calculating the number of rings in the model.
+{'':8s} size in beams = {size_in_beams}
+{'':8s} ring_size = {ring_size}
+''',Configuration['OUTPUTLOG'],debug = debug)
+    est_rings = round((size_in_beams)/(ring_size)+2)
+    if est_rings > 20 and Configuration['MAX_RINGS'] > 25:
+        Configuration['OUTER_RINGS_DOUBLED'] = True
+        no_rings = 2+10+round((est_rings-10-2)/2.)
+    else:
+        Configuration['OUTER_RINGS_DOUBLED'] = False
+        no_rings = est_rings
+    if debug:
+        print_log(f'''CALC_RINGS: The model will have {no_rings} Rings.
+''',Configuration['OUTPUTLOG'],debug = False)
+    return int(no_rings)
 
 #batch convert types
-def convert_type(array, type = 'float'):
+def convert_type(array, type = 'float',debug = False):
+    if debug:
+        print_log(f'''CONVERT_TYPE: Start.
+''',None,debug =True)
     if type =='int':
         return  [int(x) for x in array]
     elif type =='str':
@@ -92,6 +125,12 @@ convert_type.__doc__ = '''
 #Function to convert column densities
 # levels should be n mJy/beam when flux is given
 def columndensity(levels,systemic = 100.,beam=[1.,1.],channel_width=1.,column= False,arcsquare=False,solar_mass_input =False,solar_mass_output=False, debug = False):
+    if debug:
+        print_log(f'''COLUMNDENSITY: Starting conversion from the following input.
+{'':8s}Levels = {levels}
+{'':8s}Beam = {beam}
+{'':8s}channel_width = {channel_width}
+''',None,debug =True)
     beam=np.array(beam)
     f0 = 1.420405751786E9 #Hz rest freq
     c = 299792.458 # light speed in km / s
@@ -172,7 +211,12 @@ columndensity.__doc__ = '''
 
 '''
         # a Function to convert the RA and DEC into hour angle (invert = False) and vice versa (default)
-def convertRADEC(RAin,DECin,invert=False, colon=False):
+def convertRADEC(RAin,DECin,invert=False, colon=False,debug = False):
+    if debug:
+            print_log(f'''CONVERTRADEC: Starting conversion from the following input.
+    {'':8s}RA = {RAin}
+    {'':8s}DEC = {DECin}
+''',None,debug =True)
     RA = copy.deepcopy(RAin)
     DEC = copy.deepcopy(DECin)
     if not invert:
@@ -231,7 +275,12 @@ def convertRADEC(RAin,DECin,invert=False, colon=False):
 
 # function for converting kpc to arcsec and vice versa
 
-def convertskyangle(angle, distance=1., unit='arcsec', distance_unit='Mpc', physical=False):
+def convertskyangle(angle, distance=1., unit='arcsec', distance_unit='Mpc', physical=False,debug = False):
+    if debug:
+            print_log(f'''CONVERTSKYANGLE: Starting conversion from the following input.
+    {'':8s}Angle = {angle}
+    {'':8s}Distance = {distance}
+''',None,debug =True)
     try:
         _ = (e for e in angle)
     except TypeError:
@@ -283,11 +332,34 @@ def convertskyangle(angle, distance=1., unit='arcsec', distance_unit='Mpc', phys
         kpc = float(kpc[0])
     return kpc
 
+def finish_current_run(Configuration,current_run,debug=False):
+    print_log(f"FINISH_CURRENT_RUN: Is Tirific Running? {Configuration['TIRIFIC_RUNNING']}. \n",Configuration['OUTPUTLOG'],debug=debug,screen=True)
+    if Configuration['TIRIFIC_RUNNING']:
+        try:
+            os.kill(Configuration['TIRIFIC_PID'], signal.SIGKILL)
+            print_log(f"FINISH_CURRENT_RUN: We killed PID = {Configuration['TIRIFIC_PID']}. \n",Configuration['OUTPUTLOG'],debug=debug,screen=True)
+        except:
+            try:
+                current_run.kill()
+                print_log(f"FINISH_CURRENT_RUN: We killed the current run although we failed on the PID = {Configuration['TIRIFIC_PID']}. \n",Configuration['OUTPUTLOG'],debug=debug,screen=True)
+            except AttributeError:
+                print_log(f"FINISH_CURRENT_RUN: We failed to kill the current run even though we have tirific running",Configuration['OUTPUTLOG'],debug=debug,screen=True)
+                raise TirificRunError('FINISH_CURRENT_RUN: Despite having an initialized tirific we could not kill it.')
+        Configuration['TIRIFIC_RUNNING'] = False
+        Configuration['TIRIFIC_PID'] = 'Not Initialized'
+    else:
+        print_log(f"FINISH_CURRENT_RUN: No run is initialized.",Configuration['OUTPUTLOG'],debug=debug,screen=True)
+
 
 def gaussian_function(axis,peak,center,sigma):
     return peak*np.exp(-(axis-center)**2/(2*sigma**2))
 
-def fit_gaussian(x,y, covariance = False):
+def fit_gaussian(x,y, covariance = False,debug = False):
+    if debug:
+            print_log(f'''FIT_GAUSSIAN: Starting to fit a Gaussian.
+{'':8s}x = {x}
+{'':8s}y = {y}
+''',None,debug =True)
     # First get some initial estimates
     est_peak = np.nanmax(y)
     est_center = float(x[np.where(y == est_peak)])
@@ -421,7 +493,7 @@ print_log.__doc__ = '''
 
 '''
 
-def rename_fit_products(Configuration,stage = 'initial', fit_stage='Undefined_Stage'):
+def rename_fit_products(Configuration,stage = 'initial', fit_stage='Undefined_Stage',debug = False):
     extensions = ['def','log','ps','fits']
     for filetype in extensions:
         if filetype == 'log':
@@ -429,9 +501,16 @@ def rename_fit_products(Configuration,stage = 'initial', fit_stage='Undefined_St
                 os.system(f"cp {Configuration['FITTING_DIR']}{fit_stage}/{fit_stage}.{filetype} {Configuration['FITTING_DIR']}{fit_stage}/{fit_stage}_Prev.{filetype} ")
         else:
             if filetype == 'def':
-                if os.path.exists(f"{Configuration['FITTING_DIR']}{fit_stage}/{fit_stage}_Prev.{filetype}"):
-                    os.system(f"mv {Configuration['FITTING_DIR']}{fit_stage}/{fit_stage}_Prev.{filetype} {Configuration['FITTING_DIR']}{fit_stage}/{fit_stage}_Prev2.{filetype} ")
-            if os.path.exists(f"{Configuration['FITTING_DIR']}{fit_stage}/{fit_stage}.{filetype}"):
+                if fit_stage == 'Extent_Convergence' and stage == 'run_ec':
+                    Loopnr = f"{Configuration['EC_LOOPS']}"
+                elif fit_stage == 'Centre_Convergence' and stage == 'run_cc' :
+                    Loopnr = f"{Configuration['CC_LOOPS']}"
+                else:
+                    Loopnr = 'before_'+stage
+                if os.path.exists(f"{Configuration['FITTING_DIR']}{fit_stage}/{fit_stage}.{filetype}"):
+                    os.system(f"mv {Configuration['FITTING_DIR']}{fit_stage}/{fit_stage}.{filetype} {Configuration['FITTING_DIR']}{fit_stage}/{fit_stage}_{Loopnr}.{filetype}")
+
+            elif os.path.exists(f"{Configuration['FITTING_DIR']}{fit_stage}/{fit_stage}.{filetype}"):
                 os.system(f"mv {Configuration['FITTING_DIR']}{fit_stage}/{fit_stage}.{filetype} {Configuration['FITTING_DIR']}{fit_stage}/{fit_stage}_Prev.{filetype}")
 
 
@@ -469,9 +548,73 @@ rename_fit_products.__doc__ = '''
 
 '''
 
+def remove_inhomogeneities(Configuration,fits_map,inclination=30., pa = 90. , center = [0.,0.],WCS_center = True, debug=False):
+    if debug:
+        print_log(f'''REMOVE_INHOMOGENEITIES: These are the values we get as input
+{'':8s}Inclination = {inclination}
+{'':8s}pa = {pa}
+{'':8s}center = {center}
+''',Configuration['OUTPUTLOG'],debug = True)
+    map = fits_map[0].data
+    # first rotate the pa
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        map_wcs = WCS(fits_map[0].header)
+    # convert the boundaries to real coordinates
+    if WCS_center:
+        x, y = map_wcs.wcs_world2pix(*center, 0.)
+    else:
+        x = center[0]
+        y = center[1]
+    rot_map = rotateImage(map,pa-90,[x,y],debug=debug)
+    # deproject
+    dep_map = deproject(copy.deepcopy(rot_map),inclination,center = y, debug=debug)
+
+    if debug:
+        fits.writeto(f"{Configuration['FITTING_DIR']}rot_map.fits",rot_map,fits_map[0].header,overwrite = True)
+        fits.writeto(f"{Configuration['FITTING_DIR']}dep_map.fits",dep_map,fits_map[0].header,overwrite = True)
+
+    angles = np.linspace(5.,360.,71)
+    print(angles)
+    minimum_map = copy.deepcopy(dep_map)
+    for angle in angles:
+        rot_dep_map =  rotateImage(copy.deepcopy(dep_map),angle,[x,y],debug=debug)
+
+        #tmp = np.where(rot_dep_map < minimum_map)[0]
+        minimum_map[rot_dep_map < minimum_map] =rot_dep_map[rot_dep_map < minimum_map]
+    clean_map = rotateImage(deproject(copy.deepcopy(minimum_map),inclination,center = y,invert= True,debug=debug),-1*(pa-90),[x,y],debug=debug)
+
+    if debug:
+        fits.writeto(f"{Configuration['FITTING_DIR']}minimum_map.fits",minimum_map,fits_map[0].header,overwrite = True)
+        fits.writeto(f"{Configuration['FITTING_DIR']}clean_map.fits",clean_map,fits_map[0].header,overwrite = True)
+    fits_map[0].data = clean_map
+    return fits_map
+
+def deproject(map,angle, center = 0., invert = False,debug=False):
+    axis = range(len(map[:,0]))-center
+    if invert:
+        newaxis = axis/np.cos(np.radians(angle))
+    else:
+        newaxis = axis*np.cos(np.radians(angle))
+    for x in range(len(map[0,:])):
+        profile = copy.deepcopy(map[:,x])
+        new_profile = np.interp(np.array(newaxis,dtype=float),np.array(axis,dtype=float),np.array(profile,dtype=float))
+        map[:,x] = new_profile
+    return map
+
+
+#function to rotate a cube without losing info
+def rotateImage(Cube, angle, pivot, debug = False):
+    padX = [int(Cube.shape[1] - pivot[0]), int(pivot[0])]
+    padY = [int(Cube.shape[0] - pivot[1]), int(pivot[1])]
+    print(padY,padX)
+    print(pivot,Cube.shape[1],Cube.shape[0])
+    imgP = np.pad(Cube, [padY, padX], 'constant')
+    imgR = ndimage.rotate(imgP, angle, axes=(1, 0), reshape=False)
+    return imgR[padY[0]: -padY[1], padX[0]: -padX[1]]
 
 def sbr_limits(Configuration,hdr, systemic= 100. , debug = False):
-    radii = set_rings(Configuration, bmaj= hdr['BMAJ']*3600.)
+    radii = set_rings(Configuration,debug=debug)
     if debug:
         print_log(f'''SBR_LIMITS: Got {len(radii)} radii
 ''',Configuration['OUTPUTLOG'], debug=debug,screen =True)
@@ -491,11 +634,24 @@ def sbr_limits(Configuration,hdr, systemic= 100. , debug = False):
         sbr_ring_limits=9e-4*(ringarea/beamsolid)**(-0.82)*ratio
     if ringarea[0] == 0.:
          sbr_ring_limits[0]=0.
+    print('before modifier')
+    print(len(sbr_ring_limits))
     if len(Configuration['LIMIT_MODIFIER']) == 1:
+
         sbr_ring_limits= sbr_ring_limits*Configuration['LIMIT_MODIFIER']
     else:
+        mod_list = list(Configuration['LIMIT_MODIFIER'])
+        while len(mod_list) < len(sbr_ring_limits):
+            mod_list.append(Configuration['LIMIT_MODIFIER'][-1])
+        Configuration['LIMIT_MODIFIER'] = np.array(mod_list,dtype=float)
         sbr_ring_limits=[x*y for x,y in zip(sbr_ring_limits,Configuration['LIMIT_MODIFIER'])]
-
+    print('after modifier')
+    print(len(sbr_ring_limits))
+    if debug:
+        print_log(f'''SBR_LIMITS: Retrieved these radii and limits:
+{'':8s}{radii}
+{'':8s}{sbr_ring_limits}
+''',Configuration['OUTPUTLOG'], debug=False,screen =True)
     return radii,sbr_ring_limits
 
 
@@ -533,7 +689,7 @@ sbr_limits.__doc__ = '''
 
 '''
 
-def set_limits(value,minv,maxv):
+def set_limits(value,minv,maxv,debug = False):
     if value < minv:
         return minv
     elif value > maxv:
@@ -576,7 +732,9 @@ set_limits.__doc__ = '''
 '''
 #simple function keep track of how to modify the edge limits
 def set_limit_modifier(Configuration,Inclination, debug= False):
-
+    if debug:
+        print_log(f'''SET_LIMIT_MODIFIER: Checking the limit modifier.
+''', Configuration['OUTPUTLOG'], debug=debug)
     if not Inclination.shape:
         Inclination = [Inclination]
     modifier_list = []
@@ -595,63 +753,87 @@ def set_limit_modifier(Configuration,Inclination, debug= False):
 ''', Configuration['OUTPUTLOG'], debug=debug)
 
 
-def set_ring_size(Configuration, debug = False, no_rings = 0., check_set_rings = True):
-    if no_rings == 0.:
+def set_ring_size(Configuration, debug = False, size_in_beams = 0., check_set_rings = True):
+
+    if size_in_beams == 0.:
         check_set_rings = False
-        no_rings = Configuration['NO_RINGS']
-        ring_size = Configuration['RING_SIZE']
         size_in_beams =  Configuration['SIZE_IN_BEAMS']
-    else:
-        ring_size = Configuration['RING_SIZE']
-        size_in_beams = (no_rings-2)*ring_size
+    ring_size = Configuration['RING_SIZE']
+    no_rings = calc_rings(Configuration,ring_size=ring_size,size_in_beams=size_in_beams,debug=debug)
+    if debug:
+        print_log(f'''SET_RING_SIZE: Starting with the following parameters.
+{'':8s}SIZE_IN_BEAMS = {size_in_beams}
+{'':8s}RING_SIZE = {ring_size}
+''', Configuration['OUTPUTLOG'],debug=debug)
 
     while ring_size > 0.5 and  no_rings < Configuration['MINIMUM_RINGS']:
         previous_ringsize = ring_size
-        ring_size = set_limits(ring_size/1.5,0.5,float('NaN'))
-        if ring_size <= 2.:
-            no_rings = int(round(size_in_beams/ring_size)+2)
-        else:
-            no_rings = int(round(size_in_beams/ring_size-0.66)+2)
+        ring_size = set_limits(ring_size/1.5,0.5,float('NaN'),debug=debug)
+        no_rings = calc_rings(Configuration,ring_size=ring_size,size_in_beams=size_in_beams,debug=debug)
         print_log(f'''SET_RING_SIZE: Because we had less than four rings we have reduced the ring size from {previous_ringsize} to {ring_size}
-''',Configuration['OUTPUTLOG'],debug = Configuration['DEBUG'])
+''',Configuration['OUTPUTLOG'],debug = debug)
 
     while no_rings < Configuration['MINIMUM_RINGS'] and size_in_beams !=  Configuration['MAX_SIZE_IN_BEAMS']:
-        size_in_beams = set_limits(size_in_beams+1,1, Configuration['MAX_SIZE_IN_BEAMS'])
-        no_rings = int(round(size_in_beams/ring_size)+2)
+        size_in_beams = set_limits(size_in_beams+1.*ring_size,1, Configuration['MAX_SIZE_IN_BEAMS'])
+        no_rings = calc_rings(Configuration,ring_size=ring_size,size_in_beams=size_in_beams,debug=debug)
         print_log(f'''SET_RING_SIZE: The initial estimate is too small to fit adding a ring to it.
-''',Configuration['OUTPUTLOG'],debug = Configuration['DEBUG'])
+''',Configuration['OUTPUTLOG'],debug = False)
 
     if check_set_rings:
-        return no_rings,ring_size
+        return size_in_beams,ring_size
     else:
+        if debug:
+            print_log(f'''SET_RING_SIZE: Setting the following parameters.
+{'':8s}SIZE_IN_BEAMS = {size_in_beams}
+{'':8s}RING_SIZE = {ring_size}
+{'':8s}NO_RINGS = {no_rings}
+''', Configuration['OUTPUTLOG'],debug=False)
         Configuration['NO_RINGS'] = int(no_rings)
-        Configuration['SIZE_IN_BEAMS'] = int(size_in_beams)
+        Configuration['SIZE_IN_BEAMS'] = size_in_beams
         Configuration['RING_SIZE'] = ring_size
         if Configuration['NO_RINGS'] < Configuration['MINIMUM_RINGS']:
             print_log(f'''SET_RING_SIZE: With a ring size of {Configuration['RING_SIZE']} we still only find {Configuration['NO_RINGS']}.
     {"":8s}SET_RING_SIZE: This is not enough for a fit.
-    ''',Configuration['OUTPUTLOG'],debug = Configuration['DEBUG'])
-            raise SmallSourceError('This source is too small to reliably fit')
+    ''',Configuration['OUTPUTLOG'],debug = False)
+            raise SmallSourceError('This source is too small to reliably fit.')
 
 
-def set_rings(Configuration, bmaj = 15., debug = False):
-    Configuration['NO_RINGS'] = Configuration['SIZE_IN_BEAMS']/Configuration['RING_SIZE']
-    set_ring_size(Configuration)
-    if Configuration['NO_RINGS'] > 20 and Configuration['MAX_RINGS'] > 25:
-        Configuration['OUTER_RINGS_DOUBLED'] = True
-        print_log(f'''SET_RINGS: This is a large galaxy (# Rings = {Configuration['NO_RINGS']}) Therefore we use twice the ring size in the outer parts.
+def set_rings(Configuration,ring_size = 0.,size_in_beams = 0. , debug = False):
+    if ring_size == 0.:
+        ring_size = Configuration['RING_SIZE']
+    if size_in_beams == 0.:
+        size_in_beams = Configuration['SIZE_IN_BEAMS']
+    if debug:
+        print_log(f'''SET_RINGS: Starting with the following parameters.
+{'':8s}SIZE_IN_BEAMS = {size_in_beams}
+{'':8s}RING_SIZE = {ring_size}
+''', Configuration['OUTPUTLOG'],debug=debug)
+    no_rings = calc_rings(Configuration,debug=debug)
+    if debug:
+        print_log(f'''SET_RINGS: We find {no_rings} rings.
+''', Configuration['OUTPUTLOG'],debug=False)
+    #Configuration['NO_RINGS'] = Configuration['SIZE_IN_BEAMS']/Configuration['RING_SIZE']
+    if Configuration['OUTER_RINGS_DOUBLED']:
+        print_log(f'''SET_RINGS: This is a large galaxy (Size = {size_in_beams}) Therefore we use twice the ring size in the outer parts.
 ''',Configuration['OUTPUTLOG'],debug = Configuration['DEBUG'])
-        radii = [0.,1./5.*bmaj]
-        radii = np.hstack((radii,(np.linspace(bmaj*Configuration['RING_SIZE'],bmaj*10.*Configuration['RING_SIZE'], \
-                                        10)+1./5*bmaj)))
-        radii = np.hstack((radii,(np.linspace(bmaj*11.*Configuration['RING_SIZE'],bmaj \
-                                      *Configuration['NO_RINGS']*Configuration['RING_SIZE'],int((Configuration['NO_RINGS']-9)/2.))+1./5*bmaj)))
+        radii = [0.,1./5.*Configuration['BMMAJ']]
+        radii = np.hstack((radii,(np.linspace(Configuration['BMMAJ']*ring_size,Configuration['BMMAJ']*10.*ring_size, \
+                                        10)+1./5*Configuration['BMMAJ'])))
+        radii = np.hstack((radii,(np.linspace(Configuration['BMMAJ']*11.*ring_size, \
+                                              Configuration['BMMAJ']*(size_in_beams), \
+                                              no_rings-12) \
+                                              +1./5*Configuration['BMMAJ'])))
     else:
-        radii = [0.,1./5.*bmaj]
-        radii = np.hstack((radii,(np.linspace(bmaj*Configuration['RING_SIZE'],bmaj*Configuration['NO_RINGS']*Configuration['RING_SIZE'], \
-                                        Configuration['NO_RINGS'])+1./5.*bmaj)))
-    Configuration['NO_RINGS'] = len(radii)
-    Configuration['SIZE_IN_BEAMS']= int((radii[-1]-1./5.*bmaj)/bmaj)
+        radii = [0.,1./5.*Configuration['BMMAJ']]
+        radii = np.hstack((radii,(np.linspace(Configuration['BMMAJ']*ring_size,Configuration['BMMAJ']*size_in_beams, \
+                                        no_rings-2)+1./5.*Configuration['BMMAJ'])))
+    if debug:
+        print_log(f'''SET_RINGS: Got the following radii.
+{'':8s}{radii}
+{'':8s}We should have {Configuration['NO_RINGS']} rings and have {len(radii)} rings.
+''', Configuration['OUTPUTLOG'],debug=False)
+    #Configuration['NO_RINGS'] = len(radii)
+    #Configuration['SIZE_IN_BEAMS']= int((radii[-1]-1./5.*bmaj)/bmaj)
     return np.array(radii,dtype = float)
 set_rings.__doc__ = '''
 ;+
@@ -685,4 +867,27 @@ set_rings.__doc__ = '''
 ; EXAMPLE:
 ;
 
+'''
+
+def sofia_output_exists(Configuration,Fits_Files, debug = False):
+    if debug:
+        print_log(f'''SOFIA_OUTPUT_EXISTS: Starting check
+''', Configuration['OUTPUTLOG'],debug = debug)
+    req_files= ['MOMENT1','MOMENT0','MOMENT2','MASK']
+    for file in req_files:
+        if os.path.exists(Configuration['FITTING_DIR']+'Sofia_Output/'+Fits_Files[file]):
+            continue
+        else:
+            log_statement = f"CHECK_SOFIA_OUTPUT: The file {Configuration['FITTING_DIR']+'Sofia_Output/'+Fits_Files[file]} is not found."
+            print_log(log_statement, Configuration['OUTPUTLOG'],debug = debug)
+            raise FileNotFoundError(log_statement)
+
+    if not os.path.exists(Configuration['FITTING_DIR']+'Sofia_Output/'+Configuration['BASE_NAME']+'_cat.txt'):
+        log_statement = f"CHECK_SOFIA_OUTPUT: The file {Configuration['FITTING_DIR']+'Sofia_Output/'+Configuration['BASE_NAME']+'_cat.txt'} is not found."
+        print_log(log_statement, Configuration['OUTPUTLOG'],debug = debug)
+        raise FileNotFoundError(log_statement)
+
+
+sofia_output_exists.__doc__ =f'''
+Simple function to make sure all sofia output is present as expeceted
 '''

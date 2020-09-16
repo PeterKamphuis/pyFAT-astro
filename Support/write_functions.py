@@ -23,7 +23,7 @@ from astropy.wcs import WCS
 def basicinfo(Configuration,initialize = False,first_fit = False, second_fit = False, debug = False,
               RA=[0.,0.], DEC=[0.,0.], VSYS =[0.,0.],
               PA=[0,0], Inclination = [0,0], Max_Vrot = [0,0], Tot_Flux = [0,0], V_mask = [0,0],
-              Distance = 0 , DHI = 0):
+              Distance = 0 , DHI = 0,Fits_Files = [], template ={}):
     if initialize:
         with open(f"{Configuration['FITTING_DIR']}{Configuration['BASE_NAME']}-Basic_Info.txt",'w') as file:
             file.write(f'''#This file contains the basic parameters of the Galaxy
@@ -33,7 +33,24 @@ def basicinfo(Configuration,initialize = False,first_fit = False, second_fit = F
 # {'hh:mm:ss':>25s} {'dd:mm:ss':>25s} {'km/s':>20s} {'deg':>20s} {'deg':>20s} {'km/s':>20s} {'km/s':>20s} {'Jy':>20s} {'arcsec':>20s} {'Mpc':>20s} {'M_solar':>20s} {'kpc':>20s}
 # The initial input
 ''')
+    else:
+        Vars_to_Set =  ['XPOS','YPOS','VSYS','VROT','INCL','PA','SDIS','SBR','SBR_2','Z0']
+        FAT_Model = load_template(template,Variables= Vars_to_Set,unpack=False, debug=debug)
+        RA=[FAT_Model[0,Vars_to_Set.index('XPOS')],abs(Configuration['BMMAJ']/(3600.*2.))]
+        DEC=[FAT_Model[0,Vars_to_Set.index('YPOS')],abs(Configuration['BMMAJ']/(3600.*2.))]
+        VSYS =[FAT_Model[0,Vars_to_Set.index('VSYS')],1.]
+        PA=[FAT_Model[0,Vars_to_Set.index('PA')], 3.]
+        Inclination = [FAT_Model[0,Vars_to_Set.index('INCL')], 3.]
+        Max_Vrot = [np.max(FAT_Model[:,Vars_to_Set.index('VROT')]),np.max(FAT_Model[:,Vars_to_Set.index('VROT')])-np.min(FAT_Model[1:,Vars_to_Set.index('VROT')]) ]
+        Tot_Flux = [1.,1.]
+        V_mask = [1000.,1000.]
+        Distance = Configuration['DISTANCE']
+        DHI = 50.
+
+
     with open(f"{Configuration['FITTING_DIR']}{Configuration['BASE_NAME']}-Basic_Info.txt",'a') as file:
+
+
         if first_fit:
             file.write(f'''#After the center converged. \n''')
         elif second_fit:
@@ -110,7 +127,7 @@ def initialize_def_file(Configuration, Fits_Files,Tirific_Template, cube_hdr,Ini
         if 'VSYS' in Initial_Parameters:
             Initial_Parameters['VSYS'] = [x*1000. for x in Initial_Parameters['VSYS']]
     elif fit_stage == 'Extent_Convergence':
-        accepted = check_size(Configuration,Tirific_Template,cube_hdr, debug=debug)
+        #accepted = check_size(Configuration,Tirific_Template,cube_hdr, debug=debug)
         set_overall_parameters(Configuration, Fits_Files,Tirific_Template,loops = 7 ,fit_stage=fit_stage,hdr=cube_hdr, debug=debug,stage='initialize_ec')
         Vars_to_Set =  ['XPOS','YPOS','VSYS','VROT','INCL','PA','SDIS','SBR','SBR_2','Z0']
         FAT_Model = load_template(Tirific_Template,Variables= Vars_to_Set,unpack=False, debug=debug)
@@ -163,7 +180,15 @@ initialize_def_file.__doc__ = '''
 ;
 '''
 def make_overview_plot(Configuration,Fits_Files, debug = False):
+        if os.path.exists(f"{Configuration['FITTING_DIR']}Overview.png"):
+            if os.path.exists(f"{Configuration['FITTING_DIR']}Overview_Prev.png"):
+                os.remove(f"{Configuration['FITTING_DIR']}Overview_Prev.png")
+            os.rename( f"{Configuration['FITTING_DIR']}Overview.png",f"{Configuration['FITTING_DIR']}Overview_Prev.png")
+
         # open the cube
+        if debug:
+            print_log(f'''MAKE_OVERVIEW_PLOT: We are starting the overview plot.
+''',Configuration['OUTPUTLOG'],screen = True,debug =True )
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             cube_mod = fits.open(f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel.fits")
@@ -179,9 +204,16 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
 
         # Open the model info
         Vars_to_plot= ['RADI','XPOS','YPOS','VSYS','VROT','VROT_ERR','VROT_2','VROT_2_ERR','INCL','INCL_ERR','INCL_2','INCL_2_ERR','PA','PA_ERR','PA_2','PA_2_ERR','SDIS','SDIS_ERR','SDIS_2','SDIS_2_ERR','SBR','SBR_2','Z0','Z0_2']
-        FAT_Model = load_tirific(f"{Configuration['FITTING_DIR']}Finalmodel/Finalmodel.def",Variables= Vars_to_plot,unpack=False)
+        FAT_Model = load_tirific(f"{Configuration['FITTING_DIR']}Finalmodel/Finalmodel.def",Variables= Vars_to_plot,unpack=False,debug=debug)
+        Extra_Model = load_tirific(f"{Configuration['FITTING_DIR']}Centre_Convergence/Centre_Convergence.def",Variables= Vars_to_plot,unpack=False,debug=debug)
+
+        if debug:
+            print_log(f'''MAKE_OVERVIEW_PLOT: We find the following model values.
+{'':8s}{[f"{x} = {FAT_Model[:,i]}" for i,x in enumerate(Vars_to_plot)]}
+''',Configuration['OUTPUTLOG'],screen = True,debug =True )
+
         if os.path.exists(f"{Configuration['FITTING_DIR']}ModelInput.def"):
-            Input_Model = load_tirific(f"{Configuration['FITTING_DIR']}ModelInput.def",Variables= Vars_to_plot,unpack=False)
+            Input_Model = load_tirific(f"{Configuration['FITTING_DIR']}ModelInput.def",Variables= Vars_to_plot,unpack=False,debug=debug)
         else:
             Input_Model = []
         sof_basic_ra,sof_basic_dec, sof_basic_vsys,sof_basic_maxrot,sof_basic_pa,sof_basic_inclination = load_basicinfo(
@@ -532,9 +564,20 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
         labelfont= {'family':'Times New Roman',
                 'weight':'normal',
                 'size':10}
-        ax_RC = plot_parameters(Vars_to_plot,FAT_Model,Input_Model,gs[18:21,0:6],Overview,'VROT',initial = sof_basic_maxrot[0] )
-        ymin =np.nanmin([FAT_Model[1:,Vars_to_plot.index('VROT')],FAT_Model[1:,Vars_to_plot.index('VROT_2')]])
-        ymax =np.nanmax([FAT_Model[1:,Vars_to_plot.index('VROT')],FAT_Model[1:,Vars_to_plot.index('VROT_2')]])
+        ax_RC = plot_parameters(Vars_to_plot,FAT_Model,Input_Model,gs[18:21,0:6],Overview,'VROT',initial = sof_basic_maxrot[0],Extra_Model = Extra_Model,debug=debug )
+        ymin =np.min([FAT_Model[1:,Vars_to_plot.index('VROT')],FAT_Model[1:,Vars_to_plot.index('VROT_2')]])
+        ymin2 =np.min([Extra_Model[1:,Vars_to_plot.index('VROT')],Extra_Model[1:,Vars_to_plot.index('VROT_2')]])
+        ymax =np.max([FAT_Model[1:,Vars_to_plot.index('VROT')],FAT_Model[1:,Vars_to_plot.index('VROT_2')]])
+        ymax2 =np.max([Extra_Model[1:,Vars_to_plot.index('VROT')],Extra_Model[1:,Vars_to_plot.index('VROT_2')]])
+        if len(Input_Model) > 0:
+            ymin3 =np.min([Input_Model[1:,Vars_to_plot.index('VROT')],Input_Model[1:,Vars_to_plot.index('VROT_2')]])
+            ymax3 =np.max([Input_Model[1:,Vars_to_plot.index('VROT')],Input_Model[1:,Vars_to_plot.index('VROT_2')]])
+        else:
+            ymin3=ymin
+            ymax3= ymax
+        ymin = np.min([ymin,ymin2,ymin3])
+        ymax = np.max([ymax,ymax2,ymax3])
+
         buffer = np.mean([ymin,ymax])/20.
         ymin= ymin-buffer
         ymax = ymax+buffer
@@ -550,7 +593,7 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
             labelbottom=False)
         plt.ylabel('RC (km s$^{-1}$)',**labelfont)
 # ------------------------------Inclination------------------------------------
-        ax_INCL = plot_parameters(Vars_to_plot,FAT_Model,Input_Model,gs[21:24,0:6],Overview,'INCL', initial =sof_basic_inclination[0] )
+        ax_INCL = plot_parameters(Vars_to_plot,FAT_Model,Input_Model,gs[21:24,0:6],Overview,'INCL', initial =sof_basic_inclination[0],Extra_Model = Extra_Model ,debug=debug)
 
         plt.tick_params(
             axis='x',          # changes apply to the x-axis
@@ -564,7 +607,7 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
               bbox=dict(facecolor='white',edgecolor='white',pad=0.,alpha=0.),zorder=7,fontsize=12)
         plt.ylabel('Incl ($^{\circ}$)',**labelfont)
 # ------------------------------PA------------------------------------
-        ax_PA = plot_parameters(Vars_to_plot,FAT_Model,Input_Model,gs[24:27,0:6],Overview,'PA',initial = sof_basic_pa[0])
+        ax_PA = plot_parameters(Vars_to_plot,FAT_Model,Input_Model,gs[24:27,0:6],Overview,'PA',initial = sof_basic_pa[0],Extra_Model = Extra_Model,debug=debug)
 
         plt.tick_params(
             axis='x',          # changes apply to the x-axis
@@ -579,7 +622,7 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
         plt.xlabel('Radius (arcsec)',**labelfont)
         plt.ylabel('PA ($^{\circ}$)',**labelfont)
 # ------------------------------SDIS------------------------------------
-        ax_SDIS = plot_parameters(Vars_to_plot,FAT_Model,Input_Model,gs[18:21,9:15],Overview,'SDIS',initial = 8.)
+        ax_SDIS = plot_parameters(Vars_to_plot,FAT_Model,Input_Model,gs[18:21,9:15],Overview,'SDIS',Extra_Model = Extra_Model,initial = 8.)
         plt.tick_params(
             axis='x',          # changes apply to the x-axis
             which='both',      # both major and minor ticks are affected
@@ -590,9 +633,12 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
         if Configuration['FIX_SDIS']:
             ax_SDIS.text(1.01,0.5,'Forced Flat',rotation=-90, va='center',ha='left', color='black',transform = ax_SDIS.transAxes,
               bbox=dict(facecolor='white',edgecolor='white',pad=0.,alpha=0.),zorder=7,fontsize=12)
+        ax_SDIS.text(1.1,1.0,f'''Ring size {Configuration['RING_SIZE']} x BMAJ
+BMAJ = {cube[0].header['BMAJ']*3600.:.1f} arcsec''',rotation=0, va='center',ha='left', color='black',transform = ax_SDIS.transAxes,
+              bbox=dict(facecolor='white',edgecolor='white',pad=0.,alpha=0.),zorder=7,fontsize=12)
         plt.ylabel('Disp (km s$^{-1}$)',**labelfont)
 # ------------------------------Scale height------------------------------------
-        ax_Z0 = plot_parameters(Vars_to_plot,FAT_Model,Input_Model,gs[21:24,9:15],Overview,'Z0',initial = convertskyangle(0.2,Configuration['DISTANCE'],physical=True))
+        ax_Z0 = plot_parameters(Vars_to_plot,FAT_Model,Input_Model,gs[21:24,9:15],Overview,'Z0',Extra_Model = Extra_Model,initial = convertskyangle(0.2,Configuration['DISTANCE'],physical=True),debug=debug)
 
         plt.tick_params(
             axis='x',          # changes apply to the x-axis
@@ -606,7 +652,7 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
               bbox=dict(facecolor='white',edgecolor='white',pad=0.,alpha=0.),zorder=7,fontsize=12)
         plt.ylabel('Scale height (arcsec)',**labelfont)
 # ------------------------------SDIS------------------------------------
-        ax_SBR = plot_parameters(Vars_to_plot,FAT_Model,Input_Model,gs[24:27,9:15],Overview,'SBR', legend = ['Appr.','Rec.','Input Appr.','Input Rec.'])
+        ax_SBR = plot_parameters(Vars_to_plot,FAT_Model,Input_Model,gs[24:27,9:15],Overview,'SBR',Extra_Model = Extra_Model, legend = ['Appr.','Rec.','Input Appr.','Input Rec.'],debug=debug)
 
 
         plt.ylabel('SBR (Jy km s$^{-1}$ arcsec$^{-2}$)',**labelfont)
@@ -619,9 +665,10 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
         ax_VSYS = Overview.add_subplot(gs[0:4,16:20])
         plt.xlabel('Sys. Vel. (km s$^{-1}$)',**labelfont)
         plt.ylabel('Distance (Mpc)',**labelfont)
-        plt.scatter(float(FAT_Model[0,Vars_to_plot.index('VSYS')]),float(Configuration['DISTANCE']),c='k')
+        plt.scatter(float(FAT_Model[0,Vars_to_plot.index('VSYS')]),float(Configuration['DISTANCE']),c='k',zorder= 3)
+        plt.scatter(float(Extra_Model[0,Vars_to_plot.index('VSYS')]),float(Configuration['DISTANCE']),c='r',alpha = 0.5,zorder=1)
         if len(Input_Model) > 0:
-            plt.scatter(float(Input_Model[0,Vars_to_plot.index('VSYS')]),float(Configuration['DISTANCE']),c='b')
+            plt.scatter(float(Input_Model[0,Vars_to_plot.index('VSYS')]),float(Configuration['DISTANCE']),c='b',zorder= 2)
         plt.scatter(sof_basic_vsys[0],float(Configuration['DISTANCE']),marker='x',alpha=0.5)
         xmin,xmax = ax_VSYS.get_xlim()
         ymin,ymax = ax_VSYS.get_ylim()
@@ -641,14 +688,15 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
         ax_VSYS.set_ylim(ymin, ymax)
 #----------------------------------------------RA vs DEC -----------------------------------------
         ax_RAD = Overview.add_subplot(gs[6:10,16:20])
-        plt.scatter(float(FAT_Model[0,Vars_to_plot.index('XPOS')]),float(FAT_Model[0,Vars_to_plot.index('YPOS')]),c='k')
+        plt.scatter(float(FAT_Model[0,Vars_to_plot.index('XPOS')]),float(FAT_Model[0,Vars_to_plot.index('YPOS')]),c='k',zorder=3,label = 'Final')
+        plt.scatter(float(Extra_Model[0,Vars_to_plot.index('XPOS')]),float(Extra_Model[0,Vars_to_plot.index('YPOS')]),c='r',zorder=1,alpha=0.5,label='CC')
         if len(Input_Model) > 0:
-            plt.scatter(float(Input_Model[0,Vars_to_plot.index('XPOS')]),float(Input_Model[0,Vars_to_plot.index('YPOS')]),c='b')
-        plt.scatter(sof_basic_ra[0],sof_basic_dec[0],marker='x',alpha=0.5, c = 'k')
+            plt.scatter(float(Input_Model[0,Vars_to_plot.index('XPOS')]),float(Input_Model[0,Vars_to_plot.index('YPOS')]),c='b',zorder =2,label='Input')
+        plt.scatter(sof_basic_ra[0],sof_basic_dec[0],marker='x',alpha=0.5, c = 'k',label='Initial')
         mod_ell = Ellipse(xy=[float(FAT_Model[0,Vars_to_plot.index('XPOS')]),float(FAT_Model[0,Vars_to_plot.index('YPOS')])], width=cube[0].header['BMAJ'] , height=cube[0].header['BMAJ'], angle=0,
                    edgecolor='none', alpha=0.4, lw=4, facecolor='k', hatch=' ',zorder=-1)
         ax_RAD.add_patch(mod_ell)
-
+        ax_RAD.legend(loc='upper left', bbox_to_anchor=(0.0, -0.3), shadow=True, ncol=1)
         plt.xlabel('RA ($^{\circ}$)',**labelfont)
         plt.ylabel('DEC ($^{\circ}$)',**labelfont)
 
@@ -666,31 +714,38 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
         plt.savefig(f"{Configuration['FITTING_DIR']}Overview.png", bbox_inches='tight')
         plt.close()
 
-def plot_parameters(Vars_to_plot,FAT_Model,Input_Model,location,Figure,parameter, legend = ['Empty','Empty','Empty','Empty'],initial = 'No Value', debug = False):
+def plot_parameters(Vars_to_plot,FAT_Model,Input_Model,location,Figure,parameter, legend = ['Empty','Empty','Empty','Empty'],initial = 'No Value', Extra_Model = [], debug = False):
+    if debug:
+        print_log(f'''PLOT_PARAMETERS: We are starting to plot {parameter}
+''', None,screen =True, debug =True)
     ax = Figure.add_subplot(location)
     try:
-        yerr = FAT_Model[:,Vars_to_plot.index(f'# {parameter}_ERR')]
+        yerr = FAT_Model[:,Vars_to_plot.index(f'{parameter}_ERR')]
     except:
         yerr =np.zeros(len(FAT_Model[:,Vars_to_plot.index('RADI')]))
-    ax.errorbar(FAT_Model[:,Vars_to_plot.index('RADI')],FAT_Model[:,Vars_to_plot.index(f'{parameter}')],yerr= yerr, c ='k', label=f'{legend[0]}')
-    ax.plot(FAT_Model[:,Vars_to_plot.index('RADI')],FAT_Model[:,Vars_to_plot.index(f'{parameter}')],'ko', ms = 3.)
+    if debug:
+        print_log(f'''PLOT_PARAMETERS: We found these errors {yerr}
+''', None,screen =True, debug =True)
+
+    ax.errorbar(FAT_Model[:,Vars_to_plot.index('RADI')],FAT_Model[:,Vars_to_plot.index(f'{parameter}')],yerr= yerr, c ='k', label=f'{legend[0]}',zorder=3)
+    ax.plot(FAT_Model[:,Vars_to_plot.index('RADI')],FAT_Model[:,Vars_to_plot.index(f'{parameter}')],'ko', ms = 3.,zorder=3)
     if np.sum(FAT_Model[:,Vars_to_plot.index(f'{parameter}_2')]) != 0.:
         diff = np.sum(abs(FAT_Model[:,Vars_to_plot.index(f'{parameter}_2')]-FAT_Model[:,Vars_to_plot.index(f'{parameter}')]))
         if diff != 0.:
             try:
-                yerr = FAT_Model[:,Vars_to_plot.index(f'# {parameter}_2_ERR')]
+                yerr = FAT_Model[:,Vars_to_plot.index(f'{parameter}_2_ERR')]
             except:
                 yerr =np.zeros(len(FAT_Model[:,Vars_to_plot.index('RADI')]))
-            ax.errorbar(FAT_Model[:,Vars_to_plot.index('RADI')],FAT_Model[:,Vars_to_plot.index(f'{parameter}_2')],yerr= yerr, c ='r', label=f'{legend[1]}')
-            ax.plot(FAT_Model[:,Vars_to_plot.index('RADI')],FAT_Model[:,Vars_to_plot.index(f'{parameter}_2')],'ro', ms = 3.)
+            ax.errorbar(FAT_Model[:,Vars_to_plot.index('RADI')],FAT_Model[:,Vars_to_plot.index(f'{parameter}_2')],yerr= yerr, c ='r', label=f'{legend[1]}',zorder=3)
+            ax.plot(FAT_Model[:,Vars_to_plot.index('RADI')],FAT_Model[:,Vars_to_plot.index(f'{parameter}_2')],'ro', ms = 3.,zorder=3)
 
     if len(Input_Model) > 0:
         try:
             yerr = Input_Model[:,Vars_to_plot.index(f'# {parameter}_ERR')]
         except:
             yerr =np.zeros(len(Input_Model[:,Vars_to_plot.index('RADI')]))
-        ax.errorbar(Input_Model[:,Vars_to_plot.index('RADI')],Input_Model[:,Vars_to_plot.index(f'{parameter}')],yerr= yerr, c ='b',linestyle='-', label=f'{legend[2]}')
-        ax.plot(Input_Model[:,Vars_to_plot.index('RADI')],Input_Model[:,Vars_to_plot.index(f'{parameter}')],'bo',linestyle='-', ms = 3.)
+        ax.errorbar(Input_Model[:,Vars_to_plot.index('RADI')],Input_Model[:,Vars_to_plot.index(f'{parameter}')],yerr= yerr, c ='b',linestyle='-', label=f'{legend[2]}',zorder=2)
+        ax.plot(Input_Model[:,Vars_to_plot.index('RADI')],Input_Model[:,Vars_to_plot.index(f'{parameter}')],'bo',linestyle='-', ms = 3.,zorder=2)
         if np.sum(Input_Model[:,Vars_to_plot.index(f'{parameter}_2')]) != 0.:
             diff = np.sum(abs(Input_Model[:,Vars_to_plot.index(f'{parameter}_2')]-Input_Model[:,Vars_to_plot.index(f'{parameter}')]))
             if diff != 0.:
@@ -698,8 +753,15 @@ def plot_parameters(Vars_to_plot,FAT_Model,Input_Model,location,Figure,parameter
                     yerr = Input_Model[:,Vars_to_plot.index(f'# {parameter}_2_ERR')]
                 except:
                     yerr =np.zeros(len(Input_Model[:,Vars_to_plot.index('RADI')]))
-                ax.errorbar(Input_Model[:,Vars_to_plot.index('RADI')],Input_Model[:,Vars_to_plot.index(f'{parameter}_2')],yerr= yerr, c ='yellow', label=f'{legend[3]}')
-                ax.plot(Input_Model[:,Vars_to_plot.index('RADI')],Input_Model[:,Vars_to_plot.index(f'{parameter}_2')],'yellow',marker ='o',linestyle='-' , ms = 3.)
+                ax.errorbar(Input_Model[:,Vars_to_plot.index('RADI')],Input_Model[:,Vars_to_plot.index(f'{parameter}_2')],yerr= yerr, c ='yellow', label=f'{legend[3]}',zorder=2)
+                ax.plot(Input_Model[:,Vars_to_plot.index('RADI')],Input_Model[:,Vars_to_plot.index(f'{parameter}_2')],'yellow',zorder=2,marker ='o',linestyle='-' , ms = 3.)
+    if len(Extra_Model) > 0:
+        ax.plot(Extra_Model[:,Vars_to_plot.index('RADI')],Extra_Model[:,Vars_to_plot.index(f'{parameter}')],'ko',linestyle='-', ms = 3., alpha=0.2,zorder=1)
+        if np.sum(Extra_Model[:,Vars_to_plot.index(f'{parameter}_2')]) != 0.:
+            diff = np.sum(abs(Extra_Model[:,Vars_to_plot.index(f'{parameter}_2')]-Extra_Model[:,Vars_to_plot.index(f'{parameter}')]))
+            if diff != 0.:
+                ax.plot(Extra_Model[:,Vars_to_plot.index('RADI')],Extra_Model[:,Vars_to_plot.index(f'{parameter}_2')],'r', alpha=0.2,zorder=1,marker ='o',linestyle='-' , ms = 3.)
+
     xmin,xmax = ax.get_xlim()
     if initial != 'No Value':
         ax.plot([xmin-5,xmax+5],[float(initial),float(initial)],c='k',alpha=0.4, linestyle ='--')
@@ -757,35 +819,61 @@ def plot_usage_stats(Configuration,debug = False):
                 mem.append(tmp[8])
     # Below thanks to P. Serra
     # Make single-PID figures and total figure
-
-
     fig, ax1 = plt.subplots(figsize = (8,4))
-    fig.subplots_adjust(left = 0.1, right = 0.9, bottom = 0.15, top = 0.8)
-    #fig.suptitle('file: {0:s}, PID: {1:s}, command: {2:s}'.format(sys.argv[1].split('/')[-1],jj,jobs_dict[jj][0]),x=0.07,ha='left')
+    fig.subplots_adjust(left = 0.1, right = 0.9, bottom = 0.15, top = 0.7)
     times = np.array(times, dtype = float)
     mem = np.array(mem, dtype = float)
     CPU = np.array(CPU, dtype = float)
 
     ax1.plot(times,mem,'b-',lw=0.5)
-    ax1.set_ylim(0,np.max(mem))
-    #ax1.set_xlim(times.min()-times[0],times.max()-times[0]) # to have all plots on the same time axis
-      #ax1.set_xlim(time.min(),time.max())                     # to have each plot on its own time axis
-      #ax1.set_xlim(0,1.5)
+    ax1.set_ylim(0,np.max(mem)+np.max(mem)/10.)
     ax1.set_ylabel('RAM (Mb) ', color='b')
-    #ax1.axhline(y=expmemfrac,color='k',linestyle='--')
     ax1.tick_params(axis='y', labelcolor='b')
     ax1.set_xlabel('time (min)', color='k')
     ax2 = ax1.twinx()
     ax2.plot(times,CPU,'r-',lw=0.5)
-    #for xx in range(1,expcpu): ax2.axhline(y=xx, color='r', linestyle=':', linewidth=0.1)
-    #ax2.set_ylim(0,expcpu)
     ax2.set_ylabel('CPUs (%)',color='r')
-    #ax2.axhline(y=expcpu,color='r',linestyle='--')
+    ax2miny,ax2maxy = ax2.get_ylim()
     ax2.tick_params(axis='y', labelcolor='r')
-
+    last_label = -100
+    label_sep = 1.
+    color, linest = '0.5', '--'
+    labelfont = {'family': 'Times New Roman',
+             'weight': 'normal',
+             'size': 6.5}
+    prev_label = ''
     for label,time in zip(labels,label_times):
-        ax2.text(time,np.max(CPU)+20.,label, va='bottom',ha='left',rotation= 60, color='black',
-              bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7)
+        if color == '0.5':
+            color = 'k'
+        elif color == 'k':
+            color = '0.5'
+        if linest == '--':
+            linest = '-'
+        elif linest == '-':
+            linest = '--'
+        if (prev_label == 'Initializing tmp_incl_check' or prev_label == 'Ended tmp_incl_check'):
+            if (label != 'Initializing tmp_incl_check' and label != 'Ended tmp_incl_check'):
+                ax2.axvline(x=prev_time, linestyle=linest, color=color, linewidth=0.05)
+                last_label = max(prev_time,last_label+label_sep)
+                ax2.text(last_label,ax2maxy+20.,prev_label, va='bottom',ha='left',rotation= 60, color='black',
+                      bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7,fontdict = labelfont)
+                ax2.plot([prev_time,last_label+0.1],[ax2maxy,ax2maxy+20.],'k'+linest,color=color,linewidth=0.05,clip_on=False)
+                ax2.axvline(x=time, linestyle=linest, color=color, linewidth=0.05)
+                last_label = max(time,last_label+label_sep)
+                ax2.text(last_label,ax2maxy+20.,label, va='bottom',ha='left',rotation= 60, color='black',
+                      bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7,fontdict = labelfont)
+                ax2.plot([time,last_label+0.1],[ax2maxy,ax2maxy+20.],'k'+linest,color=color,linewidth=0.05,clip_on=False)
+            else:
+                prev_time = time
+        else:
+            ax2.axvline(x=time, linestyle=linest, color=color, linewidth=0.05)
+            last_label = max(time,last_label+label_sep)
+            ax2.text(last_label,ax2maxy+20.,label, va='bottom',ha='left',rotation= 60, color='black',
+                  bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7,fontdict = labelfont)
+            ax2.plot([time,last_label+0.1],[ax2maxy,ax2maxy+20.],'k'+linest,color=color,linewidth=0.05,clip_on=False)
+        prev_label = label
+    #This is beyond stupid again, but hey it is python so needed to make things work.
+    ax2.set_ylim([ax2miny,ax2maxy])
     fig.savefig(f"{Configuration['FITTING_DIR']}Logs/ram_cpu.pdf")
     plt.close()
 

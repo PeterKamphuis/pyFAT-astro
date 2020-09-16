@@ -1,10 +1,18 @@
 #!/usr/local/bin/ python3
 # This module contains a set of functions and classes that are used in FAT to read input files
 
-from support_functions import Proper_Dictionary,print_log,convertRADEC
+from support_functions import Proper_Dictionary,print_log,convertRADEC,set_limits, remove_inhomogeneities
 from astropy.io import fits
 from scipy import ndimage
-
+import warnings
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore")
+    import matplotlib
+    matplotlib.use('pdf')
+    import matplotlib.pyplot as plt
+    from mpl_toolkits.axes_grid1 import make_axes_locatable
+    from matplotlib.patches import Ellipse
+    import matplotlib.axes as maxes
 import os
 import copy
 import numpy as np
@@ -235,11 +243,14 @@ config_file.__doc__ ='''
 
 def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
     #open the moment 0
-
+    if debug:
+        print_log(f'''GUESS_ORIENTATION: starting extraction of initial parameters.
+''',Configuration['OUTPUTLOG'], debug = True)
     Image = fits.open(Configuration['FITTING_DIR']+'Sofia_Output/'+Fits_Files['MOMENT0'],\
             uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
     map = Image[0].data
     hdr = Image[0].header
+    mom0 = copy.deepcopy(Image)
     Image.close()
     if not center:
         center = [hdr['NAXIS1']/2.,hdr['NAXIS2']/2]
@@ -251,57 +262,117 @@ def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
     median_noise_in_map = np.nanmedian(noise_map[noise_map > 0.])
     minimum_noise_in_map = np.nanmin(noise_map[noise_map > 0.])
     map[3*minimum_noise_in_map > noise_map] = 0.
+    for i in [0,1]:
+        # now we need to get profiles under many angles let's say 100
+        #extract the profiles under a set of angles
+        angles = np.linspace(0, 180, 180)
 
-    # now we need to get profiles under many angles let's say 100
-    #extract the profiles under a set of angles
-    angles = np.linspace(0, 180, 180)
+        ratios, maj_extent = obtain_ratios(map, hdr, center, angles)
 
-    ratios, maj_extent = obtain_ratios(map, hdr, center, angles)
+        max_index = np.where(ratios == np.nanmax(ratios))[0]
+        if max_index.size > 1:
+            max_index =max_index[0]
+        min_index = np.where(ratios == np.nanmin(ratios))[0]
+        if min_index.size > 1:
+            min_index =min_index[0]
+        #get a 10% bracket
 
-    max_index = np.where(ratios == np.nanmax(ratios))[0]
-    if max_index.size > 1:
-        max_index =max_index[0]
-    min_index = np.where(ratios == np.nanmin(ratios))[0]
-    if min_index.size > 1:
-        min_index =min_index[0]
-    #get a 10% bracket
+        tenp_max_index = np.where(ratios > np.nanmax(ratios)*0.9)[0]
+        tenp_min_index = np.where(ratios < np.nanmin(ratios)*1.1)[0]
+        if tenp_max_index.size <= 1:
+            tenp_max_index= [max_index-2,max_index+2]
+        if tenp_min_index.size <= 1:
+            tenp_min_index= [min_index-2,min_index+2]
+        pa = np.mean([angles[min_index],angles[max_index]-90.])
+        pa_error = set_limits(np.mean([abs(angles[tenp_min_index[0]]-angles[min_index]),\
+                            abs(angles[tenp_min_index[-1]]-angles[min_index]),\
+                            abs(angles[tenp_max_index[0]]-angles[max_index]), \
+                            abs(angles[tenp_min_index[-1]]-angles[max_index])]), \
+                            0.5,15.)
+        ratios[ratios < 0.204] = 0.204
+        ratios[1./ratios < 0.204] = 1./0.204
+        inclination = np.mean([np.degrees(np.arccos(np.sqrt((ratios[min_index]**2-0.2**2)/0.96))) \
+                              ,np.degrees(np.arccos(np.sqrt(((1./ratios[max_index])**2-0.2**2)/0.96))) ])
 
-    tenp_max_index = np.where(ratios > np.nanmax(ratios)*0.9)[0]
-    tenp_min_index = np.where(ratios < np.nanmin(ratios)*1.1)[0]
-    if tenp_max_index.size <= 1:
-        tenp_max_index= [max_index-2,max_index+2]
-    if tenp_min_index.size <= 1:
-        tenp_min_index= [min_index-2,min_index+2]
-    pa = np.mean([angles[min_index],angles[max_index]-90.])
-    pa_error = np.mean([abs(angles[tenp_min_index[0]]-angles[min_index]),\
-                        abs(angles[tenp_min_index[-1]]-angles[min_index]),\
-                        abs(angles[tenp_max_index[0]]-angles[max_index]), \
-                        abs(angles[tenp_min_index[-1]]-angles[max_index])])
-    ratios[ratios < 0.204] = 0.204
-    ratios[1./ratios < 0.204] = 1./0.204
-    inclination = np.mean([np.degrees(np.arccos(np.sqrt((ratios[min_index]**2-0.2**2)/0.96))) \
-                          ,np.degrees(np.arccos(np.sqrt(((1./ratios[max_index])**2-0.2**2)/0.96))) ])
-
-    inclination_error = np.mean([abs(np.degrees(np.arccos(np.sqrt((ratios[min_index]**2-0.2**2)/0.96))) - np.degrees(np.arccos(np.sqrt((ratios[tenp_min_index[0]]**2-0.2**2)/0.96)))),\
-                                 abs(np.degrees(np.arccos(np.sqrt((ratios[min_index]**2-0.2**2)/0.96))) - np.degrees(np.arccos(np.sqrt((ratios[tenp_min_index[-1]]**2-0.2**2)/0.96)))),\
-                                 abs(np.degrees(np.arccos(np.sqrt(((1./ratios[max_index])**2-0.2**2)/0.96))) - np.degrees(np.arccos(np.sqrt(((1./ratios[tenp_max_index[0]])**2-0.2**2)/0.96)))),\
-                                 abs(np.degrees(np.arccos(np.sqrt(((1./ratios[max_index])**2-0.2**2)/0.96))) - np.degrees(np.arccos(np.sqrt(((1./ratios[tenp_max_index[0]])**2-0.2**2)/0.96))))])
+        if i == 0:
+            inclination_error = set_limits(np.mean([abs(np.degrees(np.arccos(np.sqrt((ratios[min_index]**2-0.2**2)/0.96))) - np.degrees(np.arccos(np.sqrt((ratios[tenp_min_index[0]]**2-0.2**2)/0.96)))),\
+                                     abs(np.degrees(np.arccos(np.sqrt((ratios[min_index]**2-0.2**2)/0.96))) - np.degrees(np.arccos(np.sqrt((ratios[tenp_min_index[-1]]**2-0.2**2)/0.96)))),\
+                                     abs(np.degrees(np.arccos(np.sqrt(((1./ratios[max_index])**2-0.2**2)/0.96))) - np.degrees(np.arccos(np.sqrt(((1./ratios[tenp_max_index[0]])**2-0.2**2)/0.96)))),\
+                                     abs(np.degrees(np.arccos(np.sqrt(((1./ratios[max_index])**2-0.2**2)/0.96))) - np.degrees(np.arccos(np.sqrt(((1./ratios[tenp_max_index[0]])**2-0.2**2)/0.96))))]), \
+                                     2.5,25.)
+        if ratios[max_index]-ratios[min_index] < 0.4:
+            inclination = float(inclination-(inclination*0.04/(ratios[max_index]-ratios[min_index])))
+            if i == 0:
+                inclination_error = float(inclination_error*0.4/(ratios[max_index]-ratios[min_index]))
+        if maj_extent/hdr['BMAJ'] < 4:
+            inclination = float(inclination+(inclination/10.*np.sqrt(4./(maj_extent/hdr['BMAJ']))))
+            if i == 0:
+                inclination_error = float(inclination_error*4./(maj_extent/hdr['BMAJ']))
+        if i == 0:
+            print(center)
+            mom0 = remove_inhomogeneities(Configuration,mom0,inclination=inclination, pa = pa, center = center,WCS_center = False, debug=debug)
+            map = mom0[0].data
+            #map[3*minimum_noise_in_map > noise_map] = 0.
     # From these estimates we also get an initial SBR
     x1,x2,y1,y2 = obtain_border_pix(hdr,pa,center)
     linex,liney = np.linspace(x1,x2,1000), np.linspace(y1,y2,1000)
     maj_resolution = abs((abs(x2-x1)/1000.)*np.sin(np.radians(pa)))+abs(abs(y2-y1)/1000.*np.cos(np.radians(pa)))
     maj_profile = ndimage.map_coordinates(map, np.vstack((liney,linex)),order=1)
     maj_axis =  np.linspace(0,1000*maj_resolution,1000)- (abs((abs(center[0]))*np.sin(np.radians(pa)))+abs(abs(center[1])*np.cos(np.radians(pa))))
+
+    # let's get an intensity weighted center for the extracted profile.
+
+    center_of_profile = np.sum(maj_profile*maj_axis)/np.sum(maj_profile)
     neg_index = np.where(maj_axis < 0.)[0]
     pos_index = np.where(maj_axis > 0.)[0]
-
     avg_profile = []
+    neg_profile = []
+    pos_profile = []
+    diff = 0.
     for i in range(np.nanmin([neg_index.size,pos_index.size])):
         avg_profile.append(np.nanmean([maj_profile[neg_index[neg_index.size-i-1]],maj_profile[pos_index[i]]]))
+        neg_profile.append(maj_profile[neg_index[neg_index.size-i-1]])
+        pos_profile.append(maj_profile[pos_index[i]])
+        diff = diff+abs(avg_profile[i]-neg_profile[i])+abs(avg_profile[i]-pos_profile[i])
+    diff = diff/np.nanmin([neg_index.size,pos_index.size])
+    print('Beam, center of profiele, center ')
+    print(hdr['BMAJ']*0.5/np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])]),center_of_profile,center)
+    # if the center of the profile is more than half a beam off from the Sofia center let's see which on provides a more symmetric profile
+    if abs(center_of_profile) > hdr['BMAJ']*0.5/np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])]):
+        if debug:
+                print_log(f'''GUESS_ORIENTATION: The SoFiA center and that of the SBR profile are separated by more than half a bemea apart.
+{'':8s}GUESS_ORIENTATION: Determining the more symmetric profile.
+''',Configuration['OUTPUTLOG'], debug = False)
+        neg_index = np.where(maj_axis < center_of_profile)[0]
+        pos_index = np.where(maj_axis > center_of_profile)[0]
+        avg_profile_new = []
+        neg_profile_new = []
+        pos_profile_new = []
+        diff_new =0.
+        for i in range(np.nanmin([neg_index.size,pos_index.size])):
+            avg_profile_new.append(np.nanmean([maj_profile[neg_index[neg_index.size-i-1]],maj_profile[pos_index[i]]]))
+            neg_profile_new.append(maj_profile[neg_index[neg_index.size-i-1]])
+            pos_profile_new.append(maj_profile[pos_index[i]])
+            diff_new = diff_new+abs(avg_profile_new[i]-neg_profile_new[i])+abs(avg_profile_new[i]-pos_profile_new[i])
+        diff_new = diff_new/np.nanmin([neg_index.size,pos_index.size])
+        print('The diffs')
+        print(diff_new,diff)
+        if diff_new < diff:
+            if debug:
+                print_log(f'''GUESS_ORIENTATION: We are updating the center from {center[0]},{center[1]} to {center[0]+center_of_profile/(2.*np.sin(np.radians(pa)))*maj_resolution},{center[1]+center_of_profile/(2.*np.cos(np.radians(pa)))*maj_resolution}
+''',Configuration['OUTPUTLOG'], debug = False)
+            avg_profile = avg_profile_new
+            center[0] = center[0]-center_of_profile/(2.*np.sin(np.radians(pa)))*maj_resolution
+            center[1] = center[1]+center_of_profile/(2.*np.cos(np.radians(pa)))*maj_resolution
+            maj_axis =  np.linspace(0,1000*maj_resolution,1000)- (abs((abs(center[0]))*np.sin(np.radians(pa)))+abs(abs(center[1])*np.cos(np.radians(pa))))
+
+
     ring_size_req = Configuration['RING_SIZE']*hdr['BMAJ']/(np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])*maj_resolution)
     SBR_initial = avg_profile[0::int(ring_size_req)]/(np.pi*abs(hdr['BMAJ']*3600.*hdr['BMIN']*3600.)/(4.*np.log(2.))) # Jy*km/s
     SBR_initial =np.hstack((SBR_initial[0],SBR_initial,SBR_initial[-1]))
     #We need to know which is the approaching side and which is receding
+
+
 
     Image = fits.open(Configuration['FITTING_DIR']+'Sofia_Output/'+Fits_Files['MOMENT1'],\
             uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
@@ -321,7 +392,7 @@ def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
             pa = pa+180
             print_log(f'''GUESS_ORIENTATION: We have modified the pa by 180 deg as we found the maximum velocity west of the center.
 ''' , Configuration['OUTPUTLOG'])
-    return [pa,pa_error],[inclination,inclination_error],SBR_initial,maj_extent
+    return np.array([pa,pa_error]),np.array([inclination,inclination_error]),SBR_initial,maj_extent,center[0],center[1]
 guess_orientation.__doc__ ='''
 ;+
 ; NAME:
@@ -418,6 +489,10 @@ def load_tirific(filename,Variables = ['BMIN','BMAJ','BPA','RMS','DISTANCE','NUR
                  'Z0', 'SBR', 'INCL','PA','XPOS','YPOS','VSYS','SDIS','VROT_2',  'Z0_2','SBR_2',
                  'INCL_2','PA_2','XPOS_2','YPOS_2','VSYS_2','SDIS_2','CONDISP','CFLUX','CFLUX_2'],
                  unpack = True , debug = False ):
+    if debug:
+        print_log(f'''LOAD_TIRIFIC: Starting to extract the following paramaters:
+{'':8s}{Variables}
+''',None,screen=True, debug = True)
     Variables = np.array([e.upper() for e in Variables],dtype=str)
 
     tmp = open(filename, 'r')
@@ -429,6 +504,10 @@ def load_tirific(filename,Variables = ['BMIN','BMAJ','BPA','RMS','DISTANCE','NUR
     # Separate the keyword names
     for line in unarranged:
         var_concerned = str(line.split('=')[0].strip().upper())
+        if debug:
+            print_log(f'''LOAD_TIRIFIC: extracting line
+{'':8s}{var_concerned}.
+''',None,screen=True, debug = True)
         if len(var_concerned) < 1:
             var_concerned = 'xxx'
         varpos = np.where(Variables == var_concerned)[0]
@@ -441,7 +520,11 @@ def load_tirific(filename,Variables = ['BMIN','BMAJ','BPA','RMS','DISTANCE','NUR
             outputarray[0:len(tmp),int(varpos)] = tmp[0:len(tmp)]
         else:
             if var_concerned[0] == '#':
-                varpos = np.where(var_concerned[2:] == Variables)[0]
+                varpos = np.where(var_concerned[2:].strip() == Variables)[0]
+                if debug:
+                    print_log(f'''LOAD_TIRIFIC: comparing {var_concerned[2:].strip()} to the variables.
+{'':8s}Found {varpos}.
+''',None,screen=True, debug = True)
                 if varpos.size > 0:
                     tmp = np.array(line.split('=')[1].rsplit(),dtype=float)
                     if len(outputarray[:, 0]) < len(tmp):
@@ -569,6 +652,9 @@ def obtain_border_pix(hdr,angle,center, debug = False):
 # function to read the sofia catalogue
 def sofia_catalogue(Configuration, Variables =['name','x','x_min','x_max','y','y_min','y_max','z','z_min','z_max','ra',\
                     'dec','v_app','f_sum','kin_pa','w50','err_f_sum','err_x','err_y','err_z'], header = None , debug = False):
+    if debug:
+        print_log(f'''SOFIA_CATLOGUE: Reading the source from the catalogue.
+''',Configuration['OUTPUTLOG'],debug= debug)
     outlist = [[] for x in Variables]
     with open(Configuration['FITTING_DIR']+'Sofia_Output/'+Configuration['BASE_NAME']+'_cat.txt') as sof_cat:
         for line in sof_cat.readlines():
@@ -595,7 +681,7 @@ def sofia_catalogue(Configuration, Variables =['name','x','x_min','x_max','y','y
 {"":8s}READ_SOFIA_CATALOGUE: c) You are using pre processed SoFiA output of your own and do not have all the output'
 {"":8s}READ_SOFIA_CATALOGUE:    Required output is {','.join(Variables)})
 '''
-                            print_log(log_statement,Configuration['OUTPUTLOG'])
+                            print_log(log_statement,Configuration['OUTPUTLOG'],debug= debug)
                             raise BadCatalogueError("READ_SOFIA_CATALOGUE: The required columns could not be found in the sofia catalogue.")
             else:
                 for col in Variables:
@@ -622,34 +708,62 @@ def sofia_catalogue(Configuration, Variables =['name','x','x_min','x_max','y','y
 
     # we want to fit a specific source
     if len(outlist[0]) > 1 and 'f_sum' in Variables and header:
-        many_sources  = copy.deepcopy(outlist)
-        # We want to exclude any edge sources
-        for i in range(len(many_sources[0])):
-            edge = False
-            diff = np.array([many_sources[Variables.index('x_min')][i],
-                    abs(float(many_sources[Variables.index('x_max')][i])-header['NAXIS1']),
-                    many_sources[Variables.index('y_min')][i],
-                    abs(float(many_sources[Variables.index('y_max')][i])-header['NAXIS2'])
-                    ],dtype=float)
-
-            index = np.where(diff < 2*header['BMAJ']/((abs(header['CDELT1'])+abs(header['CDELT2']))/2.))[0]
-            if np.where(diff < 2*header['BMAJ']/((abs(header['CDELT1'])+abs(header['CDELT2']))/2.))[0].size:
-                edge = True
-            diff = np.array([many_sources[Variables.index('z_min')][i],
-                    abs(float(many_sources[Variables.index('z_max')][i])-float(header['NAXIS3']))],dtype=float)
-            if np.where(diff < 2)[0].size:
-                edge = True
-            if edge:
-                many_sources[Variables.index('f_sum')][i]=0.
-
+        if debug:
+            print_log(f'''SOFIA_CATALOGUE: Multiple sources were found we will try to select the correct one.
+''',Configuration['OUTPUTLOG'],debug= debug)
+        found = False
+        beam_edge=2.
+        while not found:
+            many_sources  = copy.deepcopy(outlist)
+            # We want to exclude any edge sources
+            for i in range(len(many_sources[0])):
+                edge = False
+                diff = np.array([many_sources[Variables.index('x_min')][i],
+                        abs(float(many_sources[Variables.index('x_max')][i])-header['NAXIS1']),
+                        many_sources[Variables.index('y_min')][i],
+                        abs(float(many_sources[Variables.index('y_max')][i])-header['NAXIS2'])
+                        ],dtype=float)
+                if debug:
+                    print_log(f'''SOFIA_CATALOGUE: We find these differences and this edge size {beam_edge*header['BMAJ']/((abs(header['CDELT1'])+abs(header['CDELT2']))/2.)}
+    {'':8s} diff  = {diff}
+    ''',Configuration['OUTPUTLOG'],debug= debug,screen = True)
+                if np.where(diff < beam_edge*header['BMAJ']/((abs(header['CDELT1'])+abs(header['CDELT2']))/2.))[0].size:
+                    edge = True
+                diff = np.array([many_sources[Variables.index('z_min')][i],
+                        abs(float(many_sources[Variables.index('z_max')][i])-float(header['NAXIS3']))],dtype=float)
+                if debug:
+                    print_log(f'''SOFIA_CATALOGUE: And for velocity edge =  2
+    {'':8s} diff  = {diff}
+    ''',Configuration['OUTPUTLOG'],debug= debug,screen = True)
+                if np.where(diff < 2)[0].size:
+                    edge = True
+                if debug:
+                    print_log(f'''SOFIA_CATALOGUE: Edge = {edge}
+    ''',Configuration['OUTPUTLOG'],debug= debug,screen = True)
+                if edge:
+                    many_sources[Variables.index('f_sum')][i]=0.
+            if np.nansum(many_sources[Variables.index('f_sum')]) == 0.:
+                    beam_edge = beam_edge/2.
+            else:
+                found = True
+        if debug:
+            print_log(f'''SOFIA_CATALOGUE: after checking edges we find these fluxes
+{'':8s}{many_sources[Variables.index('f_sum')]}
+''',Configuration['OUTPUTLOG'],debug= debug,screen = True)
 
         fluxes = np.array(many_sources[Variables.index('f_sum')],dtype= float)
         outlist = []
         #We want the source with the most total flux.
         index = np.where(np.nanmax(fluxes) == fluxes)[0][0]
+        print_log(f'''SOFIA_CATALOGUE: We select the {index} source of this list.
+''',Configuration['OUTPUTLOG'],debug= debug, screen =True)
         outlist = [x[index] for x in many_sources]
     else:
         outlist = [x[0] for x in outlist]
+    if debug:
+        print_log(f'''SOFIA_CATALOGUE: we found these values
+{'':8s}{outlist}
+''',Configuration['OUTPUTLOG'],debug= debug,screen = True)
     return outlist
 
 sofia_catalogue.__doc__ ='''

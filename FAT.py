@@ -30,6 +30,7 @@ def FAT(argv):
     parser.add_option('--FD','--FULL_DATABASE', action ="store_true" ,dest = "full_test", default = False, help = 'Run the Full Database Test. Developer Only.')
     parser.add_option('-p','--problems', action ="store_true" ,dest = "problems", default = False, help = 'Run the Problem test set. Developer Only.')
     parser.add_option('-t','--timing', action ="store_true" ,dest = "timing", default = False, help = 'Create a file in the maindir that provides start and stop times for each galaxy.')
+    parser.add_option('-n','--ncpu', action ="store" ,dest = "ncpu", default = 6, help = 'Number of CPUs to use.')
     input_parameters,args = parser.parse_args()
 
     basic_info  = 'BasicInfo'
@@ -54,14 +55,12 @@ def FAT(argv):
     import read_functions as rf
     # functions that are used often for menial tasks
     import support_functions as sf
+    # Functions that run external programs such as tirific and sofia
+    import run_functions as runf
     # function that keep things orderly and nicely
     import clean_functions as cf
     # Functions that modify or produce fat fits file
     import fits_functions as ff
-    # Functions that run external programs such as tirific and sofia
-    import run_functions as runf
-    # Functions that check on the presence of output or input
-    import exist_check as ec
     #functions that write files
     import write_functions as wf
     from modify_template import write_new_to_template,flatten_the_curve
@@ -77,6 +76,7 @@ def FAT(argv):
     # Also add the timing input and some other recurring parameters
     Original_Configuration['TIMING'] = input_parameters.timing
     Original_Configuration['DEBUG'] = input_parameters.debug
+    Original_Configuration['NCPU'] = input_parameters.ncpu
     # if the number of beams across the major axis is less than this size we will only fit a flat disc
     Original_Configuration['MINIMUM_WARP_SIZE'] = 3
     Original_Configuration['MINIMUM_RINGS'] = 3 # we need at least this amount of rings (Including 0 and 1.5./)
@@ -95,10 +95,12 @@ def FAT(argv):
     Original_Configuration['OPTIMIZED'] = False
     Original_Configuration['OUTER_RINGS_DOUBLED'] = False
     Original_Configuration['TIRIFIC_RUNNING'] = False
-    Original_Configuration['CURRENT_RUN_ID'] = 0
+    Original_Configuration['TIRIFIC_PID'] = 'Not Initialized'
     Original_Configuration['RUN_COUNTER'] = 0
     Original_Configuration['LIMIT_MODIFIER'] = [1.]
-
+    Original_Configuration['INNER_FIX'] = 3
+    Original_Configuration['OUTER_SLOPE'] = 1
+    Original_Configuration['OLD_RINGS'] = []
     #Then read the input Catalogue
     Full_Catalogue = rf.catalogue(Original_Configuration['CATALOGUE'])
     # Get the longest directory name to format the output directory properly
@@ -165,20 +167,24 @@ def FAT(argv):
 '''
 
         # Adapt configuration to hold some specifics to this galaxy
+        if Catalogue['DIRECTORYNAME'] == './':
+            Configuration['LOG_DIR'] = f"{Configuration['MAINDIR']}Logs/"
+        else:
+            Configuration['LOG_DIR'] = f"{Configuration['MAINDIR']}{Catalogue['DIRECTORYNAME']}/Logs/"
         if Configuration['OUTPUTLOG']:
             if Catalogue['DIRECTORYNAME'] == './':
                 if not os.path.isdir(f"{Configuration['MAINDIR']}Logs/"):
                     os.mkdir(f"{Configuration['MAINDIR']}Logs/")
                 Configuration['OUTPUTLOG'] = f"{Configuration['MAINDIR']}Logs/{Configuration['OUTPUTLOG']}"
-                Configuration['LOG_DIR'] = f"{Configuration['MAINDIR']}Logs/"
             else:
                 if not os.path.isdir(f"{Configuration['MAINDIR']}{Catalogue['DIRECTORYNAME']}/Logs/"):
                     os.mkdir(f"{Configuration['MAINDIR']}{Catalogue['DIRECTORYNAME']}/Logs/")
                 Configuration['OUTPUTLOG'] = f"{Configuration['MAINDIR']}{Catalogue['DIRECTORYNAME']}/Logs/{Configuration['OUTPUTLOG']}"
-                Configuration['LOG_DIR'] = f"{Configuration['MAINDIR']}{Catalogue['DIRECTORYNAME']}/Logs/"
             #If it exists move the previous Log
             if os.path.exists(Configuration['OUTPUTLOG']):
                 os.rename(Configuration['OUTPUTLOG'],f"{Configuration['LOG_DIR']}/Previous_Log.txt")
+
+
         sf.print_log(log_statement,Configuration['OUTPUTLOG'])
 
         # Adapt configuration to hold some specifics to this galaxy
@@ -187,7 +193,7 @@ def FAT(argv):
             Configuration['BASE_NAME'] = Catalogue['BASENAME']
         else:
             Configuration['BASE_NAME'] = Catalogue['CUBENAME']+'_FAT'
-        Fits_Files['NOISEMAP'] = f"{Configuration['BASE_NAME']}_noisemap.fits"
+        #Fits_Files['NOISEMAP'] = f"{Configuration['BASE_NAME']}_noisemap.fits"
         Fits_Files['FITTING_CUBE'] = f"{Catalogue['CUBENAME']}_FAT.fits"
         Fits_Files['OPTIMIZED_CUBE'] = f"{Catalogue['CUBENAME']}_FAT_opt.fits"
         Fits_Files['MOMENT0'] = f"{Configuration['BASE_NAME']}_mom0.fits"
@@ -244,47 +250,47 @@ def FAT(argv):
         # We write the pixels per beam info to Configuration such that it is easily accesible
         beamarea=(np.pi*abs(cube_hdr['BMAJ']*cube_hdr['BMIN']))/(4.*np.log(2.))
         Configuration['PIX_PER_BEAM'] = beamarea/(abs(cube_hdr['CDELT1'])*abs(cube_hdr['CDELT2']))
-
+        # Ad the major beam to configuration as we need it in many places
+        Configuration['BMMAJ'] = float(cube_hdr['BMAJ']*3600.)
         #If we have Sofia Preprocessed Output request make sure it all exists
 
         if Configuration['START_POINT'] >= 3:
             try:
-                ec.sofia_output(Configuration,Fits_Files)
+                sf.sofia_output_exists(Configuration,Fits_Files)
             except Exception as e:
                 Configuration['FINAL_COMMENT'] = e + 'Please make sure your Sofia input is in the right location'
                 Configuration['MAPS_OUTPUT'] = 5
-                cf.finish_galaxy(Configuration,maximum_directory_length)
-                traceback.print_exc()
+                cf.finish_galaxy(Configuration,maximum_directory_length,debug=Configuration['DEBUG'])
                 continue
         else:
             # Run sofia2
             try:
-                runf.sofia(Configuration, Fits_Files,cube_hdr,input_parameters.supportdir)
+                runf.sofia(Configuration, Fits_Files,cube_hdr,input_parameters.supportdir,debug=Configuration['DEBUG'])
                 # check that all is well
-                ec.sofia_output(Configuration,Fits_Files)
+                sf.sofia_output_exists(Configuration,Fits_Files,debug=Configuration['DEBUG'])
             except Exception as e:
                 Configuration['FINAL_COMMENT'] = e
                 Configuration['MAPS_OUTPUT'] = 5
-                cf.finish_galaxy(Configuration,maximum_directory_length)
-                traceback.print_exc()
+                cf.finish_galaxy(Configuration,maximum_directory_length,debug=Configuration['DEBUG'])
                 continue
+
                 # We assume sofia is ran and created the proper files
 
         try:
             current_run = 'Not Initialized'
             # Process the found source in sofia to set up the proper fitting and make sure source can be fitted
-            Initial_Parameters = runf.check_source(Configuration, Fits_Files, Catalogue, cube_hdr)
+            Initial_Parameters = runf.check_source(Configuration, Fits_Files, Catalogue, cube_hdr,debug=Configuration['DEBUG'])
 
             sf.print_log(f'''The source is well defined and we will now setup the initial tirific file
 ''' ,Configuration['OUTPUTLOG'], screen =True, debug = Configuration['DEBUG'])
             if Configuration['FINISHAFTER'] == 0:
                 Configuration['FINAL_COMMENT'] = 'You have chosen to end the fitting after preprocessing and sofia.'
-                cf.finish_galaxy(Configuration,maximum_directory_length)
+                cf.finish_galaxy(Configuration,maximum_directory_length,debug=Configuration['DEBUG'])
                 continue
             if Configuration['START_POINT'] < 4:
                 # setup the first def file to be used in the first loop
                 wf.initialize_def_file(Configuration, Fits_Files,Tirific_Template, \
-                                        cube_hdr,Initial_Parameters= Initial_Parameters,fit_stage='Centre_Convergence')
+                                        cube_hdr,Initial_Parameters= Initial_Parameters,fit_stage='Centre_Convergence',debug=Configuration['DEBUG'])
                 sf.print_log(f'''The initial def file is written and we will now start fitting.
 ''' ,Configuration['OUTPUTLOG'], screen =True, debug = Configuration['DEBUG'])
                 Configuration['PREP_END_TIME'] = datetime.now()
@@ -301,53 +307,55 @@ def FAT(argv):
                     sf.print_log(f'''We are starting loop {Configuration['CC_LOOPS']} of trying to converge the center.
 ''',Configuration['OUTPUTLOG'],screen =True, debug = Configuration['DEBUG'])
                     current_run = runf.central_converge(Configuration, Fits_Files,Tirific_Template,current_run,cube_hdr,Initial_Parameters, debug = Configuration['DEBUG'])
+
                 if Configuration['CC_ACCEPTED']:
                     sf.print_log(f''' The center has converged and we will adjust the smoothed profile and start to adjust the size of the galaxy.
-''',Configuration['OUTPUTLOG'],screen =True)
+''',Configuration['OUTPUTLOG'],screen =True,debug=Configuration['DEBUG'])
                 else:
                     sf.print_log(f''' We could not find a stable center for the the initial stages. We will now try while adapting the the size of the model.
-''',Configuration['OUTPUTLOG'],screen =True)
+''',Configuration['OUTPUTLOG'],screen =True,debug=Configuration['DEBUG'])
 
                 #Then we want to make a smoothed version that can be adapted
-                current_run = runf.fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run,cube_hdr,stage = 'after_cc', fit_stage = 'Centre_Convergence')
+                current_run = runf.fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run,cube_hdr,stage = 'after_cc', fit_stage = 'Centre_Convergence',debug=Configuration['DEBUG'])
+                incl = rf.load_tirific(f"{Configuration['FITTING_DIR']}Centre_Convergence/Centre_Convergence.def",Variables = ['INCL'])
+                sf.print_log(f'''BEFORE_CHECK_INCLINATION: CC_loops = {Configuration['CC_LOOPS']}
+{'':8s} Incl = {incl}
+{'':8s} Size in beams =  {Configuration['SIZE_IN_BEAMS']})
+''',Configuration['OUTPUTLOG'],debug = Configuration['DEBUG'])
+                if float(incl[0][0]) < 40.:
+                    #If our fit stage is after cc we want to make sure we do an extra check on low inclinations or small Galaxies
+                    runf.check_inclination(Configuration,Tirific_Template,Fits_Files,fit_stage = 'Centre_Convergence',debug=Configuration['DEBUG'])
+
                 if Configuration['OPTIMIZED']:
-                    try:
-                        current_run.kill()
-                        Configuration['TIRIFIC_RUNNING'] = False
-                    except AttributeError:
-                        pass
-                    runf.make_full_resolution(Configuration,Tirific_Template,Fits_Files,fit_stage = 'Centre_Convergence')
+                    runf.make_full_resolution(Configuration,Tirific_Template,Fits_Files,current_run = current_run,fit_stage = 'Centre_Convergence',debug=Configuration['DEBUG'])
             else:
                 current_run = 'Not initialized'
                 write_new_to_template(Configuration, f"{Configuration['FITTING_DIR']}Centre_Convergence/Centre_Convergence.def", Tirific_Template, \
                                      Variables = ['VROT','Z0', 'SBR', 'INCL','PA','XPOS','YPOS','VSYS','SDIS','VROT_2',  'Z0_2','SBR_2',
                                                      'RADI','INCL_2','PA_2','XPOS_2','YPOS_2','VSYS_2','SDIS_2', 'CFLUX', 'CFLUX_2', 'NUR', 'CONDISP',\
                                                      'BMIN','BMAJ','RMS','BPA','NCORES','INIMODE', 'VARY','VARINDX','MODERATE','DELEND','DELSTART'\
-                                                     ,'MINDELTA','PARMAX','PARMIN','DISTANCE','INSET'])
+                                                     ,'MINDELTA','PARMAX','PARMIN','DISTANCE','INSET'],debug=Configuration['DEBUG'])
 
             Configuration['CC_END_TIME'] = datetime.now()
+
+
             #If we only care about a centrally converged galaxy we stop here
 
             # if our current run is not broken then we want to stop it
-            try:
-                current_run.kill()
-                Configuration['TIRIFIC_RUNNING'] = False
-            except AttributeError:
-                pass
+            sf.finish_current_run(Configuration,current_run,debug= Configuration['DEBUG'])
+            # write the new values to the basic info file
+                #Write the info to the Basic info File
+
+            wf.basicinfo(Configuration,first_fit = True, template=Tirific_Template,Fits_Files=Fits_Files)
+
+
 
             if Configuration['FINISHAFTER'] == 1:
                 Configuration['FINAL_COMMENT'] = 'You have chosen to end the fitting after preprocessing and sofia.'
-                cf.finish_galaxy(Configuration,maximum_directory_length,current_run =current_run, Fits_Files =Fits_Files)
+                cf.finish_galaxy(Configuration,maximum_directory_length,current_run =current_run, Fits_Files =Fits_Files,debug=Configuration['DEBUG'])
                 continue
             # Now set our variations to the original values but only if the galaxy is large enough
             if Configuration['SIZE_IN_BEAMS'] > Configuration['MINIMUM_WARP_SIZE']:
-                if Configuration['DEBUG']:
-                    sf.print_log(f'''Settings for the variations will be.
-{'':8s} INCLINATION: Fixed = {Original_Configuration['FIX_INCLINATION']}
-{'':8s} PA: Fixed = {Original_Configuration['FIX_PA']}
-{'':8s} SDIS: Fixed = {Original_Configuration['FIX_SDIS']}
-{'':8s} Z0: Fixed = {Original_Configuration['FIX_Z0']}
-''',Configuration['OUTPUTLOG'],debug=Configuration['DEBUG'],screen =True)
                 Configuration['FIX_INCLINATION'] = Original_Configuration['FIX_INCLINATION']
                 Configuration['FIX_SDIS'] = Original_Configuration['FIX_SDIS']
                 Configuration['FIX_PA'] = Original_Configuration['FIX_PA']
@@ -364,26 +372,19 @@ def FAT(argv):
                 Configuration['EC_LOOPS'] = Configuration['EC_LOOPS']+1
                 sf.print_log(f'''We are starting loop {Configuration['EC_LOOPS']} of trying to converge the extent.
 ''',Configuration['OUTPUTLOG'],screen =True, debug = Configuration['DEBUG'])
-                if Configuration['SIZE_IN_BEAMS'] > 3:
-                    if Configuration['DEBUG']:
+                if Configuration['DEBUG']:
                         sf.print_log(f'''Settings for the variations will be.
             {'':8s} INCLINATION: Fixed = {Original_Configuration['FIX_INCLINATION']}
             {'':8s} PA: Fixed = {Original_Configuration['FIX_PA']}
             {'':8s} SDIS: Fixed = {Original_Configuration['FIX_SDIS']}
             {'':8s} Z0: Fixed = {Original_Configuration['FIX_Z0']}
 ''',Configuration['OUTPUTLOG'],debug=Configuration['DEBUG'],screen =True)
+                if Configuration['SIZE_IN_BEAMS'] > 3:
                     Configuration['FIX_INCLINATION'] = Original_Configuration['FIX_INCLINATION']
                     Configuration['FIX_SDIS'] = Original_Configuration['FIX_SDIS']
                     Configuration['FIX_PA'] = Original_Configuration['FIX_PA']
                     Configuration['FIX_Z0'] = Original_Configuration['FIX_Z0']
                 else:
-                    if debug:
-                        sf.print_log(f'''Settings for the variations will be.
-            {'':8s} INCLINATION: Fixed = {Original_Configuration['FIX_INCLINATION']}
-            {'':8s} PA: Fixed = {Original_Configuration['FIX_PA']}
-            {'':8s} SDIS: Fixed = {Original_Configuration['FIX_SDIS']}
-            {'':8s} Z0: Fixed = {Original_Configuration['FIX_Z0']}
-''',Configuration['OUTPUTLOG'],debug=debug,screen =True)
                     Configuration['FIX_INCLINATION'] = True
                     Configuration['FIX_SDIS'] = True
                     Configuration['FIX_PA'] = True
@@ -391,23 +392,25 @@ def FAT(argv):
                     flatten_the_curve(Configuration,Tirific_Template)
                 current_run = runf.extent_converge(Configuration, Fits_Files,Tirific_Template,current_run,cube_hdr,debug = Configuration['DEBUG'],allowed_loops = allowed_loops)
 
+
             if Configuration['EC_ACCEPTED']:
                 sf.print_log(f'''The extent has converged and we make a smoothed version.
     ''',Configuration['OUTPUTLOG'],screen =True, debug = Configuration['DEBUG'])
                 current_run = runf.fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run,cube_hdr,stage = 'after_ec', fit_stage = 'Extent_Convergence',debug = Configuration['DEBUG'])
                 if Configuration['OPTIMIZED']:
-                    try:
-                        current_run.kill()
-                        Configuration['TIRIFIC_RUNNING'] = False
-                    except AttributeError:
-                        pass
-                    runf.make_full_resolution(Configuration,Tirific_Template,Fits_Files,fit_stage = 'Extent_Convergence',debug=Configuration['DEBUG'])
-
+                    runf.make_full_resolution(Configuration,Tirific_Template,Fits_Files,current_run = current_run,fit_stage = 'Extent_Convergence',debug=Configuration['DEBUG'])
+            else:
+                Configuration['FINAL_COMMENT'] = 'We could not converge on the extend of the galaxy'
+                Configuration['MAPS_OUTPUT'] = 5
+                cf.finish_galaxy(Configuration,maximum_directory_length,current_run =current_run,debug=Configuration['DEBUG'])
+                continue
             Configuration['EC_END_TIME'] = datetime.now()
         except Exception as e:
             Configuration['FINAL_COMMENT'] = e
             Configuration['MAPS_OUTPUT'] = 5
             cf.finish_galaxy(Configuration,maximum_directory_length,current_run =current_run,debug=Configuration['DEBUG'])
+            with open(Configuration['OUTPUTLOG'],'a') as log_file:
+                traceback.print_exc(file=log_file)
             traceback.print_exc()
             continue
 
@@ -416,6 +419,9 @@ def FAT(argv):
             Configuration['FINAL_COMMENT'] = 'The galaxy has succesfully been fitted'
         else:
             Configuration['FINAL_COMMENT'] = 'We could not converge the size of this galaxy.'
+        wf.basicinfo(Configuration,second_fit = True, template=Tirific_Template,Fits_Files=Fits_Files)
+
+
         cf.finish_galaxy(Configuration,maximum_directory_length,current_run =current_run, Fits_Files =Fits_Files,debug = Configuration['DEBUG'])
 
 
@@ -473,6 +479,22 @@ if __name__ == '__main__':
     try:
         FAT(sys.argv[1:])
     except Exception as exc:
+        print(f"FINISH_CURRENT_RUN: Is Tirific Running? {Configuration['TIRIFIC_RUNNING']}. \n",Configuration['OUTPUTLOG'],debug=debug,screen=True)
+        if Configuration['TIRIFIC_RUNNING']:
+            try:
+                os.kill(Configuration['TIRIFIC_PID'], signal.SIGKILL)
+                print(f"FINISH_CURRENT_RUN: We killed PID = {Configuration['TIRIFIC_PID']}. \n",Configuration['OUTPUTLOG'],debug=debug,screen=True)
+            except:
+                try:
+                    current_run.kill()
+                    print(f"FINISH_CURRENT_RUN: We killed the current run although we failed on the PID = {Configuration['TIRIFIC_PID']}. \n",Configuration['OUTPUTLOG'],debug=debug,screen=True)
+                except AttributeError:
+                    print(f"FINISH_CURRENT_RUN: We failed to kill the current run even though we have tirific running",Configuration['OUTPUTLOG'],debug=debug,screen=True)
+                    raise TirificRunError('FINISH_CURRENT_RUN: Despite having an initialized tirific we could not kill it.')
+            Configuration['TIRIFIC_RUNNING'] = False
+            Configuration['TIRIFIC_PID'] = 'Not Initialized'
+        else:
+            print(f"FINISH_CURRENT_RUN: No run is initialized.",Configuration['OUTPUTLOG'],debug=debug,screen=True)
         print('------------When filing a bug report please copy all output  below this line------------')
         try:
             print(f"For the galaxy in directory {Configuration['FITTING_DIR']} we got the following error")

@@ -548,7 +548,6 @@ def optimized_cube(hdr,Configuration,Fits_Files, log =None, debug = False):
         data = cube[0].data
         hdr = cube[0].header
         cube.close()
-        Configuration['OPTIMIZED'] = True
         required_cdelt = hdr['BMIN']/int(Configuration['OPT_PIXELBEAM'])
         ratio = required_cdelt/abs(hdr['CDELT2'])
         opt_data,opt_hdr = regrid_cube(data, hdr, ratio)
@@ -812,7 +811,7 @@ def make_moments(filename = 'Input_Cube.fits', basename = 'Finalmodel', director
     if 0 in moments:
         hdr2D['BUNIT'] = f"{cube[0].header['BUNIT']}*{cube[0].header['CUNIT3']}"
         moment0 = np.nansum(cube[0].data, axis=0) * cube[0].header['CDELT3']
-        moment0[np.invert(np.isfinite(moment0))] = 0.
+        moment0[np.invert(np.isfinite(moment0))] = float('NaN')
         hdr2D['DATAMAX'] = np.nanmax(moment0)
         hdr2D['DATAMIN'] = np.nanmin(moment0)
         fits.writeto(f"{directory}/{basename}_mom0.fits",moment0,hdr2D,overwrite = overwrite)
@@ -824,7 +823,7 @@ def make_moments(filename = 'Input_Cube.fits', basename = 'Finalmodel', director
         # Remember Python is stupid so z,y,x
         with np.errstate(invalid='ignore', divide='ignore'):
             moment1 = np.nansum(cube[0].data*c, axis=0)/ np.nansum(cube[0].data, axis=0)
-        moment1[np.invert(np.isfinite(moment1))] = 0.
+        moment1[np.invert(np.isfinite(moment1))] = float('NaN')
         hdr2D['DATAMAX'] = np.nanmax(moment1)
         hdr2D['DATAMIN'] = np.nanmin(moment1)
         if 1 in moments:
@@ -833,7 +832,7 @@ def make_moments(filename = 'Input_Cube.fits', basename = 'Finalmodel', director
             d = c - np.resize(moment1,[len(zaxis),cube[0].header['NAXIS2'],cube[0].header['NAXIS1']])
             with np.errstate(invalid='ignore', divide='ignore'):
                 moment2 = np.sqrt(np.nansum(cube[0].data*d**2, axis=0)/ np.nansum(cube[0].data, axis=0))
-            moment2[np.invert(np.isfinite(moment1))] = 0.
+            moment2[np.invert(np.isfinite(moment1))] = float('NaN')
             hdr2D['DATAMAX'] = np.nanmax(moment2)
             hdr2D['DATAMIN'] = np.nanmin(moment2)
             fits.writeto(f"{directory}/{basename}_mom2.fits",moment2,hdr2D,overwrite = overwrite)
