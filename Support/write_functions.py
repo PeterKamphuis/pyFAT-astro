@@ -638,7 +638,8 @@ BMAJ = {cube[0].header['BMAJ']*3600.:.1f} arcsec''',rotation=0, va='center',ha='
               bbox=dict(facecolor='white',edgecolor='white',pad=0.,alpha=0.),zorder=7,fontsize=12)
         plt.ylabel('Disp (km s$^{-1}$)',**labelfont)
 # ------------------------------Scale height------------------------------------
-        ax_Z0 = plot_parameters(Vars_to_plot,FAT_Model,Input_Model,gs[21:24,9:15],Overview,'Z0',Extra_Model = Extra_Model,initial = convertskyangle(0.2,Configuration['DISTANCE'],physical=True),debug=debug)
+        ax_Z0 = plot_parameters(Vars_to_plot,FAT_Model,Input_Model,gs[21:24,9:15],Overview,'Z0',\
+                                Extra_Model = Extra_Model,initial = convertskyangle(0.2,Configuration['DISTANCE'],physical=True),debug=debug)
 
         plt.tick_params(
             axis='x',          # changes apply to the x-axis
@@ -648,18 +649,35 @@ BMAJ = {cube[0].header['BMAJ']*3600.:.1f} arcsec''',rotation=0, va='center',ha='
             top=True,         # ticks along the top edge are off
             labelbottom=False)
         if Configuration['FIX_Z0']:
-            ax_Z0.text(1.01,0.5,'Forced Flat',rotation=-90, va='center',ha='left', color='black',transform = ax_Z0.transAxes,
+            ax_Z0.text(1.2,0.5,'Forced Flat',rotation=-90, va='center',ha='left', color='black',transform = ax_Z0.transAxes,
               bbox=dict(facecolor='white',edgecolor='white',pad=0.,alpha=0.),zorder=7,fontsize=12)
-        plt.ylabel('Scale height (arcsec)',**labelfont)
+        plt.ylabel('Z0 (arcsec)',**labelfont)
+        arcmin,arcmax = ax_Z0.get_ylim()
+        sec_ax = ax_Z0.twinx()
+        sec_ax.set_ylim(convertskyangle(arcmin,Configuration['DISTANCE']),convertskyangle(arcmax,Configuration['DISTANCE']))
+        sec_ax.figure.canvas.draw()
+        sec_ax.set_ylabel('Z0 (kpc)',rotation=-90,va='bottom',**labelfont)
+
+
+
 # ------------------------------SDIS------------------------------------
         ax_SBR = plot_parameters(Vars_to_plot,FAT_Model,Input_Model,gs[24:27,9:15],Overview,'SBR',Extra_Model = Extra_Model, legend = ['Appr.','Rec.','Input Appr.','Input Rec.'],debug=debug)
 
 
-        plt.ylabel('SBR (Jy km s$^{-1}$ arcsec$^{-2}$)',**labelfont)
+        plt.ylabel('SBR \n (Jy km s$^{-1}$ arcsec$^{-2}$)',**labelfont)
         plt.xlabel('Radius (arcsec)',**labelfont)
+
+        jymin,jymax = ax_SBR.get_ylim()
+        sec_ax = ax_SBR.twinx()
+        sec_ax.set_ylim(columndensity(jymin*1000.,arcsquare = True)/1e20,columndensity(jymax*1000.,arcsquare = True)/1e20)
+        sec_ax.figure.canvas.draw()
+        sec_ax.set_ylabel('Col. Dens. \n (x10$^{20}$ cm$^{-2}$)',rotation=-90,va='bottom',**labelfont)
+
+
+
         chartBox = ax_SBR.get_position()
         ax_SBR.set_position([chartBox.x0, chartBox.y0, chartBox.width*1.0, chartBox.height])
-        ax_SBR.legend(loc='upper left', bbox_to_anchor=(1.0, 1.0), shadow=True, ncol=1)
+        ax_SBR.legend(loc='upper left', bbox_to_anchor=(1.25, 1.0), shadow=True, ncol=1)
 
 #----------------------------------------------Distance vs VSYS -----------------------------------------
         ax_VSYS = Overview.add_subplot(gs[0:4,16:20])

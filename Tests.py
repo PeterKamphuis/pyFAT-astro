@@ -178,4 +178,4 @@ def Test_Orientation():
             file.write(f'For {incl_in} we guess {inclination[0]}+/-{inclination[1]} in the galaxy {Catalogue["DIRECTORYNAME"]} \n')
 
 if __name__ == '__main__':
-    Test_Regularise()
+    Test_Overview()

@@ -146,7 +146,6 @@ def columndensity(levels,systemic = 100.,beam=[1.,1.],channel_width=1.,column= F
     f = f0 * (1 - (systemic / c)) #Systemic frequency
     if arcsquare:
         HIconv = 605.7383 * 1.823E18 * (2. *np.pi / (np.log(256.)))
-
         if column:
             # If the input is in solarmass we want to convert back to column densities
             if solar_mass_input:

@@ -763,7 +763,7 @@ def set_fitting_parameters(Configuration, Tirific_Template, \
             elif key == 'SDIS':
                 sdis = [np.mean(profile)*0.5,np.mean(profile)*2]
 
-    z0_limits = convertskyangle([0.2,0.5,0.05,0.5,5],Configuration['DISTANCE'], physical = True)
+    z0_limits = convertskyangle([0.2,0.05,0.05,0.2,2.5],Configuration['DISTANCE'], physical = True)
     if stage in  ['initial','run_cc','after_cc','after_ec']:
         fitting_settings['SBR'] = set_sbr_fitting(Configuration, hdr = hdr,stage = stage, systemic = systemic[0], debug = debug)
         fitting_settings['VROT'] = set_vrot_fitting(Configuration,Tirific_Template, hdr = hdr,stage = stage, rotation = rotation, debug = debug )
