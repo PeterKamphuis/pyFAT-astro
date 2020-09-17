@@ -394,10 +394,10 @@ def check_source(Configuration, Fits_Files, Catalogue, header, debug = False):
     else:
         vres = header['CDELT3']
 
-    if inclination[0] < 40:
-        max_vrot=w50/2./np.sin(np.radians(abs(inclination[0]+5.)))
-    else:
-        max_vrot=w50/2./np.sin(np.radians(abs(inclination[0])))
+    #if inclination[0] < 40:
+    #    max_vrot=w50/2./np.sin(np.radians(abs(inclination[0]+5.)))
+    #else:
+    max_vrot=w50/2./np.sin(np.radians(abs(inclination[0])))
     max_vrot_dev=set_limits((VELboun[1]-VELboun[0])/4./np.sin(np.radians(inclination[0])),4.*vres,20*vres,debug=debug)
     #Write the info to the Basic info File
     wf.basicinfo(Configuration,initialize = True,

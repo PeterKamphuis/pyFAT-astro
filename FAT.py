@@ -323,9 +323,9 @@ def FAT(argv):
 {'':8s} Incl = {incl}
 {'':8s} Size in beams =  {Configuration['SIZE_IN_BEAMS']})
 ''',Configuration['OUTPUTLOG'],debug = Configuration['DEBUG'])
-                if float(incl[0][0]) < 40.:
+                #if float(incl[0][0]) < 40.:
                     #If our fit stage is after cc we want to make sure we do an extra check on low inclinations or small Galaxies
-                    runf.check_inclination(Configuration,Tirific_Template,Fits_Files,fit_stage = 'Centre_Convergence',debug=Configuration['DEBUG'])
+                #    runf.check_inclination(Configuration,Tirific_Template,Fits_Files,fit_stage = 'Centre_Convergence',debug=Configuration['DEBUG'])
 
                 if Configuration['OPTIMIZED']:
                     runf.make_full_resolution(Configuration,Tirific_Template,Fits_Files,current_run = current_run,fit_stage = 'Centre_Convergence',debug=Configuration['DEBUG'])

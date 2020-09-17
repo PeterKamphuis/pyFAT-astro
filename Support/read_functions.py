@@ -388,7 +388,8 @@ def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
     maj_profile = ndimage.map_coordinates(map, np.vstack((liney,linex)),order=1)
     maj_axis =  np.linspace(0,1000*maj_resolution,1000)- (abs((abs(center[0]))*np.sin(np.radians(pa)))+abs(abs(center[1])*np.cos(np.radians(pa))))
     map= []
-    if maj_axis[np.where(maj_profile == np.nanmax(maj_profile))[0]] > 0:
+    loc_max = np.mean(maj_axis[np.where(maj_profile == np.nanmax(maj_profile))[0]])
+    if loc_max > 0.:
             pa = pa+180
             print_log(f'''GUESS_ORIENTATION: We have modified the pa by 180 deg as we found the maximum velocity west of the center.
 ''' , Configuration['OUTPUTLOG'])

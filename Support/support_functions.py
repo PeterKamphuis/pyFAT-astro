@@ -574,7 +574,6 @@ def remove_inhomogeneities(Configuration,fits_map,inclination=30., pa = 90. , ce
         fits.writeto(f"{Configuration['FITTING_DIR']}dep_map.fits",dep_map,fits_map[0].header,overwrite = True)
 
     angles = np.linspace(5.,360.,71)
-    print(angles)
     minimum_map = copy.deepcopy(dep_map)
     for angle in angles:
         rot_dep_map =  rotateImage(copy.deepcopy(dep_map),angle,[x,y],debug=debug)
@@ -606,8 +605,6 @@ def deproject(map,angle, center = 0., invert = False,debug=False):
 def rotateImage(Cube, angle, pivot, debug = False):
     padX = [int(Cube.shape[1] - pivot[0]), int(pivot[0])]
     padY = [int(Cube.shape[0] - pivot[1]), int(pivot[1])]
-    print(padY,padX)
-    print(pivot,Cube.shape[1],Cube.shape[0])
     imgP = np.pad(Cube, [padY, padX], 'constant')
     imgR = ndimage.rotate(imgP, angle, axes=(1, 0), reshape=False)
     return imgR[padY[0]: -padY[1], padX[0]: -padX[1]]
