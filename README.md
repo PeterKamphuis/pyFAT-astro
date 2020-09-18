@@ -1,14 +1,12 @@
-# Fully Automated TiRiFiC (FAT)
+# Python Fully Automated TiRiFiC (pyFAT)
 =====
 
 Introduction
 ------------
 
-The Fully Automated TiRiFiC is an IDL/GDL wrapper around the tilted ring fitting code ([TiRiFiC](http://gigjozsa.github.io/tirific/)) that aims to fully automate the process of fitting simple tilted ring models to line emission cubes. This code is still in the development phase and hence errors and bugs can be present. Nevertheless, the code has extensively been tested and the results and a more extensive description of the code are documented in [Kamphuis et al. 2015](http://arxiv.org/abs/1507.00413) 
+The Python Fully Automated TiRiFiC is a python (> 3.6) wrapper around the tilted ring fitting code ([TiRiFiC](http://gigjozsa.github.io/tirific/)) that aims to fully automate the process of fitting simple tilted ring models to line emission cubes. This python version is in continuous development and hence errors and bugs can be present. Nevertheless, the code has extensively been tested and the results and a more extensive description of the code are documented in [Kamphuis et al. 2015](http://arxiv.org/abs/1507.00413) and [Kamphuis et al. in prep]
 
-The file [Current_Status.pdf](./Current_Status.pdf)  provides an overview of plots from [Kamphuis et al. (2015)](http://arxiv.org/abs/1507.00413) which illustrate the performance of the current version of FAT. This fully tested version is available on the master branch. Typically the current version works much better then the version from 2015. However, as we have also reduced the applied errors the plots in this document show that performance is comparable, i.e. the fits are equally accurate with smaller errors. Additionally, as FAT now employs a Monte Carlo method in the regularisation of the parameters the final model can sometimes differ slightly. However this should always be within the calculated errors. If not please open an issue on the GitHub. The very latest version of FAT will always be available on the FAT-Beta branch. Although this branch will contain a stable version that has been tested on some galaxies, it will not be tested on the full database and overview plots will not be available. 
-
-Even though the master will always work under both GDL and IDL since version 6.0 the main development of FAT is done under GDL. This might lead to situations where FAT-Beta is not always working under IDL and that results in this branch can sometimes be better under GDL.
+The file [Current_Status.pdf](./Current_Status.pdf)  provides an overview of the default test sets provided by the [HI TRM Database](https://github.com/PeterKamphuis/HI_TRM_Test_Database) which illustrate the performance of the current release version of FAT. This fully tested version is available on the master branch. In release 2.0 the code has permanently switched to python development in order to maintain easier use and a larger development base. The final IDL/GDL version is release 1.5. The python version strives to be an improvement on the IDL/GDL version and has been extensively tested to at the very least match the results of the older code. However should you find that your fits have significantly degraded please open an issue on the GitHub and let us know. From release 2.0 the intention is to maintain a more regular release policy when the code has undergone major development. For the very latest version of FAT one can always check the available branches but these come without any quality guarantees.
 
 If you are looking for specific functionality or find that FAT is not performing well despite the galaxy having regular rotation or just want to chat about tilted ring modelling pipelines please do not hesitate to contact me.
 
@@ -20,41 +18,23 @@ Requirements
 ------------
 The code requires full installation of:
 
-    IDL 7.0 or higher or GDL 0.9.6 or higher with astrolib
-    TiRiFiC v2.2.3 or higher 
-    SoFiA v 0.4.0 or higher 
-    mpfit package
-    Standard unix commands pwd, mkdir, rm, cp, ls, python
+    python v3.6 or higher
+    astropy, matplotlib, numpy and scipy (Versions unknown for now)
+    TiRiFiC v2.2.3 or higher
+    SoFiA2  
 
-[astrolib](http://idlastro.gsfc.nasa.gov/) (note the Coyote Library Dependencies for newer versions), [GDL](http://gnudatalanguage.sourceforge.net/), [IDL](https://www.harrisgeospatial.com/docs/using_idl_home.html),[TiRiFiC](http://gigjozsa.github.io/tirific/download_and_installation.html), [SoFiA](https://github.com/SoFiA-Admin/SoFiA)
+[astropy](https://www.astropy.org/), [python](https://www.python.org/),[TiRiFiC](http://gigjozsa.github.io/tirific/download_and_installation.html), [SoFiA2](https://github.com/SoFiA-Admin/SoFiA-2)
 
-IDL/GDL needs to be able to execute tirific, sofia, rename and the standard unix commands from a spawn command. All other dependencies should be in IDL and available with the normal IDL distributions. 
-
-To run under GDL you will additionally need the package mpfit for GDL by Ole Streicher (https://packages.debian.org/sid/all/gdl-mpfit/download). Since version 6.0 mpfit is also a requirement when run under idl. The IDL version can be found here: https://cow.physics.wisc.edu/~craigm/idl/fitqa.html#download
-
-The GDL version is tested under Ubuntu 16.04 and runs after running the command
-
-	sudo apt-get install gnudatalanguage gdl-astrolib gdl-mpfit libplplot-dev
-
-Under ubuntu the astrolib package and mpfit package were not found after installation and hence a .gdlstartup file is required with the line
-
-	!PATH=!PATH+':/usr/share/gnudatalanguage/astrolib:/usr/share/gnudatalanguage/coyote:/usr/share/gnudatalanguage/mpfit'
+TiRiFiC and SoFiA2 should be accessible for subproccess calls this normally means that it should be possible to invoke them propoerly from the command line.
 
 Installation
 ------------
 
-Unpack the zip file in a desired directory and you are ready to run FAT from this directory under IDL. 
-The rename command might have to be aliased to rename -s, as this depends on which exact rename command and their are many versions available the code excutes the command "rename originalstring replacestring filesonwhichtoexecute" make sure that this is what the rename command does in the shell that is run by IDL.
+Unpack the zip file in a desired directory and you are ready to run FAT from this directory.
 
-You will also have to make a softlink in the Support directory to file sofia_pipeline.py in the sofia distribution i.e.:
+Once you have installed FAT you can check that it has been installed properly by running FAT as.
 
-	cd Support/
-  	ln -s pathtosofiainstallation/sofia_pipeline.py sofia_pipeline.py
-Where `pathtosofiainstallation` is the name of the PATH leading to your local installation of SoFiA.
-Once you have installed FAT you can check that it has been installed properly by running FAT as 
-	
-	IDL/GDL>.r FAT.pro
-	IDL/GDL>FAT, /installation_check
+  FAT>python3 FAT.py --ic
 
 This should take typically 10 min and should finish with the message:
 
@@ -66,25 +46,31 @@ This should take typically 10 min and should finish with the message:
 The check consists of fitting a flat disk on NGC 2903. The data for this galaxy were take as part of the WHISP program.
 This survey is decribed in [van der Hulst et al. (2001)](http://adsabs.harvard.edu/abs/2001ASPC..240..451V) and the data can be found at [Westerbork on the Web](http://wow.astron.nl/) or the [WHISP page](https://www.astro.rug.nl/~whisp/).
 
-If you get any other message please do not hesitate to file an issue here.
+If you get any other message please do not hesitate to file an issue here. Do not however that if you perform this check on a unreleased version/branch it might not perform well. So always check with the master branch.
 
-The fit done to check the installation will only leave the .def file and the overview plot that is produced. 
-The directory Installation_Check will contain three overview files. Overview.png is the plot produced by your installation. Overview_IDL.png is for comparison with and IDL run and Overview_GDL.png for comparison with a GDL fit.
+The Overview.png will contain a comparison with the fit performed by you. These should be the same (the correct fit is classified Input.)
 
 The plots should look like this:
 
-![Overview plot of IDL run of Flat Disk](Installation_Check/Overview_IDL.png)
+![Overview plot after running installation check.](Installation_Check/Overview.png)
 
-Sometimes, due to updates in SoFiA or TiRiFiC, the check might show small difference beyond the tolerance limits. If these are small and you have checked the individual installations of SoFiA, GDL/IDL, TiRiFiC and the Installation Check files are older than the latest SoFiA or TiRiFiC update, then the installation is probably correct and you can continue. Please do post an issue about the outdated installation check.
+Sometimes, due to updates in SoFiA2 or TiRiFiC, the check might show differences beyond the tolerance limits. If these are small and you have checked the individual installations of SoFiA2, TiRiFiC and the Installation Check files are older than the latest SoFiA2 or TiRiFiC update, then the installation is probably correct and you can continue. Please do post an issue about the outdated installation check.
+
 
 
 Running FAT
 -----------
-FAT is currently run under GDL/IDL. It is called as a regular GDL/IDL program, i.e. in GDL/IDL:
+FAT is currently run under python3 and simply run as a script.
 
-    IDL/GDL >.r FAT.pro
-    IDL/GDL >FAT,configuration_file='pathtodir/configfile.config',support='pathtosupportfilesdir'
-    
+    FAT> python3 FAT.py -h
+
+Will provide an overview of call options. For the most basic usage one can call FAT with a configuration file.
+
+    FAT> python3 FAT.py -c pathtodir/configfile.config
+
+FAT is intended for batch fitting and as such it is recommended
+
+
 All information that the code needs about output directories fitting steps and input parameters are taken from the configfile.
 If a config file is not given it will look for the file 'FAT_INPUT.config' in the directory from which FAT is run.
 The default support directory is ./Support however you can specify an alternative directory with the keyword support.
@@ -103,8 +89,8 @@ The code requires a catalogue with input sources to know which cubes to fit and 
 maindir should contain the path where the directories for all galaxies are stored. FAT can produce large amounts of output if requested (e.g. Models for each step, xvdiagrams, Fitting logs, see maps_output parameter). In order to keep this managable each galaxy requires its own directory. There is no default for this parameter.
 
         outputcatalogue=Path/nameofresult.txt
-	
-In these three variables `Path_to_catalog_dir`,`Path_to_dir_with_input` and `Path` should be replaced with the local path name to where your input catalog can be found, the path to the directory where the galaxy directories reside and the path to where you want the output catalog to be. 
+
+In these three variables `Path_to_catalog_dir`,`Path_to_dir_with_input` and `Path` should be replaced with the local path name to where your input catalog can be found, the path to the directory where the galaxy directories reside and the path to where you want the output catalog to be.
 The code will write a summary of the succes of the fit for each galaxy in this file.
 
         new_output='y'
@@ -113,7 +99,7 @@ new_ouput controls whether you want a new output catalogue with the summary of t
 
         startgalaxy=0
 
-The catalogue number at which the code should start. The default is 0 which is the first line
+The catalogue number at which the code should start. The default is -1 which is the first line
 
         endgalaxy=-1
 
@@ -136,33 +122,38 @@ The velocity resolution of the data cubes. If set to zero the code assume that t
 Maps_output controls the amount of outpur created by FAT.  0.= all possible output (This is a lot), 1= all steps model + maps + def files, 2 = Final model + maps + def files for steps + logs, 3 = Only final model def + logs. Default = 2
 
 	warp_output = 0
-	
+
 FAT provides the possibility to get information about the fitted warp (Tiltograms, Warp radius, Max angle) if this is required warp_output should be set to 1. 	
 
-        allnew=1.
+# 1 = start from orginal cube (Default)
+# 2 = start from FAT cube if present
+# 3 =  use provided preprocessing from Sofia
+# 4 =  Skip Central Convergence
+    start_point=1        
 
-Parameter for setting the type of input for the initial guesses. possible setting are -1, 0, 1, 2 
--1) Start from orginal cube.
-0) use initial guesses produced by FAT in a previous run. This is not recommended but can slightly speed up the start of the fitting. However it can lead to mismatches if slight changes have occured between runs.
-1) Start from header and blank adjusted cube (i.e _preprocessed) (default)
-2) Pre-produced SoFiA output should be used for the initial guesses. These need to be specified in the input catalog (See input catalog)
+Parameter for setting the type of input for the initial guesses. possible setting are 1, 2, 3, 4
+1) Start from orginal cube.
+2) Start from the cube that has been made FAT compliant
+3) Start from pre-processed SoFiA2 output
+4) Start after the Central Convergence step. This assumes this step has been ran previously and its output is present.
 
         finishafter=2.
+
 
 Parameter for finishing the fitting process early. if set to one the program finishes after fitting the flat disk. Default = 2
 
         opt_pixelbeam=4.
-        
+
 The amount of pixels in the FWHM of the minor axis. Default = 4.
 
-    
+
 
 A default config file (FAT_INPUT.config) is included in the distribution.
 
 Input Catalog
 -----------
 
-The input catalog should have at least 4 columns named as 
+The input catalog should have at least 4 columns named as
 
         number|distance|directoryname|cubename
 
@@ -173,6 +164,3 @@ The directory name is the name of the directory of the galaxy to be fitted. This
 cubename is the name of the cube to be fitted. This should be without the fits extension.
 
 An example catalog is included in the distribution. This also gives examples for how to set up a catalog when using pre-made sofia input, i.e. allnew=2
-
-
-

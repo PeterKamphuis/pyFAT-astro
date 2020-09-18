@@ -630,8 +630,6 @@ def sbr_limits(Configuration,hdr, systemic= 100. , debug = False):
         sbr_ring_limits=9e-4*(ringarea/beamsolid)**(-0.82)*ratio
     if ringarea[0] == 0.:
          sbr_ring_limits[0]=0.
-    print('before modifier')
-    print(len(sbr_ring_limits))
     if len(Configuration['LIMIT_MODIFIER']) == 1:
 
         sbr_ring_limits= sbr_ring_limits*Configuration['LIMIT_MODIFIER']
@@ -641,8 +639,6 @@ def sbr_limits(Configuration,hdr, systemic= 100. , debug = False):
             mod_list.append(Configuration['LIMIT_MODIFIER'][-1])
         Configuration['LIMIT_MODIFIER'] = np.array(mod_list,dtype=float)
         sbr_ring_limits=[x*y for x,y in zip(sbr_ring_limits,Configuration['LIMIT_MODIFIER'])]
-    print('after modifier')
-    print(len(sbr_ring_limits))
     if debug:
         print_log(f'''SBR_LIMITS: Retrieved these radii and limits:
 {'':8s}{radii}

@@ -335,8 +335,10 @@ def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
         pos_profile.append(maj_profile[pos_index[i]])
         diff = diff+abs(avg_profile[i]-neg_profile[i])+abs(avg_profile[i]-pos_profile[i])
     diff = diff/np.nanmin([neg_index.size,pos_index.size])
-    print('Beam, center of profiele, center ')
-    print(hdr['BMAJ']*0.5/np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])]),center_of_profile,center)
+    if debug:
+        print_log(f'''GUESS_ORIENTATION:'Beam, center of profile, center
+{'':8s}{hdr['BMAJ']*0.5/np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])} {center_of_profile} {center}
+''',Configuration['OUTPUTLOG'], debug = False)
     # if the center of the profile is more than half a beam off from the Sofia center let's see which on provides a more symmetric profile
     if abs(center_of_profile) > hdr['BMAJ']*0.5/np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])]):
         if debug:
@@ -355,8 +357,6 @@ def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
             pos_profile_new.append(maj_profile[pos_index[i]])
             diff_new = diff_new+abs(avg_profile_new[i]-neg_profile_new[i])+abs(avg_profile_new[i]-pos_profile_new[i])
         diff_new = diff_new/np.nanmin([neg_index.size,pos_index.size])
-        print('The diffs')
-        print(diff_new,diff)
         if diff_new < diff:
             if debug:
                 print_log(f'''GUESS_ORIENTATION: We are updating the center from {center[0]},{center[1]} to {center[0]+center_of_profile/(2.*np.sin(np.radians(pa)))*maj_resolution},{center[1]+center_of_profile/(2.*np.cos(np.radians(pa)))*maj_resolution}

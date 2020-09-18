@@ -66,8 +66,6 @@ def check_sbr(Configuration,Tirific_Template,hdr , stage ='initial',debug=False)
 ''',Configuration['OUTPUTLOG'])
 
 def check_size(Configuration,Tirific_Template,hdr,Fits_Files= 'No Files' ,debug = False,fix_rc = False,current_run='Not Initialized'):
-    print(f'''CHECK_SIZE: Why is debug not coming dubug = {debug}''')
-    debug = True
     if debug and not fix_rc:
         print_log(f'''CHECK_SIZE: Starting a new Check_size with the following parameters:
 {'':8s}CHECK_SIZE: Rings = {Configuration['NO_RINGS']}

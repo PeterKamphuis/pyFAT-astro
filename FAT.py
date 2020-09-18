@@ -424,7 +424,8 @@ def FAT(argv):
 
 
         cf.finish_galaxy(Configuration,maximum_directory_length,current_run =current_run, Fits_Files =Fits_Files,debug = Configuration['DEBUG'])
-
+        if input_parameters.installation_check:
+            cf.installation_check(Configuration)
 
 FAT.__doc__ = '''
 ;+
