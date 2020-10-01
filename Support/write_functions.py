@@ -732,6 +732,7 @@ BMAJ = {cube[0].header['BMAJ']*3600.:.1f} arcsec''',rotation=0, va='center',ha='
         plt.savefig(f"{Configuration['FITTING_DIR']}Overview.png", bbox_inches='tight')
         plt.close()
 
+
 def plot_parameters(Vars_to_plot,FAT_Model,Input_Model,location,Figure,parameter, legend = ['Empty','Empty','Empty','Empty'],initial = 'No Value', Extra_Model = [], debug = False):
     if debug:
         print_log(f'''PLOT_PARAMETERS: We are starting to plot {parameter}

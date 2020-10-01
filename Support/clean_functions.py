@@ -2,7 +2,7 @@
 # This module contains a set of functions and classes that are used in several different Python scripts in the Database.
 
 
-import os,signal
+import os,signal,sys
 import traceback
 from datetime import datetime
 from support_functions import print_log,finish_current_run
@@ -58,18 +58,23 @@ Clean up the sofia output files by putting them in a dedicated directory.
 '''
 # cleanup dirty files before starting fitting
 def cleanup(Configuration,Fits_Files, debug = False):
+    #clean the log directory of all files except those named Previous_
+    files_in_log = os.listdir(f"{Configuration['FITTING_DIR']}Logs")
+    for file in files_in_log:
+        if file[0:9] != 'Previous_':
+            os.remove(f"{Configuration['FITTING_DIR']}Logs/{file}")
 
     if Configuration['START_POINT'] == 1:
         directories=['Finalmodel','Sofia_Output','Centre_Convergence','Def_Files','Extent_Convergence']
         files = [Fits_Files['FITTING_CUBE'],Fits_Files['OPTIMIZED_CUBE'], \
-                'Centre_Convergence_In.def',Configuration['BASE_NAME']+'-BasicInfo.txt','Centre_Convergence/Centre_Convergence_In_Before_Smooth.def',\
-                'Extent_Convergence_In.def','Extent_Convergence/Extent_Convergence_In_Before_Smooth.def']
+                'Centre_Convergence_In.def',Configuration['BASE_NAME']+'-BasicInfo.txt',\
+                'Extent_Convergence_In.def']
     elif Configuration['START_POINT'] == 2:
         directories=['Finalmodel','Sofia_Output','Centre_Convergence','Def_Files','Extent_Convergence']
-        files = ['Centre_Convergence_In.def',Configuration['BASE_NAME']+'-BasicInfo.txt','Centre_Convergence/Centre_Convergence_In_Before_Smooth.def']
+        files = ['Centre_Convergence_In.def',Configuration['BASE_NAME']+'-BasicInfo.txt']
     elif Configuration['START_POINT'] == 3:
         directories=['Finalmodel','Centre_Convergence','Def_Files','Extent_Convergence']
-        files = ['Centre_Convergence_In.def','Centre_Convergence/Centre_Convergence_In_Before_Smooth.def']
+        files = ['Centre_Convergence_In.def']
     elif Configuration['START_POINT'] == 4 and Configuration['FINISHAFTER'] > 1:
         directories=['Finalmodel','Def_Files','Extent_Convergence']
         files = ['Centre_Convergence_In.def',]
@@ -105,14 +110,9 @@ def cleanup(Configuration,Fits_Files, debug = False):
                                 os.remove(f'{dir}/{dir}{fe}')
                             except FileNotFoundError:
                                 pass
-                            try:
-                                os.remove(f'{dir}/{dir}_Prev{fe}')
-                            except FileNotFoundError:
-                                pass
-                            try:
-                                os.remove(f'{dir}/{dir}_Prev2{fe}')
-                            except FileNotFoundError:
-                                pass
+                            os.system(f'rm -f {dir}/{dir}_*{fe}')
+
+
                     for mom in moments:
                         try:
                             os.remove(f'{dir}/{dir}_{mom}.fits')
@@ -165,6 +165,47 @@ cleanup.__doc__ = '''
 ;
 '''
 
+def cleanup_final(Configuration,Fits_Files, debug =False):
+    if debug:
+         print_log(f'''Starting the final cleanup of the directory.
+''',Configuration['OUTPUTLOG'],screen =True,debug = True)
+    clean_files = [Fits_Files['OPTIMIZED_CUBE'],'Centre_Convergence_In.def', 'Extent_Convergence_In.def','clean_map.fits','dep_map.fits','minimum_map.fits','rot_map.fits']
+    dest_dir = ['Logs','Center_Convergence', 'Extent_Convergence', 'Logs', 'Logs', 'Logs', 'Logs']
+    for file,dir in zip(clean_files,dest_dir):
+    # Not remove anything but cleanup all
+        try:
+            if Configuration['MAPS_OUTPUT'] >= 5 or Configuration['MAPS_OUTPUT'] == 0:
+                os.rename(f"{Configuration['FITTING_DIR']}/{file}",f"{Configuration['FITTING_DIR']}{dir}/{file}")
+            else:
+                os.remove(f"{Configuration['FITTING_DIR']}/{file}")
+        except FileNotFoundError:
+            pass
+
+    fit_directories = ['Centre_Convergence', 'Extent_Convergence']
+    delete_ext = ['.log']
+    if Configuration['MAPS_OUTPUT'] == 4:
+        delete_ext.append('.fits')
+
+    for dir in fit_directories:
+        try:
+            files_in_dir = os.listdir(f"{Configuration['FITTING_DIR']}{dir}")
+        except FileNotFoundError:
+            files_in_dir = []
+            pass
+        for file in files_in_dir:
+            name,extension = os.path.splitext(f"{Configuration['FITTING_DIR']}{dir}/{file}")
+            if extension in delete_ext:
+                try:
+                    os.remove(f"{Configuration['FITTING_DIR']}{dir}/{file}")
+                except FileNotFoundError:
+                    pass
+            if (Configuration['MAPS_OUTPUT'] == 2 and extension != '.fits') or (5 >= Configuration['MAPS_OUTPUT'] >= 3) :
+                if len(name.split('_')) > 2:
+                    try:
+                        os.remove(f"{Configuration['FITTING_DIR']}{dir}/{file}")
+                    except FileNotFoundError:
+                        pass
+
 
 
 def finish_galaxy(Configuration,maximum_directory_length,current_run = 'Not initialized', Fits_Files= None, debug = False):
@@ -176,18 +217,35 @@ def finish_galaxy(Configuration,maximum_directory_length,current_run = 'Not init
     output_catalogue.write(f"{Configuration['FITTING_DIR'].split('/')[-2]:{maximum_directory_length}s} {Configuration['CC_ACCEPTED']} {Configuration['EC_ACCEPTED']}   {Configuration['FINAL_COMMENT']} \n")
     output_catalogue.close()
 
-    if Configuration['MAPS_OUTPUT'] == 5:
-        log_statement = f'''!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    if Configuration['MAPS_OUTPUT'] == 'error':
+        error_message = '''
+            Your code has crashed for some reason. If this message completely baffles you then please submit the trace back as a bug report to: \n
+            https://github.com/PeterKamphuis/pyFAT/issues \n
+            If the error occured while fitting a galaxy, please attach your fitting log as well
+'''
+        log_statement = f'''------------When filing a bug report please copy all output  below this line------------
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 {"":8s}FAT did not run the full fitting routines for the galaxy in directory {Configuration['FITTING_DIR']}.
 {"":8s}Please check this log and output_catalogue carefully for what went wrong.
 {"":8s}The detected exit reason is {Configuration['FINAL_COMMENT']}.
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 '''
         print_log(log_statement,Configuration['OUTPUTLOG'], screen = True)
+        print_log(error_message,Configuration['OUTPUTLOG'], screen = True)
+        with open(Configuration['OUTPUTLOG'],'a') as log_file:
+                    traceback.print_exc(file=log_file)
+        traceback.print_exc()
         sys.exit(1)
-    elif Configuration['MAPS_OUTPUT'] == 4:
-        print("We just want def files but this aint working yet")
-    else:
+    elif Configuration['MAPS_OUTPUT'] == 5:
+        log_statement = f'''
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+{"":8s}FAT did not run the full fitting routines for the galaxy in directory {Configuration['FITTING_DIR']}.
+{"":8s}Please check this log and output_catalogue carefully for what went wrong.
+{"":8s}The detected exit reason is {Configuration['FINAL_COMMENT']}.
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+'''
+        print_log(log_statement,Configuration['OUTPUTLOG'], screen = True)
+    elif Configuration['MAPS_OUTPUT'] != 4:
         log_statement = f'''Producing final output in {Configuration['FITTING_DIR']}.
 '''
         #
@@ -234,6 +292,8 @@ It finished the whole process at {datetime.now()}
         log_statement = f'''Finished timing statistics for the galaxy in {Configuration['FITTING_DIR']}.
 '''
         print_log(log_statement,Configuration['OUTPUTLOG'], screen = True)
+
+    cleanup_final(Configuration,Fits_Files, debug=debug)
 finish_galaxy.__doc__ = '''
     ;+
 ; NAME:

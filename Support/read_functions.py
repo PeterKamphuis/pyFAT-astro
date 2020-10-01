@@ -295,11 +295,13 @@ def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
                               ,np.degrees(np.arccos(np.sqrt(((1./ratios[max_index])**2-0.2**2)/0.96))) ])
 
         if i == 0:
-            inclination_error = set_limits(np.mean([abs(np.degrees(np.arccos(np.sqrt((ratios[min_index]**2-0.2**2)/0.96))) - np.degrees(np.arccos(np.sqrt((ratios[tenp_min_index[0]]**2-0.2**2)/0.96)))),\
+            inclination_error = set_limits(np.nanmean([abs(np.degrees(np.arccos(np.sqrt((ratios[min_index]**2-0.2**2)/0.96))) - np.degrees(np.arccos(np.sqrt((ratios[tenp_min_index[0]]**2-0.2**2)/0.96)))),\
                                      abs(np.degrees(np.arccos(np.sqrt((ratios[min_index]**2-0.2**2)/0.96))) - np.degrees(np.arccos(np.sqrt((ratios[tenp_min_index[-1]]**2-0.2**2)/0.96)))),\
                                      abs(np.degrees(np.arccos(np.sqrt(((1./ratios[max_index])**2-0.2**2)/0.96))) - np.degrees(np.arccos(np.sqrt(((1./ratios[tenp_max_index[0]])**2-0.2**2)/0.96)))),\
                                      abs(np.degrees(np.arccos(np.sqrt(((1./ratios[max_index])**2-0.2**2)/0.96))) - np.degrees(np.arccos(np.sqrt(((1./ratios[tenp_max_index[0]])**2-0.2**2)/0.96))))]), \
                                      2.5,25.)
+            if not np.isfinite(inclination_error):
+                inclination_error = 90./inclination                         
         if ratios[max_index]-ratios[min_index] < 0.4:
             inclination = float(inclination-(inclination*0.04/(ratios[max_index]-ratios[min_index])))
             if i == 0:
@@ -308,8 +310,7 @@ def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
             inclination = float(inclination+(inclination/10.*np.sqrt(4./(maj_extent/hdr['BMAJ']))))
             if i == 0:
                 inclination_error = float(inclination_error*4./(maj_extent/hdr['BMAJ']))
-        if i == 0:
-            print(center)
+        if i == 0 and inclination < 75.:
             mom0 = remove_inhomogeneities(Configuration,mom0,inclination=inclination, pa = pa, center = center,WCS_center = False, debug=debug)
             map = mom0[0].data
             #map[3*minimum_noise_in_map > noise_map] = 0.

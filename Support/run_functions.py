@@ -5,7 +5,7 @@ class BadSourceError(Exception):
     pass
 class SofiaRunError(Exception):
     pass
-class TirificRunError(Exception):
+class SofiaFaintError(Exception):
     pass
 
 from support_functions import print_log, convert_type,set_limits,sbr_limits,rename_fit_products,\
@@ -44,8 +44,8 @@ def central_converge(Configuration, Fits_Files,Tirific_Template,current_run,hdr,
     else:
         print_log('''CENTRAL_CONVERGE: Tirific ran the maximum amount of loops which means the fit is not accepted and we retry.
 ''',Configuration['OUTPUTLOG'],debug = debug)
-        smoothed_vrot = smooth_profile(Configuration,Tirific_Template,'VROT',hdr,debug=debug)
-        smoothed_sbr = smooth_profile(Configuration,Tirific_Template,'SBR',hdr,debug=debug)
+        smoothed_vrot = smooth_profile(Configuration,Tirific_Template,'VROT',hdr,min_error = float(Configuration['CHANNEL_WIDTH']), debug=debug)
+        smoothed_sbr = smooth_profile(Configuration,Tirific_Template,'SBR',hdr,min_error= np.max([float(Tirific_Template['CFLUX']),float(Tirific_Template['CFLUX_2'])]) ,debug=debug)
         #after smoothing the sbr we should check it
         check_sbr(Configuration,Tirific_Template,hdr,debug = debug)
         xpos,ypos,vsys,pa,incl = rf.load_template(Tirific_Template,Variables = ['XPOS','YPOS','VSYS','PA','INCL'])
@@ -66,12 +66,12 @@ def fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run,hd
         print_log(f'''FIT_SMOOTHED_CHECK: Starting stage {stage} and fit_stage {fit_stage}.
 ''',Configuration['OUTPUTLOG'],debug = debug)
     #if we have only a few rings we only smooth. else we fit a polynomial to the RC and smooth the SBR
-    smoothed_sbr = smooth_profile(Configuration,Tirific_Template,'SBR',hdr,debug = debug)
+    smoothed_sbr = smooth_profile(Configuration,Tirific_Template,'SBR',hdr, min_error= np.max([float(Tirific_Template['CFLUX']),float(Tirific_Template['CFLUX_2'])]),debug = debug)
     check_sbr(Configuration,Tirific_Template,hdr,debug = debug)
     if Configuration['NO_RINGS'] < 6:
-        smoothed_vrot = smooth_profile(Configuration,Tirific_Template,'VROT',hdr,debug = debug)
+        smoothed_vrot = smooth_profile(Configuration,Tirific_Template,'VROT',hdr,min_error = float(hdr['CDELT3']/1000.),debug = debug)
     else:
-        smoothed_vrot = regularise_profile(Configuration,Tirific_Template,'VROT',hdr,min_error = hdr['CDELT3']/1000.,debug = debug)
+        smoothed_vrot = regularise_profile(Configuration,Tirific_Template,'VROT',hdr,min_error = float(hdr['CDELT3']/1000.),debug = debug)
     if stage == 'after_ec':
         min_error = []
         pars_to_smooth = []
@@ -89,7 +89,7 @@ def fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run,hd
             min_error.append(hdr['CDELT3']/2000.*Configuration['LIMIT_MODIFIER'])
         for key,min_err in zip(pars_to_smooth,min_error):
             if Configuration['NO_RINGS'] < 6:
-                smoothed = smooth_profile(Configuration,Tirific_Template,key,hdr,debug = debug,min_error=min_error)
+                smoothed = smooth_profile(Configuration,Tirific_Template,key,hdr,debug = debug,min_error=min_err)
             else:
                 smoothed = regularise_profile(Configuration,Tirific_Template,key,hdr,min_error = min_err,debug = debug)
 
@@ -685,7 +685,7 @@ def sofia(Configuration, Fits_Files, hdr, supportdir, debug = False):
 {"":8s}Continuing to the next galaxy.
 '''
                 print_log(log_statement,Configuration['OUTPUTLOG'],debug = debug)
-                raise SofiaRunError("RUN_SOFIA:Sofia cannot find a source above a threshold of 3.")
+                raise SofiaFaintError("RUN_SOFIA:Sofia cannot find a source above a threshold of 3.")
         elif sfrun.returncode == 0:
             sofia_ok = True
         else:

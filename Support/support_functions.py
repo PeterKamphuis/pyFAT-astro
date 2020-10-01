@@ -23,7 +23,8 @@ class SmallSourceError(Exception):
     pass
 class FileNotFoundError(Exception):
     pass
-
+class TirificKillError(Exception):
+    pass
 
 
 # A class of ordered dictionary where keys can be inserted in at specified locations or at the end.
@@ -343,7 +344,7 @@ def finish_current_run(Configuration,current_run,debug=False):
                 print_log(f"FINISH_CURRENT_RUN: We killed the current run although we failed on the PID = {Configuration['TIRIFIC_PID']}. \n",Configuration['OUTPUTLOG'],debug=debug,screen=True)
             except AttributeError:
                 print_log(f"FINISH_CURRENT_RUN: We failed to kill the current run even though we have tirific running",Configuration['OUTPUTLOG'],debug=debug,screen=True)
-                raise TirificRunError('FINISH_CURRENT_RUN: Despite having an initialized tirific we could not kill it.')
+                raise TirificKillError('FINISH_CURRENT_RUN: Despite having an initialized tirific we could not kill it. This should not happen.')
         Configuration['TIRIFIC_RUNNING'] = False
         Configuration['TIRIFIC_PID'] = 'Not Initialized'
     else:
@@ -735,6 +736,8 @@ def set_limit_modifier(Configuration,Inclination, debug= False):
             modifier_list.append(set_limits(1.+(50-(inc)*0.05),1,2.5))
         elif inc < 40:
             modifier_list.append(set_limits(np.sin(np.radians(75.))/np.sin(np.radians(inc)),1.,2.5))
+        elif inc > 75:
+            modifier_list.append(set_limits(75./inc,0.8,1.0))
         else:
             modifier_list.append(1.)
     if Configuration['OUTER_RINGS_DOUBLED']:
