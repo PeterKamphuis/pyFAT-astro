@@ -122,7 +122,7 @@ def initialize_def_file(Configuration, Fits_Files,Tirific_Template, cube_hdr,Ini
                            systemic =  Initial_Parameters['VSYS'],
                            inclination = Initial_Parameters['INCL'],
                            pa = Initial_Parameters['PA'],
-                           rotation =Initial_Parameters['VROT'],
+                           rotation = [np.max(Initial_Parameters['VROT']) ,(np.max(Initial_Parameters['VROT'])-np.min(Initial_Parameters['VROT']))*0.2],
                            ra = Initial_Parameters['RA'], dec = Initial_Parameters['DEC'], debug=debug)
         if 'VSYS' in Initial_Parameters:
             Initial_Parameters['VSYS'] = [x*1000. for x in Initial_Parameters['VSYS']]
@@ -789,6 +789,14 @@ def plot_parameters(Vars_to_plot,FAT_Model,Input_Model,location,Figure,parameter
 
 
 def plot_usage_stats(Configuration,debug = False):
+
+    if os.path.exists(f"{Configuration['FITTING_DIR']}Logs/ram_cpu.pdf"):
+        if os.path.exists(f"{Configuration['FITTING_DIR']}Logs/ram_cpu_prev.pdf"):
+            os.remove(f"{Configuration['FITTING_DIR']}Logs/ram_cpu_prev.pdf")
+        os.rename( f"{Configuration['FITTING_DIR']}Logs/ram_cpu.pdf",f"{Configuration['FITTING_DIR']}Logs/ram_cpu_prev.pdf")
+
+
+
     with open(f"{Configuration['FITTING_DIR']}Logs/Usage_Statistics.txt") as file:
         lines = file.readlines()
     labels = []
@@ -855,7 +863,7 @@ def plot_usage_stats(Configuration,debug = False):
     ax2miny,ax2maxy = ax2.get_ylim()
     ax2.tick_params(axis='y', labelcolor='r')
     last_label = -100
-    label_sep = 1.
+    label_sep = 0.5
     color, linest = '0.5', '--'
     labelfont = {'family': 'Times New Roman',
              'weight': 'normal',

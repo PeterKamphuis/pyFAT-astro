@@ -237,7 +237,79 @@ config_file.__doc__ ='''
 ;
 '''
 
+def extract_vrot(Configuration, hdr,map ,angle,center, debug= False):
+    if debug:
+        print_log(f'''EXTRACT_VROT: starting extraction of initial VROT.
+{'':8s} PA= {angle}
+{'':8s} center= {center}
 
+''',Configuration['OUTPUTLOG'], debug = True)
+    x1,x2,y1,y2 = obtain_border_pix(hdr,angle,center)
+    linex,liney = np.linspace(x1,x2,1000), np.linspace(y1,y2,1000)
+    maj_resolution = abs((abs(x2-x1)/1000.)*np.sin(np.radians(angle)))+abs(abs(y2-y1)/1000.*np.cos(np.radians(angle)))
+    maj_profile = ndimage.map_coordinates(map, np.vstack((liney,linex)),order=1)
+    maj_axis =  np.linspace(0,1000*maj_resolution,1000)- (abs((abs(center[0]))*np.sin(np.radians(angle)))+abs(abs(center[1])*np.cos(np.radians(angle))))
+    neg_index = np.where(maj_axis < 0.)[0]
+    pos_index = np.where(maj_axis > 0.)[0]
+
+    avg_profile = []
+    neg_profile = []
+    pos_profile = []
+    diff = 0.
+    for i in range(np.nanmin([neg_index.size,pos_index.size])):
+        avg_profile.append(np.nanmean([maj_profile[neg_index[neg_index.size-i-1]],-1*maj_profile[pos_index[i]]]))
+        neg_profile.append(maj_profile[neg_index[neg_index.size-i-1]])
+        pos_profile.append(-1*maj_profile[pos_index[i]])
+
+    if debug:
+        print_log(f'''EXTRACT_VROT: starting extraction of initial VROT.
+{'':8s} negative= {neg_profile}
+{'':8s} positive= {pos_profile}
+{'':8s} avreage= {avg_profile}
+''',Configuration['OUTPUTLOG'], debug = True)
+
+    ring_size_req = Configuration['RING_SIZE']*hdr['BMAJ']/(np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])*maj_resolution)
+    profile = np.array(avg_profile[0::int(ring_size_req)],dtype=float)
+    profile[np.isnan(profile)] = profile[~np.isnan(profile)][-1]
+    return profile
+
+extract_vrot.__doc__ ='''
+;+
+; NAME:
+;       extract_averaged(Configuration, hdr,map ,angle,center, debug= False):
+;
+; PURPOSE:
+;       Extract a profile averaged over both sides.
+;
+; CATEGORY:
+;       read
+;
+;
+; INPUTS:
+;       Configuration =
+;       Fits_Files =
+;
+;
+; OPTIONAL INPUTS:
+;       center=
+;       pa =
+;
+; KEYWORD PARAMETERS:
+;       -
+;
+; OUTPUTS:
+;          result = dictionary with the config file
+;
+; OPTIONAL OUTPUTS:
+;       -
+;
+; PROCEDURES CALLED:
+;      split, strip, open
+;
+; EXAMPLE:
+;
+;
+'''
 
 # Function to get the PA and inclination from the moment 0 for initial estimates
 
@@ -301,7 +373,7 @@ def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
                                      abs(np.degrees(np.arccos(np.sqrt(((1./ratios[max_index])**2-0.2**2)/0.96))) - np.degrees(np.arccos(np.sqrt(((1./ratios[tenp_max_index[0]])**2-0.2**2)/0.96))))]), \
                                      2.5,25.)
             if not np.isfinite(inclination_error):
-                inclination_error = 90./inclination                         
+                inclination_error = 90./inclination
         if ratios[max_index]-ratios[min_index] < 0.4:
             inclination = float(inclination-(inclination*0.04/(ratios[max_index]-ratios[min_index])))
             if i == 0:
@@ -377,7 +449,7 @@ def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
 
     Image = fits.open(Configuration['FITTING_DIR']+'Sofia_Output/'+Fits_Files['MOMENT1'],\
             uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
-    map = Image[0].data/1000.
+    map = Image[0].data
     hdr = Image[0].header
     Image.close()
     map[3*minimum_noise_in_map > noise_map] = float('NaN')
@@ -388,13 +460,26 @@ def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
     maj_resolution = abs((abs(x2-x1)/1000.)*np.sin(np.radians(pa)))+abs(abs(y2-y1)/1000.*np.cos(np.radians(pa)))
     maj_profile = ndimage.map_coordinates(map, np.vstack((liney,linex)),order=1)
     maj_axis =  np.linspace(0,1000*maj_resolution,1000)- (abs((abs(center[0]))*np.sin(np.radians(pa)))+abs(abs(center[1])*np.cos(np.radians(pa))))
-    map= []
     loc_max = np.mean(maj_axis[np.where(maj_profile == np.nanmax(maj_profile))[0]])
     if loc_max > 0.:
             pa = pa+180
             print_log(f'''GUESS_ORIENTATION: We have modified the pa by 180 deg as we found the maximum velocity west of the center.
 ''' , Configuration['OUTPUTLOG'])
-    return np.array([pa,pa_error]),np.array([inclination,inclination_error]),SBR_initial,maj_extent,center[0],center[1]
+    map = map  - map[int(round(center[0])),int(round(center[1]))]
+    VROT_initial = extract_vrot(Configuration, hdr,map ,pa,center, debug= debug)
+    if pa_error < 10.:
+        for x in [pa-pa_error,pa-pa_error/2.,pa+pa_error/2.,pa+pa_error]:
+            tmp  = extract_vrot(Configuration, hdr,map ,x,center, debug= debug)
+            VROT_initial = [VROT_initial, tmp]
+        VROT_initial = np.mean(VROT_initial,axis=0.)
+    map= []
+    VROT_initial[0] = 0
+    VROT_initial = VROT_initial/np.sin(np.radians(inclination))
+    if debug:
+        print_log(f'''GUESS_ORIENTATION: We found the following initial rotation curve:
+{'':8s}GUESS_ORIENTATION: RC = {VROT_initial}
+''',Configuration['OUTPUTLOG'], debug = False)
+    return np.array([pa,pa_error]),np.array([inclination,inclination_error]),SBR_initial,maj_extent,center[0],center[1],VROT_initial
 guess_orientation.__doc__ ='''
 ;+
 ; NAME:
@@ -555,7 +640,11 @@ def obtain_ratios(map, hdr, center, angles, debug = False):
         #maj_gaus = gaussian_function(maj_profile, *gauss)
         #tmp = np.where(maj_gaus > 0.2*np.nanmax(maj_gaus))[0]
         width_maj = (tmp[-1]-tmp[0])*maj_resolution
-        width_maj = np.sqrt(width_maj**2 - (hdr['BMAJ']/(np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])))**2)
+        if width_maj**2 > (hdr['BMAJ']/(np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])))**2:
+            width_maj = np.sqrt(width_maj**2 - (hdr['BMAJ']/(np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])))**2)
+        else:
+            width_maj = maj_resolution
+
         if width_maj > max_extent:
             max_extent = width_maj
         #minor axis
@@ -572,7 +661,11 @@ def obtain_ratios(map, hdr, center, angles, debug = False):
         #min_gaus = gaussian_function(min_profile,*gauss)
         #tmp = np.where(min_gaus > 0.2*np.nanmax(min_gaus))[0]
         width_min = (tmp[-1]-tmp[0])*min_resolution
-        width_min = np.sqrt(width_min**2 - (hdr['BMAJ']/(np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])))**2)
+        if width_min**2 > (hdr['BMAJ']/(np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])))**2 :
+            width_min = np.sqrt(width_min**2 - (hdr['BMAJ']/(np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])))**2)
+        else:
+            width_min = min_resolution
+
         if width_min > max_extent:
             max_extent = width_min
         ratios.append(width_maj/width_min)

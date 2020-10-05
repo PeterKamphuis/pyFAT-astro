@@ -636,8 +636,8 @@ def fit_polynomial(Configuration,radii,profile,sm_profile,error, key, Tirific_Te
         new_profile = np.concatenate(([sm_profile[0]],[e for e in fit_profile(radii[st_fit:])]))
     else:
         new_profile = fit_profile(radii)
-    if key in ['VROT'] and profile[1] < profile[2]:
-        new_profile[1] = profile[1]
+    #if key in ['VROT'] and profile[1] < profile[2]:
+    #    new_profile[1] = profile[1]
     new_profile = fix_profile(Configuration, key, new_profile, Tirific_Template, hdr,debug =debug, singular = True)
     new_error = get_error(Configuration, profile, new_profile,min_error=min_error,singular = True,debug = debug)
 
@@ -780,10 +780,10 @@ def set_fitting_parameters(Configuration, Tirific_Template, \
                 ra = [profile[0],abs(hdr['CDELT1'])]
             elif key == 'YPOS':
                 dec = [profile[0],abs(hdr['CDELT2'])]
-            elif key == 'YPOS':
+            elif key == 'VSYS':
                 systemic = [profile[0],abs(hdr['CDELT3']/2000.)]
             elif key == 'SDIS':
-                sdis = [np.mean(profile)*0.5,np.mean(profile)*2]
+                sdis = [np.mean(profile)*0.1,np.mean(profile)*1.5]
 
     z0_limits = convertskyangle([0.2,0.05,0.05,0.2,2.5],Configuration['DISTANCE'], physical = True)
     if stage in  ['initial','run_cc','after_cc','after_ec']:
@@ -792,36 +792,37 @@ def set_fitting_parameters(Configuration, Tirific_Template, \
         fitting_settings['INCL'] = set_generic_fitting(Configuration,'INCL',stage = stage, values = inclination, debug = debug,\
                                                         upper_bracket = [60.,90.],lower_bracket = [5.,50.])
         fitting_settings['PA'] = set_generic_fitting(Configuration,'PA',stage = stage, values = pa , debug = debug,\
-                                                        upper_bracket = [190.,370.],lower_bracket = [-10.,170.])
+                                                        upper_bracket = [190.,370.],lower_bracket = [-10.,170.],step_modifier = [1.,0.5,0.5])
         fitting_settings['Z0'] = set_generic_fitting(Configuration,'Z0',stage = stage,\
                                                 values = [z0_limits[0],z0_limits[1]],\
                                                          upper_bracket = [z0_limits[3],z0_limits[4]], \
                                                          lower_bracket = [z0_limits[2],z0_limits[3]],step_modifier = [0.5,0.5,2.])
         fitting_settings['XPOS'] = set_generic_fitting(Configuration,'XPOS',stage = stage, values = ra , debug = debug,\
-                                                        upper_bracket = xrange,lower_bracket = xrange)
+                                                        upper_bracket = xrange,lower_bracket = xrange,step_modifier = [1.0,1.0,0.5])
         if debug:
             print_log(f'''SET_FITTING_PARAMETERS: setting Ypos with these values
 {'':8s}dec = {dec}
 {'':8s}range = {yrange}
 ''',Configuration['OUTPUTLOG'])
         fitting_settings['YPOS']= set_generic_fitting(Configuration,'YPOS',stage = stage, values = dec , debug = debug,\
-                                                        upper_bracket = yrange,lower_bracket = yrange)
+                                                        upper_bracket = yrange,lower_bracket = yrange,step_modifier = [1.0,1.0,0.5])
         fitting_settings['VSYS']= set_generic_fitting(Configuration,'VSYS',stage = stage, values = systemic , debug = debug,\
-                                                        upper_bracket = vrange,lower_bracket = vrange)
+                                                        upper_bracket = vrange,lower_bracket = vrange,step_modifier = [2.0,0.5,0.25])
+        fitting_settings['SDIS'] = set_generic_fitting(Configuration,'SDIS',stage = stage, values = [8.,Configuration['CHANNEL_WIDTH']], debug = debug,\
+                                                            limits = [[Configuration['CHANNEL_WIDTH'], 15],[Configuration['CHANNEL_WIDTH']/4., 15.], \
+                                                            [Configuration['CHANNEL_WIDTH']/4., 15.]],step_modifier = [1.0,1.0,2.0])
+
         if stage in ['initial','run_cc','after_cc']:
             if inclination[0] < 30.:
-                parameters_to_adjust = ['XPOS','YPOS','VSYS','PA','VROT','SBR','INCL']
+                parameters_to_adjust = ['VSYS','SBR','XPOS','YPOS','PA','SDIS','INCL','VROT']
             elif inclination[0] < 50.:
-                parameters_to_adjust = ['XPOS','YPOS','VSYS','PA','VROT','INCL','SBR']
+                parameters_to_adjust = ['VSYS','XPOS','YPOS','SBR','PA','SDIS','VROT','INCL']
             elif inclination[0] > 75.:
-                parameters_to_adjust = ['XPOS','YPOS','VSYS','PA','VROT','SBR','INCL','Z0']
+                parameters_to_adjust = ['VSYS','XPOS','YPOS','VROT','SBR','PA','INCL','SDIS','Z0']
             else:
-                parameters_to_adjust = ['XPOS','YPOS','VSYS','PA','INCL','VROT','SBR']
+                parameters_to_adjust = ['VSYS','XPOS','YPOS','SBR','VROT','PA','INCL','SDIS']
         else:
-            fitting_settings['SDIS'] = set_generic_fitting(Configuration,'SDIS',stage = stage, values = [8.,Configuration['CHANNEL_WIDTH']], debug = debug,\
-                                                            limits = [[Configuration['CHANNEL_WIDTH'], 15],[Configuration['CHANNEL_WIDTH']/4., 15.],[Configuration['CHANNEL_WIDTH']/4., 15.]])
-
-            parameters_to_adjust = ['SBR','INCL','PA','VROT','SDIS','Z0','XPOS','YPOS','VSYS']
+            parameters_to_adjust = ['SBR','INCL','PA','VROT','SDIS','Z0','VSYS','XPOS','YPOS']
     if stage in ['initialize_ec','run_ec']:
 
         fitting_settings['SBR'] = set_sbr_fitting(Configuration, hdr = hdr,stage = stage, systemic = systemic[0], debug = debug)

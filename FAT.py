@@ -329,11 +329,11 @@ def FAT(argv):
 
                     #Then we want to make a smoothed version that can be adapted
                     current_run = runf.fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run,cube_hdr,stage = 'after_cc', fit_stage = 'Centre_Convergence',debug=Configuration['DEBUG'])
-                    incl = rf.load_tirific(f"{Configuration['FITTING_DIR']}Centre_Convergence/Centre_Convergence.def",Variables = ['INCL'])
-                    sf.print_log(f'''BEFORE_CHECK_INCLINATION: CC_loops = {Configuration['CC_LOOPS']}
-    {'':8s} Incl = {incl}
-    {'':8s} Size in beams =  {Configuration['SIZE_IN_BEAMS']})
-    ''',Configuration['OUTPUTLOG'],debug = Configuration['DEBUG'])
+                    #incl = rf.load_tirific(f"{Configuration['FITTING_DIR']}Centre_Convergence/Centre_Convergence.def",Variables = ['INCL'])
+                    #sf.print_log(f'''BEFORE_CHECK_INCLINATION: CC_loops = {Configuration['CC_LOOPS']}
+    #{'':8s} Incl = {incl}
+    #{'':8s} Size in beams =  {Configuration['SIZE_IN_BEAMS']})
+    #''',Configuration['OUTPUTLOG'],debug = Configuration['DEBUG'])
                     #if float(incl[0][0]) < 40.:
                         #If our fit stage is after cc we want to make sure we do an extra check on low inclinations or small Galaxies
                     #    runf.check_inclination(Configuration,Tirific_Template,Fits_Files,fit_stage = 'Centre_Convergence',debug=Configuration['DEBUG'])
@@ -414,7 +414,7 @@ def FAT(argv):
                 else:
                     Configuration['FINAL_COMMENT'] = 'We could not converge on the extend of the galaxy'
                     Configuration['MAPS_OUTPUT'] = 5
-                    cf.finish_galaxy(Configuration,maximum_directory_length,current_run =current_run,debug=Configuration['DEBUG'])
+                    cf.finish_galaxy(Configuration,maximum_directory_length, Fits_Files =Fits_Files,current_run =current_run,debug=Configuration['DEBUG'])
                     continue
                 Configuration['EC_END_TIME'] = datetime.now()
             except Exception as e:
@@ -423,7 +423,7 @@ def FAT(argv):
                     Configuration['MAPS_OUTPUT'] = 5
                 else:
                     Configuration['MAPS_OUTPUT'] = 'error'
-                cf.finish_galaxy(Configuration,maximum_directory_length,current_run =current_run,debug=Configuration['DEBUG'])
+                cf.finish_galaxy(Configuration,maximum_directory_length, Fits_Files =Fits_Files,current_run =current_run,debug=Configuration['DEBUG'])
                 continue
 
 
@@ -437,8 +437,7 @@ def FAT(argv):
             cf.finish_galaxy(Configuration,maximum_directory_length,current_run =current_run, Fits_Files =Fits_Files,debug = Configuration['DEBUG'])
             if input_parameters.installation_check:
                 cf.installation_check(Configuration)
-    except Exception as exc:
-
+    except Exception as e:
         Configuration['FINAL_COMMENT'] = e
         Configuration['MAPS_OUTPUT'] = 'error'
         cf.finish_galaxy(Configuration,maximum_directory_length,current_run =current_run,debug=Configuration['DEBUG'])

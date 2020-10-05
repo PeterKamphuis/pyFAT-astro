@@ -59,11 +59,13 @@ Clean up the sofia output files by putting them in a dedicated directory.
 # cleanup dirty files before starting fitting
 def cleanup(Configuration,Fits_Files, debug = False):
     #clean the log directory of all files except those named Previous_
-    files_in_log = os.listdir(f"{Configuration['FITTING_DIR']}Logs")
+    files_in_log = ['restart_Centre_Convergence.txt','restart_Extent_Convergence.txt','Usage_Statistics.txt'
+                    ,'Log.txt']
     for file in files_in_log:
-        if file[0:9] != 'Previous_':
+        try:
             os.remove(f"{Configuration['FITTING_DIR']}Logs/{file}")
-
+        except FileNotFoundError:
+            pass
     if Configuration['START_POINT'] == 1:
         directories=['Finalmodel','Sofia_Output','Centre_Convergence','Def_Files','Extent_Convergence']
         files = [Fits_Files['FITTING_CUBE'],Fits_Files['OPTIMIZED_CUBE'], \
@@ -244,7 +246,7 @@ def finish_galaxy(Configuration,maximum_directory_length,current_run = 'Not init
 {"":8s}The detected exit reason is {Configuration['FINAL_COMMENT']}.
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 '''
-        print_log(log_statement,Configuration['OUTPUTLOG'], screen = True)
+        print_log(log_statement,Configuration['OUTPUTLOG'], screen = False)
     elif Configuration['MAPS_OUTPUT'] != 4:
         log_statement = f'''Producing final output in {Configuration['FITTING_DIR']}.
 '''
@@ -280,6 +282,7 @@ def finish_galaxy(Configuration,maximum_directory_length,current_run = 'Not init
     # Need to organize the fitting output orderly
     # Need to write date and Time to timing log
     if Configuration['TIMING']:
+
         plot_usage_stats(Configuration,debug = debug)
         timing_result = open(Configuration['MAINDIR']+'/Timing_Result.txt','a')
         timing_result.write(f'''The galaxy in directory {Configuration['FITTING_DIR']} started at {Configuration['START_TIME']}.

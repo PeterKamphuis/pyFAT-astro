@@ -97,13 +97,17 @@ def fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run,hd
     #If our fit stage is after cc we want to make sure we do an extra check on low inclinations or small Galaxies
     #if stage =='after_cc' and (Configuration['SIZE_IN_BEAMS'] < 5 or incl[0] < 50.):
     #    check_inclination(Configuration,Tirific_Template,Fits_Files,debug=debug)
+    if stage == 'after_cc':
+        Tirific_Template['LOOPS'] = 0.
+    else:
+        Tirific_Template['LOOPS'] = 10.
 
     set_fitting_parameters(Configuration, Tirific_Template, hdr = hdr,stage = stage,\
-                           systemic = [vsys[0], Configuration['CHANNEL_WIDTH']], \
-                           inclination = [incl[0],10.],
-                           pa = [pa[0],5.],
-                           rotation = [np.max(smoothed_vrot),np.max(smoothed_vrot)*0.1],
-                           ra = [xpos[0],abs(hdr['CDELT1'])], dec = [ypos[0],abs(hdr['CDELT2'])], debug = debug)
+                       systemic = [vsys[0], Configuration['CHANNEL_WIDTH']], \
+                       inclination = [incl[0],10.],
+                       pa = [pa[0],5.],
+                       rotation = [np.max(smoothed_vrot),np.max(smoothed_vrot)*0.1],
+                       ra = [xpos[0],abs(hdr['CDELT1'])], dec = [ypos[0],abs(hdr['CDELT2'])], debug = debug)
     os.system(f"cp {Configuration['FITTING_DIR']}{fit_stage}_In.def {Configuration['FITTING_DIR']}{fit_stage}/{fit_stage}_In_Before_Smooth.def")
     wf.tirific(Configuration,Tirific_Template,name = f'{fit_stage}_In.def',debug=debug)
     accepted,current_run = run_tirific(Configuration,current_run, stage = stage, fit_stage=fit_stage,debug=debug)
@@ -326,7 +330,7 @@ def check_source(Configuration, Fits_Files, Catalogue, header, debug = False):
     Configuration['MAX_SIZE_IN_BEAMS'] = int(round(np.sqrt(((x_max-x_min)/2.)**2+((y_max-y_min)/2.)**2) \
                 /(bmmaj_in_pixels)+3.))
     try:
-        pa, inclination, SBR_initial, maj_extent,x_new,y_new = rf.guess_orientation(Configuration,Fits_Files, center = [x,y],debug=debug)
+        pa, inclination, SBR_initial, maj_extent,x_new,y_new,VROT_initial = rf.guess_orientation(Configuration,Fits_Files, center = [x,y],debug=debug)
         if x_new != x or y_new != y:
             x=x_new
             y=y_new
@@ -399,6 +403,8 @@ def check_source(Configuration, Fits_Files, Catalogue, header, debug = False):
     #else:
     max_vrot=w50/2./np.sin(np.radians(abs(inclination[0])))
     max_vrot_dev=set_limits((VELboun[1]-VELboun[0])/4./np.sin(np.radians(inclination[0])),4.*vres,20*vres,debug=debug)
+
+
     #Write the info to the Basic info File
     wf.basicinfo(Configuration,initialize = True,
               RA=[ra,abs(err_x*header['CDELT1'])],
@@ -423,7 +429,8 @@ def check_source(Configuration, Fits_Files, Catalogue, header, debug = False):
     Initial_Parameters['DEC'] = [dec,abs(err_y*header['CDELT2'])]
     Initial_Parameters['VSYS'] =[v_app,abs(err_z*header['CDELT3'])]
     Initial_Parameters['SBR'] = SBR_initial
-    Initial_Parameters['VROT'] = [max_vrot/1000.,max_vrot_dev/1000.]
+    #Initial_Parameters['VROT'] = [max_vrot/1000.,max_vrot_dev/1000.]
+    Initial_Parameters['VROT'] = VROT_initial
     Initial_Parameters['PA'] = pa
     Initial_Parameters['INCL'] = inclination
     Initial_Parameters['FLUX'] = [f_sum,f_sum_err]
@@ -529,7 +536,7 @@ def run_tirific(Configuration, current_run, stage = 'initial',fit_stage = 'Undef
         print_log(f'''RUN_TIRIFIC: Starting a new run in stage {stage} and fit_stage {fit_stage}
 ''',Configuration['OUTPUTLOG'], screen = True,debug = debug)
     # First move the previous fits
-    rename_fit_products(Configuration,fit_stage = fit_stage,stage=stage, debug = debug)
+    rename_fit_products(Configuration,fit_stage = fit_stage, stage=stage, debug = debug)
     # Then if already running change restart file
     if Configuration['TIRIFIC_RUNNING']:
         print_log('''RUN_TIRIFIC: We are using an initialized tirific
