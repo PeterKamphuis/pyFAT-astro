@@ -1401,7 +1401,7 @@ def set_sbr_fitting(Configuration,hdr = None,systemic = 100., stage = 'no_stage'
 {'':8s} No_Rings = {Configuration['NO_RINGS']}
 ''',Configuration['OUTPUTLOG'],debug = debug)
     sbr_input = {}
-    inner_ring = 1
+    inner_ring = 2
     if stage in ['initial','run_cc','initialize_ec','run_ec']:
         if hdr:
             radii,sbr_ring_limits = sbr_limits(Configuration,hdr,systemic = systemic, debug = debug)
