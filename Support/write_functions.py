@@ -846,63 +846,64 @@ def plot_usage_stats(Configuration,debug = False):
                 mem.append(tmp[8])
     # Below thanks to P. Serra
     # Make single-PID figures and total figure
-    fig, ax1 = plt.subplots(figsize = (8,4))
-    fig.subplots_adjust(left = 0.1, right = 0.9, bottom = 0.15, top = 0.7)
-    times = np.array(times, dtype = float)
-    mem = np.array(mem, dtype = float)
-    CPU = np.array(CPU, dtype = float)
+    if len(mem) > 0.:
+        fig, ax1 = plt.subplots(figsize = (8,4))
+        fig.subplots_adjust(left = 0.1, right = 0.9, bottom = 0.15, top = 0.7)
+        times = np.array(times, dtype = float)
+        mem = np.array(mem, dtype = float)
+        CPU = np.array(CPU, dtype = float)
 
-    ax1.plot(times,mem,'b-',lw=0.5)
-    ax1.set_ylim(0,np.max(mem)+np.max(mem)/10.)
-    ax1.set_ylabel('RAM (Mb) ', color='b')
-    ax1.tick_params(axis='y', labelcolor='b')
-    ax1.set_xlabel('time (min)', color='k')
-    ax2 = ax1.twinx()
-    ax2.plot(times,CPU,'r-',lw=0.5)
-    ax2.set_ylabel('CPUs (%)',color='r')
-    ax2miny,ax2maxy = ax2.get_ylim()
-    ax2.tick_params(axis='y', labelcolor='r')
-    last_label = -100
-    label_sep = 0.5
-    color, linest = '0.5', '--'
-    labelfont = {'family': 'Times New Roman',
-             'weight': 'normal',
-             'size': 6.5}
-    prev_label = ''
-    for label,time in zip(labels,label_times):
-        if color == '0.5':
-            color = 'k'
-        elif color == 'k':
-            color = '0.5'
-        if linest == '--':
-            linest = '-'
-        elif linest == '-':
-            linest = '--'
-        if (prev_label == 'Initializing tmp_incl_check' or prev_label == 'Ended tmp_incl_check'):
-            if (label != 'Initializing tmp_incl_check' and label != 'Ended tmp_incl_check'):
-                ax2.axvline(x=prev_time, linestyle=linest, color=color, linewidth=0.05)
-                last_label = max(prev_time,last_label+label_sep)
-                ax2.text(last_label,ax2maxy+20.,prev_label, va='bottom',ha='left',rotation= 60, color='black',
-                      bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7,fontdict = labelfont)
-                ax2.plot([prev_time,last_label+0.1],[ax2maxy,ax2maxy+20.],'k'+linest,color=color,linewidth=0.05,clip_on=False)
+        ax1.plot(times,mem,'b-',lw=0.5)
+        ax1.set_ylim(0,np.max(mem)+np.max(mem)/10.)
+        ax1.set_ylabel('RAM (Mb) ', color='b')
+        ax1.tick_params(axis='y', labelcolor='b')
+        ax1.set_xlabel('time (min)', color='k')
+        ax2 = ax1.twinx()
+        ax2.plot(times,CPU,'r-',lw=0.5)
+        ax2.set_ylabel('CPUs (%)',color='r')
+        ax2miny,ax2maxy = ax2.get_ylim()
+        ax2.tick_params(axis='y', labelcolor='r')
+        last_label = -100
+        label_sep = 0.5
+        color, linest = '0.5', '--'
+        labelfont = {'family': 'Times New Roman',
+                 'weight': 'normal',
+                 'size': 6.5}
+        prev_label = ''
+        for label,time in zip(labels,label_times):
+            if color == '0.5':
+                color = 'k'
+            elif color == 'k':
+                color = '0.5'
+            if linest == '--':
+                linest = '-'
+            elif linest == '-':
+                linest = '--'
+            if (prev_label == 'Initializing tmp_incl_check' or prev_label == 'Ended tmp_incl_check'):
+                if (label != 'Initializing tmp_incl_check' and label != 'Ended tmp_incl_check'):
+                    ax2.axvline(x=prev_time, linestyle=linest, color=color, linewidth=0.05)
+                    last_label = max(prev_time,last_label+label_sep)
+                    ax2.text(last_label,ax2maxy+20.,prev_label, va='bottom',ha='left',rotation= 60, color='black',
+                          bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7,fontdict = labelfont)
+                    ax2.plot([prev_time,last_label+0.1],[ax2maxy,ax2maxy+20.],'k'+linest,color=color,linewidth=0.05,clip_on=False)
+                    ax2.axvline(x=time, linestyle=linest, color=color, linewidth=0.05)
+                    last_label = max(time,last_label+label_sep)
+                    ax2.text(last_label,ax2maxy+20.,label, va='bottom',ha='left',rotation= 60, color='black',
+                          bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7,fontdict = labelfont)
+                    ax2.plot([time,last_label+0.1],[ax2maxy,ax2maxy+20.],'k'+linest,color=color,linewidth=0.05,clip_on=False)
+                else:
+                    prev_time = time
+            else:
                 ax2.axvline(x=time, linestyle=linest, color=color, linewidth=0.05)
                 last_label = max(time,last_label+label_sep)
                 ax2.text(last_label,ax2maxy+20.,label, va='bottom',ha='left',rotation= 60, color='black',
                       bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7,fontdict = labelfont)
                 ax2.plot([time,last_label+0.1],[ax2maxy,ax2maxy+20.],'k'+linest,color=color,linewidth=0.05,clip_on=False)
-            else:
-                prev_time = time
-        else:
-            ax2.axvline(x=time, linestyle=linest, color=color, linewidth=0.05)
-            last_label = max(time,last_label+label_sep)
-            ax2.text(last_label,ax2maxy+20.,label, va='bottom',ha='left',rotation= 60, color='black',
-                  bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7,fontdict = labelfont)
-            ax2.plot([time,last_label+0.1],[ax2maxy,ax2maxy+20.],'k'+linest,color=color,linewidth=0.05,clip_on=False)
-        prev_label = label
-    #This is beyond stupid again, but hey it is python so needed to make things work.
-    ax2.set_ylim([ax2miny,ax2maxy])
-    fig.savefig(f"{Configuration['FITTING_DIR']}Logs/ram_cpu.pdf")
-    plt.close()
+            prev_label = label
+        #This is beyond stupid again, but hey it is python so needed to make things work.
+        ax2.set_ylim([ax2miny,ax2maxy])
+        fig.savefig(f"{Configuration['FITTING_DIR']}Logs/ram_cpu.pdf")
+        plt.close()
 
 
 

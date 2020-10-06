@@ -329,20 +329,23 @@ def check_source(Configuration, Fits_Files, Catalogue, header, debug = False):
     #There is a factor of two missing here but this is necessary otherwise the maxima are far to small
     Configuration['MAX_SIZE_IN_BEAMS'] = int(round(np.sqrt(((x_max-x_min)/2.)**2+((y_max-y_min)/2.)**2) \
                 /(bmmaj_in_pixels)+3.))
-    try:
-        pa, inclination, SBR_initial, maj_extent,x_new,y_new,VROT_initial = rf.guess_orientation(Configuration,Fits_Files, center = [x,y],debug=debug)
-        if x_new != x or y_new != y:
-            x=x_new
-            y=y_new
-            ra,dec,v_app = cube_wcs.wcs_pix2world(x,y,z,0.)
-            print_log(f'''CHECK_SOURCE: The center is updated to.
+
+    pa, inclination, SBR_initial, maj_extent,x_new,y_new,VROT_initial = rf.guess_orientation(Configuration,Fits_Files, center = [x,y],debug=debug)
+    if x_new != x or y_new != y:
+        x=x_new
+        y=y_new
+        ra,dec,v_app = cube_wcs.wcs_pix2world(x,y,z,0.)
+        print_log(f'''CHECK_SOURCE: The center is updated to.
 {"":8s}CHECK_SOURCE: RA center = {ra} with boundaries {','.join(convert_type(RAboun,type='str'))}
 {"":8s}CHECK_SOURCE: DEC center = {dec} with boundaries {','.join(convert_type(DECboun,type='str'))}
 {"":8s}CHECK_SOURCE: V_sys center = {v_app/1000.:.2f} with boundaries {','.join(convert_type(VELboun/1000.,type='str'))}
 ''', Configuration['OUTPUTLOG'],debug = debug)
-    except:
+    if np.sum(pa) == 0. or any(np.isnan(pa)) or \
+        np.sum(inclination) == 0. or any(np.isnan(inclination)) or \
+        np.sum(maj_extent) == 0. or any(np.isnan(maj_extent)) or \
+        np.sum(SBR_initial) == 0. or all(np.isnan(SBR_initial)) or \
+        np.sum(VROT_initial) == 0. or all(np.isnan(VROT_initial)):
         print_log(f'''CHECK_SOURCE: We could not establish proper initial estimates from the moment maps.
-{"":8s} {traceback.print_exc()}
 ''', Configuration['OUTPUTLOG'], screen = True,debug = debug)
         raise BadSourceError("No initial estimates. Likely the source is too faint.")
      # Determine whether the centre is blanked or not

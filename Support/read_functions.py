@@ -270,7 +270,11 @@ def extract_vrot(Configuration, hdr,map ,angle,center, debug= False):
 
     ring_size_req = Configuration['RING_SIZE']*hdr['BMAJ']/(np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])*maj_resolution)
     profile = np.array(avg_profile[0::int(ring_size_req)],dtype=float)
-    profile[np.isnan(profile)] = profile[~np.isnan(profile)][-1]
+    try:
+        profile[np.isnan(profile)] = profile[~np.isnan(profile)][-1]
+    except IndexError:
+        profile = []
+
     return profile
 
 extract_vrot.__doc__ ='''
@@ -470,7 +474,8 @@ def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
     if pa_error < 10.:
         for x in [pa-pa_error,pa-pa_error/2.,pa+pa_error/2.,pa+pa_error]:
             tmp  = extract_vrot(Configuration, hdr,map ,x,center, debug= debug)
-            VROT_initial = [VROT_initial, tmp]
+            if len(tmp) > 0.:
+                VROT_initial = [VROT_initial, tmp]
         VROT_initial = np.mean(VROT_initial,axis=0.)
     map= []
     VROT_initial[0] = 0

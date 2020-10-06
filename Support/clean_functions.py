@@ -246,6 +246,9 @@ def finish_galaxy(Configuration,maximum_directory_length,current_run = 'Not init
 {"":8s}The detected exit reason is {Configuration['FINAL_COMMENT']}.
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 '''
+        with open(Configuration['OUTPUTLOG'],'a') as log_file:
+                    traceback.print_exc(file=log_file)
+        traceback.print_exc()
         print_log(log_statement,Configuration['OUTPUTLOG'], screen = False)
     elif Configuration['MAPS_OUTPUT'] != 4:
         log_statement = f'''Producing final output in {Configuration['FITTING_DIR']}.
