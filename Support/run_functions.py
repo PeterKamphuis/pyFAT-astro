@@ -342,7 +342,7 @@ def check_source(Configuration, Fits_Files, Catalogue, header, debug = False):
 ''', Configuration['OUTPUTLOG'],debug = debug)
     if np.sum(pa) == 0. or any(np.isnan(pa)) or \
         np.sum(inclination) == 0. or any(np.isnan(inclination)) or \
-        np.sum(maj_extent) == 0. or any(np.isnan(maj_extent)) or \
+        np.sum(maj_extent) == 0. or np.isnan(maj_extent) or \
         np.sum(SBR_initial) == 0. or all(np.isnan(SBR_initial)) or \
         np.sum(VROT_initial) == 0. or all(np.isnan(VROT_initial)):
         print_log(f'''CHECK_SOURCE: We could not establish proper initial estimates from the moment maps.
@@ -428,9 +428,9 @@ def check_source(Configuration, Fits_Files, Catalogue, header, debug = False):
         fits.writeto(f"{Configuration['FITTING_DIR']}/Sofia_Output/{Configuration['BASE_NAME']}_sofia_xv.fits",PV[0].data,PV[0].header)
     Cube.close()
     Initial_Parameters = {}
-    Initial_Parameters['RA'] = [ra,abs(err_x*header['CDELT1'])]
-    Initial_Parameters['DEC'] = [dec,abs(err_y*header['CDELT2'])]
-    Initial_Parameters['VSYS'] =[v_app,abs(err_z*header['CDELT3'])]
+    Initial_Parameters['RA'] = [ra,set_limits(abs(err_x*header['CDELT1']),0.1*header['BMAJ'],3.*header['BMAJ'] )]
+    Initial_Parameters['DEC'] = [dec,set_limits(abs(err_y*header['CDELT2']),0.1*header['BMAJ'],3.*header['BMAJ'] )]
+    Initial_Parameters['VSYS'] =[v_app,set_limits(abs(err_z*header['CDELT3']),3*abs(header['CDELT3']),10*abs(header['CDELT3']))]
     Initial_Parameters['SBR'] = SBR_initial
     #Initial_Parameters['VROT'] = [max_vrot/1000.,max_vrot_dev/1000.]
     Initial_Parameters['VROT'] = VROT_initial
