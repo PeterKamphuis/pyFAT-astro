@@ -338,8 +338,8 @@ def FAT(argv):
                         #If our fit stage is after cc we want to make sure we do an extra check on low inclinations or small Galaxies
                     #    runf.check_inclination(Configuration,Tirific_Template,Fits_Files,fit_stage = 'Centre_Convergence',debug=Configuration['DEBUG'])
 
-                    if Configuration['OPTIMIZED']:
-                        runf.make_full_resolution(Configuration,Tirific_Template,Fits_Files,current_run = current_run,fit_stage = 'Centre_Convergence',debug=Configuration['DEBUG'])
+                    #if Configuration['OPTIMIZED']:
+                    #    runf.make_full_resolution(Configuration,Tirific_Template,Fits_Files,current_run = current_run,fit_stage = 'Centre_Convergence',debug=Configuration['DEBUG'])
                 else:
                     current_run = 'Not initialized'
                     write_new_to_template(Configuration, f"{Configuration['FITTING_DIR']}Centre_Convergence/Centre_Convergence.def", Tirific_Template, \

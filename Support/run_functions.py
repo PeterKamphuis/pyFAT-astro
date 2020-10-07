@@ -55,7 +55,7 @@ def central_converge(Configuration, Fits_Files,Tirific_Template,current_run,hdr,
                                pa = [pa[0],Initial_Parameters['PA'][1]],
                                rotation = [np.max(smoothed_vrot),Initial_Parameters['VROT'][1]],
                                ra = [xpos[0],Initial_Parameters['RA'][1]], dec = [ypos[0],Initial_Parameters['DEC'][1]], debug = debug)
-
+        Tirific_Template['SIZE'] = f"{float(Tirific_Template['SIZE']) * 2.}"
         wf.tirific(Configuration,Tirific_Template,name = 'Centre_Convergence_In.def',debug=debug)
 
     return current_run
@@ -68,7 +68,7 @@ def fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run,hd
     #if we have only a few rings we only smooth. else we fit a polynomial to the RC and smooth the SBR
     smoothed_sbr = smooth_profile(Configuration,Tirific_Template,'SBR',hdr, min_error= np.max([float(Tirific_Template['CFLUX']),float(Tirific_Template['CFLUX_2'])]),debug = debug)
     check_sbr(Configuration,Tirific_Template,hdr,debug = debug)
-    if Configuration['NO_RINGS'] < 6:
+    if Configuration['NO_RINGS'] < 6 or stage == 'after_cc':
         smoothed_vrot = smooth_profile(Configuration,Tirific_Template,'VROT',hdr,min_error = float(hdr['CDELT3']/1000.),debug = debug)
     else:
         smoothed_vrot = regularise_profile(Configuration,Tirific_Template,'VROT',hdr,min_error = float(hdr['CDELT3']/1000.),debug = debug)
@@ -93,22 +93,25 @@ def fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run,hd
             else:
                 smoothed = regularise_profile(Configuration,Tirific_Template,key,hdr,min_error = min_err,debug = debug)
 
-    xpos,ypos,vsys,pa,incl = rf.load_tirific(f"{Configuration['FITTING_DIR']}{fit_stage}/{fit_stage}.def",Variables = ['XPOS','YPOS','VSYS','PA','INCL'])
     #If our fit stage is after cc we want to make sure we do an extra check on low inclinations or small Galaxies
     #if stage =='after_cc' and (Configuration['SIZE_IN_BEAMS'] < 5 or incl[0] < 50.):
     #    check_inclination(Configuration,Tirific_Template,Fits_Files,debug=debug)
     if stage == 'after_cc':
         Tirific_Template['LOOPS'] = 0.
+        if Configuration['OPTIMIZED']:
+                Tirific_Template['INSET'] = f"{Fits_Files['FITTING_CUBE']}"
+                Tirific_Template['INIMODE'] = "0"
+                finish_current_run(Configuration,current_run,debug= debug)
     else:
         Tirific_Template['LOOPS'] = 10.
-
-    set_fitting_parameters(Configuration, Tirific_Template, hdr = hdr,stage = stage,\
-                       systemic = [vsys[0], Configuration['CHANNEL_WIDTH']], \
-                       inclination = [incl[0],10.],
-                       pa = [pa[0],5.],
-                       rotation = [np.max(smoothed_vrot),np.max(smoothed_vrot)*0.1],
-                       ra = [xpos[0],abs(hdr['CDELT1'])], dec = [ypos[0],abs(hdr['CDELT2'])], debug = debug)
-    os.system(f"cp {Configuration['FITTING_DIR']}{fit_stage}_In.def {Configuration['FITTING_DIR']}{fit_stage}/{fit_stage}_In_Before_Smooth.def")
+        xpos,ypos,vsys,pa,incl = rf.load_tirific(f"{Configuration['FITTING_DIR']}{fit_stage}/{fit_stage}.def",Variables = ['XPOS','YPOS','VSYS','PA','INCL'])
+        set_fitting_parameters(Configuration, Tirific_Template, hdr = hdr,stage = stage,\
+                           systemic = [vsys[0], Configuration['CHANNEL_WIDTH']], \
+                           inclination = [incl[0],10.],
+                           pa = [pa[0],5.],
+                           rotation = [np.max(smoothed_vrot),np.max(smoothed_vrot)*0.1],
+                           ra = [xpos[0],abs(hdr['CDELT1'])], dec = [ypos[0],abs(hdr['CDELT2'])], debug = debug)
+    os.system(f"cp {Configuration['FITTING_DIR']}{fit_stage}_In.def {Configuration['FITTING_DIR']}{fit_stage}/{fit_stage}_Last_Unsmoothed.def")
     wf.tirific(Configuration,Tirific_Template,name = f'{fit_stage}_In.def',debug=debug)
     accepted,current_run = run_tirific(Configuration,current_run, stage = stage, fit_stage=fit_stage,debug=debug)
 
@@ -430,7 +433,7 @@ def check_source(Configuration, Fits_Files, Catalogue, header, debug = False):
     Initial_Parameters = {}
     Initial_Parameters['RA'] = [ra,set_limits(abs(err_x*header['CDELT1']),0.1*header['BMAJ'],3.*header['BMAJ'] )]
     Initial_Parameters['DEC'] = [dec,set_limits(abs(err_y*header['CDELT2']),0.1*header['BMAJ'],3.*header['BMAJ'] )]
-    Initial_Parameters['VSYS'] =[v_app,set_limits(abs(err_z*header['CDELT3']),3*abs(header['CDELT3']),10*abs(header['CDELT3']))]
+    Initial_Parameters['VSYS'] =[v_app,set_limits(abs(err_z*header['CDELT3']),abs(header['CDELT3']),5.*abs(header['CDELT3']))]
     Initial_Parameters['SBR'] = SBR_initial
     #Initial_Parameters['VROT'] = [max_vrot/1000.,max_vrot_dev/1000.]
     Initial_Parameters['VROT'] = VROT_initial

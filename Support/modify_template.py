@@ -789,8 +789,9 @@ def set_fitting_parameters(Configuration, Tirific_Template, \
     if stage in  ['initial','run_cc','after_cc','after_ec']:
         fitting_settings['SBR'] = set_sbr_fitting(Configuration, hdr = hdr,stage = stage, systemic = systemic[0], debug = debug)
         fitting_settings['VROT'] = set_vrot_fitting(Configuration,Tirific_Template, hdr = hdr,stage = stage, rotation = rotation, debug = debug )
+
         fitting_settings['INCL'] = set_generic_fitting(Configuration,'INCL',stage = stage, values = inclination, debug = debug,\
-                                                        upper_bracket = [60.,90.],lower_bracket = [5.,50.])
+                                                        upper_bracket = [60.,90.],lower_bracket = [5.,50.],step_modifier = [1.,1.,2.])
         fitting_settings['PA'] = set_generic_fitting(Configuration,'PA',stage = stage, values = pa , debug = debug,\
                                                         upper_bracket = [190.,370.],lower_bracket = [-10.,170.],step_modifier = [1.,0.5,0.5])
         fitting_settings['Z0'] = set_generic_fitting(Configuration,'Z0',stage = stage,\
@@ -798,16 +799,16 @@ def set_fitting_parameters(Configuration, Tirific_Template, \
                                                          upper_bracket = [z0_limits[3],z0_limits[4]], \
                                                          lower_bracket = [z0_limits[2],z0_limits[3]],step_modifier = [0.5,0.5,2.])
         fitting_settings['XPOS'] = set_generic_fitting(Configuration,'XPOS',stage = stage, values = ra , debug = debug,\
-                                                        upper_bracket = xrange,lower_bracket = xrange,step_modifier = [1.0,1.0,0.5])
+                                                        upper_bracket = xrange,lower_bracket = xrange,step_modifier = [1.0,1.0,1.0])
         if debug:
             print_log(f'''SET_FITTING_PARAMETERS: setting Ypos with these values
 {'':8s}dec = {dec}
 {'':8s}range = {yrange}
 ''',Configuration['OUTPUTLOG'])
         fitting_settings['YPOS']= set_generic_fitting(Configuration,'YPOS',stage = stage, values = dec , debug = debug,\
-                                                        upper_bracket = yrange,lower_bracket = yrange,step_modifier = [1.0,1.0,0.5])
+                                                        upper_bracket = yrange,lower_bracket = yrange,step_modifier = [1.0,1.0,1.0])
         fitting_settings['VSYS']= set_generic_fitting(Configuration,'VSYS',stage = stage, values = systemic , debug = debug,\
-                                                        upper_bracket = vrange,lower_bracket = vrange,step_modifier = [2.0,0.5,0.25])
+                                                        upper_bracket = vrange,lower_bracket = vrange,step_modifier = [3.0,1.0,1.0])
         fitting_settings['SDIS'] = set_generic_fitting(Configuration,'SDIS',stage = stage, values = [8.,Configuration['CHANNEL_WIDTH']], debug = debug,\
                                                             limits = [[Configuration['CHANNEL_WIDTH'], 15],[Configuration['CHANNEL_WIDTH']/4., 15.], \
                                                             [Configuration['CHANNEL_WIDTH']/4., 15.]],step_modifier = [1.0,1.0,2.0])
