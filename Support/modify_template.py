@@ -764,7 +764,7 @@ def set_fitting_parameters(Configuration, Tirific_Template, \
     if stage in ['run_ec','initialize_ec']:
         # generic fitting only the values[1] matter for the step sizes when the limits are set
         if stage == 'run_ec':
-            parameters_to_set = ['INCL','PA','VROT','XPOS','YPOS','VSYS','SDIS']
+            parameters_to_set = ['INCL','PA','VROT','SDIS']
         else:
             parameters_to_set = ['SDIS']
         for key in parameters_to_set:
@@ -828,12 +828,12 @@ def set_fitting_parameters(Configuration, Tirific_Template, \
 
         fitting_settings['SBR'] = set_sbr_fitting(Configuration, hdr = hdr,stage = stage, systemic = systemic[0], debug = debug)
         fitting_settings['VROT'] = set_vrot_fitting(Configuration,Tirific_Template, hdr = hdr,stage = stage, rotation = rotation, debug = debug )
-        fitting_settings['XPOS'] = set_generic_fitting(Configuration,'XPOS',stage = stage, values = ra , debug = debug,\
-                                                        upper_bracket = xrange,lower_bracket = xrange,step_modifier = [0.1,0.1,2.])
-        fitting_settings['YPOS']= set_generic_fitting(Configuration,'YPOS',stage = stage, values = dec , debug = debug,\
-                                                        upper_bracket = yrange,lower_bracket = yrange,step_modifier = [0.1,0.1,2.])
-        fitting_settings['VSYS']= set_generic_fitting(Configuration,'VSYS',stage = stage, values = systemic , debug = debug,\
-                                                        upper_bracket = vrange,lower_bracket = vrange,step_modifier = [0.1,0.1,2.])
+        #fitting_settings['XPOS'] = set_generic_fitting(Configuration,'XPOS',stage = stage, values = ra , debug = debug,\
+        #                                                upper_bracket = xrange,lower_bracket = xrange,step_modifier = [0.1,0.1,2.])
+        #fitting_settings['YPOS']= set_generic_fitting(Configuration,'YPOS',stage = stage, values = dec , debug = debug,\
+        #                                                upper_bracket = yrange,lower_bracket = yrange,step_modifier = [0.1,0.1,2.])
+        #fitting_settings['VSYS']= set_generic_fitting(Configuration,'VSYS',stage = stage, values = systemic , debug = debug,\
+        #                                                upper_bracket = vrange,lower_bracket = vrange,step_modifier = [0.1,0.1,2.])
         incl_limits = set_boundary_limits(Configuration,Tirific_Template,'INCL', tolerance = 0.1, values = inclination,\
                                         upper_bracket = [60.,90.],lower_bracket = [5.,50.],fixed = Configuration['FIX_INCLINATION'])
 
