@@ -343,7 +343,7 @@ def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
         #extract the profiles under a set of angles
         angles = np.linspace(0, 180, 180)
 
-        ratios, maj_extent = obtain_ratios(map, hdr, center, angles,noise = minimum_noise_in_map.)
+        ratios, maj_extent = obtain_ratios(map, hdr, center, angles,noise = minimum_noise_in_map)
         if debug:
             if i == 0:
                 print_log(f'''GUESS_ORIENTATION: We initially find radius of {maj_extent} beams.
@@ -635,7 +635,7 @@ def load_tirific(filename,Variables = ['BMIN','BMAJ','BPA','RMS','DISTANCE','NUR
     else:
         return outputarray
 
-def obtain_ratios(map, hdr, center, angles, noise = 0. debug = False):
+def obtain_ratios(map, hdr, center, angles, noise = 0. ,debug = False):
     ratios = []
     max_extent = 0.
     for angle in angles:
