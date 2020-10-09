@@ -681,7 +681,8 @@ def obtain_ratios(map, hdr, center, angles, noise = 0. debug = False):
             max_extent = width_min
         ratios.append(width_maj/width_min)
     #as the extend is at 25% let's take 2 time the sigma of that
-    max_extent = (max_extent/(2.*np.sqrt(2*np.log(2))))*2.
+    #max_extent = (max_extent/(2.*np.sqrt(2*np.log(2))))*2.
+    max_extent = max_extent/2.
     return np.array(ratios,dtype=float), max_extent*np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])
 obtain_ratios.__doc__ = '''
 ;+
