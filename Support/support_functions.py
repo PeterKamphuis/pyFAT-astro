@@ -502,11 +502,11 @@ def rename_fit_products(Configuration,stage = 'initial', fit_stage='Undefined_St
         else:
             if filetype == 'def':
                 if fit_stage == 'Extent_Convergence' and stage == 'run_ec':
-                    Loopnr = f"{Configuration['EC_LOOPS']}"
+                    Loopnr = f"EC_{Configuration['EC_LOOPS']-1}"
                 elif fit_stage == 'Centre_Convergence' and stage == 'run_cc' :
-                    Loopnr = f"{Configuration['CC_LOOPS']}"
+                    Loopnr = f"CC_{Configuration['CC_LOOPS']-1}"
                 else:
-                    Loopnr = 'before_'+stage
+                    Loopnr = 'final_before_'+stage
                 if os.path.exists(f"{Configuration['FITTING_DIR']}{fit_stage}/{fit_stage}.{filetype}"):
                     os.system(f"mv {Configuration['FITTING_DIR']}{fit_stage}/{fit_stage}.{filetype} {Configuration['FITTING_DIR']}{fit_stage}/{fit_stage}_{Loopnr}.{filetype}")
 
@@ -553,7 +553,8 @@ def remove_inhomogeneities(Configuration,fits_map,inclination=30., pa = 90. , ce
         print_log(f'''REMOVE_INHOMOGENEITIES: These are the values we get as input
 {'':8s}Inclination = {inclination}
 {'':8s}pa = {pa}
-{'':8s}center = {center}
+{'':8s}center = {center}, WCS = {WCS_center}
+{'':8s}map shape = {np.shape(fits_map[0].data)}
 ''',Configuration['OUTPUTLOG'],debug = True)
     map = fits_map[0].data
     # first rotate the pa
@@ -761,7 +762,7 @@ def set_ring_size(Configuration, debug = False, size_in_beams = 0., check_set_ri
 {'':8s}RING_SIZE = {ring_size}
 ''', Configuration['OUTPUTLOG'],debug=debug)
 
-    while ring_size > 0.5 and  no_rings < Configuration['MINIMUM_RINGS']:
+    while ring_size > 0.5 and  no_rings < 8.:
         previous_ringsize = ring_size
         ring_size = set_limits(ring_size/1.5,0.5,float('NaN'),debug=debug)
         no_rings = calc_rings(Configuration,ring_size=ring_size,size_in_beams=size_in_beams,debug=debug)
@@ -775,6 +776,12 @@ def set_ring_size(Configuration, debug = False, size_in_beams = 0., check_set_ri
 ''',Configuration['OUTPUTLOG'],debug = False)
 
     if check_set_rings:
+        if debug:
+            print_log(f'''SET_RING_SIZE: Setting the following parameters.
+{'':8s}SIZE_IN_BEAMS = {size_in_beams}
+{'':8s}RING_SIZE = {ring_size}
+{'':8s}NO_RINGS = {no_rings}
+''', Configuration['OUTPUTLOG'],debug=False)
         return size_in_beams,ring_size
     else:
         if debug:

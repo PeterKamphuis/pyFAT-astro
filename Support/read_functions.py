@@ -343,8 +343,14 @@ def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
         #extract the profiles under a set of angles
         angles = np.linspace(0, 180, 180)
 
-        ratios, maj_extent = obtain_ratios(map, hdr, center, angles)
-
+        ratios, maj_extent = obtain_ratios(map, hdr, center, angles,noise = minimum_noise_in_map.)
+        if debug:
+            if i == 0:
+                print_log(f'''GUESS_ORIENTATION: We initially find radius of {maj_extent} beams.
+''',Configuration['OUTPUTLOG'], debug = True)
+            else:
+                print_log(f'''GUESS_ORIENTATION: From the cleaned map we find radius of {maj_extent} beams.
+''',Configuration['OUTPUTLOG'], debug = True)
         max_index = np.where(ratios == np.nanmax(ratios))[0]
         if max_index.size > 1:
             max_index =max_index[0]
@@ -359,7 +365,7 @@ def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
             tenp_max_index= [max_index-2,max_index+2]
         if tenp_min_index.size <= 1:
             tenp_min_index= [min_index-2,min_index+2]
-        pa = np.mean([angles[min_index],angles[max_index]-90.])
+        pa = float(np.mean([angles[min_index],angles[max_index]-90.]))
         pa_error = set_limits(np.mean([abs(angles[tenp_min_index[0]]-angles[min_index]),\
                             abs(angles[tenp_min_index[-1]]-angles[min_index]),\
                             abs(angles[tenp_max_index[0]]-angles[max_index]), \
@@ -596,10 +602,10 @@ def load_tirific(filename,Variables = ['BMIN','BMAJ','BPA','RMS','DISTANCE','NUR
     # Separate the keyword names
     for line in unarranged:
         var_concerned = str(line.split('=')[0].strip().upper())
-        if debug:
-            print_log(f'''LOAD_TIRIFIC: extracting line
-{'':8s}{var_concerned}.
-''',None,screen=True, debug = True)
+        #if debug:
+        #    print_log(f'''LOAD_TIRIFIC: extracting line
+#{'':8s}{var_concerned}.
+#''',None,screen=False, debug = True)
         if len(var_concerned) < 1:
             var_concerned = 'xxx'
         varpos = np.where(Variables == var_concerned)[0]
@@ -613,10 +619,10 @@ def load_tirific(filename,Variables = ['BMIN','BMAJ','BPA','RMS','DISTANCE','NUR
         else:
             if var_concerned[0] == '#':
                 varpos = np.where(var_concerned[2:].strip() == Variables)[0]
-                if debug:
-                    print_log(f'''LOAD_TIRIFIC: comparing {var_concerned[2:].strip()} to the variables.
-{'':8s}Found {varpos}.
-''',None,screen=True, debug = True)
+#                if debug:
+#                    print_log(f'''LOAD_TIRIFIC: comparing {var_concerned[2:].strip()} to the variables.
+#{'':8s}Found {varpos}.
+#''',None,screen=True, debug = True)
                 if varpos.size > 0:
                     tmp = np.array(line.split('=')[1].rsplit(),dtype=float)
                     if len(outputarray[:, 0]) < len(tmp):
@@ -629,7 +635,7 @@ def load_tirific(filename,Variables = ['BMIN','BMAJ','BPA','RMS','DISTANCE','NUR
     else:
         return outputarray
 
-def obtain_ratios(map, hdr, center, angles, debug = False):
+def obtain_ratios(map, hdr, center, angles, noise = 0. debug = False):
     ratios = []
     max_extent = 0.
     for angle in angles:
@@ -640,7 +646,7 @@ def obtain_ratios(map, hdr, center, angles, debug = False):
         maj_resolution = abs((abs(x2-x1)/1000.)*np.sin(np.radians(angle)))+abs(abs(y2-y1)/1000.*np.cos(np.radians(angle)))
         maj_profile = ndimage.map_coordinates(map, np.vstack((liney,linex)),order=1)
         maj_axis =  np.linspace(0,1000*maj_resolution,1000)
-        tmp = np.where(maj_profile > 0.25*np.nanmax(maj_profile))[0]
+        tmp = np.where(maj_profile > 3.*noise)[0]
         #gauss =fit_gaussian(maj_axis[tmp], maj_profile[tmp])
         #maj_gaus = gaussian_function(maj_profile, *gauss)
         #tmp = np.where(maj_gaus > 0.2*np.nanmax(maj_gaus))[0]
@@ -661,7 +667,7 @@ def obtain_ratios(map, hdr, center, angles, debug = False):
         min_resolution =abs((abs(x2-x1)/1000.)*np.sin(np.radians(angle+90)))+abs(abs(y2-y1)/1000.*np.cos(np.radians(angle+90)))
         min_axis =  np.linspace(0,1000*min_resolution,1000)
         min_profile = ndimage.map_coordinates(map, np.vstack((liney,linex)),order=1)
-        tmp = np.where(min_profile > 0.25*np.nanmax(min_profile))[0]
+        tmp = np.where(min_profile > 3.*noise)[0]
         #gauss =fit_gaussian(min_axis[tmp], maj_profile[tmp])
         #min_gaus = gaussian_function(min_profile,*gauss)
         #tmp = np.where(min_gaus > 0.2*np.nanmax(min_gaus))[0]
@@ -813,6 +819,7 @@ def sofia_catalogue(Configuration, Variables =['name','x','x_min','x_max','y','y
 ''',Configuration['OUTPUTLOG'],debug= debug)
         found = False
         beam_edge=2.
+        vel_edge = 2.
         while not found:
             many_sources  = copy.deepcopy(outlist)
             # We want to exclude any edge sources
@@ -835,7 +842,7 @@ def sofia_catalogue(Configuration, Variables =['name','x','x_min','x_max','y','y
                     print_log(f'''SOFIA_CATALOGUE: And for velocity edge =  2
     {'':8s} diff  = {diff}
     ''',Configuration['OUTPUTLOG'],debug= debug,screen = True)
-                if np.where(diff < 2)[0].size:
+                if np.where(diff < vel_edge)[0].size:
                     edge = True
                 if debug:
                     print_log(f'''SOFIA_CATALOGUE: Edge = {edge}
@@ -843,7 +850,13 @@ def sofia_catalogue(Configuration, Variables =['name','x','x_min','x_max','y','y
                 if edge:
                     many_sources[Variables.index('f_sum')][i]=0.
             if np.nansum(many_sources[Variables.index('f_sum')]) == 0.:
+                if beam_edge > 0.5:
                     beam_edge = beam_edge/2.
+                elif vel_edge > 0.5:
+                    vel_edge = vel_edge/2.
+                else:
+                    raise BadCatalogueError("The found sources are too close to the edges of the cube.")
+
             else:
                 found = True
         if debug:

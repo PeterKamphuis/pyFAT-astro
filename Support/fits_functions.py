@@ -538,7 +538,7 @@ extract_pv.__doc__ = '''
 #Create an optimized cube if required
 def optimized_cube(hdr,Configuration,Fits_Files, log =None, debug = False):
     pix_per_beam = round(hdr['BMIN']/(np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])))
-    if abs(hdr['CDELT1']) != abs(hdr['CDELT2']):
+    if f'{abs(hdr['CDELT1']):.16f}' != f'{abs(hdr['CDELT1']):.16f}':
         log_statement = f'''OPTIMIZED_CUBE: Your input cube does not have square pixels.
 {"":8s}OPTIMIZED_CUBE: FAT cannot optimize your cube.
 '''

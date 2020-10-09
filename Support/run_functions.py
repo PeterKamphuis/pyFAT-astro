@@ -68,10 +68,10 @@ def fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run,hd
     #if we have only a few rings we only smooth. else we fit a polynomial to the RC and smooth the SBR
     smoothed_sbr = smooth_profile(Configuration,Tirific_Template,'SBR',hdr, min_error= np.max([float(Tirific_Template['CFLUX']),float(Tirific_Template['CFLUX_2'])]),debug = debug)
     check_sbr(Configuration,Tirific_Template,hdr,debug = debug)
-    if Configuration['NO_RINGS'] < 6 or stage == 'after_cc':
-        smoothed_vrot = smooth_profile(Configuration,Tirific_Template,'VROT',hdr,min_error = float(hdr['CDELT3']/1000.),debug = debug)
-    else:
-        smoothed_vrot = regularise_profile(Configuration,Tirific_Template,'VROT',hdr,min_error = float(hdr['CDELT3']/1000.),debug = debug)
+    #if Configuration['NO_RINGS'] < 6 or stage == 'after_cc':
+    smoothed_vrot = smooth_profile(Configuration,Tirific_Template,'VROT',hdr,min_error = float(hdr['CDELT3']/1000.),debug = debug)
+    #else:
+    #    smoothed_vrot = regularise_profile(Configuration,Tirific_Template,'VROT',hdr,min_error = float(hdr['CDELT3']/1000.),debug = debug)
     if stage == 'after_ec':
         min_error = []
         pars_to_smooth = []
@@ -111,7 +111,7 @@ def fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run,hd
                            pa = [pa[0],5.],
                            rotation = [np.max(smoothed_vrot),np.max(smoothed_vrot)*0.1],
                            ra = [xpos[0],abs(hdr['CDELT1'])], dec = [ypos[0],abs(hdr['CDELT2'])], debug = debug)
-    os.system(f"cp {Configuration['FITTING_DIR']}{fit_stage}_In.def {Configuration['FITTING_DIR']}{fit_stage}/{fit_stage}_Last_Unsmoothed.def")
+    os.system(f"cp {Configuration['FITTING_DIR']}{fit_stage}_In.def {Configuration['FITTING_DIR']}{fit_stage}/{fit_stage}_Last_Unsmoothed_Input.def")
     wf.tirific(Configuration,Tirific_Template,name = f'{fit_stage}_In.def',debug=debug)
     accepted,current_run = run_tirific(Configuration,current_run, stage = stage, fit_stage=fit_stage,debug=debug)
 
@@ -381,10 +381,18 @@ def check_source(Configuration, Fits_Files, Catalogue, header, debug = False):
             pa[0] = kin_pa
 
     # Size of the galaxy in beams
-    Configuration['SIZE_IN_BEAMS'] = set_limits(maj_extent/(header['BMAJ']),3.,Configuration['MAX_SIZE_IN_BEAMS'])
+    Configuration['SIZE_IN_BEAMS'] = set_limits(maj_extent/(header['BMAJ'])-1.,1.0,Configuration['MAX_SIZE_IN_BEAMS'])
+    if Configuration['SIZE_IN_BEAMS'] <= Configuration['TOO_SMALL_GALAXY']:
+        print_log(f'''CHECK_SOURCE: This galaxy has an estimated size of  {2*Configuration['SIZE_IN_BEAMS']} beams in diameter.
+{'':8s}This is not large enough too fit. We will exit this fit.
+''',Configuration['OUTPUTLOG'],debug = debug)
+        raise BadSourceError('We found an initial negative total flux.')
+    set_ring_size(Configuration, debug = debug)
+
+
     # The extent is fairly well determined and the maximum should be no more than +3 beams and a minimum no less than 4
     Configuration['MAX_SIZE_IN_BEAMS'] = Configuration['SIZE_IN_BEAMS']+3.
-    Configuration['MIN_SIZE_IN_BEAMS'] = Configuration['SIZE_IN_BEAMS']-4.
+    Configuration['MIN_SIZE_IN_BEAMS'] = set_limits(Configuration['SIZE_IN_BEAMS']-4.,Configuration['TOO_SMALL_GALAXY'],Configuration['SIZE_IN_BEAMS'])
     Configuration['NO_RINGS'] = calc_rings(Configuration,debug=debug)
     print_log(f'''CHECK_SOURCE: From the original Configuration and SoFiA we find:
 {"":8s}CHECK_SOURCE: The maximum diameter we will allow  is  {2.*Configuration['MAX_SIZE_IN_BEAMS']} beams.
@@ -392,10 +400,8 @@ def check_source(Configuration, Fits_Files, Catalogue, header, debug = False):
 {"":8s}CHECK_SOURCE: SoFiA found a PA of {kin_pa:.2f} and we use a PA = {pa[0]:.2f} +/- {pa[1]:.2f}
 {"":8s}CHECK_SOURCE: We start with an inclination of {inclination[0]:.2f} +/- {inclination[1]:.2f}{"":8s}
 {"":8s}CHECK_SOURCE: SoFiA found a W50 of {w50/1000.:.2f} km/s
-{"":8s}CHECK_SOURCE: We will now check whether the size of the galaxy is sufficient.
+{"":8s}CHECK_SOURCE: We will use {2.*Configuration['NO_RINGS']} for the model with a ring size of {Configuration['RING_SIZE']}.
 ''',Configuration['OUTPUTLOG'],debug = debug)
-
-    set_ring_size(Configuration, debug = debug)
 
 
 

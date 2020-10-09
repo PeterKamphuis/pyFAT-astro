@@ -78,9 +78,11 @@ def FAT(argv):
         Original_Configuration['TIMING'] = input_parameters.timing
         Original_Configuration['DEBUG'] = input_parameters.debug
         Original_Configuration['NCPU'] = input_parameters.ncpu
-        # if the number of beams across the major axis is less than this size we will only fit a flat disc
-        Original_Configuration['MINIMUM_WARP_SIZE'] = 3
-        Original_Configuration['MINIMUM_RINGS'] = 3 # we need at least this amount of rings (Including 0 and 1.5./)
+        # if the number of beams across the major axis/2. is less than this size we will only fit a flat disc
+        Original_Configuration['MINIMUM_WARP_SIZE'] = 4.
+        Original_Configuration['MINIMUM_RINGS'] = 3. # we need at least this amount of rings (Including 0 and 1/5 beam)
+        # if the number of beams across the major axis/2 is less than this we will not fit the galaxy
+        Original_Configuration['TOO_SMALL_GALAXY'] = 1.
         Original_Configuration['FINAL_COMMENT'] = "This fitting stopped with an unregistered exit."
         Original_Configuration['PREP_END_TIME'] = 'Not completed'
         Original_Configuration['CC_END_TIME'] = 'Not completed'
@@ -391,7 +393,7 @@ def FAT(argv):
                 {'':8s} SDIS: Fixed = {Original_Configuration['FIX_SDIS']}
                 {'':8s} Z0: Fixed = {Original_Configuration['FIX_Z0']}
     ''',Configuration['OUTPUTLOG'],debug=Configuration['DEBUG'],screen =True)
-                    if Configuration['SIZE_IN_BEAMS'] > 3:
+                    if Configuration['SIZE_IN_BEAMS'] > Configuration['MINIMUM_WARP_SIZE']:
                         Configuration['FIX_INCLINATION'] = Original_Configuration['FIX_INCLINATION']
                         Configuration['FIX_SDIS'] = Original_Configuration['FIX_SDIS']
                         Configuration['FIX_PA'] = Original_Configuration['FIX_PA']

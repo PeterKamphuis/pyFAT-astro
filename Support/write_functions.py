@@ -864,7 +864,7 @@ def plot_usage_stats(Configuration,debug = False):
         ax2miny,ax2maxy = ax2.get_ylim()
         ax2.tick_params(axis='y', labelcolor='r')
         last_label = -100
-        label_sep = 0.5
+        label_sep = label_times[-1]/40.
         color, linest = '0.5', '--'
         labelfont = {'family': 'Times New Roman',
                  'weight': 'normal',
