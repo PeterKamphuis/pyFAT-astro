@@ -10,7 +10,8 @@ class SofiaFaintError(Exception):
 
 from support_functions import print_log, convert_type,set_limits,sbr_limits,rename_fit_products,\
                               set_ring_size,calc_rings,get_usage_statistics,get_inner_fix,convertskyangle,\
-                              finish_current_run, rotateImage, remove_inhomogeneities
+                              finish_current_run, rotateImage, remove_inhomogeneities,the_bends,get_from_template,set_format, \
+                              wait_for_tirific
 from clean_functions import clean_before_sofia,clean_after_sofia
 from fits_functions import cut_cubes,extract_pv,make_moments
 from modify_template import write_new_to_template,smooth_profile,set_cflux,check_sbr,regularise_profile,set_fitting_parameters,check_size
@@ -20,6 +21,7 @@ from astropy.io import fits
 import read_functions as rf
 import write_functions as wf
 import os
+import sys
 import time
 import copy
 import subprocess
@@ -34,7 +36,8 @@ def central_converge(Configuration, Fits_Files,Tirific_Template,current_run,hdr,
         print_log('''CENTRAL_CONVERGE: Starting.
 ''',Configuration['OUTPUTLOG'],debug = debug)
     #First we actually run tirific
-    accepted,current_run = run_tirific(Configuration,current_run,stage = 'run_cc', fit_stage = 'Centre_Convergence',debug=debug)
+    #accepted,current_run = run_tirific(Configuration,current_run,stage = 'run_cc', fit_stage = 'Centre_Convergence',debug=debug)
+    accepted,current_run = run_parameterized_tirific(Configuration,Tirific_Template,current_run,loops = 10, stage = 'run_cc', fit_stage = 'Centre_Convergence',debug=debug)
 
     accepted = check_central_convergence(Configuration,Tirific_Template,hdr,accepted, fit_stage = 'Centre_Convergence',debug=debug)
     set_cflux(Configuration,Tirific_Template,debug = debug)
@@ -334,6 +337,7 @@ def check_source(Configuration, Fits_Files, Catalogue, header, debug = False):
                 /(bmmaj_in_pixels)+3.))
 
     pa, inclination, SBR_initial, maj_extent,x_new,y_new,VROT_initial = rf.guess_orientation(Configuration,Fits_Files, center = [x,y],debug=debug)
+
     if x_new != x or y_new != y:
         x=x_new
         y=y_new
@@ -381,7 +385,7 @@ def check_source(Configuration, Fits_Files, Catalogue, header, debug = False):
             pa[0] = kin_pa
 
     # Size of the galaxy in beams
-    Configuration['SIZE_IN_BEAMS'] = set_limits(maj_extent/(header['BMAJ'])-1.,1.0,Configuration['MAX_SIZE_IN_BEAMS'])
+    Configuration['SIZE_IN_BEAMS'] = set_limits(maj_extent/(header['BMAJ']),1.0,Configuration['MAX_SIZE_IN_BEAMS'])
     if Configuration['SIZE_IN_BEAMS'] <= Configuration['TOO_SMALL_GALAXY']:
         print_log(f'''CHECK_SOURCE: This galaxy has an estimated size of  {2*Configuration['SIZE_IN_BEAMS']} beams in diameter.
 {'':8s}This is not large enough too fit. We will exit this fit.
@@ -652,6 +656,275 @@ run_tirific.__doc__= '''
 ;
 ;
 '''
+
+def run_parameterized_tirific(Configuration, Tirific_Template, current_run, loops = 5, stage = 'initial',fit_stage = 'Undefined_Stage', debug = False):
+    if debug:
+        print_log(f'''RUN_PARAMETIRIZED_TIRIFIC: Starting a new paremetirized run in stage {stage} and fit_stage {fit_stage}
+''',Configuration['OUTPUTLOG'], screen = True,debug = debug)
+    # First scale the inclination and the vrot
+
+    Tirific_Template['LOOPS']  = 1
+    wf.tirific(Configuration,Tirific_Template,name = f"{fit_stage}_In.def",debug = debug)
+    if Configuration['TIRIFIC_RUNNING']:
+        print_log('''RUN_TIRIFIC: We are using an initialized tirific
+''',Configuration['OUTPUTLOG'], screen = True,debug = debug)
+        with open(f"{Configuration['FITTING_DIR']}Logs/restart_{fit_stage}.txt",'a') as file:
+            file.write("Restarting from previous run")
+    else:
+        print_log('''RUN_TIRIFIC: We are starting a new TiRiFiC
+''',Configuration['OUTPUTLOG'], screen = True,debug = debug)
+        with open(f"{Configuration['FITTING_DIR']}Logs/restart_{fit_stage}.txt",'w') as file:
+            file.write("Initialized a new run")
+        current_run = subprocess.Popen(["tirific",f"DEFFILE={fit_stage}_In.def","ACTION = 1"], stdout = subprocess.PIPE, \
+                                    stderr = subprocess.PIPE,cwd=Configuration['FITTING_DIR'],universal_newlines = True)
+        Configuration['TIRIFIC_RUNNING'] = True
+        Configuration['TIRIFIC_PID'] = current_run.pid
+    #rename_fit_products(Configuration,fit_stage = fit_stage, stage=stage, debug = debug)
+    # Then if already running change restart file
+    currentloop =1
+    max_loop = 0
+    counter = 0
+    Chi_Current = 0.
+    if Configuration['TIMING']:
+        time.sleep(0.1)
+        with open(f"{Configuration['FITTING_DIR']}Logs/Usage_Statistics.txt",'a') as file:
+            file.write(f"# Started Tirific at stage = {fit_stage}\n")
+            CPU,mem = get_usage_statistics(current_run.pid)
+            file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Mb \n")
+    print(f"RUN_TIRIFIC: Starting loop 1")
+    triggered = False
+
+    for tir_out_line in current_run.stdout:
+        tmp = re.split(r"[/: ]+",tir_out_line.strip())
+        counter += 1
+        if (counter % 50) == 0:
+            if Configuration['TIMING']:
+                with open(f"{Configuration['FITTING_DIR']}Logs/Usage_Statistics.txt",'a') as file:
+                    if tmp[0] == 'L' and not triggered:
+                        if tmp[1] == '1':
+                            file.write("# Started the actual fitting \n")
+                            triggered = True
+                    CPU,mem = get_usage_statistics(current_run.pid)
+                    file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Mb \n")
+        if tmp[0] == 'L':
+            if int(tmp[1]) != currentloop:
+                print(f"RUN_TIRIFIC: Starting loop {tmp[1]} out of a maximum {max_loop}")
+            currentloop  = int(tmp[1])
+            if max_loop == 0:
+                max_loop = int(tmp[2])
+            try:
+                Configuration['NO_POINTSOURCES'] = np.array([tmp[18],tmp[19]],dtype=float)
+            except:
+                #If this fails for some reason an old number suffices, if the code really crashed problems will occur elsewhere.
+                pass
+        if tmp[0].strip() == 'Finished':
+            Chi_Current = (float(tmp[tmp.index('C')+1]))
+            break
+        if tmp[0].strip() == 'Abort':
+            break
+    time.sleep(1.)
+    # Now do the actual fitting loops
+    for i in range(loops):
+        print(f"RUN_Parameterized TIRIFIC: Starting loop {i+1}")
+        resid= Tirific_Template['RESTARTID']
+        resname =  Tirific_Template['RESTARTNAME']
+        Tirific_Template = rf.tirific_template(f"{Configuration['FITTING_DIR']}{Tirific_Template['TIRDEF']}")
+        if i == 0.:
+            prev_bends = [Tirific_Template['INCL'],Tirific_Template['INCL_2'],Tirific_Template['PA'],Tirific_Template['PA_2']]
+        Tirific_Template['RESTARTID'] = resid
+        Tirific_Template['RESTARTNAME'] = resname
+    # whatever has been fitted we will now attempt to modify by fitting a warped __version__
+        current_run,bends = fit_warp(Configuration,Tirific_Template,current_run, fit_stage=fit_stage,debug=debug)
+        Tirific_Template['LOOPS'] = 1
+        wf.tirific(Configuration,Tirific_Template,name = f"{fit_stage}_In.def",debug = False)
+        with open(f"{Configuration['FITTING_DIR']}Logs/restart_{fit_stage}.txt",'a') as file:
+            file.write("Restarting from previous run")
+        for tir_out_line in current_run.stdout:
+            tmp = re.split(r"[/: ]+",tir_out_line.strip())
+            counter += 1
+            if (counter % 50) == 0:
+                if Configuration['TIMING']:
+                    with open(f"{Configuration['FITTING_DIR']}Logs/Usage_Statistics.txt",'a') as file:
+                        if tmp[0] == 'L' and not triggered:
+                            if tmp[1] == '1':
+                                file.write("# Started the actual fitting \n")
+                                triggered = True
+                        CPU,mem = get_usage_statistics(current_run.pid)
+                        file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Mb \n")
+            if tmp[0] == 'L':
+                if int(tmp[1]) != currentloop:
+                    print(f"RUN_TIRIFIC: Starting loop {tmp[1]} out of a maximum {max_loop}")
+                currentloop  = int(tmp[1])
+                if max_loop == 0:
+                    max_loop = int(tmp[2])
+                try:
+                    Configuration['NO_POINTSOURCES'] = np.array([tmp[18],tmp[19]],dtype=float)
+                except:
+                    #If this fails for some reason an old number suffices, if the code really crashed problems will occur elsewhere.
+                    pass
+            if tmp[0].strip() == 'Finished':
+                Chi = float(tmp[tmp.index('C')+1])
+                break
+            if tmp[0].strip() == 'Abort':
+                break
+        comp_loop = i+1
+        print(f"Chi = {Chi}, Chi_Current = {Chi_Current}, loop = {comp_loop}" )
+        if Chi < Chi_Current:
+            Chi_Current = Chi
+            prev_bends = bends
+        else:
+            break
+    restore_bends(Configuration,Tirific_Template,prev_bends,debug=debug)
+    Tirific_Template['LOOPS'] = 0
+    wf.tirific(Configuration,Tirific_Template,name = f"{fit_stage}_In.def",debug = False)
+    with open(f"{Configuration['FITTING_DIR']}Logs/restart_{fit_stage}.txt",'a') as file:
+        file.write("Restarting from previous run")
+    if Configuration['TIMING']:
+        with open(f"{Configuration['FITTING_DIR']}Logs/Usage_Statistics.txt",'a') as file:
+            file.write("# Finished this run \n")
+            CPU,mem = get_usage_statistics(current_run.pid)
+            file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Gb\n")
+    print(f"RUN_TIRIFIC: Finished the current tirific run.")
+    #The break off goes faster sometimes than the writing of the file so let's make sure it is present
+    wait_counter = 0
+    while not os.path.exists(f"{Configuration['FITTING_DIR']}{fit_stage}/{fit_stage}.def") and wait_counter < 100.:
+        time.sleep(0.1)
+        wait_counter += 1
+
+    if comp_loop != loops:
+        return 1,current_run
+    else:
+        return 0,current_run
+
+run_parameterized_tirific.__doc__= '''
+
+; NAME:
+;       tirific(Configuration)
+;
+; PURPOSE:
+;       Fit a parametirized functions in tirific
+;
+; CATEGORY:
+;       run function
+;
+;
+; INPUTS:
+;
+; OPTIONAL INPUTS:
+;
+;
+; KEYWORD PARAMETERS:
+;       -
+;
+; OUTPUTS:
+;
+;
+; OPTIONAL OUTPUTS:
+;       -
+;
+; PROCEDURES CALLED:
+;      set_limits, print_log
+;
+; EXAMPLE:
+;
+;
+'''
+def restore_bends(Configuration,Tirific_Template,bends,debug=False):
+    if debug:
+        print_log(f'''RESTORE_BENDS: setting the best fit bends to be output.
+''',Configuration['OUTPUTLOG'], screen = True,debug = debug)
+    bend_keys = ['INCL','INCL_2','PA','PA_2']
+    for bend,key in zip(bends,bend_keys):
+        Tirific_Template[key] = bend
+
+def fit_warp(Configuration,Tirific_Template,current_run, fit_stage = 'None',debug=False):
+    if debug:
+        print_log(f'''FIT_WARP: Starting a new paremeterized run in fit_stage {fit_stage}
+''',Configuration['OUTPUTLOG'], screen = True,debug = debug)
+
+    Tirific_Template['LOOPS'] = 0
+    incl_bend = planet_telex(Configuration, Tirific_Template,current_run,'INCL',fit_stage=fit_stage,debug=debug)
+    incl_bend_2 = planet_telex(Configuration, Tirific_Template,current_run,'INCL_2',fit_stage=fit_stage,debug=debug)
+    pa_bend = planet_telex(Configuration, Tirific_Template,current_run,'PA',max_bend = 50, fit_stage=fit_stage,debug=debug)
+    pa_bend_2 = planet_telex(Configuration, Tirific_Template,current_run,'PA_2',max_bend = 50, fit_stage=fit_stage,debug=debug)
+
+    print(f"PA = {Tirific_Template['PA']}" )
+    print(f"PA_2 = {Tirific_Template['PA_2']}" )
+    print(f"INCL = {Tirific_Template['INCL']}" )
+    print(f"INCL_2 = {Tirific_Template['INCL_2']}" )
+
+    return current_run,[Tirific_Template['INCL'],Tirific_Template['INCL_2'],Tirific_Template['PA'],Tirific_Template['PA_2']]
+
+
+
+def planet_telex(Configuration, Tirific_Template,current_run, key, black_star = 0.,max_bend =30 ,step_bend = 5.,fit_stage= 'None', debug=False):
+    Chi = []
+    thebends = []
+    if key[-2:] == '_2':
+        SBR_key = 'SBR_2'
+        other_key = key[:-2]
+    else:
+        SBR_key = 'SBR'
+        other_key = f"{key}_2"
+    initial_profile = np.array(get_from_template(Tirific_Template,['RADI',key,other_key]))
+    if black_star == 0.:
+        black_star = initial_profile[0][-1]/2.
+        black_index = np.where(initial_profile[0] <= black_star)[0][-1]
+
+    # The start outermost bent of inclination
+    format = set_format('SBR')
+    SBRformat = set_format(SBR_key)
+    format = set_format(key)
+    SBR = np.array(get_from_template(Tirific_Template,[SBR_key])[0],dtype=float)
+    new_SBR = []
+    for i,x in enumerate(SBR):
+        if i < black_index:
+            new_SBR.append(x)
+        else:
+            new_SBR.append(SBR[3]/2.)
+
+    Tirific_Template[SBR_key] = f"{' '.join([f'{x:{SBRformat}}' for x in new_SBR ])}"
+
+
+
+    prev_bend = -1*max_bend
+    while prev_bend < max_bend:
+        #first side 1
+        bend = float(prev_bend+step_bend)
+        print(f"Checking bend = {bend} in {key}")
+        thebends.append(bend)
+        new_profile = the_bends(initial_profile[1],initial_profile[0],black_star,bend)
+        diff = float(initial_profile[2][0]-new_profile[0])
+        Tirific_Template[key] =  f"{' '.join([f'{x:{format}}' for x in new_profile])}"
+        Tirific_Template[other_key] =  f"{' '.join([f'{x-diff:{format}}' for x in initial_profile[2]])}"
+
+
+        wf.tirific(Configuration,Tirific_Template,name =  f"{fit_stage}_In.def",debug = False)
+        with open(f"{Configuration['FITTING_DIR']}Logs/restart_{fit_stage}.txt",'a') as file:
+            file.write(f"Restarting for bend = {bend} and RI = {Tirific_Template['RESTARTID']} \n")
+
+        sys.stdout.flush()
+
+        Chi_here = wait_for_tirific(f"{Configuration['FITTING_DIR']}/{Tirific_Template['PROGRESSLOG']}",Tirific_Template['RESTARTID'],current_run)
+        if ~np.isnan(Chi_here):
+            Chi.append(Chi_here)
+            prev_bend = copy.deepcopy(bend)
+        else:
+            prev_bend = copy.deepcopy(bend-step_bend)
+    Chi = np.array(Chi,dtype=float)
+    print(f"Chi = {Chi}")
+    #print(np.where(Chi == np.min(Chi))[0][0],np.min(Chi))
+    high_and_dry = thebends[np.where(Chi == np.min(Chi))[0][0]]
+    print(f"This is the bend value we find {high_and_dry} for {key}")
+    new_profile = the_bends(initial_profile[1],initial_profile[0],black_star, high_and_dry)
+    #Restore the brightness profiles
+    Tirific_Template[SBR_key] = f"{' '.join([f'{x:{SBRformat}}' for x in SBR])}"
+    diff = float(initial_profile[2][0]-new_profile[0])
+    Tirific_Template[key] =  f"{' '.join([f'{x:{format}}' for x in new_profile])}"
+    Tirific_Template[other_key] =  f"{' '.join([f'{x-diff:{format}}' for x in initial_profile[2]])}"
+
+    return new_profile
+
 
 def sofia(Configuration, Fits_Files, hdr, supportdir, debug = False):
     if debug:

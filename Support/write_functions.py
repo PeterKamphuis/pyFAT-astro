@@ -759,21 +759,24 @@ def plot_parameters(Vars_to_plot,FAT_Model,Input_Model,location,Figure,parameter
             ax.plot(FAT_Model[:,Vars_to_plot.index('RADI')],FAT_Model[:,Vars_to_plot.index(f'{parameter}_2')],'ro', ms = 3.,zorder=3)
 
     if len(Input_Model) > 0:
+        last_index = int(np.where(Input_Model[:,Vars_to_plot.index(f'{parameter}')] != 0.)[-1])
         try:
-            yerr = Input_Model[:,Vars_to_plot.index(f'# {parameter}_ERR')]
+            yerr = Input_Model[:last_index,Vars_to_plot.index(f'# {parameter}_ERR')]
         except:
-            yerr =np.zeros(len(Input_Model[:,Vars_to_plot.index('RADI')]))
-        ax.errorbar(Input_Model[:,Vars_to_plot.index('RADI')],Input_Model[:,Vars_to_plot.index(f'{parameter}')],yerr= yerr, c ='b',linestyle='-', label=f'{legend[2]}',zorder=2)
-        ax.plot(Input_Model[:,Vars_to_plot.index('RADI')],Input_Model[:,Vars_to_plot.index(f'{parameter}')],'bo',linestyle='-', ms = 3.,zorder=2)
+            yerr =np.zeros(len(Input_Model[:last_index,Vars_to_plot.index('RADI')]))
+        ax.errorbar(Input_Model[:last_index,Vars_to_plot.index('RADI')],Input_Model[:last_index,Vars_to_plot.index(f'{parameter}')],yerr= yerr, c ='b',linestyle='-', label=f'{legend[2]}',zorder=2)
+        ax.plot(Input_Model[:last_index,Vars_to_plot.index('RADI')],Input_Model[:last_index,Vars_to_plot.index(f'{parameter}')],'bo',linestyle='-', ms = 3.,zorder=2)
         if np.sum(Input_Model[:,Vars_to_plot.index(f'{parameter}_2')]) != 0.:
             diff = np.sum(abs(Input_Model[:,Vars_to_plot.index(f'{parameter}_2')]-Input_Model[:,Vars_to_plot.index(f'{parameter}')]))
             if diff != 0.:
+                last_index = int(np.where(Input_Model[:,Vars_to_plot.index(f'{parameter}_2')] != 0.)[-1])
                 try:
-                    yerr = Input_Model[:,Vars_to_plot.index(f'# {parameter}_2_ERR')]
+                    yerr = Input_Model[:last_index,Vars_to_plot.index(f'# {parameter}_2_ERR')]
                 except:
-                    yerr =np.zeros(len(Input_Model[:,Vars_to_plot.index('RADI')]))
-                ax.errorbar(Input_Model[:,Vars_to_plot.index('RADI')],Input_Model[:,Vars_to_plot.index(f'{parameter}_2')],yerr= yerr, c ='yellow', label=f'{legend[3]}',zorder=2)
-                ax.plot(Input_Model[:,Vars_to_plot.index('RADI')],Input_Model[:,Vars_to_plot.index(f'{parameter}_2')],'yellow',zorder=2,marker ='o',linestyle='-' , ms = 3.)
+                    yerr =np.zeros(len(Input_Model[:last_index,Vars_to_plot.index('RADI')]))
+
+                ax.errorbar(Input_Model[:last_index,Vars_to_plot.index('RADI')],Input_Model[:last_index,Vars_to_plot.index(f'{parameter}_2')],yerr= yerr, c ='yellow', label=f'{legend[3]}',zorder=2)
+                ax.plot(Input_Model[:last_index,Vars_to_plot.index('RADI')],Input_Model[:last_index,Vars_to_plot.index(f'{parameter}_2')],'yellow',zorder=2,marker ='o',linestyle='-' , ms = 3.)
     if len(Extra_Model) > 0:
         ax.plot(Extra_Model[:,Vars_to_plot.index('RADI')],Extra_Model[:,Vars_to_plot.index(f'{parameter}')],'ko',linestyle='-', ms = 3., alpha=0.2,zorder=1)
         if np.sum(Extra_Model[:,Vars_to_plot.index(f'{parameter}_2')]) != 0.:

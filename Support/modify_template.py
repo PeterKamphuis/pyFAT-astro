@@ -8,7 +8,7 @@ class CfluxError(Exception):
     pass
 import copy
 from support_functions import set_rings,convertskyangle,sbr_limits,set_limits,print_log,set_limit_modifier,\
-                              get_from_template,set_ring_size,calc_rings,finish_current_run
+                              get_from_template,set_ring_size,calc_rings,finish_current_run,set_format
 import numpy as np
 from scipy.optimize import curve_fit
 from scipy.signal import savgol_filter
@@ -412,10 +412,8 @@ def regularise_profile(Configuration,Tirific_Template, key ,hdr,min_error= [0.],
         profile = modify_flat(Configuration, profile, original, error,debug=debug)
         error = get_error(Configuration, original, profile,min_error=error,debug=debug)
 
-    if key == 'SBR':
-        format = '.2e'
-    else:
-        format = '.2f'
+    format = set_format(key)
+
     if not no_apply:
         Tirific_Template[key]= f"{' '.join([f'{x:{format}}' for x in profile[0,:int(Configuration['NO_RINGS'])]])}"
         Tirific_Template[f"{key}_2"]= f"{' '.join([f'{x:{format}}' for x in profile[1,:int(Configuration['NO_RINGS'])]])}"
@@ -490,6 +488,21 @@ def fix_outer_rotation(Configuration,profile, Tirific_Template,hdr, debug = Fals
             if profile[i+1] < profile[i]*0.8:
                 profile[i+1] = profile[i]*0.8
     return profile
+
+
+def no_declining_vrot(Configuration, Tirific_Template, debug = False):
+    if debug:
+        print_log(f'''NO_DECLINING_VROT: make RC flat from highest point on.)
+''',Configuration['OUTPUTLOG'],screen=True,debug = True)
+    profile = np.array(get_from_template(Tirific_Template,['VROT'], debug = debug)[0],dtype = float)
+    for i in range(len(profile)):
+        if profile[i+1] < profile[i]:
+            profile[i:] =profile[i]
+            break
+    format = set_format('VROT')
+    Tirific_Template['VROT'] = f"{' '.join([f'{x:{format}}' for x in profile])}"
+    Tirific_Template['VROT_2'] = f"{' '.join([f'{x:{format}}' for x in profile])}"
+
 
 def check_flat(Configuration,profile,error, debug = False):
     if debug:
@@ -761,10 +774,13 @@ def set_fitting_parameters(Configuration, Tirific_Template, \
         xrange = [0.,360.]
         yrange = [-90.,90.]
         vrange = [-100,15000.]
-    if stage in ['run_ec','initialize_ec']:
+
+    if stage in ['run_ec','initialize_ec','parameterized']:
         # generic fitting only the values[1] matter for the step sizes when the limits are set
         if stage == 'run_ec':
             parameters_to_set = ['INCL','PA','VROT','SDIS']
+        elif stage == 'parameterized':
+            parameters_to_set = parameters_to_adjust
         else:
             parameters_to_set = ['SDIS']
         for key in parameters_to_set:
@@ -786,10 +802,11 @@ def set_fitting_parameters(Configuration, Tirific_Template, \
                 sdis = [np.mean(profile)*0.1,np.mean(profile)*1.5]
 
     z0_limits = convertskyangle([0.2,0.05,0.05,0.2,2.5],Configuration['DISTANCE'], physical = True)
-    if stage in  ['initial','run_cc','after_cc','after_ec']:
-        fitting_settings['SBR'] = set_sbr_fitting(Configuration, hdr = hdr,stage = stage, systemic = systemic[0], debug = debug)
+    if stage in  ['initial','run_cc','after_cc','after_ec','parameterized']:
+
         fitting_settings['VROT'] = set_vrot_fitting(Configuration,Tirific_Template, hdr = hdr,stage = stage, rotation = rotation, debug = debug )
 
+        fitting_settings['SBR'] = set_sbr_fitting(Configuration, hdr = hdr,stage = stage, systemic = systemic[0], debug = debug)
         fitting_settings['INCL'] = set_generic_fitting(Configuration,'INCL',stage = stage, values = inclination, debug = debug,\
                                                         upper_bracket = [60.,90.],lower_bracket = [5.,50.],step_modifier = [1.,1.,2.])
         fitting_settings['PA'] = set_generic_fitting(Configuration,'PA',stage = stage, values = pa , debug = debug,\
@@ -803,9 +820,9 @@ def set_fitting_parameters(Configuration, Tirific_Template, \
                                                             upper_bracket = xrange,lower_bracket = xrange,step_modifier = [1.0,1.0,1.0])
             if debug:
                 print_log(f'''SET_FITTING_PARAMETERS: setting Ypos with these values
-    {'':8s}dec = {dec}
-    {'':8s}range = {yrange}
-    ''',Configuration['OUTPUTLOG'])
+{'':8s}dec = {dec}
+{'':8s}range = {yrange}
+''',Configuration['OUTPUTLOG'])
             fitting_settings['YPOS']= set_generic_fitting(Configuration,'YPOS',stage = stage, values = dec , debug = debug,\
                                                             upper_bracket = yrange,lower_bracket = yrange,step_modifier = [1.0,1.0,1.0])
             fitting_settings['VSYS']= set_generic_fitting(Configuration,'VSYS',stage = stage, values = systemic , debug = debug,\
@@ -823,7 +840,7 @@ def set_fitting_parameters(Configuration, Tirific_Template, \
                 parameters_to_adjust = ['VSYS','XPOS','YPOS','VROT','SBR','PA','INCL','SDIS','Z0']
             else:
                 parameters_to_adjust = ['VSYS','XPOS','YPOS','SBR','VROT','PA','INCL','SDIS']
-        else:
+        elif stage in ['run_ec']:
             parameters_to_adjust = ['SBR','INCL','PA','VROT','SDIS','Z0']
     if stage in ['initialize_ec','run_ec']:
 
@@ -879,12 +896,7 @@ def set_fitting_parameters(Configuration, Tirific_Template, \
                         if fit_key == 'VARINDX':
                             format = '<10s'
                         else:
-                            if key in ['SBR']:
-                                format = '<10.2e'
-                            elif key in ['XPOS','YPOS']:
-                                format = '<10.7f'
-                            else:
-                                format = '<10.2f'
+                            format = set_format(key)
                         Tirific_Template[fit_key] = f"{Tirific_Template[fit_key]} {' '.join([f'{x:{format}}' for x in fitting_settings[key][fit_key]])}"
 set_fitting_parameters.__doc__ = '''
 
@@ -1095,10 +1107,7 @@ def set_model_parameters(Configuration, Tirific_Template,Model_Values, hdr = Non
     for key in parameters_to_set:
         if key in Model_Values:
             # if 2 long we have a value and error
-            if key == 'SBR':
-                format = '.2e'
-            else:
-                format = '.2f'
+            format = set_format(key)
             if len(Model_Values[key]) == 2:
                 Tirific_Template[key]= f"{Model_Values[key][0]:{format}}"
             else:
@@ -1171,6 +1180,7 @@ def set_model_parameters(Configuration, Tirific_Template,Model_Values, hdr = Non
     if float(vrot[0]) != 0.:
         Tirific_Template['VROT']=f" 0. {' '.join([f'{x}' for x in vrot[:int(Configuration['NO_RINGS']-1)]])}"
         Tirific_Template['VROT_2']=f" 0. {' '.join([f'{x}' for x in vrot[:int(Configuration['NO_RINGS']-1)]])}"
+    no_declining_vrot(Configuration, Tirific_Template, debug = False)
 set_model_parameters.__doc__ = '''
 
     ; NAME:
@@ -1259,13 +1269,8 @@ def set_new_size(Configuration,Tirific_Template, Fits_Files, hdr = 'Empty',curre
 
                 parameters[i] = list(np.interp(np.array(radii,dtype=float),np.array(old_radii,dtype=float),np.array(parameters[i],dtype=float)))
 
+            format = set_format(key)
 
-            if key[:3] == 'SBR':
-                format = '.2e'
-            elif key[:4] in ['XPOS','YPOS']:
-                format = '.6f'
-            else:
-                format = '.2f'
             if len(parameters[i]) > Configuration['NO_RINGS']-1:
                 # if we are cutting a ring it is likely the outer ring have done weird stuff so we flatten the curve
 
@@ -1607,10 +1612,7 @@ def smooth_profile(Configuration,Tirific_Template,key,hdr,min_error = 0.,debug=F
         for i in [0,1]:
             profile[i] = savgol_filter(profile[i], 9, 4)
     # Fix the settings
-    if key == 'SBR':
-        format = '.2e'
-    else:
-        format = '.2f'
+    format = set_format(key)
     if key == 'VROT':
         if shortened:
             tmp = [[],[]]
@@ -1662,7 +1664,6 @@ def modify_flat(Configuration,profile,original_profile,errors,debug=False):
     return profile
 
 def update_disk_angles(Tirific_Template,debug = False):
-    debug=True
     extension = ['','_2']
     for ext in extension:
         PA = np.array(get_from_template(Tirific_Template,[f'PA{ext}'],debug=debug))[0]

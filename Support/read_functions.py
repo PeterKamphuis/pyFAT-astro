@@ -1,7 +1,8 @@
 #!/usr/local/bin/ python3
 # This module contains a set of functions and classes that are used in FAT to read input files
 
-from support_functions import Proper_Dictionary,print_log,convertRADEC,set_limits, remove_inhomogeneities
+from support_functions import Proper_Dictionary,print_log,convertRADEC,set_limits, remove_inhomogeneities, \
+                                obtain_border_pix, obtain_ratios, get_inclination_pa
 from astropy.io import fits
 from scipy import ndimage
 import warnings
@@ -337,71 +338,15 @@ def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
     Image.close()
     median_noise_in_map = np.nanmedian(noise_map[noise_map > 0.])
     minimum_noise_in_map = np.nanmin(noise_map[noise_map > 0.])
-    map[3*minimum_noise_in_map > noise_map] = 0.
-    for i in [0,1]:
-        # now we need to get profiles under many angles let's say 100
-        #extract the profiles under a set of angles
-        angles = np.linspace(0, 180, 180)
-
-        ratios, maj_extent = obtain_ratios(map, hdr, center, angles,noise = minimum_noise_in_map)
-        if debug:
-            if i == 0:
-                print_log(f'''GUESS_ORIENTATION: We initially find radius of {maj_extent} beams.
-''',Configuration['OUTPUTLOG'], debug = True)
-            else:
-                print_log(f'''GUESS_ORIENTATION: From the cleaned map we find radius of {maj_extent} beams.
-''',Configuration['OUTPUTLOG'], debug = True)
-        max_index = np.where(ratios == np.nanmax(ratios))[0]
-        if max_index.size > 1:
-            max_index =max_index[0]
-        min_index = np.where(ratios == np.nanmin(ratios))[0]
-        if min_index.size > 1:
-            min_index =min_index[0]
-        #get a 10% bracket
-
-        tenp_max_index = np.where(ratios > np.nanmax(ratios)*0.9)[0]
-        tenp_min_index = np.where(ratios < np.nanmin(ratios)*1.1)[0]
-        if tenp_max_index.size <= 1:
-            tenp_max_index= [max_index-2,max_index+2]
-        if tenp_min_index.size <= 1:
-            tenp_min_index= [min_index-2,min_index+2]
-        pa = float(np.mean([angles[min_index],angles[max_index]-90.]))
-        pa_error = set_limits(np.mean([abs(angles[tenp_min_index[0]]-angles[min_index]),\
-                            abs(angles[tenp_min_index[-1]]-angles[min_index]),\
-                            abs(angles[tenp_max_index[0]]-angles[max_index]), \
-                            abs(angles[tenp_min_index[-1]]-angles[max_index])]), \
-                            0.5,15.)
-        ratios[ratios < 0.204] = 0.204
-        ratios[1./ratios < 0.204] = 1./0.204
-        inclination = np.mean([np.degrees(np.arccos(np.sqrt((ratios[min_index]**2-0.2**2)/0.96))) \
-                              ,np.degrees(np.arccos(np.sqrt(((1./ratios[max_index])**2-0.2**2)/0.96))) ])
-
-        if i == 0:
-            inclination_error = set_limits(np.nanmean([abs(np.degrees(np.arccos(np.sqrt((ratios[min_index]**2-0.2**2)/0.96))) - np.degrees(np.arccos(np.sqrt((ratios[tenp_min_index[0]]**2-0.2**2)/0.96)))),\
-                                     abs(np.degrees(np.arccos(np.sqrt((ratios[min_index]**2-0.2**2)/0.96))) - np.degrees(np.arccos(np.sqrt((ratios[tenp_min_index[-1]]**2-0.2**2)/0.96)))),\
-                                     abs(np.degrees(np.arccos(np.sqrt(((1./ratios[max_index])**2-0.2**2)/0.96))) - np.degrees(np.arccos(np.sqrt(((1./ratios[tenp_max_index[0]])**2-0.2**2)/0.96)))),\
-                                     abs(np.degrees(np.arccos(np.sqrt(((1./ratios[max_index])**2-0.2**2)/0.96))) - np.degrees(np.arccos(np.sqrt(((1./ratios[tenp_max_index[0]])**2-0.2**2)/0.96))))]), \
-                                     2.5,25.)
-            if not np.isfinite(inclination_error):
-                inclination_error = 90./inclination
-        if ratios[max_index]-ratios[min_index] < 0.4:
-            inclination = float(inclination-(inclination*0.04/(ratios[max_index]-ratios[min_index])))
-            if i == 0:
-                inclination_error = float(inclination_error*0.4/(ratios[max_index]-ratios[min_index]))
-        if maj_extent/hdr['BMAJ'] < 4:
-            inclination = float(inclination+(inclination/10.*np.sqrt(4./(maj_extent/hdr['BMAJ']))))
-            if i == 0:
-                inclination_error = float(inclination_error*4./(maj_extent/hdr['BMAJ']))
-        if i == 0 and inclination < 75.:
-            mom0 = remove_inhomogeneities(Configuration,mom0,inclination=inclination, pa = pa, center = center,WCS_center = False, debug=debug)
-            map = mom0[0].data
+    map[0.5*minimum_noise_in_map > noise_map] = 0.
+    inclination, pa, maj_extent = get_inclination_pa(Configuration, map,mom0, hdr, center, cutoff = 0.5* median_noise_in_map, debug = debug)
             #map[3*minimum_noise_in_map > noise_map] = 0.
     # From these estimates we also get an initial SBR
-    x1,x2,y1,y2 = obtain_border_pix(hdr,pa,center)
+    x1,x2,y1,y2 = obtain_border_pix(hdr,pa[0],center)
     linex,liney = np.linspace(x1,x2,1000), np.linspace(y1,y2,1000)
-    maj_resolution = abs((abs(x2-x1)/1000.)*np.sin(np.radians(pa)))+abs(abs(y2-y1)/1000.*np.cos(np.radians(pa)))
+    maj_resolution = abs((abs(x2-x1)/1000.)*np.sin(np.radians(pa[0])))+abs(abs(y2-y1)/1000.*np.cos(np.radians(pa[0])))
     maj_profile = ndimage.map_coordinates(map, np.vstack((liney,linex)),order=1)
-    maj_axis =  np.linspace(0,1000*maj_resolution,1000)- (abs((abs(center[0]))*np.sin(np.radians(pa)))+abs(abs(center[1])*np.cos(np.radians(pa))))
+    maj_axis =  np.linspace(0,1000*maj_resolution,1000)- (abs((abs(center[0]))*np.sin(np.radians(pa[0])))+abs(abs(center[1])*np.cos(np.radians(pa[0]))))
 
     # let's get an intensity weighted center for the extracted profile.
 
@@ -442,12 +387,12 @@ def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
         diff_new = diff_new/np.nanmin([neg_index.size,pos_index.size])
         if diff_new < diff:
             if debug:
-                print_log(f'''GUESS_ORIENTATION: We are updating the center from {center[0]},{center[1]} to {center[0]+center_of_profile/(2.*np.sin(np.radians(pa)))*maj_resolution},{center[1]+center_of_profile/(2.*np.cos(np.radians(pa)))*maj_resolution}
+                print_log(f'''GUESS_ORIENTATION: We are updating the center from {center[0]},{center[1]} to {center[0]+center_of_profile/(2.*np.sin(np.radians(pa[0])))*maj_resolution},{center[1]+center_of_profile/(2.*np.cos(np.radians(pa[0])))*maj_resolution}
 ''',Configuration['OUTPUTLOG'], debug = False)
             avg_profile = avg_profile_new
-            center[0] = center[0]-center_of_profile/(2.*np.sin(np.radians(pa)))*maj_resolution
-            center[1] = center[1]+center_of_profile/(2.*np.cos(np.radians(pa)))*maj_resolution
-            maj_axis =  np.linspace(0,1000*maj_resolution,1000)- (abs((abs(center[0]))*np.sin(np.radians(pa)))+abs(abs(center[1])*np.cos(np.radians(pa))))
+            center[0] = center[0]-center_of_profile/(2.*np.sin(np.radians(pa[0])))*maj_resolution
+            center[1] = center[1]+center_of_profile/(2.*np.cos(np.radians(pa[0])))*maj_resolution
+            maj_axis =  np.linspace(0,1000*maj_resolution,1000)- (abs((abs(center[0]))*np.sin(np.radians(pa[0])))+abs(abs(center[1])*np.cos(np.radians(pa[0]))))
 
 
     ring_size_req = Configuration['RING_SIZE']*hdr['BMAJ']/(np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])*maj_resolution)
@@ -465,32 +410,32 @@ def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
     map[3*minimum_noise_in_map > noise_map] = float('NaN')
     noise_map = []
 
-    x1,x2,y1,y2 = obtain_border_pix(hdr,pa,center)
+    x1,x2,y1,y2 = obtain_border_pix(hdr,pa[0],center)
     linex,liney = np.linspace(x1,x2,1000), np.linspace(y1,y2,1000)
-    maj_resolution = abs((abs(x2-x1)/1000.)*np.sin(np.radians(pa)))+abs(abs(y2-y1)/1000.*np.cos(np.radians(pa)))
+    maj_resolution = abs((abs(x2-x1)/1000.)*np.sin(np.radians(pa[0])))+abs(abs(y2-y1)/1000.*np.cos(np.radians(pa[0])))
     maj_profile = ndimage.map_coordinates(map, np.vstack((liney,linex)),order=1)
-    maj_axis =  np.linspace(0,1000*maj_resolution,1000)- (abs((abs(center[0]))*np.sin(np.radians(pa)))+abs(abs(center[1])*np.cos(np.radians(pa))))
+    maj_axis =  np.linspace(0,1000*maj_resolution,1000)- (abs((abs(center[0]))*np.sin(np.radians(pa[0])))+abs(abs(center[1])*np.cos(np.radians(pa[0]))))
     loc_max = np.mean(maj_axis[np.where(maj_profile == np.nanmax(maj_profile))[0]])
     if loc_max > 0.:
-            pa = pa+180
+            pa[0] = pa[0]+180
             print_log(f'''GUESS_ORIENTATION: We have modified the pa by 180 deg as we found the maximum velocity west of the center.
 ''' , Configuration['OUTPUTLOG'])
     map = map  - map[int(round(center[0])),int(round(center[1]))]
-    VROT_initial = extract_vrot(Configuration, hdr,map ,pa,center, debug= debug)
-    if pa_error < 10.:
-        for x in [pa-pa_error,pa-pa_error/2.,pa+pa_error/2.,pa+pa_error]:
+    VROT_initial = extract_vrot(Configuration, hdr,map ,pa[0],center, debug= debug)
+    if pa[1] < 10.:
+        for x in [pa[0]-pa[1],pa[0]-pa[1]/2.,pa[0]+pa[1]/2.,pa[0]+pa[1]]:
             tmp  = extract_vrot(Configuration, hdr,map ,x,center, debug= debug)
             if len(tmp) > 0.:
                 VROT_initial = [VROT_initial, tmp]
         VROT_initial = np.mean(VROT_initial,axis=0.)
     map= []
     VROT_initial[0] = 0
-    VROT_initial = VROT_initial/np.sin(np.radians(inclination))
+    VROT_initial = VROT_initial/np.sin(np.radians(inclination[0]))
     if debug:
         print_log(f'''GUESS_ORIENTATION: We found the following initial rotation curve:
 {'':8s}GUESS_ORIENTATION: RC = {VROT_initial}
 ''',Configuration['OUTPUTLOG'], debug = False)
-    return np.array([pa,pa_error]),np.array([inclination,inclination_error]),SBR_initial,maj_extent,center[0],center[1],VROT_initial
+    return np.array(pa),np.array(inclination),SBR_initial,maj_extent,center[0],center[1],VROT_initial
 guess_orientation.__doc__ ='''
 ;+
 ; NAME:
@@ -634,127 +579,6 @@ def load_tirific(filename,Variables = ['BMIN','BMAJ','BPA','RMS','DISTANCE','NUR
         return (*outputarray.T,)
     else:
         return outputarray
-
-def obtain_ratios(map, hdr, center, angles, noise = 0. ,debug = False):
-    ratios = []
-    max_extent = 0.
-    for angle in angles:
-        #major axis
-
-        x1,x2,y1,y2 = obtain_border_pix(hdr,angle,center)
-        linex,liney = np.linspace(x1,x2,1000), np.linspace(y1,y2,1000)
-        maj_resolution = abs((abs(x2-x1)/1000.)*np.sin(np.radians(angle)))+abs(abs(y2-y1)/1000.*np.cos(np.radians(angle)))
-        maj_profile = ndimage.map_coordinates(map, np.vstack((liney,linex)),order=1)
-        maj_axis =  np.linspace(0,1000*maj_resolution,1000)
-        tmp = np.where(maj_profile > 3.*noise)[0]
-        #gauss =fit_gaussian(maj_axis[tmp], maj_profile[tmp])
-        #maj_gaus = gaussian_function(maj_profile, *gauss)
-        #tmp = np.where(maj_gaus > 0.2*np.nanmax(maj_gaus))[0]
-        width_maj = (tmp[-1]-tmp[0])*maj_resolution
-        if width_maj**2 > (hdr['BMAJ']/(np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])))**2:
-            width_maj = np.sqrt(width_maj**2 - (hdr['BMAJ']/(np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])))**2)
-        else:
-            width_maj = maj_resolution
-
-        if width_maj > max_extent:
-            max_extent = width_maj
-        #minor axis
-        if angle < 90:
-            x1,x2,y1,y2 = obtain_border_pix(hdr,angle+90,center)
-        else:
-            x1,x2,y1,y2 = obtain_border_pix(hdr,angle-90,center)
-        linex,liney = np.linspace(x1,x2,1000), np.linspace(y1,y2,1000)
-        min_resolution =abs((abs(x2-x1)/1000.)*np.sin(np.radians(angle+90)))+abs(abs(y2-y1)/1000.*np.cos(np.radians(angle+90)))
-        min_axis =  np.linspace(0,1000*min_resolution,1000)
-        min_profile = ndimage.map_coordinates(map, np.vstack((liney,linex)),order=1)
-        tmp = np.where(min_profile > 3.*noise)[0]
-        #gauss =fit_gaussian(min_axis[tmp], maj_profile[tmp])
-        #min_gaus = gaussian_function(min_profile,*gauss)
-        #tmp = np.where(min_gaus > 0.2*np.nanmax(min_gaus))[0]
-        width_min = (tmp[-1]-tmp[0])*min_resolution
-        if width_min**2 > (hdr['BMAJ']/(np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])))**2 :
-            width_min = np.sqrt(width_min**2 - (hdr['BMAJ']/(np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])))**2)
-        else:
-            width_min = min_resolution
-
-        if width_min > max_extent:
-            max_extent = width_min
-        ratios.append(width_maj/width_min)
-    #as the extend is at 25% let's take 2 time the sigma of that
-    #max_extent = (max_extent/(2.*np.sqrt(2*np.log(2))))*2.
-    max_extent = max_extent/2.
-    return np.array(ratios,dtype=float), max_extent*np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])
-obtain_ratios.__doc__ = '''
-;+
-; NAME:
-;       obtain_ratios(map, hdr, center, angles)
-;
-; PURPOSE:
-;       Obtain the ratio between an axis along the specified angle as well as one rotated 90 degrees to determine the pa and inclination.
-;       Additionally keep track of the maximum width.
-; CATEGORY:
-;       read
-;
-;
-; INPUTS:
-;       Configuration
-;
-; OPTIONAL INPUTS:
-;
-;
-; KEYWORD PARAMETERS:
-;       -
-;
-; OUTPUTS:
-;          ratios =  ratios corresponding to the input angles
-;         maj_width = the maximum extend of any profile analysed (in degree)
-; OPTIONAL OUTPUTS:
-;       -
-;
-; PROCEDURES CALLED:
-;      np.mean, ndimage.map_coordinates, np.linspace, np.vstack, np.cos, np.radians, np.sin
-;
-; EXAMPLE:
-;
-;
-'''
-
-
-
-
-
-def obtain_border_pix(hdr,angle,center, debug = False):
-
-    if angle < 90.:
-        x1 = center[0]-(hdr['NAXIS2']-center[1])*np.tan(np.radians(angle))
-        x2 = center[0]+(center[1])*np.tan(np.radians(angle))
-        if x1 < 0:
-            x1 = 0
-            y1 = center[1]+(center[0])*np.tan(np.radians(90-angle))
-        else:
-            y1 = hdr['NAXIS2']
-        if x2 > hdr['NAXIS1']:
-            x2 = hdr['NAXIS1']
-            y2 = center[1]-(center[0])*np.tan(np.radians(90-angle))
-        else:
-            y2 = 0
-    elif angle == 90:
-        x1 = 0 ; y1 = center[1] ; x2 = hdr['NAXIS1'] ; y2 = center[1]
-    else:
-        x1 = center[0]-(center[1])*np.tan(np.radians(180.-angle))
-        x2 = center[0]+(hdr['NAXIS2']-center[1])*np.tan(np.radians(180-angle))
-        if x1 < 0:
-            x1 = 0
-            y1 = center[1]-(center[0])*np.tan(np.radians(angle-90))
-        else:
-            y1 = 0
-        if x2 > hdr['NAXIS1']:
-            x2 = hdr['NAXIS1']
-            y2 = center[1]+(center[0])*np.tan(np.radians(angle-90))
-        else:
-            y2 = hdr['NAXIS2']
-
-    return x1,x2,y1,y2
 
 # function to read the sofia catalogue
 def sofia_catalogue(Configuration, Variables =['name','x','x_min','x_max','y','y_min','y_max','z','z_min','z_max','ra',\

@@ -17,11 +17,12 @@ with warnings.catch_warnings():
     from matplotlib.patches import Ellipse
     import matplotlib.axes as maxes
 
-sys.path.insert(1,'/home/peter/FAT_Main/FAT_Source_Dev/Support/')
+sys.path.insert(1,'/home/peter/FAT_Main/pyFAT_Dev/Support/')
 
 
 import modify_template as mt
 import read_functions as rf
+import run_functions as runf
 import write_functions as wf
 import support_functions as sf
 
@@ -177,5 +178,41 @@ def Test_Orientation():
         with open(f"Inclinations.txt",'a') as file:
             file.write(f'For {incl_in} we guess {inclination[0]}+/-{inclination[1]} in the galaxy {Catalogue["DIRECTORYNAME"]} \n')
 
+def Test_Parameterized():
+    Configuration = {'INNER_FIX': 4}
+    Configuration['FITTING_DIR']= '/home/peter/FAT_Main/FAT_Testers/Database-09-10-2020/NGC_3198_6.0Beams_1.0SNR/'
+    Configuration['OUTPUTLOG'] = None
+    Configuration['RING_SIZE'] = 1.
+    Configuration['NOISE'] = 0.003
+    Configuration['MINIMUM_RINGS'] = 3
+    Configuration['SIZE_IN_BEAMS'] = 3.5
+    Configuration['CUBENAME']= 'Convolved_Cube'
+    Configuration['BASE_NAME']= 'Convolved_Cube_FAT'
+
+    Fits_Files = {'ORIGINAL_CUBE': "Convolved_Cube.fits"}
+    Fits_Files['NOISEMAP'] = f"{Configuration['BASE_NAME']}_noisemap.fits"
+    Fits_Files['FITTING_CUBE'] = f"{Configuration['CUBENAME']}_FAT.fits"
+    Fits_Files['OPTIMIZED_CUBE'] = f"{Configuration['CUBENAME']}_FAT_opt.fits"
+    Fits_Files['MOMENT0'] = f"{Configuration['BASE_NAME']}_mom0.fits"
+    Fits_Files['MOMENT1'] = f"{Configuration['BASE_NAME']}_mom1.fits"
+    Fits_Files['MOMENT2'] = f"{Configuration['BASE_NAME']}_mom2.fits"
+    Fits_Files['MASK'] = f"{Configuration['BASE_NAME']}_mask.fits"
+    Fits_Files['CHANNEL_MAP'] = f"{Configuration['BASE_NAME']}_chan.fits"
+    Configuration['FIX_INCLINATION'] = False
+    Configuration['FIX_SDIS'] = False
+    Configuration['FIX_PA'] = False
+    Configuration['FIX_Z0'] = True
+    hdr = fits.getheader(f"{Configuration['FITTING_DIR']}/{Fits_Files['FITTING_CUBE']}")
+    Configuration['DISTANCE'] = 5.
+    Configuration['TIRIFIC_RUNNING'] = False
+    Configuration['TIMING'] = False
+    # Initialize a def file.
+    Tirific_Template = rf.tirific_template(f"{Configuration['FITTING_DIR']}/Centre_Convergence_In.def")
+    Configuration['NO_RINGS'] = Tirific_Template['NUR']
+    current_run = ''
+    #runf.fit_warp(Configuration,Tirific_Template,current_run, fit_stage = 'None')
+    accepted,current_run = runf.run_parameterized_tirific(Configuration,Tirific_Template,current_run,stage = 'paramiterized', fit_stage = 'Parameterized', debug= True)
+
+
 if __name__ == '__main__':
-    Test_Overview()
+    Test_Parameterized()

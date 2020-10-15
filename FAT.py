@@ -13,6 +13,7 @@ from astropy.io import fits
 
 def FAT(argv):
     try:
+        
         #Get the directory we are running from
         start_dir = os.getcwd()
 

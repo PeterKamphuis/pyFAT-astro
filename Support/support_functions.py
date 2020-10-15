@@ -11,6 +11,7 @@ from astropy.io import fits
 
 import os
 import signal
+import time
 import traceback
 import numpy as np
 import copy
@@ -386,6 +387,67 @@ def get_from_template(Tirific_Template,Variables, debug = False):
     # However if you make a np. array from it make sure that you specify float  or have lists of the same length else you get an array of lists which behave just as dumb
     return out
 
+def get_inclination_pa(Configuration, map, Image, hdr, center, cutoff = 0., debug = False):
+
+    for i in [0,1]:
+        # now we need to get profiles under many angles let's say 100
+        #extract the profiles under a set of angles
+        angles = np.linspace(0, 180, 180)
+
+        ratios, maj_extent = obtain_ratios(map, hdr, center, angles,noise = cutoff)
+        if debug:
+            if i == 0:
+                print_log(f'''GUESS_ORIENTATION: We initially find radius of {maj_extent/hdr['BMAJ']} beams.
+''',Configuration['OUTPUTLOG'], debug = True)
+            else:
+                print_log(f'''GUESS_ORIENTATION: From the cleaned map we find radius of {maj_extent/hdr['BMAJ']} beams.
+''',Configuration['OUTPUTLOG'], debug = True)
+        max_index = np.where(ratios == np.nanmax(ratios))[0]
+        if max_index.size > 1:
+            max_index =max_index[0]
+        min_index = np.where(ratios == np.nanmin(ratios))[0]
+        if min_index.size > 1:
+            min_index =min_index[0]
+        #get a 10% bracket
+
+        tenp_max_index = np.where(ratios > np.nanmax(ratios)*0.9)[0]
+        tenp_min_index = np.where(ratios < np.nanmin(ratios)*1.1)[0]
+        if tenp_max_index.size <= 1:
+            tenp_max_index= [max_index-2,max_index+2]
+        if tenp_min_index.size <= 1:
+            tenp_min_index= [min_index-2,min_index+2]
+        pa = float(np.mean([angles[min_index],angles[max_index]-90.]))
+        pa_error = set_limits(np.mean([abs(angles[tenp_min_index[0]]-angles[min_index]),\
+                            abs(angles[tenp_min_index[-1]]-angles[min_index]),\
+                            abs(angles[tenp_max_index[0]]-angles[max_index]), \
+                            abs(angles[tenp_min_index[-1]]-angles[max_index])]), \
+                            0.5,15.)
+        ratios[ratios < 0.204] = 0.204
+        ratios[1./ratios < 0.204] = 1./0.204
+        inclination = np.mean([np.degrees(np.arccos(np.sqrt((ratios[min_index]**2-0.2**2)/0.96))) \
+                              ,np.degrees(np.arccos(np.sqrt(((1./ratios[max_index])**2-0.2**2)/0.96))) ])
+
+        if i == 0:
+            inclination_error = set_limits(np.nanmean([abs(np.degrees(np.arccos(np.sqrt((ratios[min_index]**2-0.2**2)/0.96))) - np.degrees(np.arccos(np.sqrt((ratios[tenp_min_index[0]]**2-0.2**2)/0.96)))),\
+                                     abs(np.degrees(np.arccos(np.sqrt((ratios[min_index]**2-0.2**2)/0.96))) - np.degrees(np.arccos(np.sqrt((ratios[tenp_min_index[-1]]**2-0.2**2)/0.96)))),\
+                                     abs(np.degrees(np.arccos(np.sqrt(((1./ratios[max_index])**2-0.2**2)/0.96))) - np.degrees(np.arccos(np.sqrt(((1./ratios[tenp_max_index[0]])**2-0.2**2)/0.96)))),\
+                                     abs(np.degrees(np.arccos(np.sqrt(((1./ratios[max_index])**2-0.2**2)/0.96))) - np.degrees(np.arccos(np.sqrt(((1./ratios[tenp_max_index[0]])**2-0.2**2)/0.96))))]), \
+                                     2.5,25.)
+            if not np.isfinite(inclination_error):
+                inclination_error = 90./inclination
+        if ratios[max_index]-ratios[min_index] < 0.4:
+            inclination = float(inclination-(inclination*0.04/(ratios[max_index]-ratios[min_index])))
+            if i == 0:
+                inclination_error = float(inclination_error*0.4/(ratios[max_index]-ratios[min_index]))
+        if maj_extent/hdr['BMAJ'] < 4:
+            inclination = float(inclination+(inclination/10.*np.sqrt(4./(maj_extent/hdr['BMAJ']))))
+            if i == 0:
+                inclination_error = float(inclination_error*4./(maj_extent/hdr['BMAJ']))
+        if i == 0 and inclination < 75.:
+            Image = remove_inhomogeneities(Configuration,Image,inclination=inclination, pa = pa, center = center,WCS_center = False, debug=debug)
+            map = Image[0].data
+    return [inclination,inclination_error], [pa,pa_error],maj_extent
+
 # Function to get the amount of inner rings to fix
 def get_inner_fix(Configuration,Tirific_Template, debug =False):
     if debug:
@@ -448,6 +510,126 @@ def linenumber(debug=False):
                 break
     return line
 
+def obtain_ratios(map, hdr, center, angles, noise = 0. ,debug = False):
+    ratios = []
+    max_extent = 0.
+    for angle in angles:
+        #major axis
+
+        x1,x2,y1,y2 = obtain_border_pix(hdr,angle,center)
+        linex,liney = np.linspace(x1,x2,1000), np.linspace(y1,y2,1000)
+        maj_resolution = abs((abs(x2-x1)/1000.)*np.sin(np.radians(angle)))+abs(abs(y2-y1)/1000.*np.cos(np.radians(angle)))
+        maj_profile = ndimage.map_coordinates(map, np.vstack((liney,linex)),order=1)
+        maj_axis =  np.linspace(0,1000*maj_resolution,1000)
+        tmp = np.where(maj_profile > noise)[0]
+        #gauss =fit_gaussian(maj_axis[tmp], maj_profile[tmp])
+        #maj_gaus = gaussian_function(maj_profile, *gauss)
+        #tmp = np.where(maj_gaus > 0.2*np.nanmax(maj_gaus))[0]
+        width_maj = (tmp[-1]-tmp[0])*maj_resolution
+        if width_maj**2 > (hdr['BMAJ']/(np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])))**2:
+            width_maj = np.sqrt(width_maj**2 - (hdr['BMAJ']/(np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])))**2)
+        else:
+            width_maj = maj_resolution
+
+        if width_maj > max_extent:
+            max_extent = width_maj
+        #minor axis
+        if angle < 90:
+            x1,x2,y1,y2 = obtain_border_pix(hdr,angle+90,center)
+        else:
+            x1,x2,y1,y2 = obtain_border_pix(hdr,angle-90,center)
+        linex,liney = np.linspace(x1,x2,1000), np.linspace(y1,y2,1000)
+        min_resolution =abs((abs(x2-x1)/1000.)*np.sin(np.radians(angle+90)))+abs(abs(y2-y1)/1000.*np.cos(np.radians(angle+90)))
+        min_axis =  np.linspace(0,1000*min_resolution,1000)
+        min_profile = ndimage.map_coordinates(map, np.vstack((liney,linex)),order=1)
+        tmp = np.where(min_profile > noise)[0]
+        #gauss =fit_gaussian(min_axis[tmp], maj_profile[tmp])
+        #min_gaus = gaussian_function(min_profile,*gauss)
+        #tmp = np.where(min_gaus > 0.2*np.nanmax(min_gaus))[0]
+        width_min = (tmp[-1]-tmp[0])*min_resolution
+        if width_min**2 > (hdr['BMAJ']/(np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])))**2 :
+            width_min = np.sqrt(width_min**2 - (hdr['BMAJ']/(np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])))**2)
+        else:
+            width_min = min_resolution
+
+        if width_min > max_extent:
+            max_extent = width_min
+        ratios.append(width_maj/width_min)
+    #as the extend is at 25% let's take 2 time the sigma of that
+    #max_extent = (max_extent/(2.*np.sqrt(2*np.log(2))))*2.
+    max_extent = max_extent/2.
+    return np.array(ratios,dtype=float), max_extent*np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])
+obtain_ratios.__doc__ = '''
+;+
+; NAME:
+;       obtain_ratios(map, hdr, center, angles)
+;
+; PURPOSE:
+;       Obtain the ratio between an axis along the specified angle as well as one rotated 90 degrees to determine the pa and inclination.
+;       Additionally keep track of the maximum width.
+; CATEGORY:
+;       read
+;
+;
+; INPUTS:
+;       Configuration
+;
+; OPTIONAL INPUTS:
+;
+;
+; KEYWORD PARAMETERS:
+;       -
+;
+; OUTPUTS:
+;          ratios =  ratios corresponding to the input angles
+;         maj_width = the maximum extend of any profile analysed (in degree)
+; OPTIONAL OUTPUTS:
+;       -
+;
+; PROCEDURES CALLED:
+;      np.mean, ndimage.map_coordinates, np.linspace, np.vstack, np.cos, np.radians, np.sin
+;
+; EXAMPLE:
+;
+;
+'''
+
+
+
+
+
+def obtain_border_pix(hdr,angle,center, debug = False):
+
+    if angle < 90.:
+        x1 = center[0]-(hdr['NAXIS2']-center[1])*np.tan(np.radians(angle))
+        x2 = center[0]+(center[1])*np.tan(np.radians(angle))
+        if x1 < 0:
+            x1 = 0
+            y1 = center[1]+(center[0])*np.tan(np.radians(90-angle))
+        else:
+            y1 = hdr['NAXIS2']
+        if x2 > hdr['NAXIS1']:
+            x2 = hdr['NAXIS1']
+            y2 = center[1]-(center[0])*np.tan(np.radians(90-angle))
+        else:
+            y2 = 0
+    elif angle == 90:
+        x1 = 0 ; y1 = center[1] ; x2 = hdr['NAXIS1'] ; y2 = center[1]
+    else:
+        x1 = center[0]-(center[1])*np.tan(np.radians(180.-angle))
+        x2 = center[0]+(hdr['NAXIS2']-center[1])*np.tan(np.radians(180-angle))
+        if x1 < 0:
+            x1 = 0
+            y1 = center[1]-(center[0])*np.tan(np.radians(angle-90))
+        else:
+            y1 = 0
+        if x2 > hdr['NAXIS1']:
+            x2 = hdr['NAXIS1']
+            y2 = center[1]+(center[0])*np.tan(np.radians(angle-90))
+        else:
+            y2 = hdr['NAXIS2']
+
+    return x1,x2,y1,y2
 
 def print_log(log_statement,log, screen = False,debug = False):
     log_statement = f"{linenumber(debug=debug)}{log_statement}"
@@ -683,6 +865,28 @@ sbr_limits.__doc__ = '''
 
 '''
 
+def the_bends(profile,radii,start,outer_diff):
+    profile = np.array(profile,dtype=float)
+    mean = np.mean(profile[0])   # This is necessary to keep both sides conneccted and the same
+    radii = np.array(radii,dtype=float)
+    length = float((radii[-1] -start)/2.)
+    amplitude =  float(outer_diff)
+    center = float(radii[-1])
+    mod_profile = np.arctan((radii-center)/(abs(length)))/(0.5*np.pi)
+    mod_profile = mod_profile/np.nanmax(abs(mod_profile))
+    add = mean-np.mean(mod_profile-mod_profile[0])*amplitude
+    mod_profile = (mod_profile-mod_profile[0])*amplitude+mean
+    return mod_profile
+
+def set_format(key):
+    if key in ['SBR', 'SBR_2']:
+        format = '.5e'
+    elif key in ['XPOS', 'YPOS','XPOS_2', 'YPOS_2']:
+        format = '.7e'
+    else:
+        format = '.2f'
+    return format
+
 def set_limits(value,minv,maxv,debug = False):
     if value < minv:
         return minv
@@ -893,3 +1097,45 @@ def sofia_output_exists(Configuration,Fits_Files, debug = False):
 sofia_output_exists.__doc__ =f'''
 Simple function to make sure all sofia output is present as expeceted
 '''
+
+# Function to wait for tirific when it is too fast for stdout
+def wait_for_tirific(progress_log,req_stamp,current_run):
+    Chi = 0.
+    attempt = 0.
+    while True:
+        try:
+            gh = current_run.stdout.readline()
+            print(gh)
+            for tir_out_line in current_run.stdout:
+                print(tir_out_line)
+                tmp = re.split(r"[/: ]+",tir_out_line.strip())
+                if tmp[0] == 'L':
+                    if int(tmp[1]) != currentloop:
+                        print(f"RUN_TIRIFIC: Starting loop {tmp[1]} out of a maximum {max_loop}")
+                    currentloop  = int(tmp[1])
+                    if max_loop == 0:
+                        max_loop = int(tmp[2])
+                    try:
+                        Configuration['NO_POINTSOURCES'] = np.array([tmp[18],tmp[19]],dtype=float)
+                    except:
+                        #If this fails for some reason an old number suffices, if the code really crashed problems will occur elsewhere.
+                        pass
+                if tmp[0].strip() == 'Finished':
+                    Chi = float(tmp[tmp.index('C')+1])
+                    break
+                if tmp[0].strip() == 'Abort':
+                    break
+                attempt += 1
+                print("", end=f"\rPercentComplete: {attempt/100.} %",flush = True)
+
+                if attempt > 1000.:
+                    Chi = float('NaN')
+                    print("\n")
+                    break
+        except IOError:
+            time.sleep(0.5)
+            attempt += 1
+            print("", end=f"\rPercenbcbcvtComplete: {attempt/100.} %",flush = True)
+
+    print("\n")
+    return Chi
