@@ -816,7 +816,7 @@ def make_moments(filename = 'Input_Cube.fits', basename = 'Finalmodel', director
         hdr2D['DATAMIN'] = np.nanmin(moment0)
         fits.writeto(f"{directory}/{basename}_mom0.fits",moment0,hdr2D,overwrite = overwrite)
     if 1 in moments or 2 in moments:
-        zaxis = cube[0].header['CRVAL3'] + (np.arange(cube[0].header['NAXIS3']) \
+        zaxis = cube[0].header['CRVAL3'] + (np.arange(cube[0].header['NAXIS3'])+1 \
               - cube[0].header['CRPIX3']) * cube[0].header['CDELT3']
         c=np.transpose(np.resize(zaxis,[cube[0].header['NAXIS1'],cube[0].header['NAXIS2'],len(zaxis)]),(2,1,0))
         hdr2D['BUNIT'] = f"{cube[0].header['CUNIT3']}"

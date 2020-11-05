@@ -13,7 +13,7 @@ from astropy.io import fits
 
 def FAT(argv):
     try:
-        
+
         #Get the directory we are running from
         start_dir = os.getcwd()
 
@@ -99,10 +99,12 @@ def FAT(argv):
         Original_Configuration['OPTIMIZED'] = False
         Original_Configuration['OUTER_RINGS_DOUBLED'] = False
         Original_Configuration['TIRIFIC_RUNNING'] = False
+        Original_Configuration['VEL_SMOOTH_EXTENDED'] = False
         Original_Configuration['TIRIFIC_PID'] = 'Not Initialized'
         Original_Configuration['RUN_COUNTER'] = 0
         Original_Configuration['LIMIT_MODIFIER'] = [1.]
         Original_Configuration['INNER_FIX'] = 3
+        Original_Configuration['WARP_SLOPE'] = [0.,0.]
         Original_Configuration['OUTER_SLOPE'] = 1
         Original_Configuration['OLD_RINGS'] = []
         #Then read the input Catalogue
@@ -160,6 +162,7 @@ def FAT(argv):
             doubled = 0
             ini_mode_factor =25
             # We initially set the variations to fixed for all parameters
+            #let's see what happens if we immediately
             Configuration['FIX_INCLINATION'] = True
             Configuration['FIX_SDIS'] = True
             Configuration['FIX_PA'] = True

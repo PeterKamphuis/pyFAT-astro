@@ -112,18 +112,18 @@ basicinfo.__doc__ = '''
 def initialize_def_file(Configuration, Fits_Files,Tirific_Template, cube_hdr,Initial_Parameters = {}, fit_stage = 'Undefined_Stage',debug = False):
     #First we set some basic parameters that will hardly change
     if fit_stage == 'Centre_Convergence':
+
         if 'VSYS' in Initial_Parameters:
             Initial_Parameters['VSYS'] = [x/1000. for x in Initial_Parameters['VSYS']]
         set_overall_parameters(Configuration, Fits_Files,Tirific_Template,loops=10,fit_stage=fit_stage,hdr=cube_hdr, flux = Initial_Parameters['FLUX'][0], debug=debug)
         # Then set the values for the various parameters of the model
+
         set_model_parameters(Configuration, Tirific_Template,Initial_Parameters, hdr=cube_hdr, debug=debug)
+
         set_limit_modifier(Configuration,Initial_Parameters['INCL'][0], debug=debug )
+
         set_fitting_parameters(Configuration, Tirific_Template, hdr = cube_hdr,stage = 'initial',
-                           systemic =  Initial_Parameters['VSYS'],
-                           inclination = Initial_Parameters['INCL'],
-                           pa = Initial_Parameters['PA'],
-                           rotation = [np.max(Initial_Parameters['VROT']) ,(np.max(Initial_Parameters['VROT'])-np.min(Initial_Parameters['VROT']))*0.2],
-                           ra = Initial_Parameters['RA'], dec = Initial_Parameters['DEC'], debug=debug)
+                                initial_estimates = Initial_Parameters, debug=debug)
         if 'VSYS' in Initial_Parameters:
             Initial_Parameters['VSYS'] = [x*1000. for x in Initial_Parameters['VSYS']]
     elif fit_stage == 'Extent_Convergence':
@@ -135,13 +135,15 @@ def initialize_def_file(Configuration, Fits_Files,Tirific_Template, cube_hdr,Ini
         set_limit_modifier(Configuration,FAT_Model[0,Vars_to_Set.index('INCL')], debug=debug)
         Configuration['INNER_FIX'] = get_inner_fix(Configuration,Tirific_Template, debug=debug)
         Configuration['WARP_SLOPE'] = get_warp_slope(Configuration,Tirific_Template,cube_hdr, debug=debug)
+
+        parameters = {'VSYS': [FAT_Model[0,Vars_to_Set.index('VSYS')], Configuration['CHANNEL_WIDTH']], \
+                      'XPOS': [FAT_Model[0,Vars_to_Set.index('XPOS')],cube_hdr['BMAJ']] ,
+                      'YPOS': [FAT_Model[0,Vars_to_Set.index('YPOS')], cube_hdr['BMAJ']],
+                      'INCL': [FAT_Model[0,Vars_to_Set.index('INCL')], 3.],
+                      'PA':  [FAT_Model[0,Vars_to_Set.index('PA')], 3.],
+                      'VROT':[np.mean(FAT_Model[:,Vars_to_Set.index('VROT')]),np.max(FAT_Model[:,Vars_to_Set.index('VROT')])-np.min(FAT_Model[1:,Vars_to_Set.index('VROT')]) ]  }
         set_fitting_parameters(Configuration, Tirific_Template, hdr = cube_hdr,stage = 'initialize_ec',
-                               systemic =  [FAT_Model[0,Vars_to_Set.index('VSYS')], Configuration['CHANNEL_WIDTH']],
-                               inclination = [FAT_Model[0,Vars_to_Set.index('INCL')], 3.],
-                               pa = [FAT_Model[0,Vars_to_Set.index('PA')], 3.],
-                               rotation =[np.mean(FAT_Model[:,Vars_to_Set.index('VROT')]),np.max(FAT_Model[:,Vars_to_Set.index('VROT')])-np.min(FAT_Model[1:,Vars_to_Set.index('VROT')]) ],
-                               ra = [FAT_Model[0,Vars_to_Set.index('XPOS')], cube_hdr['BMAJ']],
-                               dec = [FAT_Model[0,Vars_to_Set.index('YPOS')],cube_hdr['BMAJ'] ], debug=debug)
+                               initial_estimates=parameters, debug=debug)
 
     tirific(Configuration,Tirific_Template,name = f'{fit_stage}_In.def', debug=debug)
 
@@ -759,17 +761,20 @@ def plot_parameters(Vars_to_plot,FAT_Model,Input_Model,location,Figure,parameter
             ax.plot(FAT_Model[:,Vars_to_plot.index('RADI')],FAT_Model[:,Vars_to_plot.index(f'{parameter}_2')],'ro', ms = 3.,zorder=3)
 
     if len(Input_Model) > 0:
-        last_index = int(np.where(Input_Model[:,Vars_to_plot.index(f'{parameter}')] != 0.)[-1])
-        try:
-            yerr = Input_Model[:last_index,Vars_to_plot.index(f'# {parameter}_ERR')]
-        except:
-            yerr =np.zeros(len(Input_Model[:last_index,Vars_to_plot.index('RADI')]))
-        ax.errorbar(Input_Model[:last_index,Vars_to_plot.index('RADI')],Input_Model[:last_index,Vars_to_plot.index(f'{parameter}')],yerr= yerr, c ='b',linestyle='-', label=f'{legend[2]}',zorder=2)
-        ax.plot(Input_Model[:last_index,Vars_to_plot.index('RADI')],Input_Model[:last_index,Vars_to_plot.index(f'{parameter}')],'bo',linestyle='-', ms = 3.,zorder=2)
+        print(f"What is going with {parameter} wrong {np.where(Input_Model[:,Vars_to_plot.index(f'{parameter}')] != 0.)}")
+        print(f" {Vars_to_plot.index(f'{parameter}')} ")
+        if np.sum(Input_Model[:,Vars_to_plot.index(f'{parameter}')]) != 0.:
+            last_index = int(np.where(Input_Model[:,Vars_to_plot.index(f'{parameter}')] != 0.)[0][-1])
+            try:
+                yerr = Input_Model[:last_index,Vars_to_plot.index(f'# {parameter}_ERR')]
+            except:
+                yerr =np.zeros(len(Input_Model[:last_index,Vars_to_plot.index('RADI')]))
+            ax.errorbar(Input_Model[:last_index,Vars_to_plot.index('RADI')],Input_Model[:last_index,Vars_to_plot.index(f'{parameter}')],yerr= yerr, c ='b',linestyle='-', label=f'{legend[2]}',zorder=2)
+            ax.plot(Input_Model[:last_index,Vars_to_plot.index('RADI')],Input_Model[:last_index,Vars_to_plot.index(f'{parameter}')],'bo',linestyle='-', ms = 3.,zorder=2)
         if np.sum(Input_Model[:,Vars_to_plot.index(f'{parameter}_2')]) != 0.:
             diff = np.sum(abs(Input_Model[:,Vars_to_plot.index(f'{parameter}_2')]-Input_Model[:,Vars_to_plot.index(f'{parameter}')]))
             if diff != 0.:
-                last_index = int(np.where(Input_Model[:,Vars_to_plot.index(f'{parameter}_2')] != 0.)[-1])
+                last_index = int(np.where(Input_Model[:,Vars_to_plot.index(f'{parameter}_2')] != 0.)[0][-1])
                 try:
                     yerr = Input_Model[:last_index,Vars_to_plot.index(f'# {parameter}_2_ERR')]
                 except:

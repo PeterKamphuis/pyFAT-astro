@@ -10,6 +10,7 @@ from astropy.wcs import WCS
 from astropy.io import fits
 
 import os
+import sys
 import signal
 import time
 import traceback
@@ -395,12 +396,13 @@ def get_inclination_pa(Configuration, map, Image, hdr, center, cutoff = 0., debu
         angles = np.linspace(0, 180, 180)
 
         ratios, maj_extent = obtain_ratios(map, hdr, center, angles,noise = cutoff)
+
         if debug:
             if i == 0:
-                print_log(f'''GUESS_ORIENTATION: We initially find radius of {maj_extent/hdr['BMAJ']} beams.
+                print_log(f'''GET_INCLINATION_PA: We initially find radius of {maj_extent/hdr['BMAJ']} beams.
 ''',Configuration['OUTPUTLOG'], debug = True)
             else:
-                print_log(f'''GUESS_ORIENTATION: From the cleaned map we find radius of {maj_extent/hdr['BMAJ']} beams.
+                print_log(f'''GET_INCLINATION_PA: From the cleaned map we find radius of {maj_extent/hdr['BMAJ']} beams.
 ''',Configuration['OUTPUTLOG'], debug = True)
         max_index = np.where(ratios == np.nanmax(ratios))[0]
         if max_index.size > 1:
@@ -432,20 +434,22 @@ def get_inclination_pa(Configuration, map, Image, hdr, center, cutoff = 0., debu
                                      abs(np.degrees(np.arccos(np.sqrt((ratios[min_index]**2-0.2**2)/0.96))) - np.degrees(np.arccos(np.sqrt((ratios[tenp_min_index[-1]]**2-0.2**2)/0.96)))),\
                                      abs(np.degrees(np.arccos(np.sqrt(((1./ratios[max_index])**2-0.2**2)/0.96))) - np.degrees(np.arccos(np.sqrt(((1./ratios[tenp_max_index[0]])**2-0.2**2)/0.96)))),\
                                      abs(np.degrees(np.arccos(np.sqrt(((1./ratios[max_index])**2-0.2**2)/0.96))) - np.degrees(np.arccos(np.sqrt(((1./ratios[tenp_max_index[0]])**2-0.2**2)/0.96))))]), \
-                                     2.5,25.)
+                                     1.5,10.)
             if not np.isfinite(inclination_error):
                 inclination_error = 90./inclination
         if ratios[max_index]-ratios[min_index] < 0.4:
-            inclination = float(inclination-(inclination*0.04/(ratios[max_index]-ratios[min_index])))
+            inclination = float(inclination-(inclination*0.01/(ratios[max_index]-ratios[min_index])))
             if i == 0:
                 inclination_error = float(inclination_error*0.4/(ratios[max_index]-ratios[min_index]))
         if maj_extent/hdr['BMAJ'] < 4:
             inclination = float(inclination+(inclination/10.*np.sqrt(4./(maj_extent/hdr['BMAJ']))))
             if i == 0:
                 inclination_error = float(inclination_error*4./(maj_extent/hdr['BMAJ']))
-        if i == 0 and inclination < 75.:
+        if inclination < 70.:
             Image = remove_inhomogeneities(Configuration,Image,inclination=inclination, pa = pa, center = center,WCS_center = False, debug=debug)
             map = Image[0].data
+        else:
+            break
     return [inclination,inclination_error], [pa,pa_error],maj_extent
 
 # Function to get the amount of inner rings to fix
@@ -938,13 +942,13 @@ def set_limit_modifier(Configuration,Inclination, debug= False):
     modifier_list = []
     for inc in Inclination:
         if 40 < inc < 50:
-            modifier_list.append(set_limits(1.+(50-(inc)*0.05),1,2.5))
+            modifier_list.append(set_limits(1.+((50-inc)*0.05),1.,2.5))
         elif inc < 40:
-            modifier_list.append(set_limits(np.sin(np.radians(75.))/np.sin(np.radians(inc)),1.,2.5))
+            modifier_list.append(set_limits(np.sin(np.radians(75.))/np.sin(np.radians(inc)),1.5,2.5))
         elif inc > 75:
-            modifier_list.append(set_limits(75./inc,0.8,1.0))
+            modifier_list.append(set_limits(75./inc,0.7,0.95))
         else:
-            modifier_list.append(1.)
+            modifier_list.append(0.95)
     if Configuration['OUTER_RINGS_DOUBLED']:
         if len(modifier_list) > 10:
             modifier_list[10:]= np.sqrt(modifier_list[10:])
@@ -973,7 +977,7 @@ def set_ring_size(Configuration, debug = False, size_in_beams = 0., check_set_ri
         print_log(f'''SET_RING_SIZE: Because we had less than four rings we have reduced the ring size from {previous_ringsize} to {ring_size}
 ''',Configuration['OUTPUTLOG'],debug = debug)
 
-    while no_rings < Configuration['MINIMUM_RINGS'] and size_in_beams !=  Configuration['MAX_SIZE_IN_BEAMS']:
+    while no_rings < Configuration['MINIMUM_RINGS'] and not size_in_beams >=  Configuration['MAX_SIZE_IN_BEAMS']:
         size_in_beams = set_limits(size_in_beams+1.*ring_size,1, Configuration['MAX_SIZE_IN_BEAMS'])
         no_rings = calc_rings(Configuration,ring_size=ring_size,size_in_beams=size_in_beams,debug=debug)
         print_log(f'''SET_RING_SIZE: The initial estimate is too small to fit adding a ring to it.
@@ -1026,12 +1030,12 @@ def set_rings(Configuration,ring_size = 0.,size_in_beams = 0. , debug = False):
         radii = np.hstack((radii,(np.linspace(Configuration['BMMAJ']*ring_size,Configuration['BMMAJ']*10.*ring_size, \
                                         10)+1./5*Configuration['BMMAJ'])))
         radii = np.hstack((radii,(np.linspace(Configuration['BMMAJ']*11.*ring_size, \
-                                              Configuration['BMMAJ']*(size_in_beams), \
+                                              Configuration['BMMAJ']*ring_size*(no_rings-12), \
                                               no_rings-12) \
                                               +1./5*Configuration['BMMAJ'])))
     else:
         radii = [0.,1./5.*Configuration['BMMAJ']]
-        radii = np.hstack((radii,(np.linspace(Configuration['BMMAJ']*ring_size,Configuration['BMMAJ']*size_in_beams, \
+        radii = np.hstack((radii,(np.linspace(Configuration['BMMAJ']*ring_size,Configuration['BMMAJ']*ring_size*(no_rings-2.), \
                                         no_rings-2)+1./5.*Configuration['BMMAJ'])))
     if debug:
         print_log(f'''SET_RINGS: Got the following radii.
@@ -1099,43 +1103,38 @@ Simple function to make sure all sofia output is present as expeceted
 '''
 
 # Function to wait for tirific when it is too fast for stdout
-def wait_for_tirific(progress_log,req_stamp,current_run):
+def wait_for_tirific(Configuration,req_stamp,current_run,counter = 0. ,total_fits = 1.):
+    sys.stdout.flush()
     Chi = 0.
     attempt = 0.
-    while True:
+    currentloop = 0.
+    max_loop = 0
+    time.sleep(1.0)
+    for tir_out_line in current_run.stdout:
+        tmp = re.split(r"[/: ]+",tir_out_line.strip())
+        if tmp[0] == 'L':
+            #if int(tmp[1]) != currentloop:
+                #print(f"RUN_TIRIFIC: Starting loop {tmp[1]} out of a maximum {max_loop}")
+            currentloop = int(tmp[1])
+            if max_loop == 0:
+                max_loop = int(tmp[2])
+            try:
+                Configuration['NO_POINTSOURCES'] = np.array([tmp[18],tmp[19]],dtype=float)
+            except:
+                #If this fails for some reason an old number suffices, if the code really crashed problems will occur elsewhere.
+                pass
+        if tmp[0].strip() == 'Finished':
+            Chi = float(tmp[tmp.index('C')+1])
+            break
+        if tmp[0].strip() == 'Abort':
+            break
+        attempt += 1
         try:
-            gh = current_run.stdout.readline()
-            print(gh)
-            for tir_out_line in current_run.stdout:
-                print(tir_out_line)
-                tmp = re.split(r"[/: ]+",tir_out_line.strip())
-                if tmp[0] == 'L':
-                    if int(tmp[1]) != currentloop:
-                        print(f"RUN_TIRIFIC: Starting loop {tmp[1]} out of a maximum {max_loop}")
-                    currentloop  = int(tmp[1])
-                    if max_loop == 0:
-                        max_loop = int(tmp[2])
-                    try:
-                        Configuration['NO_POINTSOURCES'] = np.array([tmp[18],tmp[19]],dtype=float)
-                    except:
-                        #If this fails for some reason an old number suffices, if the code really crashed problems will occur elsewhere.
-                        pass
-                if tmp[0].strip() == 'Finished':
-                    Chi = float(tmp[tmp.index('C')+1])
-                    break
-                if tmp[0].strip() == 'Abort':
-                    break
-                attempt += 1
-                print("", end=f"\rPercentComplete: {attempt/100.} %",flush = True)
-
-                if attempt > 1000.:
-                    Chi = float('NaN')
-                    print("\n")
-                    break
-        except IOError:
-            time.sleep(0.5)
-            attempt += 1
-            print("", end=f"\rPercenbcbcvtComplete: {attempt/100.} %",flush = True)
-
-    print("\n")
+            print(f"\rWarp Loop {counter/total_fits*100.:6.2f}% Complete.", end=" ",flush = True)
+        except:
+            pass
+        if attempt > 1000.:
+            Chi = float('NaN')
+            break
+    current_run.stdout.flush()
     return Chi

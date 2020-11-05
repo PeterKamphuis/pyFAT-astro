@@ -15,6 +15,7 @@ with warnings.catch_warnings():
     from matplotlib.patches import Ellipse
     import matplotlib.axes as maxes
 import os
+import time
 import copy
 import numpy as np
 import traceback
@@ -250,8 +251,10 @@ def extract_vrot(Configuration, hdr,map ,angle,center, debug= False):
     maj_resolution = abs((abs(x2-x1)/1000.)*np.sin(np.radians(angle)))+abs(abs(y2-y1)/1000.*np.cos(np.radians(angle)))
     maj_profile = ndimage.map_coordinates(map, np.vstack((liney,linex)),order=1)
     maj_axis =  np.linspace(0,1000*maj_resolution,1000)- (abs((abs(center[0]))*np.sin(np.radians(angle)))+abs(abs(center[1])*np.cos(np.radians(angle))))
-    neg_index = np.where(maj_axis < 0.)[0]
-    pos_index = np.where(maj_axis > 0.)[0]
+    #neg_index = np.where(maj_axis < 0.)[0]
+    #pos_index = np.where(maj_axis > 0.)[0]
+    neg_index = np.where(maj_profile > 0.)[0]
+    pos_index = np.where(maj_profile < 0.)[0]
 
     avg_profile = []
     neg_profile = []
@@ -261,7 +264,22 @@ def extract_vrot(Configuration, hdr,map ,angle,center, debug= False):
         avg_profile.append(np.nanmean([maj_profile[neg_index[neg_index.size-i-1]],-1*maj_profile[pos_index[i]]]))
         neg_profile.append(maj_profile[neg_index[neg_index.size-i-1]])
         pos_profile.append(-1*maj_profile[pos_index[i]])
+        #correct for beam smearing in the center
+        beam_back = -1*int(hdr['BMAJ']/(np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])*maj_resolution))
+        if i > hdr['BMAJ']/(np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])*maj_resolution) and i < -2.*beam_back:
 
+        #if i*np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])*maj_resolution < 1.5*hdr['BMAJ'] and i > int() :
+            avg_profile[beam_back] = avg_profile[beam_back]+0.5*avg_profile[int(beam_back/2.)]+0.1*avg_profile[-1]
+            neg_profile[beam_back] = neg_profile[beam_back]+0.5*neg_profile[int(beam_back/2.)]+0.1*neg_profile[-1]
+            pos_profile[beam_back] = pos_profile[beam_back]+0.5*pos_profile[int(beam_back/2.)]+0.1*pos_profile[-1]
+
+
+        #if neg_profile[-1]/pos_profile[-1] < 0.:
+        #    avg_profile.append(np.nanmean([maj_profile[neg_index[neg_index.size-i-1]],-1*maj_profile[pos_index[i]]]))
+        #elif neg_profile[-1] < 0.:
+        #    avg_profile.append(np.nanmin([maj_profile[neg_index[neg_index.size-i-1]],-1*maj_profile[pos_index[i]]]))
+        #else:
+        #    avg_profile.append(np.nanmax([maj_profile[neg_index[neg_index.size-i-1]],-1*maj_profile[pos_index[i]]]))
     if debug:
         print_log(f'''EXTRACT_VROT: starting extraction of initial VROT.
 {'':8s} negative= {neg_profile}
@@ -269,7 +287,7 @@ def extract_vrot(Configuration, hdr,map ,angle,center, debug= False):
 {'':8s} avreage= {avg_profile}
 ''',Configuration['OUTPUTLOG'], debug = True)
 
-    ring_size_req = Configuration['RING_SIZE']*hdr['BMAJ']/(np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])*maj_resolution)
+    ring_size_req = hdr['BMAJ']/(np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])*maj_resolution)
     profile = np.array(avg_profile[0::int(ring_size_req)],dtype=float)
     try:
         profile[np.isnan(profile)] = profile[~np.isnan(profile)][-1]
@@ -334,12 +352,20 @@ def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
     Image = fits.open(Configuration['FITTING_DIR']+'Sofia_Output/'+Fits_Files['CHANNEL_MAP'],\
             uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
     noise_map = np.sqrt(Image[0].data)*Configuration['NOISE']*Configuration['CHANNEL_WIDTH']
+    SNR = np.nanmean(map[noise_map > 0.]/noise_map[noise_map > 0.])
     noise_hdr = Image[0].header
     Image.close()
     median_noise_in_map = np.nanmedian(noise_map[noise_map > 0.])
     minimum_noise_in_map = np.nanmin(noise_map[noise_map > 0.])
     map[0.5*minimum_noise_in_map > noise_map] = 0.
-    inclination, pa, maj_extent = get_inclination_pa(Configuration, map,mom0, hdr, center, cutoff = 0.5* median_noise_in_map, debug = debug)
+    scale_factor = set_limits(SNR/3.*minimum_noise_in_map/median_noise_in_map, 0.05, 1.)
+    if debug:
+        print_log(f'''GUESS_ORIENTATION: We find SNR = {SNR} and a scale factor {scale_factor} and the noise median {median_noise_in_map}
+{'':8s} minimum {minimum_noise_in_map}
+''',Configuration['OUTPUTLOG'], debug = True)
+    inclination, pa, maj_extent = get_inclination_pa(Configuration, map,mom0, hdr, center, cutoff = scale_factor* median_noise_in_map, debug = debug)
+
+    maj_extent = maj_extent+(hdr['BMAJ']*0.2/scale_factor)
             #map[3*minimum_noise_in_map > noise_map] = 0.
     # From these estimates we also get an initial SBR
     x1,x2,y1,y2 = obtain_border_pix(hdr,pa[0],center)
@@ -395,7 +421,7 @@ def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
             maj_axis =  np.linspace(0,1000*maj_resolution,1000)- (abs((abs(center[0]))*np.sin(np.radians(pa[0])))+abs(abs(center[1])*np.cos(np.radians(pa[0]))))
 
 
-    ring_size_req = Configuration['RING_SIZE']*hdr['BMAJ']/(np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])*maj_resolution)
+    ring_size_req = hdr['BMAJ']/(np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])*maj_resolution)
     SBR_initial = avg_profile[0::int(ring_size_req)]/(np.pi*abs(hdr['BMAJ']*3600.*hdr['BMIN']*3600.)/(4.*np.log(2.))) # Jy*km/s
     SBR_initial =np.hstack((SBR_initial[0],SBR_initial,SBR_initial[-1]))
     #We need to know which is the approaching side and which is receding
@@ -537,13 +563,18 @@ def load_tirific(filename,Variables = ['BMIN','BMAJ','BPA','RMS','DISTANCE','NUR
 {'':8s}{Variables}
 ''',None,screen=True, debug = True)
     Variables = np.array([e.upper() for e in Variables],dtype=str)
+    numrings = []
+    while len(numrings) < 1:
+        time.sleep(0.1)
+        with open(filename, 'r') as tmp:
+            numrings = [int(e.split('=')[1].strip()) for e in tmp.readlines() if e.split('=')[0].strip().upper() == 'NUR']
 
-    tmp = open(filename, 'r')
 
-    numrings = [int(e.split('=')[1].strip()) for e in tmp.readlines() if e.split('=')[0].strip().upper() == 'NUR']
-    tmp.seek(0)
+
+    #print(numrings)tmp
     outputarray=np.zeros((numrings[0],len(Variables)),dtype=float)
-    unarranged = tmp.readlines()
+    with open(filename, 'r') as tmp:
+        unarranged = tmp.readlines()
     # Separate the keyword names
     for line in unarranged:
         var_concerned = str(line.split('=')[0].strip().upper())
@@ -644,7 +675,10 @@ def sofia_catalogue(Configuration, Variables =['name','x','x_min','x_max','y','y
 ''',Configuration['OUTPUTLOG'],debug= debug)
         found = False
         beam_edge=2.
-        vel_edge = 2.
+        if Configuration['VEL_SMOOTH_EXTENDED']:
+            vel_edge = 0.
+        else:
+            vel_edge = 1.
         while not found:
             many_sources  = copy.deepcopy(outlist)
             # We want to exclude any edge sources
