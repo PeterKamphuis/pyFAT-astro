@@ -99,7 +99,7 @@ def config_file(input_parameters, start_dir, debug = False):
                         Else press CTRL-C to abort.
                 ''')
     Configuration = Proper_Dictionary({})
-    boolean_keys = ['NEW_OUTPUT', 'HANNING','FIX_INCLINATION','FIX_PA','FIX_SDIS','FIX_Z0','WARP_OUTPUT']
+    boolean_keys = ['NEW_OUTPUT', 'HANNING','FIX_INCLINATION','FIX_PA','FIX_SDIS','FIX_Z0','WARP_OUTPUT','TWO_STEP']
     string_keys = ['OUTPUTLOG', 'OUTPUTCATALOGUE','MAINDIR','CATALOGUE']
     integer_keys = ['STARTGALAXY','ENDGALAXY','MAPS_OUTPUT','OPT_PIXELBEAM','FINISHAFTER']
     # Separate the keyword names
@@ -163,42 +163,50 @@ def config_file(input_parameters, start_dir, debug = False):
             Configuration['OUTPUTCATALOGUE'] = check_dir+'/'+output_catalogue_dir[-1]
 
 
-    required_configuration_keys = ['FIX_INCLINATION','FIX_PA','FIX_SDIS','FIX_Z0','HANNING','STARTGALAXY', 'ENDGALAXY', 'TESTING', 'START_POINT','RING_SIZE', 'FINISHAFTER', 'CATALOGUE', 'MAINDIR', 'OUTPUTCATALOGUE', 'OUTPUTLOG', 'NEW_OUTPUT', 'OPT_PIXELBEAM', 'MAPS_OUTPUT','WARP_OUTPUT']
+    required_configuration_keys = ['FIX_INCLINATION','FIX_PA','FIX_SDIS','FIX_Z0','HANNING',\
+                                   'STARTGALAXY', 'ENDGALAXY', 'TESTING', 'START_POINT',\
+                                   'RING_SIZE', 'FINISHAFTER', 'CATALOGUE', 'MAINDIR',\
+                                    'OUTPUTCATALOGUE', 'OUTPUTLOG', 'NEW_OUTPUT', 'OPT_PIXELBEAM',\
+                                     'MAPS_OUTPUT','WARP_OUTPUT','TWO_STEP']
 
     for key in required_configuration_keys:
         if key not in Configuration:
-            if key == 'STARTGALAXY':
+            if key == 'TWO_STEP':
+                Configuration[key] = False
+            elif key == 'STARTGALAXY':
                 Configuration[key] = 0
-            if key == 'FINISHAFTER':
+            elif key == 'FINISHAFTER':
                 Configuration[key] = 2
-            if key == 'TESTING':
+            elif key == 'TESTING':
                 Configuration[key] = 0
-            if key == 'START_POINT': #Previously calle allnew
+            elif key == 'START_POINT': #Previously calle allnew
                 Configuration[key] = 1
-            if key == 'ENDGALAXY':
+            elif key == 'ENDGALAXY':
                 Configuration[key] = -1
-            if key == 'NEW_OUTPUT':   # Called newresult in the gdl code
+            elif key == 'NEW_OUTPUT':   # Called newresult in the gdl code
                 Configuration[key] = True
-            if key == 'HANNING':
+            elif key == 'HANNING':
                 Configuration[key] = False
-            if key == 'RING_SIZE': #Previosuly called RINGSPACING in
+            elif key == 'RING_SIZE': #Previosuly called RINGSPACING in
                 Configuration[key] = 1.1
-            if key == 'FIX_INCLINATION': #Previosuly called fix_incl
+            elif key == 'FIX_INCLINATION': #Previosuly called fix_incl
                 Configuration[key] = False
-            if key == 'FIX_PA':
+            elif key == 'FIX_PA':
                 Configuration[key] = False
-            if key == 'FIX_SDIS':
+            elif key == 'FIX_SDIS':
                 Configuration[key] = False
-            if key == 'FIX_Z0':
+            elif key == 'FIX_Z0':
                 Configuration[key] = True
-            if key == 'OPT_PIXELBEAM':
+            elif key == 'OPT_PIXELBEAM':
                 Configuration[key] = 4
-            if key == 'MAPS_OUTPUT': # Previously called bookkeeping
+            elif key == 'MAPS_OUTPUT': # Previously called bookkeeping
                 Configuration[key] = 3
-            if key == 'WARP_OUTPUT':
+            elif key == 'WARP_OUTPUT':
                 Configuration[key] = False
-            if key == 'OUTPUTLOG':
+            elif key == 'OUTPUTLOG':
                 Configuration[key] = None
+            else:
+                raise BadConfigurationError('This should never ever happen. Please file an issue on github')
     if Configuration['RING_SIZE'] < 0.5:
         Configuration['RING_SIZE'] = 0.5
     if Configuration['MAPS_OUTPUT'] == 5:

@@ -66,23 +66,31 @@ def cleanup(Configuration,Fits_Files, debug = False):
             os.remove(f"{Configuration['FITTING_DIR']}Logs/{file}")
         except FileNotFoundError:
             pass
+    directories = ['Finalmodel','Sofia_Output','Def_Files']
+    files = [Configuration['BASE_NAME']+'-BasicInfo.txt']
+    if Configuration['TWO_STEP']:
+        directories.append('Centre_Convergence')
+        directories.append('Extent_Convergence')
+        files.append('Centre_Convergence_In.def')
+        files.append('Extent_Convergence_In.def')
+    else:
+        directories.append('One_Step_Convergence')
+        files.append('One_Step_Convergence_In.def')
     if Configuration['START_POINT'] == 1:
-        directories=['Finalmodel','Sofia_Output','Centre_Convergence','Def_Files','Extent_Convergence']
-        files = [Fits_Files['FITTING_CUBE'],Fits_Files['OPTIMIZED_CUBE'], \
-                'Centre_Convergence_In.def',Configuration['BASE_NAME']+'-BasicInfo.txt',\
-                'Extent_Convergence_In.def']
+        files.append(Fits_Files['FITTING_CUBE'])
+        files.append(Fits_Files['OPTIMIZED_CUBE'])
     elif Configuration['START_POINT'] == 2:
-        directories=['Finalmodel','Sofia_Output','Centre_Convergence','Def_Files','Extent_Convergence']
-        files = ['Centre_Convergence_In.def',Configuration['BASE_NAME']+'-BasicInfo.txt']
+        pass
     elif Configuration['START_POINT'] == 3:
-        directories=['Finalmodel','Centre_Convergence','Def_Files','Extent_Convergence']
-        files = ['Centre_Convergence_In.def']
+        directories.remove('Sofia_Output')
     elif Configuration['START_POINT'] == 4 and Configuration['FINISHAFTER'] > 1:
-        directories=['Finalmodel','Def_Files','Extent_Convergence']
+        directories.remove('Sofia_Output')
+        if Configuration['TWO_STEP']:
+                directories.remove('Centre_Convergence')
         files = ['Centre_Convergence_In.def',]
     else:
         directories= None
-        file =  None
+        files =  None
     if directories:
         print_log(f'''CLEANUP: We are cleaning the following directories:
 {"":8s}CLEANUP: {','.join(directories)}
@@ -259,16 +267,21 @@ def finish_galaxy(Configuration,maximum_directory_length,current_run = 'Not init
         if Configuration['FINISHAFTER'] > 0:
             if not os.path.isdir(Configuration['FITTING_DIR']+'/Finalmodel'):
                 os.mkdir(Configuration['FITTING_DIR']+'/Finalmodel')
-            if Configuration['FINISHAFTER'] == 1 and Configuration['START_POINT'] < 4:
-                # As tirific does not transfer the errors we have to do This
-                transfer_errors(Configuration,fit_stage='Centre_Convergence')
-                os.symlink(f"{Configuration['FITTING_DIR']}/Centre_Convergence/Centre_Convergence.fits",f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel.fits")
-                os.symlink(f"{Configuration['FITTING_DIR']}/Centre_Convergence/Centre_Convergence.def",f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel.def")
-            elif Configuration['FINISHAFTER'] == 2:
-                # As tirific does not transfer the errors we have to do This
-                transfer_errors(Configuration,fit_stage='Extent_Convergence')
-                os.symlink(f"{Configuration['FITTING_DIR']}/Extent_Convergence/Extent_Convergence.fits",f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel.fits")
-                os.symlink(f"{Configuration['FITTING_DIR']}/Extent_Convergence/Extent_Convergence.def",f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel.def")
+            if Configuration['TWO_STEP']:
+                if Configuration['FINISHAFTER'] == 1 and Configuration['START_POINT'] < 4:
+                    # As tirific does not transfer the errors we have to do This
+                    transfer_errors(Configuration,fit_stage='Centre_Convergence')
+                    linkname = f"{Configuration['FITTING_DIR']}/Centre_Convergence/Centre_Convergence"
+                elif Configuration['FINISHAFTER'] == 2:
+                    # As tirific does not transfer the errors we have to do This
+                    transfer_errors(Configuration,fit_stage='Extent_Convergence')
+                    linkname = f"{Configuration['FITTING_DIR']}/Extent_Convergence/Extent_Convergence"
+            else:
+                transfer_errors(Configuration,fit_stage='One_Step_Convergence')
+                linkname = f"{Configuration['FITTING_DIR']}/One_Step_Convergence/One_Step_Convergence"
+            os.symlink(f"{linkname}.fits",f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel.fits")
+            os.symlink(f"{linkname}.def",f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel.def")
+
             # We need to produce a FinalModel Directory with moment maps and an XV-Diagram of the model.
             if Fits_Files:
                 if Configuration['FINISHAFTER'] == 1 and Configuration['START_POINT'] == 4:

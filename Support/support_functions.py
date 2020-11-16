@@ -691,8 +691,10 @@ def rename_fit_products(Configuration,stage = 'initial', fit_stage='Undefined_St
                     Loopnr = f"EC_{Configuration['EC_LOOPS']-1}"
                 elif fit_stage == 'Centre_Convergence' and stage == 'run_cc' :
                     Loopnr = f"CC_{Configuration['CC_LOOPS']-1}"
+                elif fit_stage == 'One_Step_Convergence' and stage == 'run_os' :
+                    Loopnr = f"OS_{Configuration['OS_LOOPS']-1}"
                 else:
-                    Loopnr = 'final_before_'+stage
+                    Loopnr = 'final_output_before_'+stage
                 if os.path.exists(f"{Configuration['FITTING_DIR']}{fit_stage}/{fit_stage}.{filetype}"):
                     os.system(f"mv {Configuration['FITTING_DIR']}{fit_stage}/{fit_stage}.{filetype} {Configuration['FITTING_DIR']}{fit_stage}/{fit_stage}_{Loopnr}.{filetype}")
 
@@ -946,9 +948,9 @@ def set_limit_modifier(Configuration,Inclination, debug= False):
         elif inc < 40:
             modifier_list.append(set_limits(np.sin(np.radians(75.))/np.sin(np.radians(inc)),1.5,2.5))
         elif inc > 75:
-            modifier_list.append(set_limits(75./inc,0.7,0.95))
+            modifier_list.append(set_limits(75./inc,0.7,1.00))
         else:
-            modifier_list.append(0.95)
+            modifier_list.append(1.00)
     if Configuration['OUTER_RINGS_DOUBLED']:
         if len(modifier_list) > 10:
             modifier_list[10:]= np.sqrt(modifier_list[10:])

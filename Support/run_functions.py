@@ -71,11 +71,10 @@ def fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run,hd
     #if we have only a few rings we only smooth. else we fit a polynomial to the RC and smooth the SBR
     smoothed_sbr = smooth_profile(Configuration,Tirific_Template,'SBR',hdr, min_error= np.max([float(Tirific_Template['CFLUX']),float(Tirific_Template['CFLUX_2'])]),debug = debug)
     check_sbr(Configuration,Tirific_Template,hdr,debug = debug)
-    #if Configuration['NO_RINGS'] < 6 or stage == 'after_cc':
-    smoothed_vrot = smooth_profile(Configuration,Tirific_Template,'VROT',hdr,min_error = float(hdr['CDELT3']/1000.),debug = debug)
-
-    #else:
-    #    smoothed_vrot = regularise_profile(Configuration,Tirific_Template,'VROT',hdr,min_error = float(hdr['CDELT3']/1000.),debug = debug)
+    if Configuration['NO_RINGS'] < 6 or stage == 'after_cc':
+        smoothed_vrot = smooth_profile(Configuration,Tirific_Template,'VROT',hdr,min_error = float(hdr['CDELT3']/1000.),debug = debug)
+    else:
+        smoothed_vrot = regularise_profile(Configuration,Tirific_Template,'VROT',hdr,min_error = float(hdr['CDELT3']/1000.),debug = debug)
     if stage == 'after_ec':
         min_error = []
         pars_to_smooth = []
@@ -509,9 +508,10 @@ def extent_converge(Configuration, Fits_Files,Tirific_Template,current_run,hdr, 
         print_log(f'''EXTENT_CONVERGENCE: Starting with loop {Configuration['EC_LOOPS']} out of maximum {allowed_loops}.
 ''',Configuration['OUTPUTLOG'],debug = debug)
     fit_stage = 'Extent_Convergence'
-    accepted,current_run = run_tirific(Configuration,current_run,stage = 'run_ec', fit_stage = fit_stage, debug= debug)
+    stage = 'run_ec'
+    accepted,current_run = run_tirific(Configuration,current_run,stage = stage, fit_stage = fit_stage, debug= debug)
     write_new_to_template(Configuration,f"{Configuration['FITTING_DIR']}{fit_stage}/{fit_stage}.def" , Tirific_Template, debug = debug)
-    accepted_size = check_size(Configuration,Tirific_Template,hdr, current_run = current_run, debug=debug,Fits_Files=Fits_Files)
+    accepted_size = check_size(Configuration,Tirific_Template,hdr,  fit_stage = fit_stage, stage = stage,current_run = current_run, debug=debug,Fits_Files=Fits_Files)
     check_sbr(Configuration,Tirific_Template,hdr,stage = 'run_ec',debug=debug)
     if accepted and accepted_size:
             Configuration['EC_ACCEPTED'] = True
@@ -563,7 +563,49 @@ def make_full_resolution(Configuration,Tirific_Template,Fits_Files,fit_stage = '
 
 
 
+def one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run,hdr, debug = False,allowed_loops = 10.):
+    if debug:
+        print_log(f'''ONE_STEP_CONVERGENCE: Starting with loop {Configuration['OS_LOOPS']} out of maximum {allowed_loops}.
+''',Configuration['OUTPUTLOG'],debug = debug)
+    fit_stage = 'One_Step_Convergence'
+    stage = 'run_os'
+    accepted,current_run = run_tirific(Configuration,current_run,stage = stage, fit_stage = fit_stage, debug= debug)
+    write_new_to_template(Configuration,f"{Configuration['FITTING_DIR']}{fit_stage}/{fit_stage}.def" , Tirific_Template, debug = debug)
+    accepted = check_central_convergence(Configuration,Tirific_Template,hdr,accepted, fit_stage = fit_stage,debug=debug)
+    accepted_size = check_size(Configuration,Tirific_Template,hdr, fit_stage = fit_stage, stage = stage, current_run = current_run, debug=debug,Fits_Files=Fits_Files)
+    if accepted and accepted_size:
+            Configuration['OS_ACCEPTED'] = True
+    else:
+        if not accepted:
+            print_log('''ONE_STEP_CONVERGENCE: The centre did not converge or Tirific ran the maximum amount of loops which means the fit is not accepted and we smooth and retry.
+''',Configuration['OUTPUTLOG'],debug = debug)
+        else:
+            print_log(f'''ONE_STEP_CONVERGENCE: FAT adjusted the rings. Refitting with new settings after smoothing them.
+''',Configuration['OUTPUTLOG'],debug = debug)
+        Configuration['OS_ACCEPTED'] = False
+        if Configuration['OS_LOOPS'] > allowed_loops:
+            print_log(f'''ONE_STEP_CONVERGENCE: We have ran the convergence more than {allowed_loops} times aborting the fit.
+''',Configuration['OUTPUTLOG'],debug = debug)
+            return current_run
 
+        Configuration['INNER_FIX'] = get_inner_fix(Configuration, Tirific_Template,debug=debug)
+        set_cflux(Configuration,Tirific_Template,debug = debug)
+        keys_to_smooth =['INCL','PA','SDIS','Z0','VROT']
+        min_errors = [2.*Configuration['LIMIT_MODIFIER'],1.,hdr['CDELT3']/(2000.*Configuration['LIMIT_MODIFIER']), \
+                        convertskyangle(0.1,Configuration['DISTANCE'],physical= True)/Configuration['LIMIT_MODIFIER'],\
+                        hdr['CDELT3']/(1000.*Configuration['LIMIT_MODIFIER']),1e-6]
+        for j,key in enumerate(keys_to_smooth):
+            smoothed = smooth_profile(Configuration,Tirific_Template,key,hdr,debug=debug,min_error=min_errors[j])
+
+        set_fitting_parameters(Configuration, Tirific_Template, hdr = hdr,stage = 'run_os',\
+                             debug = debug)
+
+        #After smoothing the SBR we should check it again?
+        check_sbr(Configuration,Tirific_Template,hdr,stage = 'run_os',debug = debug)
+        wf.tirific(Configuration,Tirific_Template,name = 'One_Step_Convergence_In.def',debug = debug)
+
+
+    return current_run
 
 def run_tirific(Configuration, current_run, stage = 'initial',fit_stage = 'Undefined_Stage', debug = False):
     if debug:
@@ -597,7 +639,7 @@ def run_tirific(Configuration, current_run, stage = 'initial',fit_stage = 'Undef
             file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Mb \n")
     else:
         time.sleep(0.1)
-    print(f"RUN_TIRIFIC: Starting loop 1")
+    print(f"\r RUN_TIRIFIC: 0 % Completed", end =" ",flush = True)
     triggered = False
     for tir_out_line in current_run.stdout:
         tmp = re.split(r"[/: ]+",tir_out_line.strip())
@@ -613,7 +655,7 @@ def run_tirific(Configuration, current_run, stage = 'initial',fit_stage = 'Undef
                     file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Mb \n")
         if tmp[0] == 'L':
             if int(tmp[1]) != currentloop:
-                print(f"RUN_TIRIFIC: Starting loop {tmp[1]} out of a maximum {max_loop}")
+                print(f"\r RUN_TIRIFIC: {float(tmp[1])/float(max_loop)*100.:.1f} % Completed", end =" ",flush = True)
             currentloop  = int(tmp[1])
             if max_loop == 0:
                 max_loop = int(tmp[2])
@@ -626,6 +668,7 @@ def run_tirific(Configuration, current_run, stage = 'initial',fit_stage = 'Undef
             break
         if tmp[0].strip() == 'Abort':
             break
+    print(f'\n')
     if Configuration['TIMING']:
         with open(f"{Configuration['FITTING_DIR']}Logs/Usage_Statistics.txt",'a') as file:
             file.write("# Finished this run \n")
@@ -636,7 +679,7 @@ def run_tirific(Configuration, current_run, stage = 'initial',fit_stage = 'Undef
     time.sleep(1.0)
     wait_counter = 0
     while not os.path.exists(f"{Configuration['FITTING_DIR']}{fit_stage}/{fit_stage}.fits") and wait_counter < 1000.:
-        print(f"/r Waiting", end = "", flush = True)
+        print(f"\r Waiting ", end = "", flush = True)
         time.sleep(0.5)
         wait_counter += 1
 

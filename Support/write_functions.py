@@ -126,10 +126,14 @@ def initialize_def_file(Configuration, Fits_Files,Tirific_Template, cube_hdr,Ini
                                 initial_estimates = Initial_Parameters, debug=debug)
         if 'VSYS' in Initial_Parameters:
             Initial_Parameters['VSYS'] = [x*1000. for x in Initial_Parameters['VSYS']]
-    elif fit_stage == 'Extent_Convergence':
+    elif fit_stage in ['Extent_Convergence','One_Step_Convergence']:
+        if 'VSYS' in Initial_Parameters and fit_stage == 'One_Step_Convergence':
+            Initial_Parameters['VSYS'] = [x/1000. for x in Initial_Parameters['VSYS']]
         #accepted = check_size(Configuration,Tirific_Template,cube_hdr, debug=debug)
         set_overall_parameters(Configuration, Fits_Files,Tirific_Template,loops = 7 ,fit_stage=fit_stage,hdr=cube_hdr, debug=debug,stage='initialize_ec')
         Vars_to_Set =  ['XPOS','YPOS','VSYS','VROT','INCL','PA','SDIS','SBR','SBR_2','Z0']
+        if fit_stage == 'One_Step_Convergence':
+            set_model_parameters(Configuration, Tirific_Template,Initial_Parameters, hdr=cube_hdr, debug=debug)
         FAT_Model = load_template(Tirific_Template,Variables= Vars_to_Set,unpack=False, debug=debug)
         # Finally we set how these parameters are fitted.
         set_limit_modifier(Configuration,FAT_Model[0,Vars_to_Set.index('INCL')], debug=debug)
@@ -142,7 +146,7 @@ def initialize_def_file(Configuration, Fits_Files,Tirific_Template, cube_hdr,Ini
                       'INCL': [FAT_Model[0,Vars_to_Set.index('INCL')], 3.],
                       'PA':  [FAT_Model[0,Vars_to_Set.index('PA')], 3.],
                       'VROT':[np.mean(FAT_Model[:,Vars_to_Set.index('VROT')]),np.max(FAT_Model[:,Vars_to_Set.index('VROT')])-np.min(FAT_Model[1:,Vars_to_Set.index('VROT')]) ]  }
-        set_fitting_parameters(Configuration, Tirific_Template, hdr = cube_hdr,stage = 'initialize_ec',
+        set_fitting_parameters(Configuration, Tirific_Template, hdr = cube_hdr,stage = 'initialize_os',
                                initial_estimates=parameters, debug=debug)
 
     tirific(Configuration,Tirific_Template,name = f'{fit_stage}_In.def', debug=debug)
@@ -207,8 +211,10 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
         # Open the model info
         Vars_to_plot= ['RADI','XPOS','YPOS','VSYS','VROT','VROT_ERR','VROT_2','VROT_2_ERR','INCL','INCL_ERR','INCL_2','INCL_2_ERR','PA','PA_ERR','PA_2','PA_2_ERR','SDIS','SDIS_ERR','SDIS_2','SDIS_2_ERR','SBR','SBR_2','Z0','Z0_2']
         FAT_Model = load_tirific(f"{Configuration['FITTING_DIR']}Finalmodel/Finalmodel.def",Variables= Vars_to_plot,unpack=False,debug=debug)
-        Extra_Model = load_tirific(f"{Configuration['FITTING_DIR']}Centre_Convergence/Centre_Convergence.def",Variables= Vars_to_plot,unpack=False,debug=debug)
-
+        if os.path.exists(f"{Configuration['FITTING_DIR']}Centre_Convergence/Centre_Convergence.def"):
+            Extra_Model = load_tirific(f"{Configuration['FITTING_DIR']}Centre_Convergence/Centre_Convergence.def",Variables= Vars_to_plot,unpack=False,debug=debug)
+        else:
+            Extra_Model = []
         if debug:
             print_log(f'''MAKE_OVERVIEW_PLOT: We find the following model values.
 {'':8s}{[f"{x} = {FAT_Model[:,i]}" for i,x in enumerate(Vars_to_plot)]}
@@ -568,9 +574,14 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
                 'size':10}
         ax_RC = plot_parameters(Vars_to_plot,FAT_Model,Input_Model,gs[18:21,0:6],Overview,'VROT',initial = sof_basic_maxrot[0],Extra_Model = Extra_Model,debug=debug )
         ymin =np.min([FAT_Model[1:,Vars_to_plot.index('VROT')],FAT_Model[1:,Vars_to_plot.index('VROT_2')]])
-        ymin2 =np.min([Extra_Model[1:,Vars_to_plot.index('VROT')],Extra_Model[1:,Vars_to_plot.index('VROT_2')]])
+        if len(Extra_Model) > 0:
+            ymin2 =np.min([Extra_Model[1:,Vars_to_plot.index('VROT')],Extra_Model[1:,Vars_to_plot.index('VROT_2')]])
+            ymax2 =np.max([Extra_Model[1:,Vars_to_plot.index('VROT')],Extra_Model[1:,Vars_to_plot.index('VROT_2')]])
+        else:
+            ymin2 = ymin
+            ymax2 = ymax
         ymax =np.max([FAT_Model[1:,Vars_to_plot.index('VROT')],FAT_Model[1:,Vars_to_plot.index('VROT_2')]])
-        ymax2 =np.max([Extra_Model[1:,Vars_to_plot.index('VROT')],Extra_Model[1:,Vars_to_plot.index('VROT_2')]])
+
         if len(Input_Model) > 0:
             ymin3 =np.min([Input_Model[1:,Vars_to_plot.index('VROT')],Input_Model[1:,Vars_to_plot.index('VROT_2')]])
             ymax3 =np.max([Input_Model[1:,Vars_to_plot.index('VROT')],Input_Model[1:,Vars_to_plot.index('VROT_2')]])
@@ -686,7 +697,8 @@ BMAJ = {cube[0].header['BMAJ']*3600.:.1f} arcsec''',rotation=0, va='center',ha='
         plt.xlabel('Sys. Vel. (km s$^{-1}$)',**labelfont)
         plt.ylabel('Distance (Mpc)',**labelfont)
         plt.scatter(float(FAT_Model[0,Vars_to_plot.index('VSYS')]),float(Configuration['DISTANCE']),c='k',zorder= 3)
-        plt.scatter(float(Extra_Model[0,Vars_to_plot.index('VSYS')]),float(Configuration['DISTANCE']),c='r',alpha = 0.5,zorder=1)
+        if len(Extra_Model) > 0:
+            plt.scatter(float(Extra_Model[0,Vars_to_plot.index('VSYS')]),float(Configuration['DISTANCE']),c='r',alpha = 0.5,zorder=1)
         if len(Input_Model) > 0:
             plt.scatter(float(Input_Model[0,Vars_to_plot.index('VSYS')]),float(Configuration['DISTANCE']),c='b',zorder= 2)
         plt.scatter(sof_basic_vsys[0],float(Configuration['DISTANCE']),marker='x',alpha=0.5)
@@ -709,7 +721,8 @@ BMAJ = {cube[0].header['BMAJ']*3600.:.1f} arcsec''',rotation=0, va='center',ha='
 #----------------------------------------------RA vs DEC -----------------------------------------
         ax_RAD = Overview.add_subplot(gs[6:10,16:20])
         plt.scatter(float(FAT_Model[0,Vars_to_plot.index('XPOS')]),float(FAT_Model[0,Vars_to_plot.index('YPOS')]),c='k',zorder=3,label = 'Final')
-        plt.scatter(float(Extra_Model[0,Vars_to_plot.index('XPOS')]),float(Extra_Model[0,Vars_to_plot.index('YPOS')]),c='r',zorder=1,alpha=0.5,label='CC')
+        if len(Extra_Model) > 0:
+            plt.scatter(float(Extra_Model[0,Vars_to_plot.index('XPOS')]),float(Extra_Model[0,Vars_to_plot.index('YPOS')]),c='r',zorder=1,alpha=0.5,label='CC')
         if len(Input_Model) > 0:
             plt.scatter(float(Input_Model[0,Vars_to_plot.index('XPOS')]),float(Input_Model[0,Vars_to_plot.index('YPOS')]),c='b',zorder =2,label='Input')
         plt.scatter(sof_basic_ra[0],sof_basic_dec[0],marker='x',alpha=0.5, c = 'k',label='Initial')

@@ -89,9 +89,11 @@ def FAT(argv):
         Original_Configuration['CC_END_TIME'] = 'Not completed'
         Original_Configuration['EC_END_TIME'] = 'Not completed'
         Original_Configuration['CC_LOOPS'] = 0
+        Original_Configuration['OS_LOOPS'] = 0
         Original_Configuration['EC_LOOPS'] = 0
         Original_Configuration['CC_ACCEPTED'] = False
         Original_Configuration['EC_ACCEPTED'] = False
+        Original_Configuration['OS_ACCEPTED'] = False
         Original_Configuration['CURRENT_STAGE'] = 'initial'
         #Add some tracking paramaters
         Original_Configuration['MAX_RINGS'] = 0
@@ -163,10 +165,7 @@ def FAT(argv):
             ini_mode_factor =25
             # We initially set the variations to fixed for all parameters
             #let's see what happens if we immediately
-            Configuration['FIX_INCLINATION'] = True
-            Configuration['FIX_SDIS'] = True
-            Configuration['FIX_PA'] = True
-            Configuration['FIX_Z0'] = True
+
             #Make a dictionary for the fitsfiles we use
             Fits_Files = {'ORIGINAL_CUBE': f"{Catalogue['CUBENAME']}.fits"}
 
@@ -293,136 +292,190 @@ def FAT(argv):
                     continue
 
                     # We assume sofia is ran and created the proper files
-
+            allowed_loops = 15
             try:
                 current_run = 'Not Initialized'
                 # Process the found source in sofia to set up the proper fitting and make sure source can be fitted
                 Initial_Parameters = runf.check_source(Configuration, Fits_Files, Catalogue, cube_hdr,debug=Configuration['DEBUG'])
 
                 sf.print_log(f'''The source is well defined and we will now setup the initial tirific file
-    ''' ,Configuration['OUTPUTLOG'], screen =True, debug = Configuration['DEBUG'])
+''' ,Configuration['OUTPUTLOG'], screen =True, debug = Configuration['DEBUG'])
                 if Configuration['FINISHAFTER'] == 0:
                     Configuration['FINAL_COMMENT'] = 'You have chosen to end the fitting after preprocessing and sofia.'
                     cf.finish_galaxy(Configuration,maximum_directory_length,debug=Configuration['DEBUG'])
                     continue
-                if Configuration['START_POINT'] < 4:
-                    # setup the first def file to be used in the first loop
+                if not Configuration['TWO_STEP']:
+                    if not os.path.isdir(Configuration['FITTING_DIR']+'/One_Step_Convergence'):
+                        os.mkdir(Configuration['FITTING_DIR']+'/One_Step_Convergence')
                     wf.initialize_def_file(Configuration, Fits_Files,Tirific_Template, \
-                                            cube_hdr,Initial_Parameters= Initial_Parameters,fit_stage='Centre_Convergence',debug=Configuration['DEBUG'])
+                                            cube_hdr,Initial_Parameters= Initial_Parameters,fit_stage='One_Step_Convergence',debug=Configuration['DEBUG'])
                     sf.print_log(f'''The initial def file is written and we will now start fitting.
-    ''' ,Configuration['OUTPUTLOG'], screen =True, debug = Configuration['DEBUG'])
+''' ,Configuration['OUTPUTLOG'], screen =True, debug = Configuration['DEBUG'])
                     Configuration['PREP_END_TIME'] = datetime.now()
                     current_run = 'Not Initialized'
-                    # If we have no directory to put the output we create it
-                    if not os.path.isdir(Configuration['FITTING_DIR']+'/Centre_Convergence'):
-                        os.mkdir(Configuration['FITTING_DIR']+'/Centre_Convergence')
-                    #We skip the first fit atm
-                    #Configuration['CC_ACCEPTED'] = True
-                    #write_new_to_template(Configuration,f"{Configuration['FITTING_DIR']}Cen_Conv.def", Tirific_Template)
-                    #Upto here should be removed for real code
-                    while not Configuration['CC_ACCEPTED'] and Configuration['CC_LOOPS'] < 10:
-                        Configuration['CC_LOOPS'] = Configuration['CC_LOOPS']+1
-                        sf.print_log(f'''We are starting loop {Configuration['CC_LOOPS']} of trying to converge the center.
-    ''',Configuration['OUTPUTLOG'],screen =True, debug = Configuration['DEBUG'])
-                        current_run = runf.central_converge(Configuration, Fits_Files,Tirific_Template,current_run,cube_hdr,Initial_Parameters, debug = Configuration['DEBUG'])
+                        # If we have no directory to put the output we create it
 
-                    if Configuration['CC_ACCEPTED']:
-                        sf.print_log(f''' The center has converged and we will adjust the smoothed profile and start to adjust the size of the galaxy.
-    ''',Configuration['OUTPUTLOG'],screen =True,debug=Configuration['DEBUG'])
+                    while not Configuration['OS_ACCEPTED'] and Configuration['OS_LOOPS'] < allowed_loops:
+                        Configuration['OS_LOOPS'] = Configuration['OS_LOOPS']+1
+                        sf.print_log(f'''We are starting loop {Configuration['OS_LOOPS']} of trying to converge the center and extent.
+''',Configuration['OUTPUTLOG'],screen =True, debug = Configuration['DEBUG'])
+                        if Configuration['DEBUG']:
+                                sf.print_log(f'''Settings for the variations will be.
+{'':8s} INCLINATION: Fixed = {Original_Configuration['FIX_INCLINATION']}
+{'':8s} PA: Fixed = {Original_Configuration['FIX_PA']}
+{'':8s} SDIS: Fixed = {Original_Configuration['FIX_SDIS']}
+{'':8s} Z0: Fixed = {Original_Configuration['FIX_Z0']}
+''',Configuration['OUTPUTLOG'],debug=Configuration['DEBUG'],screen =True)
+                        if Configuration['SIZE_IN_BEAMS'] > Configuration['MINIMUM_WARP_SIZE']:
+                            Configuration['FIX_INCLINATION'] = Original_Configuration['FIX_INCLINATION']
+                            Configuration['FIX_SDIS'] = Original_Configuration['FIX_SDIS']
+                            Configuration['FIX_PA'] = Original_Configuration['FIX_PA']
+                            Configuration['FIX_Z0'] = Original_Configuration['FIX_Z0']
+                        else:
+                            Configuration['FIX_INCLINATION'] = True
+                            Configuration['FIX_SDIS'] = True
+                            Configuration['FIX_PA'] = True
+                            Configuration['FIX_Z0'] = True
+                            flatten_the_curve(Configuration,Tirific_Template)
+                        current_run = runf.one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run,cube_hdr,debug = Configuration['DEBUG'],allowed_loops = allowed_loops)
+
+
+                    if Configuration['OS_ACCEPTED']:
+                        sf.print_log(f'''The model has converged in center and extent and we make a smoothed version.
+            ''',Configuration['OUTPUTLOG'],screen =True, debug = Configuration['DEBUG'])
+                        current_run = runf.fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run,cube_hdr,stage = 'after_os', fit_stage = 'One_Step_Convergence',debug = Configuration['DEBUG'])
+                        if Configuration['OPTIMIZED']:
+                            runf.make_full_resolution(Configuration,Tirific_Template,Fits_Files,current_run = current_run,fit_stage = 'One_Step_Convergence',debug=Configuration['DEBUG'])
                     else:
-                        sf.print_log(f''' We could not find a stable center for the the initial stages. We will now try while adapting the the size of the model.
-    ''',Configuration['OUTPUTLOG'],screen =True,debug=Configuration['DEBUG'])
-
-                    #Then we want to make a smoothed version that can be adapted
-                    current_run = runf.fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run,cube_hdr,stage = 'after_cc', fit_stage = 'Centre_Convergence',debug=Configuration['DEBUG'])
-                    #incl = rf.load_tirific(f"{Configuration['FITTING_DIR']}Centre_Convergence/Centre_Convergence.def",Variables = ['INCL'])
-                    #sf.print_log(f'''BEFORE_CHECK_INCLINATION: CC_loops = {Configuration['CC_LOOPS']}
-    #{'':8s} Incl = {incl}
-    #{'':8s} Size in beams =  {Configuration['SIZE_IN_BEAMS']})
-    #''',Configuration['OUTPUTLOG'],debug = Configuration['DEBUG'])
-                    #if float(incl[0][0]) < 40.:
-                        #If our fit stage is after cc we want to make sure we do an extra check on low inclinations or small Galaxies
-                    #    runf.check_inclination(Configuration,Tirific_Template,Fits_Files,fit_stage = 'Centre_Convergence',debug=Configuration['DEBUG'])
-
-                    #if Configuration['OPTIMIZED']:
-                    #    runf.make_full_resolution(Configuration,Tirific_Template,Fits_Files,current_run = current_run,fit_stage = 'Centre_Convergence',debug=Configuration['DEBUG'])
+                        Configuration['FINAL_COMMENT'] = 'We could not converge on the extent or centre of the galaxy'
+                        Configuration['MAPS_OUTPUT'] = 5
+                        cf.finish_galaxy(Configuration,maximum_directory_length, Fits_Files =Fits_Files,current_run =current_run,debug=Configuration['DEBUG'])
+                        continue
+                    Configuration['OS_END_TIME'] = datetime.now()
                 else:
-                    current_run = 'Not initialized'
-                    write_new_to_template(Configuration, f"{Configuration['FITTING_DIR']}Centre_Convergence/Centre_Convergence.def", Tirific_Template, \
-                                         Variables = ['VROT','Z0', 'SBR', 'INCL','PA','XPOS','YPOS','VSYS','SDIS','VROT_2',  'Z0_2','SBR_2',
-                                                         'RADI','INCL_2','PA_2','XPOS_2','YPOS_2','VSYS_2','SDIS_2', 'CFLUX', 'CFLUX_2', 'NUR', 'CONDISP',\
-                                                         'BMIN','BMAJ','RMS','BPA','NCORES','INIMODE', 'VARY','VARINDX','MODERATE','DELEND','DELSTART'\
-                                                         ,'MINDELTA','PARMAX','PARMIN','DISTANCE','INSET'],debug=Configuration['DEBUG'])
+                    if Configuration['START_POINT'] < 4:
+                        #We first fixe the variations
+                        Configuration['FIX_INCLINATION'] = True
+                        Configuration['FIX_SDIS'] = True
+                        Configuration['FIX_PA'] = True
+                        Configuration['FIX_Z0'] = True
+                        # setup the first def file to be used in the first loop
+                        wf.initialize_def_file(Configuration, Fits_Files,Tirific_Template, \
+                                                cube_hdr,Initial_Parameters= Initial_Parameters,fit_stage='Centre_Convergence',debug=Configuration['DEBUG'])
+                        sf.print_log(f'''The initial def file is written and we will now start fitting.
+''' ,Configuration['OUTPUTLOG'], screen =True, debug = Configuration['DEBUG'])
+                        Configuration['PREP_END_TIME'] = datetime.now()
+                        current_run = 'Not Initialized'
+                        # If we have no directory to put the output we create it
+                        if not os.path.isdir(Configuration['FITTING_DIR']+'/Centre_Convergence'):
+                            os.mkdir(Configuration['FITTING_DIR']+'/Centre_Convergence')
+                        #We skip the first fit atm
+                        #Configuration['CC_ACCEPTED'] = True
+                        #write_new_to_template(Configuration,f"{Configuration['FITTING_DIR']}Cen_Conv.def", Tirific_Template)
+                        #Upto here should be removed for real code
+                        while not Configuration['CC_ACCEPTED'] and Configuration['CC_LOOPS'] < 10:
+                            Configuration['CC_LOOPS'] = Configuration['CC_LOOPS']+1
+                            sf.print_log(f'''We are starting loop {Configuration['CC_LOOPS']} of trying to converge the center.
+        ''',Configuration['OUTPUTLOG'],screen =True, debug = Configuration['DEBUG'])
+                            current_run = runf.central_converge(Configuration, Fits_Files,Tirific_Template,current_run,cube_hdr,Initial_Parameters, debug = Configuration['DEBUG'])
 
-                Configuration['CC_END_TIME'] = datetime.now()
+                        if Configuration['CC_ACCEPTED']:
+                            sf.print_log(f''' The center has converged and we will adjust the smoothed profile and start to adjust the size of the galaxy.
+        ''',Configuration['OUTPUTLOG'],screen =True,debug=Configuration['DEBUG'])
+                        else:
+                            sf.print_log(f''' We could not find a stable center for the the initial stages. We will now try while adapting the the size of the model.
+        ''',Configuration['OUTPUTLOG'],screen =True,debug=Configuration['DEBUG'])
+
+                        #Then we want to make a smoothed version that can be adapted
+                        #current_run = runf.fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run,cube_hdr,stage = 'after_cc', fit_stage = 'Centre_Convergence',debug=Configuration['DEBUG'])
+                        #incl = rf.load_tirific(f"{Configuration['FITTING_DIR']}Centre_Convergence/Centre_Convergence.def",Variables = ['INCL'])
+                        #sf.print_log(f'''BEFORE_CHECK_INCLINATION: CC_loops = {Configuration['CC_LOOPS']}
+        #{'':8s} Incl = {incl}
+        #{'':8s} Size in beams =  {Configuration['SIZE_IN_BEAMS']})
+        #''',Configuration['OUTPUTLOG'],debug = Configuration['DEBUG'])
+                        #if float(incl[0][0]) < 40.:
+                            #If our fit stage is after cc we want to make sure we do an extra check on low inclinations or small Galaxies
+                        #    runf.check_inclination(Configuration,Tirific_Template,Fits_Files,fit_stage = 'Centre_Convergence',debug=Configuration['DEBUG'])
+
+                        #if Configuration['OPTIMIZED']:
+                        #    runf.make_full_resolution(Configuration,Tirific_Template,Fits_Files,current_run = current_run,fit_stage = 'Centre_Convergence',debug=Configuration['DEBUG'])
+                    else:
+                        current_run = 'Not initialized'
+                        write_new_to_template(Configuration, f"{Configuration['FITTING_DIR']}Centre_Convergence/Centre_Convergence.def", Tirific_Template, \
+                                             Variables = ['VROT','Z0', 'SBR', 'INCL','PA','XPOS','YPOS','VSYS','SDIS','VROT_2',  'Z0_2','SBR_2',
+                                                             'RADI','INCL_2','PA_2','XPOS_2','YPOS_2','VSYS_2','SDIS_2', 'CFLUX', 'CFLUX_2', 'NUR', 'CONDISP',\
+                                                             'BMIN','BMAJ','RMS','BPA','NCORES','INIMODE', 'VARY','VARINDX','MODERATE','DELEND','DELSTART'\
+                                                             ,'MINDELTA','PARMAX','PARMIN','DISTANCE','INSET'],debug=Configuration['DEBUG'])
+
+                    Configuration['CC_END_TIME'] = datetime.now()
 
 
-                #If we only care about a centrally converged galaxy we stop here
+                    #If we only care about a centrally converged galaxy we stop here
 
-                # if our current run is not broken then we want to stop it
-                sf.finish_current_run(Configuration,current_run,debug= Configuration['DEBUG'])
-                # write the new values to the basic info file
-                    #Write the info to the Basic info File
+                    # if our current run is not broken then we want to stop it
+                    sf.finish_current_run(Configuration,current_run,debug= Configuration['DEBUG'])
+                    # write the new values to the basic info file
+                        #Write the info to the Basic info File
 
-                wf.basicinfo(Configuration,first_fit = True, template=Tirific_Template,Fits_Files=Fits_Files)
-
-
-
-                if Configuration['FINISHAFTER'] == 1:
-                    Configuration['FINAL_COMMENT'] = 'You have chosen to end the fitting after preprocessing and sofia.'
-                    cf.finish_galaxy(Configuration,maximum_directory_length,current_run =current_run, Fits_Files =Fits_Files,debug=Configuration['DEBUG'])
-                    continue
-                # Now set our variations to the original values but only if the galaxy is large enough
-                if Configuration['SIZE_IN_BEAMS'] > Configuration['MINIMUM_WARP_SIZE']:
-                    Configuration['FIX_INCLINATION'] = Original_Configuration['FIX_INCLINATION']
-                    Configuration['FIX_SDIS'] = Original_Configuration['FIX_SDIS']
-                    Configuration['FIX_PA'] = Original_Configuration['FIX_PA']
-                    Configuration['FIX_Z0'] = Original_Configuration['FIX_Z0']
+                    wf.basicinfo(Configuration,first_fit = True, template=Tirific_Template,Fits_Files=Fits_Files)
 
 
-                #Then we want to setup for the next fit.
-                wf.initialize_def_file(Configuration, Fits_Files,Tirific_Template, \
-                                        cube_hdr,fit_stage='Extent_Convergence',debug=Configuration['DEBUG'])
-                if not os.path.isdir(Configuration['FITTING_DIR']+'/Extent_Convergence'):
-                    os.mkdir(Configuration['FITTING_DIR']+'/Extent_Convergence')
-                allowed_loops = 10
-                while not Configuration['EC_ACCEPTED'] and Configuration['EC_LOOPS'] < allowed_loops:
-                    Configuration['EC_LOOPS'] = Configuration['EC_LOOPS']+1
-                    sf.print_log(f'''We are starting loop {Configuration['EC_LOOPS']} of trying to converge the extent.
-    ''',Configuration['OUTPUTLOG'],screen =True, debug = Configuration['DEBUG'])
-                    if Configuration['DEBUG']:
-                            sf.print_log(f'''Settings for the variations will be.
-                {'':8s} INCLINATION: Fixed = {Original_Configuration['FIX_INCLINATION']}
-                {'':8s} PA: Fixed = {Original_Configuration['FIX_PA']}
-                {'':8s} SDIS: Fixed = {Original_Configuration['FIX_SDIS']}
-                {'':8s} Z0: Fixed = {Original_Configuration['FIX_Z0']}
-    ''',Configuration['OUTPUTLOG'],debug=Configuration['DEBUG'],screen =True)
+
+                    if Configuration['FINISHAFTER'] == 1:
+                        Configuration['FINAL_COMMENT'] = 'You have chosen to end the fitting after preprocessing and sofia.'
+                        cf.finish_galaxy(Configuration,maximum_directory_length,current_run =current_run, Fits_Files =Fits_Files,debug=Configuration['DEBUG'])
+                        continue
+                    # Now set our variations to the original values but only if the galaxy is large enough
                     if Configuration['SIZE_IN_BEAMS'] > Configuration['MINIMUM_WARP_SIZE']:
                         Configuration['FIX_INCLINATION'] = Original_Configuration['FIX_INCLINATION']
                         Configuration['FIX_SDIS'] = Original_Configuration['FIX_SDIS']
                         Configuration['FIX_PA'] = Original_Configuration['FIX_PA']
                         Configuration['FIX_Z0'] = Original_Configuration['FIX_Z0']
-                    else:
-                        Configuration['FIX_INCLINATION'] = True
-                        Configuration['FIX_SDIS'] = True
-                        Configuration['FIX_PA'] = True
-                        Configuration['FIX_Z0'] = True
-                        flatten_the_curve(Configuration,Tirific_Template)
-                    current_run = runf.extent_converge(Configuration, Fits_Files,Tirific_Template,current_run,cube_hdr,debug = Configuration['DEBUG'],allowed_loops = allowed_loops)
 
 
-                if Configuration['EC_ACCEPTED']:
-                    sf.print_log(f'''The extent has converged and we make a smoothed version.
+                    #Then we want to setup for the next fit.
+                    wf.initialize_def_file(Configuration, Fits_Files,Tirific_Template, \
+                                            cube_hdr,fit_stage='Extent_Convergence',debug=Configuration['DEBUG'])
+                    if not os.path.isdir(Configuration['FITTING_DIR']+'/Extent_Convergence'):
+                        os.mkdir(Configuration['FITTING_DIR']+'/Extent_Convergence')
+
+                    while not Configuration['EC_ACCEPTED'] and Configuration['EC_LOOPS'] < allowed_loops:
+                        Configuration['EC_LOOPS'] = Configuration['EC_LOOPS']+1
+                        sf.print_log(f'''We are starting loop {Configuration['EC_LOOPS']} of trying to converge the extent.
         ''',Configuration['OUTPUTLOG'],screen =True, debug = Configuration['DEBUG'])
-                    current_run = runf.fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run,cube_hdr,stage = 'after_ec', fit_stage = 'Extent_Convergence',debug = Configuration['DEBUG'])
-                    if Configuration['OPTIMIZED']:
-                        runf.make_full_resolution(Configuration,Tirific_Template,Fits_Files,current_run = current_run,fit_stage = 'Extent_Convergence',debug=Configuration['DEBUG'])
-                else:
-                    Configuration['FINAL_COMMENT'] = 'We could not converge on the extend of the galaxy'
-                    Configuration['MAPS_OUTPUT'] = 5
-                    cf.finish_galaxy(Configuration,maximum_directory_length, Fits_Files =Fits_Files,current_run =current_run,debug=Configuration['DEBUG'])
-                    continue
-                Configuration['EC_END_TIME'] = datetime.now()
+                        if Configuration['DEBUG']:
+                                sf.print_log(f'''Settings for the variations will be.
+                    {'':8s} INCLINATION: Fixed = {Original_Configuration['FIX_INCLINATION']}
+                    {'':8s} PA: Fixed = {Original_Configuration['FIX_PA']}
+                    {'':8s} SDIS: Fixed = {Original_Configuration['FIX_SDIS']}
+                    {'':8s} Z0: Fixed = {Original_Configuration['FIX_Z0']}
+        ''',Configuration['OUTPUTLOG'],debug=Configuration['DEBUG'],screen =True)
+                        if Configuration['SIZE_IN_BEAMS'] > Configuration['MINIMUM_WARP_SIZE']:
+                            Configuration['FIX_INCLINATION'] = Original_Configuration['FIX_INCLINATION']
+                            Configuration['FIX_SDIS'] = Original_Configuration['FIX_SDIS']
+                            Configuration['FIX_PA'] = Original_Configuration['FIX_PA']
+                            Configuration['FIX_Z0'] = Original_Configuration['FIX_Z0']
+                        else:
+                            Configuration['FIX_INCLINATION'] = True
+                            Configuration['FIX_SDIS'] = True
+                            Configuration['FIX_PA'] = True
+                            Configuration['FIX_Z0'] = True
+                            flatten_the_curve(Configuration,Tirific_Template)
+                        current_run = runf.extent_converge(Configuration, Fits_Files,Tirific_Template,current_run,cube_hdr,debug = Configuration['DEBUG'],allowed_loops = allowed_loops)
+
+
+                    if Configuration['EC_ACCEPTED']:
+                        sf.print_log(f'''The extent has converged and we make a smoothed version.
+            ''',Configuration['OUTPUTLOG'],screen =True, debug = Configuration['DEBUG'])
+                        current_run = runf.fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run,cube_hdr,stage = 'after_ec', fit_stage = 'Extent_Convergence',debug = Configuration['DEBUG'])
+                        if Configuration['OPTIMIZED']:
+                            runf.make_full_resolution(Configuration,Tirific_Template,Fits_Files,current_run = current_run,fit_stage = 'Extent_Convergence',debug=Configuration['DEBUG'])
+                    else:
+                        Configuration['FINAL_COMMENT'] = 'We could not converge on the extend of the galaxy'
+                        Configuration['MAPS_OUTPUT'] = 5
+                        cf.finish_galaxy(Configuration,maximum_directory_length, Fits_Files =Fits_Files,current_run =current_run,debug=Configuration['DEBUG'])
+                        continue
+                    Configuration['EC_END_TIME'] = datetime.now()
             except Exception as e:
                 Configuration['FINAL_COMMENT'] = e
                 if e.__class__.__name__ in stop_individual_errors:

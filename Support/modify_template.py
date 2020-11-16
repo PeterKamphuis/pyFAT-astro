@@ -65,7 +65,8 @@ def check_sbr(Configuration,Tirific_Template,hdr , stage ='initial',debug=False)
     print_log(f'''CHECK_SBR: We checked the surface brightness profiles.
 ''',Configuration['OUTPUTLOG'])
 
-def check_size(Configuration,Tirific_Template,hdr,Fits_Files= 'No Files' ,debug = False,fix_rc = False,current_run='Not Initialized'):
+def check_size(Configuration,Tirific_Template,hdr, fit_stage = 'Unitialized_Stage', stage = 'initial',
+                Fits_Files= 'No Files' ,debug = False,fix_rc = False,current_run='Not Initialized'):
     if debug and not fix_rc:
         print_log(f'''CHECK_SIZE: Starting a new Check_size with the following parameters:
 {'':8s}CHECK_SIZE: Rings = {Configuration['NO_RINGS']}
@@ -219,7 +220,7 @@ def check_size(Configuration,Tirific_Template,hdr,Fits_Files= 'No Files' ,debug 
     if Fits_Files == 'No Files':
         raise InitializeError('CHECK_SIZE: Trying to adapt the model size but the fits files were not provided.')
     else:
-        set_new_size(Configuration,Tirific_Template,Fits_Files,hdr=hdr ,debug = debug,current_run = current_run)
+        set_new_size(Configuration,Tirific_Template,Fits_Files,fit_stage= fit_stage, stage = stage, hdr=hdr ,debug = debug,current_run = current_run)
     return False
 check_size.__doc__ = '''
 ;+
@@ -668,14 +669,14 @@ def fit_polynomial(Configuration,radii,profile,sm_profile,error, key, Tirific_Te
 {'':8s} and the following profile:
 {'':8s}{sm_profile[st_fit:]}''',Configuration['OUTPUTLOG'],screen =True, debug=debug)
     for ord in order:
-        fit_prof = np.poly1d(np.polyfit(radii[st_fit:],sm_profile[st_fit:],ord,w=1./error[st_fit:]))
+        fit_prof = np.poly1d(np.polyfit(radii[st_fit:],profile[st_fit:],ord,w=1./error[st_fit:]))
         fit_profile = fit_prof(radii)
         fit_profile = fix_profile(Configuration, key, fit_profile, Tirific_Template, hdr,debug =debug, singular = True)
         red_chi = np.sum((profile[st_fit:]-fit_profile[st_fit:])**2/error[st_fit:])/(len(radii[st_fit:])-ord)
         reduced_chi.append(red_chi)
     reduced_chi = np.array(reduced_chi,dtype = float)
     final_order = order[np.where(np.min(reduced_chi ) == reduced_chi )[0][0]]
-    fit_profile = np.poly1d(np.polyfit(radii[st_fit:],sm_profile[st_fit:],final_order,w=1./error[st_fit:]))
+    fit_profile = np.poly1d(np.polyfit(radii[st_fit:],profile[st_fit:],final_order,w=1./error[st_fit:]))
     if st_fit > 0.:
         new_profile = np.concatenate(([sm_profile[0]],[e for e in fit_profile(radii[st_fit:])]))
     else:
@@ -813,6 +814,8 @@ def set_fitting_parameters(Configuration, Tirific_Template, \
                 parameters_to_adjust = ['VSYS','XPOS','YPOS','SBR','VROT','PA','INCL','SDIS']
         elif stage in ['initialize_ec','run_ec','after_ec']:
             parameters_to_adjust = ['INCL','PA','VROT','SDIS','SBR','Z0','XPOS','YPOS','VSYS']
+        elif stage in  ['initialize_os','run_os','after_os']:
+            parameters_to_adjust = ['VSYS','XPOS','YPOS','INCL','PA','SBR','VROT','SDIS','Z0']
         else:
             if debug:
                 print_log(f'''SET_FITTING_PARAMETERS: No default adjustment for unknown stage.
@@ -853,7 +856,7 @@ def set_fitting_parameters(Configuration, Tirific_Template, \
             if key == 'Z0':  modifiers['Z0'] = [0.5,0.5,2.]
             elif key in ['XPOS','YPOS']: modifiers[key] = [1.,1.,1.]
             elif key == 'VSYS': modifiers[key] = [3.,1.,1.]
-            elif stage in  ['initial','run_cc','after_cc','after_ec']:
+            elif stage in  ['initial','run_cc','after_cc','after_ec','after_os']:
                 if key == 'INCL': modifiers['INCL'] = [1.,1.,1.]
                 elif key == 'PA': modifiers['PA'] = [1.,0.5,0.5]
                 elif key == 'SDIS': modifiers['SDIS'] =  [1.,1.,2.]
@@ -1021,7 +1024,7 @@ def set_generic_fitting(Configuration, key , stage = 'initial', values = [60,5.]
     if debug:
             print_log(f'''SET_GENERIC_FITTING: flat is {fixed}
 ''', Configuration['OUTPUTLOG'], screen = True ,debug = debug)
-    if (stage in ['initial','run_cc','after_cc','after_ec','parameterized']) or fixed:
+    if (stage in ['after_os','after_cc','after_ec','parameterized']) or fixed:
         if debug:
             print_log(f'''SET_GENERIC_FITTING: implementing a flat profile
 ''', Configuration['OUTPUTLOG'], screen = True ,debug = debug)
@@ -1032,7 +1035,7 @@ def set_generic_fitting(Configuration, key , stage = 'initial', values = [60,5.]
         input['DELSTART'] = np.array([values[1]*step_modifier[0]]) # Starting step
         input['DELEND'] = np.array([0.1*values[1]*step_modifier[1]]) #Ending step
         input['MINDELTA'] = np.array([0.05*values[1]*step_modifier[2]]) #saturation criterum when /SIZE SIZE should be 10 troughout the code
-    elif stage in ['initialize_ec','run_ec']:
+    else:
         if not symmetric:
             if debug:
                 print_log(f'''SET_GENERIC_FITTING: implementing a varying symmetric profile
@@ -1249,7 +1252,8 @@ set_model_parameters.__doc__ = '''
 '''
 
 #function to check that all parameters in template have the proper length.
-def set_new_size(Configuration,Tirific_Template, Fits_Files, hdr = 'Empty',current_run='Not Initialized', debug = False, Variables =
+def set_new_size(Configuration,Tirific_Template, Fits_Files, fit_stage = 'Unitialized Stage', stage = 'initial',
+                    hdr = 'Empty',current_run='Not Initialized', debug = False, Variables =
                     ['VROT','Z0', 'SBR', 'INCL','PA','XPOS','YPOS','VSYS','SDIS','VROT_2',  'Z0_2','SBR_2',
                      'INCL_2','PA_2','XPOS_2','YPOS_2','VSYS_2','SDIS_2', 'AZ1P', 'AZ1W' ,'AZ1P_2','AZ1W_2', 'RADI']):
     for key in Variables:
@@ -1333,7 +1337,7 @@ def set_new_size(Configuration,Tirific_Template, Fits_Files, hdr = 'Empty',curre
     #update the limit_modifier
     Inclination = np.array([(float(x)+float(y))/2. for x,y in zip(Tirific_Template['INCL'].split(),Tirific_Template['INCL_2'].split())],dtype=float)
     set_limit_modifier(Configuration,Inclination,debug=debug)
-    set_overall_parameters(Configuration, Fits_Files,Tirific_Template,loops = 7 ,fit_stage='Extent_Convergence',hdr=hdr, debug=debug,stage='run_ec')
+    set_overall_parameters(Configuration, Fits_Files,Tirific_Template,loops = 7 ,fit_stage=fit_stage,hdr=hdr, debug=debug,stage=stage)
     # if we change the radii we need to restart tirific
     finish_current_run(Configuration,current_run,debug=debug)
 
@@ -1358,11 +1362,12 @@ def set_overall_parameters(Configuration, Fits_Files,Tirific_Template,stage = 'i
             else:
                 Tirific_Template['INIMODE'] = '3'
 
-            if Configuration['NO_RINGS'] > 18:
+            if Configuration['NO_RINGS'] > 5:
                 Tirific_Template['INTY'] = 0
                 #Tirific_Template['INDINTY'] = 0
             else:
-                Tirific_Template['INTY'] = 2
+                #This should not be used with < 5 rings.
+                Tirific_Template['INTY'] = 1
                 #Tirific_Template['INDINTY'] = 2
             Tirific_Template['NUR'] = f"{Configuration['NO_RINGS']}"
 
@@ -1444,7 +1449,7 @@ def set_sbr_fitting(Configuration,hdr = None,systemic = 100., stage = 'no_stage'
 ''',Configuration['OUTPUTLOG'],debug = debug)
     sbr_input = {}
     inner_ring = 2
-    if stage in ['initial','run_cc','initialize_ec','run_ec']:
+    if stage in ['initial','run_cc','initialize_ec','run_ec','initialize_os','run_os']:
         if hdr:
             radii,sbr_ring_limits = sbr_limits(Configuration,hdr,systemic = systemic, debug = debug)
         else:
@@ -1457,7 +1462,7 @@ def set_sbr_fitting(Configuration,hdr = None,systemic = 100., stage = 'no_stage'
 ''',Configuration['OUTPUTLOG'],debug = False)
         if stage in ['initial','run_cc']:
             max_size = 4
-        elif stage in ['initialize_ec','run_ec']:
+        elif stage in ['initialize_ec','run_ec','initialize_os','run_os']:
             max_size = 2.
 
         if Configuration['SIZE_IN_BEAMS'] < max_size:
@@ -1481,7 +1486,7 @@ def set_sbr_fitting(Configuration,hdr = None,systemic = 100., stage = 'no_stage'
             sbr_input['MODERATE'] = np.array([[5,5] for x in range(len(radii)-1,inner_ring-1,-1)]).reshape((len(radii)-inner_ring)*2) #How many steps from del start to del end
             sbr_input['DELSTART'] = np.array([[7.5e-5,7.5e-5] for x in range(len(radii)-1,inner_ring-1,-1)]).reshape((len(radii)-inner_ring)*2) # Starting step
             sbr_input['DELEND'] = np.array([[2.5e-6,2.5e-6] for x in range(len(radii)-1,inner_ring-1,-1)]).reshape((len(radii)-inner_ring)*2)
-            sbr_input['MINDELTA'] = np.array([[5e-6,5e-6] for x in range(len(radii)-1,inner_ring-1,-1)]).reshape((len(radii)-inner_ring)*2)
+            sbr_input['MINDELTA'] = np.array([[sbr_ring_limits[x]/20.,sbr_ring_limits[x]/20.] for x in range(len(radii)-1,inner_ring-1,-1)]).reshape((len(radii)-inner_ring)*2)
 
         sbr_input['VARY'] = np.concatenate((sbr_input['VARY'],[f"SBR {' '.join([str(int(x)) for x in range(1,inner_ring+1)])} SBR_2 {' '.join([str(int(x)) for x in range(1,inner_ring+1)])}"]),axis=0)
         sbr_input['PARMAX'] = np.concatenate((sbr_input['PARMAX'],[2e-3]))
@@ -1490,7 +1495,7 @@ def set_sbr_fitting(Configuration,hdr = None,systemic = 100., stage = 'no_stage'
         sbr_input['DELSTART'] = np.concatenate((sbr_input['DELSTART'],[1e-5]))
         sbr_input['DELEND'] = np.concatenate((sbr_input['DELEND'],[1e-6]))
         sbr_input['MINDELTA'] = np.concatenate((sbr_input['MINDELTA'],[2e-6]))
-    elif stage in ['after_cc','after_ec']:
+    elif stage in ['after_cc','after_ec','after_os']:
         #Used in Fit_Smoothed_Check
         sbr_input['VARY'] = [f"SBR 1:{Configuration['NO_RINGS']}, SBR_2 1:{Configuration['NO_RINGS']}"]
         sbr_input['PARMAX'] = np.concatenate(([2e-3],[2e-3]))
@@ -1545,10 +1550,10 @@ def set_vrot_fitting(Configuration,Tirific_Template,hdr = None,systemic = 100., 
 {'':8s} No_Rings = {Configuration['NO_RINGS']}
 {'':8s} Limits = {vrot_limits}
 ''',Configuration['OUTPUTLOG'],debug = debug)
-    if stage in  ['initial','run_cc','after_cc','initialize_ec','run_ec']:
-        if stage in ['initial', 'run_cc','initialize_ec','run_ec']:
+    if stage in  ['initial','run_cc','after_cc','initialize_ec','run_ec','initialize_os','run_os']:
+        if stage in ['initial', 'run_cc','initialize_ec','run_ec','initialize_os','run_os']:
             vrot_input['VARY'] =  np.array([f"!VROT {NUR}:2 VROT_2 {NUR}:2"])
-        elif stage in ['after_cc', 'after_ec']:
+        elif stage in ['after_cc', 'after_ec','after_os']:
             vrot_input['VARY'] =  np.array([f"VROT {NUR}:2 VROT_2 {NUR}:2"])
         vrot_input['PARMAX'] = np.array([vrot_limits[1]])
         vrot_input['PARMIN'] = np.array([vrot_limits[0]])
@@ -1636,7 +1641,7 @@ def smooth_profile(Configuration,Tirific_Template,key,hdr,min_error = 0.,debug=F
 {'':8s}{profile}''',Configuration['OUTPUTLOG'],screen=True,debug = True)
     # savgol filters do not work for small array
     if  len(profile[0]) < 15:
-        if key != 'VROT':
+        if key != 'VROT' or len(profile[0]) > 8:
             for i in [0,1]:
                 profile[i] = savgol_filter(profile[i], 3, 1)
     elif len(profile[0]) < 20:
