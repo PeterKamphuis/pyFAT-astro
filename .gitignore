@@ -10,7 +10,7 @@ Tests
 *~
 Support/#*
 #The star does not seem to work so make section for Installation check.
-Installation_Check/*
+pyFAT/Installation_Check/*
 
 
 # Masks #
@@ -65,7 +65,7 @@ Thumbs.db
 ##################
 .eggs/
 .idea/
-cubical.egg-info/
+pyFAT.egg-info/
 
 # Backup files #
 ################

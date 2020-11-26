@@ -1,4 +1,0 @@
-astropy
-matplotlib
-numpy>=1.14
-scipy
