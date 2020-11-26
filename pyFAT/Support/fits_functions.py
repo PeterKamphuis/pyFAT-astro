@@ -1,9 +1,9 @@
-#!/usr/local/bin/ python3
+# -*- coding: future_fstrings -*-
 # This module contains a set of functions and classes that are used in several different Python scripts in the Database.
 from astropy.io import fits
 from astropy.wcs import WCS
-from support_functions import linenumber,print_log,set_limits
-from read_functions import obtain_border_pix
+from pyFAT.Support.support_functions import linenumber,print_log,set_limits
+from pyFAT.Support.read_functions import obtain_border_pix
 from scipy import ndimage
 import numpy as np
 import copy

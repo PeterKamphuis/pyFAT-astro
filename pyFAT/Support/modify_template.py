@@ -1,4 +1,4 @@
-#!/usr/local/bin/ python3
+# -*- coding: future_fstrings -*-
 # This module contains a set of functions and classes that are used to Modify the Tirific_Template
 
 
@@ -7,7 +7,7 @@ class InitializeError(Exception):
 class CfluxError(Exception):
     pass
 import copy
-from support_functions import set_rings,convertskyangle,sbr_limits,set_limits,print_log,set_limit_modifier,\
+from pyFAT.Support.support_functions import set_rings,convertskyangle,sbr_limits,set_limits,print_log,set_limit_modifier,\
                               get_from_template,set_ring_size,calc_rings,finish_current_run,set_format
 import numpy as np
 from scipy.optimize import curve_fit
@@ -277,7 +277,15 @@ def fix_profile(Configuration, key, profile, Tirific_Template, hdr, debug= False
             print_log(f'''FIX_PROFILE: the  {Configuration['INNER_FIX']} inner rings are fixed for the profile:
 {'':8s}{profile}
 ''', Configuration['OUTPUTLOG'])
-        profile[:,:Configuration['INNER_FIX']] = np.nanmean(profile[:,:Configuration['INNER_FIX']])
+
+        inner_mean = np.nanmean(profile[:,:Configuration['INNER_FIX']])
+        # need to make sure this connects smoothly
+        for i in [0,1]:
+            for x in [1,2,3,4]:
+                if Configuration['INNER_FIX']+x < len(profile[i,:]):
+                    profile[i,Configuration['INNER_FIX']+x] = 1/(x+0.5)*inner_mean+ (1-1/(x+0.5))*profile[i,Configuration['INNER_FIX']+x]
+
+        #profile[:,:Configuration['INNER_FIX']] = np.nanmean(profile[:,:Configuration['INNER_FIX']])
     if key in ['SDIS']:
         profile[:,:3] = np.mean(profile[:,:3])
         for i in [0,1]:
@@ -1337,6 +1345,7 @@ def set_new_size(Configuration,Tirific_Template, Fits_Files, fit_stage = 'Unitia
     #update the limit_modifier
     Inclination = np.array([(float(x)+float(y))/2. for x,y in zip(Tirific_Template['INCL'].split(),Tirific_Template['INCL_2'].split())],dtype=float)
     set_limit_modifier(Configuration,Inclination,debug=debug)
+    # Maybe increase the amount of loops in smaller galaxies
     set_overall_parameters(Configuration, Fits_Files,Tirific_Template,loops = 7 ,fit_stage=fit_stage,hdr=hdr, debug=debug,stage=stage)
     # if we change the radii we need to restart tirific
     finish_current_run(Configuration,current_run,debug=debug)
@@ -1362,12 +1371,14 @@ def set_overall_parameters(Configuration, Fits_Files,Tirific_Template,stage = 'i
             else:
                 Tirific_Template['INIMODE'] = '3'
 
-            if Configuration['NO_RINGS'] > 5:
+            if Configuration['NO_RINGS'] > 8:
+
                 Tirific_Template['INTY'] = 0
                 #Tirific_Template['INDINTY'] = 0
             else:
-                #This should not be used with < 5 rings.
+                #This should not be used with < 8 rings.
                 Tirific_Template['INTY'] = 1
+                #preferably we'd use the akima spline but there is an issue with that where the final ring does not get modified
                 #Tirific_Template['INDINTY'] = 2
             Tirific_Template['NUR'] = f"{Configuration['NO_RINGS']}"
 
@@ -1383,6 +1394,7 @@ def set_overall_parameters(Configuration, Fits_Files,Tirific_Template,stage = 'i
             else:
                 Tirific_Template['NCORES'] = '6'
             '''
+
             Tirific_Template['NCORES'] = Configuration['NCPU']
 
             Tirific_Template['LOOPS'] = f"{int(loops)}"
@@ -1640,18 +1652,17 @@ def smooth_profile(Configuration,Tirific_Template,key,hdr,min_error = 0.,debug=F
         print_log(f'''SMOOTH_PROFILE: profile before smoothing {key}.
 {'':8s}{profile}''',Configuration['OUTPUTLOG'],screen=True,debug = True)
     # savgol filters do not work for small array
-    if  len(profile[0]) < 15:
-        if key != 'VROT' or len(profile[0]) > 8:
-            for i in [0,1]:
-                profile[i] = savgol_filter(profile[i], 3, 1)
-    elif len(profile[0]) < 20:
-        for i in [0,1]:
+    for i in [0,1]:
+        if len(profile[i]) < 8:
+            #In this case we are using a cubic spline so no smoothing required
+            pass
+        elif len(profile[i]) < 15:
+            profile[i] = savgol_filter(profile[i], 3, 1)
+        elif len(profile[i]) < 20:
             profile[i] = savgol_filter(profile[i], 5, 2)
-    elif len(profile[0]) < 25:
-        for i in [0,1]:
+        elif len(profile[i]) < 25:
             profile[i] = savgol_filter(profile[i], 7, 3)
-    else:
-        for i in [0,1]:
+        else:
             profile[i] = savgol_filter(profile[i], 9, 4)
     # Fix the settings
     format = set_format(key)
@@ -1702,7 +1713,7 @@ def modify_flat(Configuration,profile,original_profile,errors,debug=False):
         for side in [0,1]:
             if flatness[side]:
                 profile[side]  = np.median(original_profile[side])
-        profile[:,0:3] = np.mean(profile[:,0:3])
+        #profile[:,0:3] = np.mean(profile[:,0:3])
     return profile
 
 def update_disk_angles(Tirific_Template,debug = False):

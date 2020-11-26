@@ -1,14 +1,14 @@
-#!/usr/local/bin/ python3
+# -*- coding: future_fstrings -*-
 # This module contains a set of functions and classes that are used in several different Python scripts in the Database.
 
 
 import os,signal,sys
 import traceback
 from datetime import datetime
-from support_functions import print_log,finish_current_run
-from fits_functions import make_moments
-from write_functions import make_overview_plot,plot_usage_stats,tirific
-from read_functions import tirific_template,load_tirific
+from pyFAT.Support.support_functions import print_log,finish_current_run
+from pyFAT.Support.fits_functions import make_moments
+from pyFAT.Support.write_functions import make_overview_plot,plot_usage_stats,tirific
+from pyFAT.Support.read_functions import tirific_template,load_tirific
 
 def clean_before_sofia(Configuration, debug = False):
     if debug:

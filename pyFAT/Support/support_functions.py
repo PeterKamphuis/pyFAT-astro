@@ -1,4 +1,4 @@
-#!/usr/local/bin/ python3
+# -*- coding: future_fstrings -*-
 # This module contains a set of functions and classes that are used in several different Python scripts in the Database.
 
 

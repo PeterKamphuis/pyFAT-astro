@@ -1,7 +1,6 @@
-#!/usr/local/bin/ python3
-# -*- coding: utf-8 -*-
+# -*- coding: future_fstrings -*-
+
 # This is the python version of FAT
-__version__ = 'pyFAT 1.0.0'
 import sys
 import os
 import copy
@@ -10,8 +9,19 @@ from optparse import OptionParser
 import traceback
 from datetime import datetime
 from astropy.io import fits
+import pyFAT.Support.read_functions as rf
+import pyFAT.Support.support_functions as sf
+# Functions that run external programs such as tirific and sofia
+import pyFAT.Support.run_functions as runf
+# function that keep things orderly and nicely
+import pyFAT.Support.clean_functions as cf
+# Functions that modify or produce fat fits file
+import pyFAT.Support.fits_functions as ff
+#functions that write files
+import pyFAT.Support.write_functions as wf
+from  pyFAT.Support.modify_template import write_new_to_template,flatten_the_curve
 
-def FAT(argv):
+def main(argv):
     try:
 
         #Get the directory we are running from
@@ -52,20 +62,20 @@ def FAT(argv):
             input_parameters.configfile=fat_main_test_dir+'/Problems/FAT_INPUT.config'
 
         #Add the support dir to the system path and read the functions from there
-        sys.path.insert(1, input_parameters.supportdir)
+        #sys.path.insert(1, input_parameters.supportdir)
         # Functions that read files
-        import read_functions as rf
+        #import read_functions as rf
         # functions that are used often for menial tasks
-        import support_functions as sf
+        #import support_functions as sf
         # Functions that run external programs such as tirific and sofia
-        import run_functions as runf
+        #import run_functions as runf
         # function that keep things orderly and nicely
-        import clean_functions as cf
+        #import clean_functions as cf
         # Functions that modify or produce fat fits file
-        import fits_functions as ff
+        #import fits_functions as ff
         #functions that write files
-        import write_functions as wf
-        from modify_template import write_new_to_template,flatten_the_curve
+        #import write_functions as wf
+        #from modify_template import write_new_to_template,flatten_the_curve
         #Check the existence of the config file and read it
 
         try:
@@ -501,7 +511,7 @@ def FAT(argv):
         Configuration['MAPS_OUTPUT'] = 'error'
         cf.finish_galaxy(Configuration,maximum_directory_length,current_run =current_run,debug=Configuration['DEBUG'])
 
-FAT.__doc__ = '''
+main.__doc__ = '''
 ;+
 ; NAME:
 ;      FAT
@@ -544,7 +554,3 @@ FAT.__doc__ = '''
 ; EXAMPLE:
 ;     python3 FAT.py --cf /home/your_computer/FAT_dir/FAT_INPUT.config'
 '''
-
-
-if __name__ == '__main__':
-    FAT(sys.argv[1:])

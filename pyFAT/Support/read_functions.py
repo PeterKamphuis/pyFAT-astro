@@ -1,7 +1,7 @@
-#!/usr/local/bin/ python3
+# -*- coding: future_fstrings -*-
 # This module contains a set of functions and classes that are used in FAT to read input files
 
-from support_functions import Proper_Dictionary,print_log,convertRADEC,set_limits, remove_inhomogeneities, \
+from pyFAT.Support.support_functions import Proper_Dictionary,print_log,convertRADEC,set_limits, remove_inhomogeneities, \
                                 obtain_border_pix, obtain_ratios, get_inclination_pa
 from astropy.io import fits
 from scipy import ndimage

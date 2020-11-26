@@ -1,4 +1,4 @@
-#!/usr/local/bin/ python3
+# -*- coding: future_fstrings -*-
 # This module contains a set of functions and classes that are used to run external programs
 
 class BadSourceError(Exception):
@@ -8,18 +8,18 @@ class SofiaRunError(Exception):
 class SofiaFaintError(Exception):
     pass
 
-from support_functions import print_log, convert_type,set_limits,sbr_limits,rename_fit_products,\
+from pyFAT.Support.support_functions import print_log, convert_type,set_limits,sbr_limits,rename_fit_products,\
                               set_ring_size,calc_rings,get_usage_statistics,get_inner_fix,convertskyangle,\
                               finish_current_run, rotateImage, remove_inhomogeneities,the_bends,get_from_template,set_format, \
                               wait_for_tirific,set_rings
-from clean_functions import clean_before_sofia,clean_after_sofia
-from fits_functions import cut_cubes,extract_pv,make_moments
-from modify_template import write_new_to_template,smooth_profile,set_cflux,check_sbr,regularise_profile,set_fitting_parameters,check_size,no_declining_vrot
+from pyFAT.Support.clean_functions import clean_before_sofia,clean_after_sofia
+from pyFAT.Support.fits_functions import cut_cubes,extract_pv,make_moments
+from pyFAT.Support.modify_template import write_new_to_template,smooth_profile,set_cflux,check_sbr,regularise_profile,set_fitting_parameters,check_size,no_declining_vrot
 from astropy.wcs import WCS
 from astropy.io import fits
 
-import read_functions as rf
-import write_functions as wf
+import pyFAT.Support.read_functions as rf
+import pyFAT.Support.write_functions as wf
 import os
 import sys
 import time
@@ -71,10 +71,11 @@ def fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run,hd
     #if we have only a few rings we only smooth. else we fit a polynomial to the RC and smooth the SBR
     smoothed_sbr = smooth_profile(Configuration,Tirific_Template,'SBR',hdr, min_error= np.max([float(Tirific_Template['CFLUX']),float(Tirific_Template['CFLUX_2'])]),debug = debug)
     check_sbr(Configuration,Tirific_Template,hdr,debug = debug)
-    if Configuration['NO_RINGS'] < 6 or stage == 'after_cc':
+    if stage == 'after_cc':
         smoothed_vrot = smooth_profile(Configuration,Tirific_Template,'VROT',hdr,min_error = float(hdr['CDELT3']/1000.),debug = debug)
     else:
         smoothed_vrot = regularise_profile(Configuration,Tirific_Template,'VROT',hdr,min_error = float(hdr['CDELT3']/1000.),debug = debug)
+    no_declining_vrot(Configuration, Tirific_Template, debug = debug)
     if stage == 'after_ec':
         min_error = []
         pars_to_smooth = []
@@ -91,16 +92,14 @@ def fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run,hd
             pars_to_smooth.append('SDIS')
             min_error.append(hdr['CDELT3']/2000.*Configuration['LIMIT_MODIFIER'])
         for key,min_err in zip(pars_to_smooth,min_error):
-            if Configuration['NO_RINGS'] < 6:
-                smoothed = smooth_profile(Configuration,Tirific_Template,key,hdr,debug = debug,min_error=min_err)
-            else:
+            if Configuration['NO_RINGS'] > 6:
                 smoothed = regularise_profile(Configuration,Tirific_Template,key,hdr,min_error = min_err,debug = debug)
 
     #If our fit stage is after cc we want to make sure we do an extra check on low inclinations or small Galaxies
     #if stage =='after_cc' and (Configuration['SIZE_IN_BEAMS'] < 5 or incl[0] < 50.):
     #    check_inclination(Configuration,Tirific_Template,Fits_Files,debug=debug)
     if stage == 'after_cc':
-        no_declining_vrot(Configuration, Tirific_Template, debug = debug)
+
         Tirific_Template['LOOPS'] = 1.
         if Configuration['OPTIMIZED']:
                 Tirific_Template['INSET'] = f"{Fits_Files['FITTING_CUBE']}"
@@ -615,12 +614,12 @@ def run_tirific(Configuration, current_run, stage = 'initial',fit_stage = 'Undef
     rename_fit_products(Configuration,fit_stage = fit_stage, stage=stage, debug = debug)
     # Then if already running change restart file
     if Configuration['TIRIFIC_RUNNING']:
-        print_log('''RUN_TIRIFIC: We are using an initialized tirific
+        print_log(f'''RUN_TIRIFIC: We are using an initialized tirific in {Configuration['FITTING_DIR']}
 ''',Configuration['OUTPUTLOG'], screen = True,debug = debug)
         with open(f"{Configuration['FITTING_DIR']}Logs/restart_{fit_stage}.txt",'a') as file:
             file.write("Restarting from previous run")
     else:
-        print_log('''RUN_TIRIFIC: We are starting a new TiRiFiC
+        print_log(f'''RUN_TIRIFIC: We are starting a new TiRiFiC in {Configuration['FITTING_DIR']}
 ''',Configuration['OUTPUTLOG'], screen = True,debug = debug)
         with open(f"{Configuration['FITTING_DIR']}Logs/restart_{fit_stage}.txt",'w') as file:
             file.write("Initialized a new run")
