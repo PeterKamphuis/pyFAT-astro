@@ -1147,7 +1147,7 @@ def set_generic_fitting(Configuration, key , stage = 'initial', values = [60,5.]
             input['PARMAX'] = np.concatenate((np.array([limits[1][1]]),np.array([limits[0][1]])))
             input['PARMIN'] = np.concatenate((np.array([limits[1][0]]),np.array([limits[0][0]])))
             input['MODERATE'] =np.array([moderate,moderate]) #How many steps from del start to del end
-            input['DELSTART'] =np.array([2.,0.5,dtype=float)*step_modifier[0]*values[1] # Starting step
+            input['DELSTART'] =np.array([2.,0.5],dtype=float)*step_modifier[0]*values[1] # Starting step
             input['DELEND'] = np.array([0.1,0.05],dtype=float)*step_modifier[1]*values[1] #Ending step
             input['MINDELTA'] = np.array([0.1,0.01],dtype=float)*step_modifier[2]*values[1] #saturation criterum when /SIZE SIZE should be 10 troughout the code
         # then we need to set the warp slope
