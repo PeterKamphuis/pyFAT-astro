@@ -76,19 +76,19 @@ def fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run,hd
     else:
         smoothed_vrot = regularise_profile(Configuration,Tirific_Template,'VROT',hdr,min_error = float(hdr['CDELT3']/1000.),debug = debug)
     no_declining_vrot(Configuration, Tirific_Template, debug = debug)
-    if stage == 'after_ec':
+    if stage in ['after_ec', 'after_os']:
         min_error = []
         pars_to_smooth = []
-        if not Configuration['FIX_INCLINATION']:
+        if not Configuration['FIX_INCLINATION'][0]:
             pars_to_smooth.append('INCL')
             min_error.append(2.*Configuration['LIMIT_MODIFIER'])
-        if not Configuration['FIX_Z0']:
+        if not Configuration['FIX_Z0'][0]:
             pars_to_smooth.append('Z0')
             min_error.append(convertskyangle(0.1,Configuration['DISTANCE'],physical= True))
-        if not Configuration['FIX_PA']:
+        if not Configuration['FIX_PA'][0]:
             pars_to_smooth.append('PA')
             min_error.append(1.)
-        if not Configuration['FIX_SDIS']:
+        if not Configuration['FIX_SDIS'][0]:
             pars_to_smooth.append('SDIS')
             min_error.append(hdr['CDELT3']/2000.*Configuration['LIMIT_MODIFIER'])
         for key,min_err in zip(pars_to_smooth,min_error):
@@ -568,15 +568,20 @@ def one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run,hdr
 ''',Configuration['OUTPUTLOG'],debug = debug)
     fit_stage = 'One_Step_Convergence'
     stage = 'run_os'
+    #First we run tirific
     accepted,current_run = run_tirific(Configuration,current_run,stage = stage, fit_stage = fit_stage, debug= debug)
+    #Then we load the produced output into our template
     write_new_to_template(Configuration,f"{Configuration['FITTING_DIR']}{fit_stage}/{fit_stage}.def" , Tirific_Template, debug = debug)
-    accepted = check_central_convergence(Configuration,Tirific_Template,hdr,accepted, fit_stage = fit_stage,debug=debug)
+    #Check that the centre does not deviate too much
+    accepted_central = check_central_convergence(Configuration,Tirific_Template,hdr,accepted, fit_stage = fit_stage,debug=debug)
+    # Check whether we have the correct sizes,
     accepted_size = check_size(Configuration,Tirific_Template,hdr, fit_stage = fit_stage, stage = stage, current_run = current_run, debug=debug,Fits_Files=Fits_Files)
-    if accepted and accepted_size:
+    if accepted and accepted_size and accepted_central:
+
             Configuration['OS_ACCEPTED'] = True
     else:
         if not accepted:
-            print_log('''ONE_STEP_CONVERGENCE: The centre did not converge or Tirific ran the maximum amount of loops which means the fit is not accepted and we smooth and retry.
+            print_log(f'''ONE_STEP_CONVERGENCE: Tirific ran {allowed_loops} hence we do not accept this run the maximum amount of loops which means the fit is not accepted and we smooth and retry.
 ''',Configuration['OUTPUTLOG'],debug = debug)
         else:
             print_log(f'''ONE_STEP_CONVERGENCE: FAT adjusted the rings. Refitting with new settings after smoothing them.
@@ -1012,11 +1017,11 @@ def fake_plastic_trees(Configuration,Tirific_Template,current_run,key,other_key,
         counter += 1
     return Chi,profiles,counter
 
-def sofia(Configuration, Fits_Files, hdr, supportdir, debug = False):
+def sofia(Configuration, Fits_Files, hdr, debug = False):
     if debug:
-        print_log(f'''RUN_SOFIA: starting sofia run from the template in {supportdir}.
+        print_log(f'''RUN_SOFIA: starting sofia run from the template.
 ''',Configuration['OUTPUTLOG'],debug = debug)
-    sofia_template = rf.sofia_template(supportdir+'/sofia_template.par',debug=debug)
+    sofia_template = rf.sofia_template(debug=debug)
     if not os.path.isdir(Configuration['FITTING_DIR']+'/Sofia_Output'):
         os.mkdir(Configuration['FITTING_DIR']+'/Sofia_Output')
     os.chdir(Configuration['FITTING_DIR'])

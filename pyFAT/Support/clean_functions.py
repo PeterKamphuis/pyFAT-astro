@@ -3,12 +3,55 @@
 
 
 import os,signal,sys
+import numpy as np
 import traceback
 from datetime import datetime
 from pyFAT.Support.support_functions import print_log,finish_current_run
 from pyFAT.Support.fits_functions import make_moments
 from pyFAT.Support.write_functions import make_overview_plot,plot_usage_stats,tirific
-from pyFAT.Support.read_functions import tirific_template,load_tirific
+from pyFAT.Support.read_functions import tirific_template,load_tirific,load_template
+
+def check_legitimacy(Configuration,debug=False):
+    if debug:
+        print_log(f'''CHECK_LEGITIMACY: Start.
+''',Configuration['OUTPUTLOG'],debug =True)
+    if Configuration['MAPS_OUTPUT'] == 'error':
+        print_log(f'''CHECK_LEGITIMACY: An unspecified error is registered. The final message should reflect this.
+''',Configuration['OUTPUTLOG'],debug =False)
+        return
+    elif Configuration['MAPS_OUTPUT'] == 5:
+        print_log(f'''CHECK_LEGITIMACY: A FAT specific error is registered. The final message should reflect this.
+''',Configuration['OUTPUTLOG'],debug =False)
+        return
+    else:
+        if Configuration['FINISHAFTER'] > 0:
+            if Configuration['TWO_STEP']:
+                if Configuration['FINISHAFTER'] == 1 and Configuration['START_POINT'] < 4:
+                        # As tirific does not transfer the errors we have to do This
+                        outfile = f"{Configuration['FITTING_DIR']}/Centre_Convergence/Centre_Convergence.def"
+                elif Configuration['FINISHAFTER'] == 2:
+                        outfile = f"{Configuration['FITTING_DIR']}/Extent_Convergence/Extent_Convergence.def"
+                else:
+                    Configuration['FINAL_COMMENT'] = 'This is an odd occurence, FAT ran fine but the output can not be found.'
+                    Configuration['MAPS_OUTPUT'] = 5
+                    return
+            else:
+                outfile = f"{Configuration['FITTING_DIR']}/One_Step_Convergence/One_Step_Convergence.def"
+    inclination = load_tirific(outfile,Variables=['INCL'],debug=debug)[0]
+    low_incl_limit = 20.
+    low_beam_limit = 8.
+    if float(inclination[0]) < low_incl_limit or 2.*Configuration['SIZE_IN_BEAMS'] < low_beam_limit:
+        Configuration['EC_ACCEPTED'] = False
+        Configuration['OS_ACCEPTED'] = False
+        if float(inclination[0]) < low_incl_limit:
+            Configuration['FINAL_COMMENT'] = f'The final inclination is below {low_incl_limit}. FAT is not neccesarily reliable in this range.'
+        elif 2.*Configuration['SIZE_IN_BEAMS'] < low_beam_limit:
+            Configuration['FINAL_COMMENT'] = f'The final size is below {low_beam_limit}. FAT is not neccesarily reliable in this range.'
+    return
+check_legitimacy.__doc__ = '''
+see if the output fall in the range where FAT is reliable.
+'''
+
 
 def clean_before_sofia(Configuration, debug = False):
     if debug:
@@ -58,9 +101,9 @@ Clean up the sofia output files by putting them in a dedicated directory.
 '''
 # cleanup dirty files before starting fitting
 def cleanup(Configuration,Fits_Files, debug = False):
-    #clean the log directory of all files except those named Previous_
-    files_in_log = ['restart_Centre_Convergence.txt','restart_Extent_Convergence.txt','Usage_Statistics.txt'
-                    ,'Log.txt']
+    #clean the log directory of all files except those named Previous_ and not the Log as it is already moved if existing
+    files_in_log = ['restart_Centre_Convergence.txt','restart_Extent_Convergence.txt','Usage_Statistics.txt']
+
     for file in files_in_log:
         try:
             os.remove(f"{Configuration['FITTING_DIR']}Logs/{file}")
@@ -216,16 +259,74 @@ def cleanup_final(Configuration,Fits_Files, debug =False):
                     except FileNotFoundError:
                         pass
 
+def installation_check(Configuration, debug =False):
+    if debug:
+         print_log(f'''INSTALLATION_CHECK: Starting to compare the output to what is expected.
+''',Configuration['OUTPUTLOG'],screen =True,debug = True)
 
+    Model = tirific_template(filename = 'Installation_Check', debug= debug)
+    Variables_to_Compare = ['VROT','INCL','PA','SBR','SDIS','Z0','XPOS','YPOS','VSYS']
+    Model_values = load_template(Model,Variables = Variables_to_Compare,unpack = False,debug=debug)
+    #Then the fitted file
+    Fitted_values =load_tirific(f"{Configuration['FITTING_DIR']}Finalmodel/Finalmodel.def",Variables = Variables_to_Compare,unpack = False,debug=debug)
+    succes = False
+
+    try:
+        diff = np.array(Model_values,dtype=float)-np.array(Fitted_values,dtype=float)
+        if debug:
+            print_log(f'''INSTALLATION_CHECK: the found differences
+{'':8s}{diff}
+''',Configuration['OUTPUTLOG'],screen =True,debug = False)
+        too_much = np.array(np.where(diff > 1e-3),dtype=float)
+        if debug:
+            print_log(f'''INSTALLATION_CHECK: at the locations
+{'':8s}{too_much}
+{'':8s}{too_much.size}
+''',Configuration['OUTPUTLOG'],screen =True,debug = False)
+
+        if too_much.size == 0.:
+            succes = True
+    except:
+        pass
+
+    if succes:
+        print_log(f'''
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!! All parameters are fitted within the expected variance. !!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!        We think pyFAT is installed succesfully          !!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+''',Configuration['OUTPUTLOG'],screen =True,debug = True)
+    else:
+        print_log(f'''
+!!!!---------------------------------------------!!!!!
+!!!! FAT ran through the fitting process but the !!!!!
+!!!! fitted values differ too much from their    !!!!!
+!!!! expectations. Please update SoFiA and other !!!!!
+!!!! dependencies. If you are unable to resolve  !!!!!
+!!!! resolve the issue please file a bug report  !!!!!
+!!!! at:                                         !!!!!
+!!!!                                             !!!!!
+!!!! https://github.com/PeterKamphuis/pyFAT/issues !!!!!
+!!!!                                             !!!!!
+!!!! Please add the Log.txt file in the directory!!!!!
+!!!! Installation_Check and the Finalmodel.def   !!!!!
+!!!! in the Installation_Check/Finalmodel/       !!!!!
+!!!! directory to your report.                   !!!!!
+!!!!---------------------------------------------!!!!!
+''',Configuration['OUTPUTLOG'],screen =True,debug = True)
 
 def finish_galaxy(Configuration,maximum_directory_length,current_run = 'Not initialized', Fits_Files= None, debug = False):
     #make sure we are not leaving stuff
     finish_current_run(Configuration,current_run,debug=debug)
+    # We need to check if the final output is legit
+    check_legitimacy(Configuration,debug=debug)
 
     # Need to write to results catalog
-    output_catalogue = open(Configuration['OUTPUTCATALOGUE'],'a')
-    output_catalogue.write(f"{Configuration['FITTING_DIR'].split('/')[-2]:{maximum_directory_length}s} {Configuration['CC_ACCEPTED']} {Configuration['EC_ACCEPTED']}   {Configuration['FINAL_COMMENT']} \n")
-    output_catalogue.close()
+    with open(Configuration['OUTPUTCATALOGUE'],'a') as output_catalogue:
+        if Configuration['TWO_STEP']:
+            output_catalogue.write(f"{Configuration['FITTING_DIR'].split('/')[-2]:{maximum_directory_length}s} {str(Configuration['CC_ACCEPTED']):>6s} {str(Configuration['EC_ACCEPTED']):>6s} {Configuration['FINAL_COMMENT']} \n")
+        else:
+            output_catalogue.write(f"{Configuration['FITTING_DIR'].split('/')[-2]:{maximum_directory_length}s} {str(Configuration['OS_ACCEPTED']):>6s} {Configuration['FINAL_COMMENT']} \n")
 
     if Configuration['MAPS_OUTPUT'] == 'error':
         error_message = '''
@@ -351,7 +452,7 @@ finish_galaxy.__doc__ = '''
 '''
 def transfer_errors(Configuration,fit_stage='Not Initialized',debug = False):
     # Load the final file
-    Tirific_Template = tirific_template(f"{Configuration['FITTING_DIR']}{fit_stage}/{fit_stage}.def",debug= debug)
+    Tirific_Template = tirific_template(filename = f"{Configuration['FITTING_DIR']}{fit_stage}/{fit_stage}.def",debug= debug)
     # Get the errors from the input
     errors_to_transfer= ['VROT_ERR','VROT_2_ERR','INCL_ERR','INCL_2_ERR','PA_ERR','PA_2_ERR','SDIS_ERR','SDIS_2_ERR']
     FAT_Model = load_tirific(f"{Configuration['FITTING_DIR']}{fit_stage}_In.def",Variables=errors_to_transfer,unpack=False,debug=debug)

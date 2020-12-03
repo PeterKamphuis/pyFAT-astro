@@ -130,7 +130,7 @@ def initialize_def_file(Configuration, Fits_Files,Tirific_Template, cube_hdr,Ini
         if 'VSYS' in Initial_Parameters and fit_stage == 'One_Step_Convergence':
             Initial_Parameters['VSYS'] = [x/1000. for x in Initial_Parameters['VSYS']]
         #accepted = check_size(Configuration,Tirific_Template,cube_hdr, debug=debug)
-        set_overall_parameters(Configuration, Fits_Files,Tirific_Template,loops = 7 ,fit_stage=fit_stage,hdr=cube_hdr, debug=debug,stage='initialize_ec')
+        set_overall_parameters(Configuration, Fits_Files,Tirific_Template,loops = 10 ,fit_stage=fit_stage,hdr=cube_hdr, debug=debug,stage='initialize_ec')
         Vars_to_Set =  ['XPOS','YPOS','VSYS','VROT','INCL','PA','SDIS','SBR','SBR_2','Z0']
         if fit_stage == 'One_Step_Convergence':
             set_model_parameters(Configuration, Tirific_Template,Initial_Parameters, hdr=cube_hdr, debug=debug)
@@ -615,7 +615,7 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
             bottom=True,      # ticks along the bottom edge are off
             top=True,         # ticks along the top edge are off
             labelbottom=False)
-        if Configuration['FIX_INCLINATION']:
+        if Configuration['FIX_INCLINATION'][0]:
             ax_INCL.text(1.01,0.5,'Forced Flat', rotation =-90,va='center',ha='left', color='black',transform = ax_INCL.transAxes,
               bbox=dict(facecolor='white',edgecolor='white',pad=0.,alpha=0.),zorder=7,fontsize=12)
         plt.ylabel('Incl ($^{\circ}$)',**labelfont)
@@ -629,7 +629,7 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
             bottom=True,      # ticks along the bottom edge are off
             top=True,         # ticks along the top edge are off
             labelbottom=True)
-        if Configuration['FIX_PA']:
+        if Configuration['FIX_PA'][0]:
             ax_PA.text(1.01,0.5,'Forced Flat', va='center',ha='left', color='black',rotation = -90, transform = ax_PA.transAxes,
               bbox=dict(facecolor='white',edgecolor='white',pad=0.,alpha=0.),zorder=7,fontsize=12)
         plt.xlabel('Radius (arcsec)',**labelfont)
@@ -643,7 +643,7 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
             bottom=True,      # ticks along the bottom edge are off
             top=True,         # ticks along the top edge are off
             labelbottom=False)
-        if Configuration['FIX_SDIS']:
+        if Configuration['FIX_SDIS'][0]:
             ax_SDIS.text(1.01,0.5,'Forced Flat',rotation=-90, va='center',ha='left', color='black',transform = ax_SDIS.transAxes,
               bbox=dict(facecolor='white',edgecolor='white',pad=0.,alpha=0.),zorder=7,fontsize=12)
         ax_SDIS.text(1.1,1.0,f'''Ring size {Configuration['RING_SIZE']} x BMAJ
@@ -661,7 +661,7 @@ BMAJ = {cube[0].header['BMAJ']*3600.:.1f} arcsec''',rotation=0, va='center',ha='
             bottom=True,      # ticks along the bottom edge are off
             top=True,         # ticks along the top edge are off
             labelbottom=False)
-        if Configuration['FIX_Z0']:
+        if Configuration['FIX_Z0'][0]:
             ax_Z0.text(1.2,0.5,'Forced Flat',rotation=-90, va='center',ha='left', color='black',transform = ax_Z0.transAxes,
               bbox=dict(facecolor='white',edgecolor='white',pad=0.,alpha=0.),zorder=7,fontsize=12)
         plt.ylabel('Z0 (arcsec)',**labelfont)

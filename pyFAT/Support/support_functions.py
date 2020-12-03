@@ -80,6 +80,7 @@ def calc_rings(Configuration,size_in_beams = 0., ring_size  = 0.,debug=False):
 ''',Configuration['OUTPUTLOG'],debug = False)
     return int(no_rings)
 
+
 #batch convert types
 def convert_type(array, type = 'float',debug = False):
     if debug:
@@ -372,6 +373,8 @@ def fit_gaussian(x,y, covariance = False,debug = False):
     else:
         return gauss_parameters
 #Put template values in a list !!!!!!!! This is very similar to load_template in read_funtcions maybe use one?
+#No this returns unchecked list whereas load_template return a np array with length NUR
+#Also the orader is swapped
 def get_from_template(Tirific_Template,Variables, debug = False):
     out = []
     if debug:
@@ -820,6 +823,7 @@ def sbr_limits(Configuration,hdr, systemic= 100. , debug = False):
         sbr_ring_limits=9e-4*(ringarea/beamsolid)**(-0.82)*ratio
     if ringarea[0] == 0.:
          sbr_ring_limits[0]=0.
+         sbr_ring_limits[1]=sbr_ring_limits[2]/2.
     if len(Configuration['LIMIT_MODIFIER']) == 1:
 
         sbr_ring_limits= sbr_ring_limits*Configuration['LIMIT_MODIFIER']

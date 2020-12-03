@@ -9,6 +9,7 @@ from optparse import OptionParser
 import traceback
 from datetime import datetime
 from astropy.io import fits
+import pyFAT
 import pyFAT.Support.read_functions as rf
 import pyFAT.Support.support_functions as sf
 # Functions that run external programs such as tirific and sofia
@@ -24,7 +25,7 @@ from  pyFAT.Support.modify_template import write_new_to_template,flatten_the_cur
 def main(argv):
     try:
 
-        #Get the directory we are running from
+        #Get the directory we are running from, This is for the Installation Check
         start_dir = os.getcwd()
 
         #Constants that are used in the code
@@ -35,7 +36,7 @@ def main(argv):
         parser  = OptionParser()
         parser.add_option('-c','--cf','--configuration_file', action ="store" ,dest = "configfile", default = 'FAT_INPUT.config', help = 'Define the input configuration file.',metavar='CONFIGURATION_FILE')
         parser.add_option('-d','--debug', action ="store_true" ,dest = "debug", default = False, help = 'Print debug messages',metavar = '')
-        parser.add_option('-s','--sd','--support_directory', action ="store" ,dest = "supportdir", default=f'{start_dir}/Support', help = 'location where the support files reside. Only required when FAT is not started in the directory where the Support dir resides.',metavar='SUPPORT_DIR')
+        #parser.add_option('-s','--sd','--support_directory', action ="store" ,dest = "supportdir", default=f'{start_dir}/Support', help = 'location where the support files reside. Only required when FAT is not started in the directory where the Support dir resides.',metavar='SUPPORT_DIR')
         parser.add_option('-i','--ic','--installation_check', action ="store_true" ,dest = "installation_check", default = False, help = 'Run the installation _check.',metavar = '')
         parser.add_option('--LVT','--LVHIS_TEST', action ="store_true" ,dest = "lvhis_test", default = False, help = 'Run the LVHIS Test. Developer Only.')
         parser.add_option('--PT','--PAPER_TEST', action ="store_true" ,dest = "paper_test", default = False, help = 'Run the PAPER Test. Developer Only.')
@@ -47,7 +48,7 @@ def main(argv):
 
         basic_info  = 'BasicInfo'
         if input_parameters.installation_check:
-            input_parameters.configfile = 'Installation_Check/FAT_INPUT.config'
+            input_parameters.configfile = 'ChecK.ConfiG'
         if input_parameters.lvhis_test:
             fat_main_test_dir = os.environ["FAT_TEST_DIR"]
             input_parameters.configfile=fat_main_test_dir+'/LVHIS-26_3/Input.config'
@@ -133,12 +134,15 @@ def main(argv):
 
         # Create a file to write the results to if if required
         if not os.path.exists(Original_Configuration['OUTPUTCATALOGUE']) or Original_Configuration['NEW_OUTPUT']:
-            output_catalogue = open(Original_Configuration['OUTPUTCATALOGUE'],'w')
-            comment = 'Comments on Fit Result'
-            AC1 = 'CC'
-            AC2 = 'EC'
-            output_catalogue.write(f"{dirname:<{maximum_directory_length}s} {AC1:>6s} {AC2:>6s}   {comment}\n")
-            output_catalogue.close()
+            with open(Original_Configuration['OUTPUTCATALOGUE'],'w') as output_catalogue:
+                comment = 'Comments on Fit Result'
+                if Original_Configuration['TWO_STEP']:
+                    AC1 = 'CC'
+                    AC2 = 'EC'
+                    output_catalogue.write(f"{dirname:<{maximum_directory_length}s} {AC1:>6s} {AC2:>6s} {comment}\n")
+                else:
+                    AC1 = 'OS'
+                    output_catalogue.write(f"{dirname:<{maximum_directory_length}s} {AC1:>6s} {comment}\n")
 
         if Original_Configuration['TIMING']:
             timing_result = open(Original_Configuration['MAINDIR']+'/Timing_Result.txt','w')
@@ -181,8 +185,9 @@ def main(argv):
 
             # If we have a fitting log we start writing
             log_statement = f'''This file is a log of the fitting process run at {Configuration ['START_TIME']}.
-    {"":8s}This is version {__version__} of the program.
-    '''
+{"":8s}This is version {pyFAT.__version__} of the program.
+'''
+
 
             # Adapt configuration to hold some specifics to this galaxy
             if Catalogue['DIRECTORYNAME'] == './':
@@ -201,9 +206,8 @@ def main(argv):
                 #If it exists move the previous Log
                 if os.path.exists(Configuration['OUTPUTLOG']):
                     os.rename(Configuration['OUTPUTLOG'],f"{Configuration['LOG_DIR']}/Previous_Log.txt")
-
-
             sf.print_log(log_statement,Configuration['OUTPUTLOG'])
+
 
             # Adapt configuration to hold some specifics to this galaxy
             #Never use the original cube only a fat modified one
@@ -227,15 +231,21 @@ def main(argv):
                 Configuration['FITTING_DIR'] = f"{Configuration['MAINDIR']}/{Catalogue['DIRECTORYNAME']}/"
             if Configuration['FITTING_DIR'][-2:] == '//':
                 Configuration['FITTING_DIR'] = Configuration['FITTING_DIR'][:-2]+'/'
+            # run cleanup
+            cf.cleanup(Configuration,Fits_Files)
+            # cleanup removes any existing log file so now we add the start statement
+
             # then we want to read the template
-            Tirific_Template = rf.tirific_template(f'{input_parameters.supportdir}/template.def')
+            Tirific_Template = rf.tirific_template()
 
             log_statement = f'''We are in loop {current_galaxy_index}. This is catalogue number {Catalogue['NUMBER']} and the directory {Catalogue['DIRECTORYNAME']}.'''
             sf.print_log(log_statement,Configuration['OUTPUTLOG'], screen =True)
             #Run cleanup
-
-
             cf.cleanup(Configuration,Fits_Files)
+
+
+
+
             if Configuration['TIMING']:
                 with open(f"{Configuration['FITTING_DIR']}Logs/Usage_Statistics.txt",'w') as file:
                     file.write("Creating a CPU RAM Log for analysis. \n")
@@ -289,7 +299,7 @@ def main(argv):
             else:
                 # Run sofia2
                 try:
-                    runf.sofia(Configuration, Fits_Files,cube_hdr,input_parameters.supportdir,debug=Configuration['DEBUG'])
+                    runf.sofia(Configuration, Fits_Files,cube_hdr,debug=Configuration['DEBUG'])
                     # check that all is well
                     sf.sofia_output_exists(Configuration,Fits_Files,debug=Configuration['DEBUG'])
                 except Exception as e:
@@ -303,6 +313,8 @@ def main(argv):
 
                     # We assume sofia is ran and created the proper files
             allowed_loops = 15
+            if input_parameters.installation_check:
+                allowed_loops = 1
             try:
                 current_run = 'Not Initialized'
                 # Process the found source in sofia to set up the proper fitting and make sure source can be fitted
@@ -329,33 +341,19 @@ def main(argv):
                         Configuration['OS_LOOPS'] = Configuration['OS_LOOPS']+1
                         sf.print_log(f'''We are starting loop {Configuration['OS_LOOPS']} of trying to converge the center and extent.
 ''',Configuration['OUTPUTLOG'],screen =True, debug = Configuration['DEBUG'])
-                        if Configuration['DEBUG']:
-                                sf.print_log(f'''Settings for the variations will be.
-{'':8s} INCLINATION: Fixed = {Original_Configuration['FIX_INCLINATION']}
-{'':8s} PA: Fixed = {Original_Configuration['FIX_PA']}
-{'':8s} SDIS: Fixed = {Original_Configuration['FIX_SDIS']}
-{'':8s} Z0: Fixed = {Original_Configuration['FIX_Z0']}
-''',Configuration['OUTPUTLOG'],debug=Configuration['DEBUG'],screen =True)
-                        if Configuration['SIZE_IN_BEAMS'] > Configuration['MINIMUM_WARP_SIZE']:
-                            Configuration['FIX_INCLINATION'] = Original_Configuration['FIX_INCLINATION']
-                            Configuration['FIX_SDIS'] = Original_Configuration['FIX_SDIS']
-                            Configuration['FIX_PA'] = Original_Configuration['FIX_PA']
-                            Configuration['FIX_Z0'] = Original_Configuration['FIX_Z0']
-                        else:
-                            Configuration['FIX_INCLINATION'] = True
-                            Configuration['FIX_SDIS'] = True
-                            Configuration['FIX_PA'] = True
-                            Configuration['FIX_Z0'] = True
-                            flatten_the_curve(Configuration,Tirific_Template)
+                        # Run the step
                         current_run = runf.one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run,cube_hdr,debug = Configuration['DEBUG'],allowed_loops = allowed_loops)
 
 
                     if Configuration['OS_ACCEPTED']:
                         sf.print_log(f'''The model has converged in center and extent and we make a smoothed version.
-            ''',Configuration['OUTPUTLOG'],screen =True, debug = Configuration['DEBUG'])
+''',Configuration['OUTPUTLOG'],screen =True, debug = Configuration['DEBUG'])
                         current_run = runf.fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run,cube_hdr,stage = 'after_os', fit_stage = 'One_Step_Convergence',debug = Configuration['DEBUG'])
                         if Configuration['OPTIMIZED']:
                             runf.make_full_resolution(Configuration,Tirific_Template,Fits_Files,current_run = current_run,fit_stage = 'One_Step_Convergence',debug=Configuration['DEBUG'])
+                    elif input_parameters.installation_check:
+                        sf.print_log(f'''The Installation_check has run a fit suvccessfully.
+''',Configuration['OUTPUTLOG'],screen =True, debug = Configuration['DEBUG'])
                     else:
                         Configuration['FINAL_COMMENT'] = 'We could not converge on the extent or centre of the galaxy'
                         Configuration['MAPS_OUTPUT'] = 5
@@ -365,10 +363,10 @@ def main(argv):
                 else:
                     if Configuration['START_POINT'] < 4:
                         #We first fixe the variations
-                        Configuration['FIX_INCLINATION'] = True
-                        Configuration['FIX_SDIS'] = True
-                        Configuration['FIX_PA'] = True
-                        Configuration['FIX_Z0'] = True
+                        Configuration['FIX_INCLINATION'][0] = True
+                        Configuration['FIX_SDIS'][0] = True
+                        Configuration['FIX_PA'][0] = True
+                        Configuration['FIX_Z0'][0] = True
                         # setup the first def file to be used in the first loop
                         wf.initialize_def_file(Configuration, Fits_Files,Tirific_Template, \
                                                 cube_hdr,Initial_Parameters= Initial_Parameters,fit_stage='Centre_Convergence',debug=Configuration['DEBUG'])
@@ -437,10 +435,10 @@ def main(argv):
                         continue
                     # Now set our variations to the original values but only if the galaxy is large enough
                     if Configuration['SIZE_IN_BEAMS'] > Configuration['MINIMUM_WARP_SIZE']:
-                        Configuration['FIX_INCLINATION'] = Original_Configuration['FIX_INCLINATION']
-                        Configuration['FIX_SDIS'] = Original_Configuration['FIX_SDIS']
-                        Configuration['FIX_PA'] = Original_Configuration['FIX_PA']
-                        Configuration['FIX_Z0'] = Original_Configuration['FIX_Z0']
+                        Configuration['FIX_INCLINATION'][0] = Original_Configuration['FIX_INCLINATION'][0]
+                        Configuration['FIX_SDIS'][0] = Original_Configuration['FIX_SDIS'][0]
+                        Configuration['FIX_PA'][0] = Original_Configuration['FIX_PA'][0]
+                        Configuration['FIX_Z0'][0] = Original_Configuration['FIX_Z0'][0]
 
 
                     #Then we want to setup for the next fit.
@@ -478,6 +476,7 @@ def main(argv):
                         sf.print_log(f'''The extent has converged and we make a smoothed version.
             ''',Configuration['OUTPUTLOG'],screen =True, debug = Configuration['DEBUG'])
                         current_run = runf.fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run,cube_hdr,stage = 'after_ec', fit_stage = 'Extent_Convergence',debug = Configuration['DEBUG'])
+                        Configuration['FINAL_COMMENT'] = 'The galaxy has succesfully been fitted'
                         if Configuration['OPTIMIZED']:
                             runf.make_full_resolution(Configuration,Tirific_Template,Fits_Files,current_run = current_run,fit_stage = 'Extent_Convergence',debug=Configuration['DEBUG'])
                     else:
@@ -496,16 +495,10 @@ def main(argv):
                 continue
 
 
-            if Configuration['EC_ACCEPTED']:
-                Configuration['FINAL_COMMENT'] = 'The galaxy has succesfully been fitted'
-            else:
-                Configuration['FINAL_COMMENT'] = 'We could not converge the size of this galaxy.'
             wf.basicinfo(Configuration,second_fit = True, template=Tirific_Template,Fits_Files=Fits_Files)
-
-
             cf.finish_galaxy(Configuration,maximum_directory_length,current_run =current_run, Fits_Files =Fits_Files,debug = Configuration['DEBUG'])
             if input_parameters.installation_check:
-                cf.installation_check(Configuration)
+                cf.installation_check(Configuration,debug=Configuration['DEBUG'])
     except Exception as e:
         Configuration['FINAL_COMMENT'] = e
         Configuration['MAPS_OUTPUT'] = 'error'

@@ -36,5 +36,3 @@ def report_version():
 
 
 __version__ = report_version()
-print('WTF')
-print(__version__)

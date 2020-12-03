@@ -18,7 +18,17 @@ import os
 import time
 import copy
 import numpy as np
+try:
+    import importlib.resources as import_res
+except ImportError:
+    # Try backported to PY<37 `importlib_resources`.
+    import importlib_resources as import_res
+
+import shutil
 import traceback
+
+
+from pyFAT import Templates as templates
 #Function to read a FAT input Catalogue
 class BadCatalogueError(Exception):
     pass
@@ -89,7 +99,12 @@ def config_file(input_parameters, start_dir, debug = False):
     No_File = True
     while No_File:
         try:
-            tmpfile = open(input_parameters.configfile, 'r')
+            if input_parameters.configfile == 'ChecK.ConfiG':
+                from pyFAT import Installation_Check as IC
+                tmpfile = import_res.open_text(IC,'FAT_INPUT.config')
+            else:
+                with open(input_parameters.configfile, 'r') as tmp:
+                    tmpfile = tmp.readlines()
             No_File = False
         except:
             print(traceback.print_exc())
@@ -103,7 +118,7 @@ def config_file(input_parameters, start_dir, debug = False):
     string_keys = ['OUTPUTLOG', 'OUTPUTCATALOGUE','MAINDIR','CATALOGUE']
     integer_keys = ['STARTGALAXY','ENDGALAXY','MAPS_OUTPUT','OPT_PIXELBEAM','FINISHAFTER']
     # Separate the keyword names
-    for tmp in tmpfile.readlines():
+    for tmp in tmpfile:
         if tmp[0] != '#':
         # python is really annoying with needing endlines. Let's strip them here and add them when writing
             add_key = tmp.split('=', 1)[0].strip().upper()
@@ -126,7 +141,6 @@ def config_file(input_parameters, start_dir, debug = False):
                 Configuration[add_key] = int(tmp.split('=', 1)[1].strip())
             else:
                 Configuration[add_key] = float(tmp.split('=', 1)[1].strip())
-
     #if we are checking the installation then the maindir, outputcatalogue and
     #Log go into the original_dir+installation_check.
     if input_parameters.installation_check:
@@ -134,9 +148,27 @@ def config_file(input_parameters, start_dir, debug = False):
            Configuration['MAINDIR'] != 'Installation_Check/' or \
            Configuration['OUTPUTCATALOGUE'] != 'Installation_Check/Output_N2903.txt':
            raise BadConfigurationError('You can not modify the Installation Check input. It is solely for checking the Installation. Aborting')
-        Configuration['CATALOGUE'] = start_dir+'/Installation_Check/FAT_Input_Catalogue.txt'
-        Configuration['MAINDIR'] = start_dir+'/Installation_Check/'
-        Configuration['OUTPUTCATALOGUE'] = start_dir+'/Installation_Check/Output_N2903.txt'
+        test_files = ['FAT_Input_Catalogue.txt','NGC_2903.fits']
+        test_dir = start_dir+'/FAT_Installation_Check/'
+        if not os.path.isdir(test_dir):
+            print('We making a dir?)')
+            os.mkdir(test_dir)
+        else:
+            for file in test_files:
+                try:
+                    os.remove(test_dir+file)
+                except:
+                    pass
+        my_resources = import_res.files("pyFAT.Installation_Check")
+        for file in test_files:
+            data = (my_resources / file).read_bytes()
+            print('Is it the opening')
+            print(test_dir+file)
+            with open(test_dir+file,'w+b') as tmp:
+                tmp.write(data)
+        Configuration['CATALOGUE'] = test_dir+'FAT_Input_Catalogue.txt'
+        Configuration['MAINDIR'] = test_dir
+        Configuration['OUTPUTCATALOGUE'] =test_dir+'Output_N2903.txt'
     #Make the input idiot safe
     if Configuration['MAINDIR'][-1] != '/':
         Configuration['MAINDIR'] = Configuration['MAINDIR']+'/'
@@ -206,11 +238,15 @@ def config_file(input_parameters, start_dir, debug = False):
             elif key == 'OUTPUTLOG':
                 Configuration[key] = None
             else:
-                raise BadConfigurationError('This should never ever happen. Please file an issue on github')
+                raise BadConfigurationError('Something has gone wrong reading the required config key. This should never ever happen. Please file an issue on github')
     if Configuration['RING_SIZE'] < 0.5:
         Configuration['RING_SIZE'] = 0.5
     if Configuration['MAPS_OUTPUT'] == 5:
         Configuration['MAPS_OUTPUT'] = 4
+    # We double the fix keys so we can  modify one while keeping the original as well
+    fix_keys = ['FIX_PA','FIX_INCLINATION','FIX_SDIS','FIX_Z0']
+    for key in fix_keys:
+        Configuration[key] = [Configuration[key],Configuration[key]]
     return Configuration
 config_file.__doc__ ='''
 ;+
@@ -432,6 +468,10 @@ def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
     ring_size_req = hdr['BMAJ']/(np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])*maj_resolution)
     SBR_initial = avg_profile[0::int(ring_size_req)]/(np.pi*abs(hdr['BMAJ']*3600.*hdr['BMIN']*3600.)/(4.*np.log(2.))) # Jy*km/s
     SBR_initial =np.hstack((SBR_initial[0],SBR_initial,SBR_initial[-1]))
+
+    SBR_initial[0:3] = SBR_initial[0:3] * (1.2 -float(inclination[0])/90.)
+
+
     #We need to know which is the approaching side and which is receding
 
 
@@ -786,12 +826,19 @@ sofia_catalogue.__doc__ ='''
 
 
 
-def tirific_template(filename, debug = False):
-    tmp = open(filename, 'r')
+def tirific_template(filename = '', debug = False):
+    if filename == '':
+        template = import_res.open_text(templates, 'template.def')
+    elif filename == 'Installation_Check':
+        from pyFAT import Installation_Check as IC
+        template = import_res.open_text(IC, 'ModelInput.def')
+    else:
+        with open(filename, 'r') as tmp:
+            template = tmp.readlines()
     result = Proper_Dictionary()
     counter = 0
     # Separate the keyword names
-    for line in tmp.readlines():
+    for line in template:
         key = str(line.split('=')[0].strip().upper())
         if key == '':
             result[f'EMPTY{counter}'] = line
@@ -835,13 +882,13 @@ tirific_template.__doc__ ='''
 ;
 '''
 
-def sofia_template(filename, debug = False):
-    tmp = open(filename, 'r')
+def sofia_template(debug = False):
+    template = import_res.open_text(templates, 'sofia_template.par')
     result = {}
     counter = 0
     counter2 = 0
     # Separate the keyword names
-    for line in tmp.readlines():
+    for line in template:
         key = str(line.split('=')[0].strip())
         if key == '':
             result[f'EMPTY{counter}'] = line

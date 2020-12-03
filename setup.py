@@ -12,6 +12,8 @@ requirements = [
     'scipy',
     'astropy',
     'matplotlib',
+    'future-fstrings',
+    'importlib_resources>=3.3.0',
 ]
 
 PACKAGE_NAME = 'pyFAT'

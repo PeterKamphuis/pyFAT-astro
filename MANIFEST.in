@@ -1,8 +1,8 @@
 include pyFAT/bin/pyFAT
 recursive-include pyFAT/ *.py
 recursive-include pyFAT/Support *.py
-recursive-include pyFAT/Support *.def
-recursive-include pyFAT/Support *.par
+recursive-include pyFAT/Templates *.def
+recursive-include pyFAT/Templates *.par
 recursive-include pyFAT/Installation_Check *.fits
 recursive-include pyFAT/Installation_Check *.def
 recursive-include pyFAT/Installation_Check *.config
