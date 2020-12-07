@@ -91,7 +91,7 @@ def main(argv):
         Original_Configuration['DEBUG'] = input_parameters.debug
         Original_Configuration['NCPU'] = input_parameters.ncpu
         # if the number of beams across the major axis/2. is less than this size we will only fit a flat disc
-        Original_Configuration['MINIMUM_WARP_SIZE'] = 4.
+        Original_Configuration['MINIMUM_WARP_SIZE'] = 2.
         Original_Configuration['MINIMUM_RINGS'] = 3. # we need at least this amount of rings (Including 0 and 1/5 beam)
         # if the number of beams across the major axis/2 is less than this we will not fit the galaxy
         Original_Configuration['TOO_SMALL_GALAXY'] = 1.
@@ -111,6 +111,7 @@ def main(argv):
         Original_Configuration['NEW_RING_SIZE'] = False
         Original_Configuration['OPTIMIZED'] = False
         Original_Configuration['OUTER_RINGS_DOUBLED'] = False
+        Original_Configuration['LAST_RELIABLE_RINGS'] = [0.,0.]
         Original_Configuration['TIRIFIC_RUNNING'] = False
         Original_Configuration['VEL_SMOOTH_EXTENDED'] = False
         Original_Configuration['TIRIFIC_PID'] = 'Not Initialized'
@@ -175,7 +176,6 @@ def main(argv):
     {'':8s}{Catalogue}
     ''',None,screen=True, debug = True )
             Configuration['DISTANCE'] = Catalogue['DISTANCE']
-            doubled = 0
             ini_mode_factor =25
             # We initially set the variations to fixed for all parameters
             #let's see what happens if we immediately

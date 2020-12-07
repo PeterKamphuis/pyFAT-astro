@@ -14,7 +14,9 @@ from pyFAT.Support.support_functions import print_log, convert_type,set_limits,s
                               wait_for_tirific,set_rings
 from pyFAT.Support.clean_functions import clean_before_sofia,clean_after_sofia
 from pyFAT.Support.fits_functions import cut_cubes,extract_pv,make_moments
-from pyFAT.Support.modify_template import write_new_to_template,smooth_profile,set_cflux,check_sbr,regularise_profile,set_fitting_parameters,check_size,no_declining_vrot
+from pyFAT.Support.modify_template import write_new_to_template,smooth_profile,set_cflux,fix_sbr, \
+                                          regularise_profile,set_fitting_parameters,check_size, \
+                                          no_declining_vrot, set_new_size
 from astropy.wcs import WCS
 from astropy.io import fits
 
@@ -70,7 +72,7 @@ def fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run,hd
 ''',Configuration['OUTPUTLOG'],debug = debug)
     #if we have only a few rings we only smooth. else we fit a polynomial to the RC and smooth the SBR
     smoothed_sbr = smooth_profile(Configuration,Tirific_Template,'SBR',hdr, min_error= np.max([float(Tirific_Template['CFLUX']),float(Tirific_Template['CFLUX_2'])]),debug = debug)
-    check_sbr(Configuration,Tirific_Template,hdr,debug = debug)
+    fix_sbr(Configuration,Tirific_Template,hdr,debug = debug)
     if stage == 'after_cc':
         smoothed_vrot = smooth_profile(Configuration,Tirific_Template,'VROT',hdr,min_error = float(hdr['CDELT3']/1000.),debug = debug)
     else:
@@ -413,6 +415,7 @@ def check_source(Configuration, Fits_Files, Catalogue, header, debug = False):
     Configuration['MAX_SIZE_IN_BEAMS'] = set_limits(Configuration['SIZE_IN_BEAMS']+2.,1.0,Configuration['MAX_SIZE_IN_BEAMS'])
     Configuration['MIN_SIZE_IN_BEAMS'] = set_limits(Configuration['SIZE_IN_BEAMS']-4.,Configuration['TOO_SMALL_GALAXY'],Configuration['SIZE_IN_BEAMS'])
     Configuration['NO_RINGS'] = calc_rings(Configuration,debug=debug)
+    Configuration['LAST_RELIABLE_RINGS'] = [Configuration['NO_RINGS'],Configuration['NO_RINGS']]
     print_log(f'''CHECK_SOURCE: From the original Configuration and SoFiA we find:
 {"":8s}CHECK_SOURCE: The maximum diameter we will allow  is  {2.*Configuration['MAX_SIZE_IN_BEAMS']} beams.
 {"":8s}CHECK_SOURCE: We start with a diameter of {2*Configuration['SIZE_IN_BEAMS']} beams in the model.
@@ -565,7 +568,7 @@ def make_full_resolution(Configuration,Tirific_Template,Fits_Files,fit_stage = '
 def one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run,hdr, debug = False,allowed_loops = 10.):
     if debug:
         print_log(f'''ONE_STEP_CONVERGENCE: Starting with loop {Configuration['OS_LOOPS']} out of maximum {allowed_loops}.
-''',Configuration['OUTPUTLOG'],debug = debug)
+''',Configuration['OUTPUTLOG'],debug = True)
     fit_stage = 'One_Step_Convergence'
     stage = 'run_os'
     #First we run tirific
@@ -577,21 +580,24 @@ def one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run,hdr
     # Check whether we have the correct sizes,
     accepted_size = check_size(Configuration,Tirific_Template,hdr, fit_stage = fit_stage, stage = stage, current_run = current_run, debug=debug,Fits_Files=Fits_Files)
     if accepted and accepted_size and accepted_central:
-
-            Configuration['OS_ACCEPTED'] = True
+        Configuration['OS_ACCEPTED'] = True
     else:
-        if not accepted:
-            print_log(f'''ONE_STEP_CONVERGENCE: Tirific ran {allowed_loops} hence we do not accept this run the maximum amount of loops which means the fit is not accepted and we smooth and retry.
-''',Configuration['OUTPUTLOG'],debug = debug)
-        else:
-            print_log(f'''ONE_STEP_CONVERGENCE: FAT adjusted the rings. Refitting with new settings after smoothing them.
-''',Configuration['OUTPUTLOG'],debug = debug)
         Configuration['OS_ACCEPTED'] = False
         if Configuration['OS_LOOPS'] > allowed_loops:
-            print_log(f'''ONE_STEP_CONVERGENCE: We have ran the convergence more than {allowed_loops} times aborting the fit.
-''',Configuration['OUTPUTLOG'],debug = debug)
-            return current_run
-
+                print_log(f'''ONE_STEP_CONVERGENCE: We have ran the convergence more than {allowed_loops} times aborting the fit.
+    ''',Configuration['OUTPUTLOG'])
+                return current_run
+        if not accepted:
+            print_log(f'''ONE_STEP_CONVERGENCE: Tirific ran the maximum amount of loops hence we do not accept and we smooth and retry.
+''',Configuration['OUTPUTLOG'])
+        if not accepted_central:
+            print_log(f'''ONE_STEP_CONVERGENCE: The center varied too much hence we do not accept and we smooth and retry.
+''',Configuration['OUTPUTLOG'])
+        if not accepted_size:
+            print_log(f'''ONE_STEP_CONVERGENCE: FAT adjusted the rings. Refitting with new settings after smoothing them.
+''',Configuration['OUTPUTLOG'])
+                    # First we fix the SBR we are left with also to set the reliable ring to configuration.
+        fix_sbr(Configuration,Tirific_Template,hdr,debug = debug)    # Then we determine the inner rings that should remain fixed
         Configuration['INNER_FIX'] = get_inner_fix(Configuration, Tirific_Template,debug=debug)
         set_cflux(Configuration,Tirific_Template,debug = debug)
         keys_to_smooth =['INCL','PA','SDIS','Z0','VROT']
@@ -599,13 +605,12 @@ def one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run,hdr
                         convertskyangle(0.1,Configuration['DISTANCE'],physical= True)/Configuration['LIMIT_MODIFIER'],\
                         hdr['CDELT3']/(1000.*Configuration['LIMIT_MODIFIER']),1e-6]
         for j,key in enumerate(keys_to_smooth):
+            #Smoothing the profile also fixes it
             smoothed = smooth_profile(Configuration,Tirific_Template,key,hdr,debug=debug,min_error=min_errors[j])
 
         set_fitting_parameters(Configuration, Tirific_Template, hdr = hdr,stage = 'run_os',\
                              debug = debug)
 
-        #After smoothing the SBR we should check it again?
-        check_sbr(Configuration,Tirific_Template,hdr,stage = 'run_os',debug = debug)
         wf.tirific(Configuration,Tirific_Template,name = 'One_Step_Convergence_In.def',debug = debug)
 
 
@@ -620,12 +625,12 @@ def run_tirific(Configuration, current_run, stage = 'initial',fit_stage = 'Undef
     # Then if already running change restart file
     if Configuration['TIRIFIC_RUNNING']:
         print_log(f'''RUN_TIRIFIC: We are using an initialized tirific in {Configuration['FITTING_DIR']}
-''',Configuration['OUTPUTLOG'], screen = True,debug = debug)
+''',Configuration['OUTPUTLOG'], screen = True)
         with open(f"{Configuration['FITTING_DIR']}Logs/restart_{fit_stage}.txt",'a') as file:
             file.write("Restarting from previous run")
     else:
         print_log(f'''RUN_TIRIFIC: We are starting a new TiRiFiC in {Configuration['FITTING_DIR']}
-''',Configuration['OUTPUTLOG'], screen = True,debug = debug)
+''',Configuration['OUTPUTLOG'], screen = True)
         with open(f"{Configuration['FITTING_DIR']}Logs/restart_{fit_stage}.txt",'w') as file:
             file.write("Initialized a new run")
         current_run = subprocess.Popen(["tirific",f"DEFFILE={fit_stage}_In.def","ACTION = 1"], stdout = subprocess.PIPE, \

@@ -357,15 +357,18 @@ def finish_current_run(Configuration,current_run,debug=False):
 def gaussian_function(axis,peak,center,sigma):
     return peak*np.exp(-(axis-center)**2/(2*sigma**2))
 
-def fit_gaussian(x,y, covariance = False,debug = False):
+def fit_gaussian(x,y, covariance = False, debug = False):
     if debug:
-            print_log(f'''FIT_GAUSSIAN: Starting to fit a Gaussian.
+        print(f'''FIT_GAUSSIAN: Starting to fit a Gaussian.
 {'':8s}x = {x}
 {'':8s}y = {y}
-''',None,debug =True)
+''')
+    # Make sure we have numpy arrays
+    x= np.array(x,dtype=float)
+    y= np.array(y,dtype=float)
     # First get some initial estimates
     est_peak = np.nanmax(y)
-    est_center = float(x[np.where(y == est_peak)])
+    est_center = float(x[np.where(y == est_peak)[0]])
     est_sigma = np.nansum(y*(x-est_center)**2)/np.nansum(y)
     gauss_parameters, gauss_covariance = curve_fit(gaussian_function, x, y,p0=[est_peak,est_center,est_sigma])
     if covariance:
