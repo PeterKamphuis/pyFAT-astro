@@ -107,7 +107,7 @@ def main(argv):
         Original_Configuration['OS_ACCEPTED'] = False
         Original_Configuration['CURRENT_STAGE'] = 'initial'
         #Add some tracking paramaters
-        Original_Configuration['MAX_RINGS'] = 0
+        Original_Configuration['MAX_SIZE_IN_BEAMS'] = 30
         Original_Configuration['NEW_RING_SIZE'] = False
         Original_Configuration['OPTIMIZED'] = False
         Original_Configuration['OUTER_RINGS_DOUBLED'] = False

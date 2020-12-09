@@ -356,7 +356,7 @@ def check_source(Configuration, Fits_Files, Catalogue, header, debug = False):
     bmmaj_in_pixels = header['BMAJ']/np.mean([abs(header['CDELT1']),abs(header['CDELT2'])])
     #There is a factor of two missing here but this is necessary otherwise the maxima are far to small
     Configuration['MAX_SIZE_IN_BEAMS'] = int(round(np.sqrt(((x_max-x_min)/2.)**2+((y_max-y_min)/2.)**2) \
-                /(bmmaj_in_pixels)+3.))
+                /(bmmaj_in_pixels)+5.))
 
     pa, inclination, SBR_initial, maj_extent,x_new,y_new,VROT_initial = rf.guess_orientation(Configuration,Fits_Files, center = [x,y],debug=debug)
 

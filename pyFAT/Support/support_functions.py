@@ -67,16 +67,18 @@ def calc_rings(Configuration,size_in_beams = 0., ring_size  = 0.,debug=False):
         print_log(f'''CALC_RINGS: Calculating the number of rings in the model.
 {'':8s} size in beams = {size_in_beams}
 {'':8s} ring_size = {ring_size}
+{'':8s} the maximum amount of rings = {Configuration['MAX_SIZE_IN_BEAMS']}
 ''',Configuration['OUTPUTLOG'],debug = debug)
-    est_rings = round((size_in_beams)/(ring_size)+2)
-    if est_rings > 20 and Configuration['MAX_RINGS'] > 25:
+    est_rings = round((size_in_beams)/(ring_size)+2.)
+    if est_rings > 20 and Configuration['MAX_SIZE_IN_BEAMS'] > 25:
         Configuration['OUTER_RINGS_DOUBLED'] = True
-        no_rings = 2+10+round((est_rings-10-2)/2.)
+        no_rings = 2+10+round((est_rings-12)/2.)
     else:
         Configuration['OUTER_RINGS_DOUBLED'] = False
         no_rings = est_rings
     if debug:
         print_log(f'''CALC_RINGS: The model will have {no_rings} Rings.
+{'':8s} We estimated {est_rings} and double outer rings is {Configuration['OUTER_RINGS_DOUBLED']}
 ''',Configuration['OUTPUTLOG'],debug = False)
     return int(no_rings)
 
@@ -1037,9 +1039,10 @@ def set_rings(Configuration,ring_size = 0.,size_in_beams = 0. , debug = False):
         radii = np.hstack((radii,(np.linspace(Configuration['BMMAJ']*ring_size,Configuration['BMMAJ']*10.*ring_size, \
                                         10)+1./5*Configuration['BMMAJ'])))
         radii = np.hstack((radii,(np.linspace(Configuration['BMMAJ']*11.*ring_size, \
-                                              Configuration['BMMAJ']*ring_size*(no_rings-12), \
-                                              no_rings-12) \
-                                              +1./5*Configuration['BMMAJ'])))
+                                              Configuration['BMMAJ']*ring_size*2.*(no_rings-6.), \
+                                              round((no_rings-6)/2.))) \
+                                              +1./5*Configuration['BMMAJ']))
+                                              #no_rings = 2+10+round((est_rings-12)/2.)
     else:
         radii = [0.,1./5.*Configuration['BMMAJ']]
         radii = np.hstack((radii,(np.linspace(Configuration['BMMAJ']*ring_size,Configuration['BMMAJ']*ring_size*(no_rings-2.), \
