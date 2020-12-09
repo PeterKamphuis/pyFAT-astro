@@ -209,10 +209,17 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
             im_wcs = WCS(moment0[0].header)
 
         # Open the model info
-        Vars_to_plot= ['RADI','XPOS','YPOS','VSYS','VROT','VROT_ERR','VROT_2','VROT_2_ERR','INCL','INCL_ERR','INCL_2','INCL_2_ERR','PA','PA_ERR','PA_2','PA_2_ERR','SDIS','SDIS_ERR','SDIS_2','SDIS_2_ERR','SBR','SBR_2','Z0','Z0_2']
+        Vars_to_plot= ['RADI','XPOS','YPOS','VSYS','VROT','VROT_ERR','VROT_2','VROT_2_ERR','INCL','INCL_ERR','INCL_2',
+                        'INCL_2_ERR','PA','PA_ERR','PA_2','PA_2_ERR','SDIS','SDIS_ERR','SDIS_2','SDIS_2_ERR','SBR',
+                        'SBR_2','Z0','Z0_2','Z0_ERR','Z0_2_ERR']
         FAT_Model = load_tirific(f"{Configuration['FITTING_DIR']}Finalmodel/Finalmodel.def",Variables= Vars_to_plot,unpack=False,debug=debug)
-        if os.path.exists(f"{Configuration['FITTING_DIR']}Centre_Convergence/Centre_Convergence.def"):
-            Extra_Model = load_tirific(f"{Configuration['FITTING_DIR']}Centre_Convergence/Centre_Convergence.def",Variables= Vars_to_plot,unpack=False,debug=debug)
+        if Configuration['TWO_STEP']:
+            Extra_Model_File = f"{Configuration['FITTING_DIR']}Centre_Convergence/Centre_Convergence.def"
+        else:
+            Extra_Model_File = f"{Configuration['FITTING_DIR']}One_Step_Convergence/One_Step_Convergence_final_output_before_after_os.def"
+
+        if os.path.exists(Extra_Model_File):
+            Extra_Model = load_tirific(Extra_Model_File,Variables= Vars_to_plot,unpack=False,debug=debug)
         else:
             Extra_Model = []
         if debug:
@@ -722,7 +729,13 @@ BMAJ = {cube[0].header['BMAJ']*3600.:.1f} arcsec''',rotation=0, va='center',ha='
         ax_RAD = Overview.add_subplot(gs[6:10,16:20])
         plt.scatter(float(FAT_Model[0,Vars_to_plot.index('XPOS')]),float(FAT_Model[0,Vars_to_plot.index('YPOS')]),c='k',zorder=3,label = 'Final')
         if len(Extra_Model) > 0:
-            plt.scatter(float(Extra_Model[0,Vars_to_plot.index('XPOS')]),float(Extra_Model[0,Vars_to_plot.index('YPOS')]),c='r',zorder=1,alpha=0.5,label='CC')
+            if Configuration['TWO_STEP']:
+                lab = 'CC'
+                alpha =1.
+            else:
+                lab = 'Unsmoothed'
+                alpha =0.5
+            plt.scatter(float(Extra_Model[0,Vars_to_plot.index('XPOS')]),float(Extra_Model[0,Vars_to_plot.index('YPOS')]),c='r',zorder=1,alpha=alpha,label=lab)
         if len(Input_Model) > 0:
             plt.scatter(float(Input_Model[0,Vars_to_plot.index('XPOS')]),float(Input_Model[0,Vars_to_plot.index('YPOS')]),c='b',zorder =2,label='Input')
         plt.scatter(sof_basic_ra[0],sof_basic_dec[0],marker='x',alpha=0.5, c = 'k',label='Initial')
@@ -795,13 +808,14 @@ def plot_parameters(Vars_to_plot,FAT_Model,Input_Model,location,Figure,parameter
 
                 ax.errorbar(Input_Model[:last_index,Vars_to_plot.index('RADI')],Input_Model[:last_index,Vars_to_plot.index(f'{parameter}_2')],yerr= yerr, c ='yellow', label=f'{legend[3]}',zorder=2)
                 ax.plot(Input_Model[:last_index,Vars_to_plot.index('RADI')],Input_Model[:last_index,Vars_to_plot.index(f'{parameter}_2')],'yellow',zorder=2,marker ='o',linestyle='-' , ms = 3.)
+    ymin,ymax = ax.get_ylim()
     if len(Extra_Model) > 0:
         ax.plot(Extra_Model[:,Vars_to_plot.index('RADI')],Extra_Model[:,Vars_to_plot.index(f'{parameter}')],'ko',linestyle='-', ms = 3., alpha=0.2,zorder=1)
         if np.sum(Extra_Model[:,Vars_to_plot.index(f'{parameter}_2')]) != 0.:
             diff = np.sum(abs(Extra_Model[:,Vars_to_plot.index(f'{parameter}_2')]-Extra_Model[:,Vars_to_plot.index(f'{parameter}')]))
             if diff != 0.:
                 ax.plot(Extra_Model[:,Vars_to_plot.index('RADI')],Extra_Model[:,Vars_to_plot.index(f'{parameter}_2')],'r', alpha=0.2,zorder=1,marker ='o',linestyle='-' , ms = 3.)
-
+    ax.set_ylim(ymin,ymax)
     xmin,xmax = ax.get_xlim()
     if initial != 'No Value':
         ax.plot([xmin-5,xmax+5],[float(initial),float(initial)],c='k',alpha=0.4, linestyle ='--')

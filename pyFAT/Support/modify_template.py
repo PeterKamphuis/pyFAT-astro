@@ -77,6 +77,8 @@ def fix_sbr(Configuration,Tirific_Template,hdr,debug=False):
     sbr[np.where(sbr<cutoff_limits)] = 1.2*cutoff_limits[np.where(sbr<cutoff_limits)]
 
 
+
+
     #rid the sawtooth
 
     #if sbr[0,1]/3. > np.mean([sbr[0,0],sbr[0,2]]):
@@ -245,10 +247,9 @@ def check_size(Configuration,Tirific_Template,hdr, fit_stage = 'Unitialized_Stag
 ''', Configuration['OUTPUTLOG'])
             Configuration['OLD_RINGS'].append(f"{size_in_beams:.1f}")
         else:
-            print_log(f'''CHECK_SIZE: After which we decreased the so we allow this addition. But no more.
+            print_log(f'''CHECK_SIZE: After which we decreased so we allow this addition. But no more.
 ''', Configuration['OUTPUTLOG'])
             Configuration['OLD_RINGS'].append(f"{size_in_beams:.1f}")
-            Configuration['OLD_RINGS'].append(f"{size_in_beams+ring_size:.1f}")
     else:
         if debug:
             print_log(f'''CHECK_SIZE: Adding the new ring size to OLD_RINGS.
@@ -444,6 +445,7 @@ get_warp_slope.__doc__ = '''
 
 
 def regularise_profile(Configuration,Tirific_Template, key ,hdr,min_error= [0.],debug = False, no_apply =False):
+    max_error = {'INCL': 10., 'PA': 5., 'SDIS' :2.*Configuration['CHANNEL_WIDTH'], 'Z0': Configuration['BMMAJ'] }
     # We start by getting an estimate for the errors
     min_error=np.array(min_error)
     profile = np.array(get_from_template(Tirific_Template, [key,f"{key}_2"]),dtype=float)
@@ -500,6 +502,13 @@ def regularise_profile(Configuration,Tirific_Template, key ,hdr,min_error= [0.],
         original = np.array(get_from_template(Tirific_Template, [key,f"{key}_2"]),dtype=float)
         profile = modify_flat(Configuration, profile, original, error,debug=debug)
         error = get_error(Configuration, original, profile,min_error=error,debug=debug)
+        for i in [0,1]:
+            if Configuration['LAST_RELIABLE_RINGS'][i] < len(profile[i,:]):
+                if debug:
+                    print_log(f'''REGULARISE_PROFILE: From ring {Configuration['LAST_RELIABLE_RINGS'][i]} on  the rings were reset so we use {max_error[key]} as the error.
+    ''', Configuration['OUTPUTLOG'])
+                for j in range(Configuration['LAST_RELIABLE_RINGS'][i], len(profile[i,:])):
+                    error[i,j] = np.nanmin([max_error[key],error[i,j]])
 
     format = set_format(key)
 
@@ -520,6 +529,7 @@ def regularise_profile(Configuration,Tirific_Template, key ,hdr,min_error= [0.],
 
 
 def get_error(Configuration,profile,sm_profile,min_error = [0.],singular = False, debug=False):
+
     try:
         size= len(min_error)
         min_error = np.array(min_error)
@@ -605,7 +615,7 @@ def no_declining_vrot(Configuration, Tirific_Template, debug = False):
             print_log(f'''NO_DECLINING_VROT: We find the maximum at ring {RCmax}
 {'':8s}NO_DECLINING_VROT: And a mean value of {RCval}.
 ''',Configuration['OUTPUTLOG'],debug = False)
-    Configuration['OUTER_SLOPE'] = Configuration['NO_RINGS']-1
+    Configuration['OUTER_SLOPE_START'] = Configuration['NO_RINGS']-1
     if RCmax < len(profile)/2. or RCval > 180.:
         if debug:
             print_log(f'''NO_DECLINING_VROT: We shan't adapt the RC
@@ -617,10 +627,10 @@ def no_declining_vrot(Configuration, Tirific_Template, debug = False):
                 if debug:
                     print_log(f'''NO_DECLINING_VROT: Flattening from ring {i} on.)
     ''',Configuration['OUTPUTLOG'],debug = False)
-                Configuration['OUTER_SLOPE'] = i+2
+                Configuration['OUTER_SLOPE_START'] = i+2
                 break
-    if Configuration['OUTER_SLOPE'] > Configuration['NO_RINGS']:
-        Configuration['OUTER_SLOPE'] = Configuration['NO_RINGS']
+    if Configuration['OUTER_SLOPE_START'] > Configuration['NO_RINGS']:
+        Configuration['OUTER_SLOPE_START'] = Configuration['NO_RINGS']
     format = set_format('VROT')
     Tirific_Template['VROT'] = f"{' '.join([f'{x:{format}}' for x in profile])}"
     Tirific_Template['VROT_2'] = f"{' '.join([f'{x:{format}}' for x in profile])}"
@@ -739,9 +749,9 @@ def fit_polynomial(Configuration,radii,profile,sm_profile,error, key, Tirific_Te
     if key in ['PA','INCL','Z0']:
         fixed = Configuration['INNER_FIX']
     elif key in ['VROT']:
-        fixed = Configuration['OUTER_SLOPE']
+        fixed =len(radii)-Configuration['OUTER_SLOPE_START']
     else:
-        fixed = 0
+        fixed = 1
     if len(radii) > 15.:
         start_order = int(len(radii)/5)
     else:
@@ -749,7 +759,19 @@ def fit_polynomial(Configuration,radii,profile,sm_profile,error, key, Tirific_Te
     max_order = set_limits(len(radii)-fixed,3,8)
     st_fit = int(1)
     if key in ['VROT']:
-        start_order = set_limits(start_order,2,max_order-1)
+        #The rotation curve varies a lot so the lower limit should be as high as possible
+        #But at least 3 less than max order and maximally 4
+        if len(radii) < 6:
+            lower_limit=set_limits(3,3,max_order-1)
+        elif len(radii) < 10:
+            lower_limit=set_limits(4,3,max_order-1)
+        else:
+            lower_limit=set_limits(5,3,max_order-1)
+        start_order = set_limits(start_order,lower_limit,max_order)
+        if debug:
+            print_log(f'''FIT_POLYNOMIAL: For VROT we start at {start_order} because we have {len(radii)} rings of which {fixed} are fixed
+{'':8s} this gves us a maximum order of {max_order}
+''',Configuration['OUTPUTLOG'],screen =True, debug=debug)
 
     reduced_chi = []
     order = range(start_order,max_order)
@@ -880,6 +902,16 @@ set_cflux.__doc__ = '''
 ;
 
 '''
+def set_errors(Configuration,Tirific_Template,key,min_error = 0.,debug = False):
+    error = np.full((2,int(Configuration['NO_RINGS'])),min_error)
+    format=set_format(key)
+    Tirific_Template.insert(key,f"# {key}_ERR",f"{' '.join([f'{x:{format}}' for x in error[0,:int(Configuration['NO_RINGS'])]])}")
+    Tirific_Template.insert(f"{key}_2",f"# {key}_2_ERR",f"{' '.join([f'{x:{format}}' for x in error[1,:int(Configuration['NO_RINGS'])]])}")
+    if debug:
+        print_log(f'''SET_ERRORS: This has gone to the template.
+{'':8s}# {key}_ERR ={Tirific_Template[f"# {key}_ERR"]}
+{'':8s}# {key}_2_ERR ={Tirific_Template[f"# {key}_2_ERR"]}
+''',Configuration['OUTPUTLOG'],debug = True)
 
 def set_fitting_parameters(Configuration, Tirific_Template, \
                            parameters_to_adjust  = ['NO_ADJUSTMENT'], modifiers = {}, \
@@ -1020,6 +1052,7 @@ def set_fitting_parameters(Configuration, Tirific_Template, \
                 flat_slope = False
             else:
                 flat_slope = True
+
             fitting_settings[key] =  set_generic_fitting(Configuration,key,stage = stage, values = initial_estimates[key], debug = debug,\
                                                         limits=limits,slope= slope, flat_slope = flat_slope, fixed =fixed, flat_inner = inner, step_modifier = modifiers[key])
 
@@ -1031,6 +1064,14 @@ def set_fitting_parameters(Configuration, Tirific_Template, \
         if key in fitting_settings:
             for fit_key in fitting_keys:
                 if  fit_key in fitting_settings[key]:
+
+                    if fit_key == 'MIN_DELTA':
+                        # This should never be 0.
+                        format = set_format(key)
+                        for i in range(fitting_settings[key][fit_key]):
+                            while float(f'{fitting_settings[key][fit_key][i]:{format}}') == 0.:
+                                fitting_settings[key][fit_key][i] += 0.05
+
                     if fit_key == 'VARY':
                         if len(Tirific_Template[fit_key]) == 0:
                             Tirific_Template[fit_key] = ', '.join([f'{x:<10s}' for x in fitting_settings[key][fit_key]])
@@ -1711,16 +1752,16 @@ def set_vrot_fitting(Configuration,Tirific_Template,hdr = None,systemic = 100., 
         forvarindex = ''
         if Configuration['EXCLUDE_CENTRAL'] or rotation[0] > 150.:
             forvarindex = 'VROT 2 VROT_2 2 '
-        if Configuration['OUTER_SLOPE'] == NUR:
+        if Configuration['OUTER_SLOPE_START'] == NUR:
             if Configuration['NO_RINGS'] > 5:
                 inner_slope =  int(round(set_limits(check_size(Configuration,Tirific_Template,hdr, debug = debug,fix_rc = True),round(NUR/2.),NUR-1)))
             else:
                 inner_slope = NUR
             if Configuration['NO_RINGS'] > 15 and inner_slope > int(Configuration['NO_RINGS']*4./5.) :
                 inner_slope = int(Configuration['NO_RINGS']*4./5.)
-            Configuration['OUTER_SLOPE'] = inner_slope
+            Configuration['OUTER_SLOPE_START'] = inner_slope
         else:
-            inner_slope = Configuration['OUTER_SLOPE']
+            inner_slope = Configuration['OUTER_SLOPE_START']
         if stage in ['initial','run_cc']:
                 #inner_slope = int(round(set_limits(NUR*(4.-Configuration['LIMIT_MODIFIER'][0])/4.,round(NUR/2.),NUR-2)))
             if inner_slope >= NUR-1:

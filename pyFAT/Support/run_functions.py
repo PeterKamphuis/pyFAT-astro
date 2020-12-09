@@ -16,7 +16,7 @@ from pyFAT.Support.clean_functions import clean_before_sofia,clean_after_sofia
 from pyFAT.Support.fits_functions import cut_cubes,extract_pv,make_moments
 from pyFAT.Support.modify_template import write_new_to_template,smooth_profile,set_cflux,fix_sbr, \
                                           regularise_profile,set_fitting_parameters,check_size, \
-                                          no_declining_vrot, set_new_size
+                                          no_declining_vrot, set_new_size,set_errors
 from astropy.wcs import WCS
 from astropy.io import fits
 
@@ -81,22 +81,39 @@ def fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run,hd
     if stage in ['after_ec', 'after_os']:
         min_error = []
         pars_to_smooth = []
+        not_to_smooth = []
+        fixed_errors = []
         if not Configuration['FIX_INCLINATION'][0]:
             pars_to_smooth.append('INCL')
             min_error.append(2.*Configuration['LIMIT_MODIFIER'])
+        else:
+            not_to_smooth.append('INCL')
+            fixed_errors.append(2.*Configuration['LIMIT_MODIFIER'])
         if not Configuration['FIX_Z0'][0]:
             pars_to_smooth.append('Z0')
             min_error.append(convertskyangle(0.1,Configuration['DISTANCE'],physical= True))
+        else:
+            not_to_smooth.append('Z0')
+            fixed_errors.append(convertskyangle(0.1,Configuration['DISTANCE'],physical= True))
         if not Configuration['FIX_PA'][0]:
             pars_to_smooth.append('PA')
             min_error.append(1.)
+        else:
+            not_to_smooth.append('PA')
+            fixed_errors.append(1.)
+
         if not Configuration['FIX_SDIS'][0]:
             pars_to_smooth.append('SDIS')
             min_error.append(hdr['CDELT3']/2000.*Configuration['LIMIT_MODIFIER'])
-        for key,min_err in zip(pars_to_smooth,min_error):
-            if Configuration['NO_RINGS'] > 6:
-                smoothed = regularise_profile(Configuration,Tirific_Template,key,hdr,min_error = min_err,debug = debug)
+        else:
+            not_to_smooth.append('SDIS')
+            fixed_errors.append(hdr['CDELT3']/2000.*Configuration['LIMIT_MODIFIER'])
 
+        for key,min_err in zip(pars_to_smooth,min_error):
+            smoothed = regularise_profile(Configuration,Tirific_Template,key,hdr,min_error = min_err,debug = debug)
+
+        for key,min_err in zip(not_to_smooth,fixed_errors):
+            set_errors(Configuration,Tirific_Template,key,min_error = min_err,debug = debug)
     #If our fit stage is after cc we want to make sure we do an extra check on low inclinations or small Galaxies
     #if stage =='after_cc' and (Configuration['SIZE_IN_BEAMS'] < 5 or incl[0] < 50.):
     #    check_inclination(Configuration,Tirific_Template,Fits_Files,debug=debug)
@@ -225,7 +242,7 @@ def check_central_convergence(Configuration,Tirific_Template,hdr,accepted, fit_s
     new_xpos,new_ypos,new_vsys = rf.load_tirific(f"{Configuration['FITTING_DIR']}{fit_stage}/{fit_stage}.def",Variables = ['XPOS','YPOS','VSYS'],debug = debug)
     old_xpos,old_ypos,old_vsys = rf.load_tirific(f"{Configuration['FITTING_DIR']}{fit_stage}_In.def",Variables = ['XPOS','YPOS','VSYS'],debug = debug)
     if Configuration['OUTER_RINGS_DOUBLED']:
-        shift_beam_frac =0.3
+        shift_beam_frac =Configuration['SIZE_IN_BEAMS']*0.05
     else:
         shift_beam_frac =0.15
     ra_lim = set_limits(shift_beam_frac*hdr['BMAJ'],np.max([abs(hdr['CDELT1']),1./3600.]),hdr['BMAJ'],debug = debug )
@@ -234,10 +251,10 @@ def check_central_convergence(Configuration,Tirific_Template,hdr,accepted, fit_s
     if abs(new_xpos[0] - old_xpos[0]) > ra_lim or \
        abs(new_ypos[0] - old_ypos[0]) > dec_lim or \
        abs(new_vsys[0] - old_vsys[0]) > sys_lim:
-        if Configuration['SIZE_IN_BEAMS'] < 25:
+        if Configuration['SIZE_IN_BEAMS'] < 20:
             apply_limit = 2*hdr['BMAJ']
         else:
-            apply_limit = hdr['BMAJ']*Configuration['SIZE_IN_BEAMS']*0.08
+            apply_limit = hdr['BMAJ']*Configuration['SIZE_IN_BEAMS']*0.2
         if abs(new_xpos[0] - old_xpos[0]) > apply_limit or\
            abs(new_ypos[0] - old_ypos[0]) > apply_limit:
            print_log(f'''CHECK_CONVERGENCE: The center shifted more than {apply_limit/hdr['BMAJ']} FWHM.
@@ -403,7 +420,7 @@ def check_source(Configuration, Fits_Files, Catalogue, header, debug = False):
     SBR_initial = np.interp(new_radii,old_radii, SBR_initial)
     old_radii = np.linspace(0.,Configuration['BMMAJ']*(len(VROT_initial)-1),len(VROT_initial))
     VROT_initial = np.interp(new_radii,old_radii, VROT_initial)
-    Configuration['OUTER_SLOPE'] = Configuration['NO_RINGS']
+    Configuration['OUTER_SLOPE_START'] = Configuration['NO_RINGS']
     if debug:
         print_log(f'''CHECK_SOURCE: Interpolating the SBR and VROT estimates to these radi.
 {'':8s} {new_radii}
@@ -598,12 +615,14 @@ def one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run,hdr
 ''',Configuration['OUTPUTLOG'])
                     # First we fix the SBR we are left with also to set the reliable ring to configuration.
         fix_sbr(Configuration,Tirific_Template,hdr,debug = debug)    # Then we determine the inner rings that should remain fixed
+
         Configuration['INNER_FIX'] = get_inner_fix(Configuration, Tirific_Template,debug=debug)
         set_cflux(Configuration,Tirific_Template,debug = debug)
-        keys_to_smooth =['INCL','PA','SDIS','Z0','VROT']
+        keys_to_smooth =['INCL','PA','SDIS','Z0','VROT','SBR']
         min_errors = [2.*Configuration['LIMIT_MODIFIER'],1.,hdr['CDELT3']/(2000.*Configuration['LIMIT_MODIFIER']), \
                         convertskyangle(0.1,Configuration['DISTANCE'],physical= True)/Configuration['LIMIT_MODIFIER'],\
-                        hdr['CDELT3']/(1000.*Configuration['LIMIT_MODIFIER']),1e-6]
+                        hdr['CDELT3']/(1000.*Configuration['LIMIT_MODIFIER']),np.max([float(Tirific_Template['CFLUX']),\
+                        float(Tirific_Template['CFLUX_2'])])]
         for j,key in enumerate(keys_to_smooth):
             #Smoothing the profile also fixes it
             smoothed = smooth_profile(Configuration,Tirific_Template,key,hdr,debug=debug,min_error=min_errors[j])

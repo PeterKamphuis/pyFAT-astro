@@ -119,7 +119,7 @@ def main(argv):
         Original_Configuration['LIMIT_MODIFIER'] = [1.]
         Original_Configuration['INNER_FIX'] = 3
         Original_Configuration['WARP_SLOPE'] = [0.,0.]
-        Original_Configuration['OUTER_SLOPE'] = 1
+        Original_Configuration['OUTER_SLOPE_START'] = 1
         Original_Configuration['OLD_RINGS'] = []
         #Then read the input Catalogue
         Full_Catalogue = rf.catalogue(Original_Configuration['CATALOGUE'])

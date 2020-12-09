@@ -483,8 +483,6 @@ def get_usage_statistics(process_id, debug = False):
     if debug:
         print(f'''{'':8s}GET_usage_statistics: We extracted the following variables {column_var}
 ''')
-    CPU = float(column_var[column_names.index('%CPU')])
-    mem = float(column_var[column_names.index('RES')])/1024**2
     try:
         if int(column_var[column_names.index('PID')]) == int(process_id):
             CPU = float(column_var[column_names.index('%CPU')])

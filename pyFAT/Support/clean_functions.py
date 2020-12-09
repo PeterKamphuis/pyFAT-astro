@@ -222,8 +222,8 @@ def cleanup_final(Configuration,Fits_Files, debug =False):
     if debug:
          print_log(f'''Starting the final cleanup of the directory.
 ''',Configuration['OUTPUTLOG'],screen =True,debug = True)
-    clean_files = [Fits_Files['OPTIMIZED_CUBE'],'Centre_Convergence_In.def', 'Extent_Convergence_In.def','clean_map.fits','dep_map.fits','minimum_map.fits','rot_map.fits']
-    dest_dir = ['Logs','Center_Convergence', 'Extent_Convergence', 'Logs', 'Logs', 'Logs', 'Logs']
+    clean_files = [Fits_Files['OPTIMIZED_CUBE'],'Centre_Convergence_In.def', 'Extent_Convergence_In.def','clean_map.fits','dep_map.fits','minimum_map.fits','rot_map.fits','One_Step_Convergence_In.def']
+    dest_dir = ['Logs','Center_Convergence', 'Extent_Convergence', 'Logs', 'Logs', 'Logs', 'Logs','One_Step_Convergence']
     for file,dir in zip(clean_files,dest_dir):
     # Not remove anything but cleanup all
         try:
@@ -454,7 +454,7 @@ def transfer_errors(Configuration,fit_stage='Not Initialized',debug = False):
     # Load the final file
     Tirific_Template = tirific_template(filename = f"{Configuration['FITTING_DIR']}{fit_stage}/{fit_stage}.def",debug= debug)
     # Get the errors from the input
-    errors_to_transfer= ['VROT_ERR','VROT_2_ERR','INCL_ERR','INCL_2_ERR','PA_ERR','PA_2_ERR','SDIS_ERR','SDIS_2_ERR']
+    errors_to_transfer= ['VROT_ERR','VROT_2_ERR','INCL_ERR','INCL_2_ERR','PA_ERR','PA_2_ERR','SDIS_ERR','SDIS_2_ERR','Z0_ERR','Z0_2_ERR']
     FAT_Model = load_tirific(f"{Configuration['FITTING_DIR']}{fit_stage}_In.def",Variables=errors_to_transfer,unpack=False,debug=debug)
     # add to the templatethere
     Tirific_Template.insert('GR_CONT','RESTARTID','0')
