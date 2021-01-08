@@ -313,6 +313,7 @@ def main(argv):
             try:
                 current_run = 'Not Initialized'
                 # Process the found source in sofia to set up the proper fitting and make sure source can be fitted
+
                 Initial_Parameters = runf.check_source(Configuration, Fits_Files, Catalogue, cube_hdr,debug=Configuration['DEBUG'])
 
                 sf.print_log(f'''The source is well defined and we will now setup the initial tirific file

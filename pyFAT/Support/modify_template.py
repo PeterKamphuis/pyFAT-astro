@@ -958,8 +958,6 @@ def set_fitting_parameters(Configuration, Tirific_Template, \
         if key not in initial_estimates:
             profile = np.array([np.mean([x,y]) for x,y in zip(get_from_template(Tirific_Template, [key])[0],get_from_template(Tirific_Template, [f"{key}_2"])[0] )])
             diff = abs(np.max(profile)-np.min(profile))/10.
-            print(profile)
-            print(Tirific_Template[key])
             if key == 'PA':
                 initial_estimates['PA'] = [profile[0],set_limits(diff,0.5,10)]
             elif key == 'VROT':
@@ -1333,6 +1331,7 @@ def set_model_parameters(Configuration, Tirific_Template,Model_Values, hdr = Non
                     Tirific_Template['Z0'] = f"{convertskyangle(0.2,distance=Configuration['DISTANCE'],physical= True):.3f}"
 
                 Tirific_Template['Z0_2'] = Tirific_Template['Z0']
+
             elif key == 'SDIS':
                 check_parameters.append('SDIS')
                 Tirific_Template['SDIS'] = '8.'

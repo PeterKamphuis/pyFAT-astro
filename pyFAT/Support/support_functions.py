@@ -453,7 +453,8 @@ def get_inclination_pa(Configuration, map, Image, hdr, center, cutoff = 0., debu
             inclination = float(inclination+(inclination/10.*np.sqrt(4./(maj_extent/hdr['BMAJ']))))
             if i == 0:
                 inclination_error = float(inclination_error*4./(maj_extent/hdr['BMAJ']))
-        if inclination < 70.:
+        # this leads to trouble for small sources due to uncertain PA and inclination estimates
+        if inclination < 70. and maj_extent/hdr['BMAJ'] > 4:
             Image = remove_inhomogeneities(Configuration,Image,inclination=inclination, pa = pa, center = center,WCS_center = False, debug=debug)
             map = Image[0].data
         else:

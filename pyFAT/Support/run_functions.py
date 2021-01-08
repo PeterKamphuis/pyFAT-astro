@@ -311,12 +311,14 @@ def check_source(Configuration, Fits_Files, Catalogue, header, debug = False):
     galaxy_box = [[z_min,z_max],[y_min,y_max],[x_min,x_max]]
 
     # If the provided distance  = -1 we assume a Hubble follow
-    if Catalogue['DISTANCE'] == -1:
-        Catalogue['DISTANCE'] == v_app/(1000.*H_0)
-    if Catalogue['DISTANCE'] < 0.5:
-        Catalogue['DISTANCE'] == 0.5
-
-
+    if float(Catalogue['DISTANCE']) == -1.:
+        Configuration['DISTANCE'] = v_app/(1000.*H_0)
+    if float(Configuration['DISTANCE']) < 0.5:
+        Configuration['DISTANCE'] = 0.5
+    if debug:
+        print_log(f'''CHECK_SOURCE: We use a distance of {Configuration['DISTANCE']}.
+{'':8s} Where the catalogue stated {Catalogue['DISTANCE']}
+''',Configuration['OUTPUTLOG'],debug = False,screen=True)
     #Check whether the cube is very large, if so cut it down
 
     new_box = cut_cubes(Configuration, Fits_Files, galaxy_box, header,debug=debug)
@@ -426,7 +428,7 @@ def check_source(Configuration, Fits_Files, Catalogue, header, debug = False):
         print_log(f'''CHECK_SOURCE: Interpolating the SBR and VROT estimates to these radi.
 {'':8s} {new_radii}
 {'':8s} We got SBR = {SBR_initial}, VROT = {VROT_initial}
-''',Configuration['OUTPUTLOG'],debug = debug)
+''',Configuration['OUTPUTLOG'],debug = False)
 
 
     # The extent is fairly well determined and the maximum should be no more than +3 beams and a minimum no less than 4

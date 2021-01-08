@@ -504,11 +504,12 @@ def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
             pa[0] = pa[0]+180
             print_log(f'''GUESS_ORIENTATION: We have modified the pa by 180 deg as we found the maximum velocity west of the center.
 ''' , Configuration['OUTPUTLOG'])
+    #As python is utterly moronic the center goes in back wards to the map
     if debug:
         print_log(f'''GUESS_ORIENTATION: We found the following initial VSYS:
-{'':8s}vsys = {map[int(round(center[0])),int(round(center[1]))]}, at {center}
+{'':8s}vsys = {map[int(round(center[1])),int(round(center[0]))]}, at {center}
 ''',Configuration['OUTPUTLOG'], debug = False)
-    map = map  - map[int(round(center[0])),int(round(center[1]))]
+    map = map  - map[int(round(center[1])),int(round(center[0]))]
     VROT_initial = extract_vrot(Configuration, hdr,map ,pa[0],center, debug= debug)
     if pa[1] < 10.:
         for x in [pa[0]-pa[1],pa[0]-pa[1]/2.,pa[0]+pa[1]/2.,pa[0]+pa[1]]:
