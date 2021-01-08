@@ -17,6 +17,7 @@ from pyFAT.Support.fits_functions import cut_cubes,extract_pv,make_moments
 from pyFAT.Support.modify_template import write_new_to_template,smooth_profile,set_cflux,fix_sbr, \
                                           regularise_profile,set_fitting_parameters,check_size, \
                                           no_declining_vrot, set_new_size,set_errors
+from pyFAT.Support.constants import H_0
 from astropy.wcs import WCS
 from astropy.io import fits
 

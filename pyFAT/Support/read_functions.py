@@ -55,6 +55,7 @@ def catalogue(filename, debug = False):
                 Catalogue[key].append(input[i])
     if 'NUMBER' in Catalogue['ENTRIES']:
         Catalogue['NUMBER'] = np.array(Catalogue['NUMBER'],dtype=int)
+
     return Catalogue
 catalogue.__doc__ ='''
 ;+
@@ -288,7 +289,6 @@ def extract_vrot(Configuration, hdr,map ,angle,center, debug= False):
         print_log(f'''EXTRACT_VROT: starting extraction of initial VROT.
 {'':8s} PA= {angle}
 {'':8s} center= {center}
-
 ''',Configuration['OUTPUTLOG'], debug = True)
     x1,x2,y1,y2 = obtain_border_pix(hdr,angle,center)
     linex,liney = np.linspace(x1,x2,1000), np.linspace(y1,y2,1000)
@@ -299,7 +299,11 @@ def extract_vrot(Configuration, hdr,map ,angle,center, debug= False):
     #pos_index = np.where(maj_axis > 0.)[0]
     neg_index = np.where(maj_profile > 0.)[0]
     pos_index = np.where(maj_profile < 0.)[0]
-
+    if debug:
+        print_log(f'''EXTRACT_VROT: The extracted major axis velocities
+{'':8s} {maj_profile}
+{'':8s} resolution = {maj_resolution}
+''',Configuration['OUTPUTLOG'], debug = False)
     avg_profile = []
     neg_profile = []
     pos_profile = []
@@ -310,6 +314,7 @@ def extract_vrot(Configuration, hdr,map ,angle,center, debug= False):
         pos_profile.append(-1*maj_profile[pos_index[i]])
         #correct for beam smearing in the center
         beam_back = -1*int(hdr['BMAJ']/(np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])*maj_resolution))
+
         if i > hdr['BMAJ']/(np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])*maj_resolution) and i < -2.*beam_back:
 
         #if i*np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])*maj_resolution < 1.5*hdr['BMAJ'] and i > int() :
@@ -329,10 +334,15 @@ def extract_vrot(Configuration, hdr,map ,angle,center, debug= False):
 {'':8s} negative= {neg_profile}
 {'':8s} positive= {pos_profile}
 {'':8s} avreage= {avg_profile}
-''',Configuration['OUTPUTLOG'], debug = True)
+''',Configuration['OUTPUTLOG'], debug = False)
 
     ring_size_req = hdr['BMAJ']/(np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])*maj_resolution)
     profile = np.array(avg_profile[0::int(ring_size_req)],dtype=float)
+    if debug:
+        print_log(f'''EXTRACT_VROT: Constructing the final RC
+{'':8s} initial RC= {profile}
+{'':8s} at step width= {ring_size_req}
+''',Configuration['OUTPUTLOG'], debug = False)
     try:
         profile[np.isnan(profile)] = profile[~np.isnan(profile)][-1]
     except IndexError:
@@ -494,6 +504,10 @@ def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
             pa[0] = pa[0]+180
             print_log(f'''GUESS_ORIENTATION: We have modified the pa by 180 deg as we found the maximum velocity west of the center.
 ''' , Configuration['OUTPUTLOG'])
+    if debug:
+        print_log(f'''GUESS_ORIENTATION: We found the following initial VSYS:
+{'':8s}vsys = {map[int(round(center[0])),int(round(center[1]))]}, at {center}
+''',Configuration['OUTPUTLOG'], debug = False)
     map = map  - map[int(round(center[0])),int(round(center[1]))]
     VROT_initial = extract_vrot(Configuration, hdr,map ,pa[0],center, debug= debug)
     if pa[1] < 10.:

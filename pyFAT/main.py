@@ -20,18 +20,13 @@ import pyFAT.Support.clean_functions as cf
 import pyFAT.Support.fits_functions as ff
 #functions that write files
 import pyFAT.Support.write_functions as wf
+#from pyFAT.Support.constants import initialize
 from  pyFAT.Support.modify_template import write_new_to_template,flatten_the_curve
 
 def main(argv):
     try:
-
         #Get the directory we are running from, This is for the Installation Check
         start_dir = os.getcwd()
-
-        #Constants that are used in the code
-        global H_0
-        H_0 = 70. #km/s/Mpc #Hubble constant
-
         #Then check the input options
         parser  = OptionParser()
         parser.add_option('-c','--cf','--configuration_file', action ="store" ,dest = "configfile", default = 'FAT_INPUT.config', help = 'Define the input configuration file.',metavar='CONFIGURATION_FILE')
@@ -156,7 +151,7 @@ def main(argv):
             Original_Configuration['STARTGALAXY'] = 0
         # If the end galaxy is -1 fit the whole catalogue
         if Original_Configuration['ENDGALAXY'] == -1:
-            Original_Configuration['ENDGALAXY'] = len(Full_Catalogue['NUMBER'])-1
+            Original_Configuration['ENDGALAXY'] = len(Full_Catalogue['NUMBER'])
             if Original_Configuration['ENDGALAXY'] == 0:
                 Original_Configuration['ENDGALAXY'] = 1
         # start the main fitting loop
