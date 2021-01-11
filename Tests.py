@@ -17,14 +17,13 @@ with warnings.catch_warnings():
     from matplotlib.patches import Ellipse
     import matplotlib.axes as maxes
 
-sys.path.insert(1,'/home/peter/FAT_Main/pyFAT_Dev/Support/')
+import pyFAT
 
-
-import modify_template as mt
-import read_functions as rf
-import run_functions as runf
-import write_functions as wf
-import support_functions as sf
+import pyFAT.Support.modify_template as mt
+import pyFAT.Support.read_functions as rf
+import pyFAT.Support.run_functions as runf
+import pyFAT.Support.write_functions as wf
+import pyFAT.Support.support_functions as sf
 
 
 def Test_Regularise():
@@ -132,12 +131,12 @@ def Test_Ram():
 
 def Test_Orientation():
     #Then read the input Catalogue
-    Full_Catalogue = rf.catalogue('/home/peter/FAT_Main/FAT_Testers/Full_Database_pyFAT/Output_Summary.txt')
+    Full_Catalogue = rf.catalogue('/home/peter/FAT_Main/FAT_Testers/Database-09-10-2020/Output_Summary.txt')
     with open(f"Inclinations.txt",'w') as file:
         file.write("#Guessing inclinations. \n")
     for current_galaxy_index in range(0,len(Full_Catalogue['DIRECTORYNAME'])):
         Configuration = {'RING_SIZE': 1.}
-        Configuration['MAINDIR'] =  '/home/peter/FAT_Main/FAT_Testers/Full_Database_pyFAT/'
+        Configuration['MAINDIR'] =  '/home/peter/FAT_Main/FAT_Testers/Database-09-10-2020/'
         Configuration['START_TIME'] = datetime.now()
         # First check the starttime
         Catalogue = {}
@@ -215,4 +214,4 @@ def Test_Parameterized():
 
 
 if __name__ == '__main__':
-    Test_Parameterized()
+    Test_Orientation()

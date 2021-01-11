@@ -2,7 +2,7 @@
 # This module contains a set of functions and classes that are used in FAT to read input files
 
 from pyFAT.Support.support_functions import Proper_Dictionary,print_log,convertRADEC,set_limits, remove_inhomogeneities, \
-                                obtain_border_pix, obtain_ratios, get_inclination_pa
+                                obtain_border_pix, obtain_ratios, get_inclination_pa,get_vel_pa
 from astropy.io import fits
 from scipy import ndimage
 import warnings
@@ -289,7 +289,7 @@ def extract_vrot(Configuration, hdr,map ,angle,center, debug= False):
         print_log(f'''EXTRACT_VROT: starting extraction of initial VROT.
 {'':8s} PA= {angle}
 {'':8s} center= {center}
-''',Configuration['OUTPUTLOG'], debug = True)
+''',Configuration['OUTPUTLOG'], debug = True,screen = True)
     x1,x2,y1,y2 = obtain_border_pix(hdr,angle,center)
     linex,liney = np.linspace(x1,x2,1000), np.linspace(y1,y2,1000)
     maj_resolution = abs((abs(x2-x1)/1000.)*np.sin(np.radians(angle)))+abs(abs(y2-y1)/1000.*np.cos(np.radians(angle)))
@@ -408,7 +408,7 @@ def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
     noise_map = np.sqrt(Image[0].data)*Configuration['NOISE']*Configuration['CHANNEL_WIDTH']
     SNR = np.nanmean(map[noise_map > 0.]/noise_map[noise_map > 0.])
     noise_hdr = Image[0].header
-    Image.close()
+
     median_noise_in_map = np.nanmedian(noise_map[noise_map > 0.])
     minimum_noise_in_map = np.nanmin(noise_map[noise_map > 0.])
     map[0.5*minimum_noise_in_map > noise_map] = 0.
@@ -493,6 +493,7 @@ def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
     Image.close()
     map[3*minimum_noise_in_map > noise_map] = float('NaN')
     noise_map = []
+    vel_pa = get_vel_pa(Configuration,map,center=center,debug=debug)
 
     x1,x2,y1,y2 = obtain_border_pix(hdr,pa[0],center)
     linex,liney = np.linspace(x1,x2,1000), np.linspace(y1,y2,1000)
@@ -504,6 +505,11 @@ def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
             pa[0] = pa[0]+180
             print_log(f'''GUESS_ORIENTATION: We have modified the pa by 180 deg as we found the maximum velocity west of the center.
 ''' , Configuration['OUTPUTLOG'])
+    if abs(pa[0]-vel_pa[0]) > 25. and ~np.isnan(vel_pa[0]):
+        pa=vel_pa
+    else:
+        if ~np.isnan(vel_pa[0]):
+            pa = [np.nansum([vel_pa[0]/vel_pa[1],pa[0]/pa[1]])/np.nansum([1./vel_pa[1],1./pa[1]]),2.*1./np.sqrt(np.nansum([1./vel_pa[1],1./pa[1]]))]
     #As python is utterly moronic the center goes in back wards to the map
     if debug:
         print_log(f'''GUESS_ORIENTATION: We found the following initial VSYS:
@@ -511,12 +517,16 @@ def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
 ''',Configuration['OUTPUTLOG'], debug = False)
     map = map  - map[int(round(center[1])),int(round(center[0]))]
     VROT_initial = extract_vrot(Configuration, hdr,map ,pa[0],center, debug= debug)
+    min_RC_length= len(VROT_initial)
     if pa[1] < 10.:
         for x in [pa[0]-pa[1],pa[0]-pa[1]/2.,pa[0]+pa[1]/2.,pa[0]+pa[1]]:
             tmp  = extract_vrot(Configuration, hdr,map ,x,center, debug= debug)
             if len(tmp) > 0.:
-                VROT_initial = [VROT_initial, tmp]
-        VROT_initial = np.mean(VROT_initial,axis=0.)
+                RC_length = len(tmp)
+                if RC_length < min_RC_length:
+                    min_RC_length = RC_length
+                VROT_initial = np.vstack((VROT_initial[:min_RC_length],tmp[:min_RC_length]))
+        VROT_initial = np.mean(VROT_initial,axis=0)
     map= []
     VROT_initial[0] = 0
     VROT_initial = VROT_initial/np.sin(np.radians(inclination[0]))

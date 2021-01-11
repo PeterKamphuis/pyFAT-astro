@@ -500,6 +500,108 @@ def get_usage_statistics(process_id, debug = False):
             pass
 
     return CPU,mem
+
+
+def get_vel_pa(Configuration,velocity_field,center= [0.,0.], debug =False):
+    if debug:
+            print_log(f'''GET_VEL_PA: This is the center we use {center}
+''',Configuration['OUTPUTLOG'],debug = True)
+    # because python is stupid the ceneter should be reversed to match the map
+    center.reverse()
+    if np.sum(center) == 0.:
+        center = [x/2. for x in velocity_field.shape]
+
+    sigma = [3.,3.]
+    sm_velocity_field = ndimage.gaussian_filter(velocity_field, sigma=(sigma[1], sigma[0]), order=0)
+    while len(sm_velocity_field[~np.isnan(sm_velocity_field)]) < 10 and sigma[0] > 0.5:
+        sigma = [x-0.5 for x in sigma]
+        sm_velocity_field = ndimage.gaussian_filter(velocity_field, sigma=(sigma[1], sigma[0]), order=0)
+    max_pos = np.where(np.nanmax(sm_velocity_field) == sm_velocity_field)
+    #Python is a super weird language so make a decent list of np output
+    max_pos = [float(max_pos[0]),float(max_pos[1])]
+    min_pos = np.where(np.nanmin(sm_velocity_field) == sm_velocity_field)
+    min_pos = [float(min_pos[0]),float(min_pos[1])]
+
+    if debug:
+            print_log(f'''GET_VEL_PA: This is the location of the maximum {max_pos} and minimum {min_pos}
+''',Configuration['OUTPUTLOG'],debug = False)
+    pa_from_max = np.arctan((center[1]-max_pos[1])/(center[0]-max_pos[0]))
+    pa_from_min = np.arctan((center[1]-min_pos[1])/(center[0]-min_pos[0]))
+    pa_max_to_min = np.arctan((max_pos[1]-min_pos[1])/(max_pos[0]-min_pos[0]))
+
+    for i in [0,1,2]:
+        if i == 0:
+            pa = pa_from_max
+            pos1 = center
+            pos2 = max_pos
+        elif i == 1:
+            pa_from_max = pa
+            pa = pa_from_min
+            pos1 = center
+            pos2 = max_pos
+        else:
+            pa_from_min = pa
+            pa = pa_max_to_min
+            pos1 = min_pos
+            pos2 = max_pos
+        if pos1[1]-pos2[1] == 0:
+            if pos1[0]-pos2[0] < 0.:
+                pa = 0.
+            else:
+                pa = np.radians(180.)
+        elif pos1[1]-pos2[1] < 0:
+            if pa < 0.:
+                pa = abs(pa)+np.radians(180.)
+            else:
+                pa = np.radians(360.) - pa
+        elif pos1[1]-pos2[1] > 0:
+            if pa < 0.:
+                pa = abs(pa)
+            else:
+                pa = np.radians(180.) - pa
+    center.reverse()
+    return np.degrees([np.nanmean([pa,pa_from_max,pa_from_min]), np.nanstd([pa,pa_from_max,pa_from_min])])
+
+
+
+get_vel_pa.__doc__='''
+;+
+; NAME:
+;       GET_VEL_PA
+;
+; PURPOSE:
+;       Routine to obtain the PA from a moment 1 map of a galaxy
+;
+; CATEGORY:
+;       Support
+;
+; CALLING SEQUENCE:
+;       GET_VEL_PA,map,CENTER=center
+;
+;
+; INPUTS:
+;       map = moment 1 map of the galaxy
+;
+; OPTIONAL INPUTS:
+;       -
+;
+; KEYWORD PARAMETERS:
+;       CENTER = center of the galaxy in pixels
+;    INTENSITY = Moment0 map to identify edges.
+;        DEBUG = option to have verbose running
+;
+; OUTPUTS:
+;       PA = the positional angle
+;
+; OPTIONAL OUTPUTS:
+;       -
+;
+; PROCEDURES CALLED:
+;
+;
+; EXAMPLE:
+'''
+
 # A simple function to return the line numbers in the stack from where the functions are called
 def linenumber(debug=False):
     line = []
@@ -786,7 +888,7 @@ def remove_inhomogeneities(Configuration,fits_map,inclination=30., pa = 90. , ce
     return fits_map
 
 def deproject(map,angle, center = 0., invert = False,debug=False):
-    axis = range(len(map[:,0]))-center
+    axis = np.array(range(len(map[:,0])),dtype=float)-center
     if invert:
         newaxis = axis/np.cos(np.radians(angle))
     else:
@@ -1039,9 +1141,13 @@ def set_rings(Configuration,ring_size = 0.,size_in_beams = 0. , debug = False):
         radii = [0.,1./5.*Configuration['BMMAJ']]
         radii = np.hstack((radii,(np.linspace(Configuration['BMMAJ']*ring_size,Configuration['BMMAJ']*10.*ring_size, \
                                         10)+1./5*Configuration['BMMAJ'])))
-        radii = np.hstack((radii,(np.linspace(Configuration['BMMAJ']*11.*ring_size, \
-                                              Configuration['BMMAJ']*ring_size*2.*(no_rings-6.), \
-                                              round((no_rings-6)/2.))) \
+        #radii = np.hstack((radii,(np.linspace(Configuration['BMMAJ']*12.*ring_size, \
+        #                                      Configuration['BMMAJ']*ring_size*2.*(no_rings-5.), \
+        #                                      round((no_rings-5)/2.+1))) \
+        #                                      +1./5*Configuration['BMMAJ']))
+        radii = np.hstack((radii,(np.linspace(Configuration['BMMAJ']*12.*ring_size, \
+                                              Configuration['BMMAJ']*ring_size*(12.+2.*round((no_rings-6.)/2.)), \
+                                              round((no_rings-5)/2.+1))) \
                                               +1./5*Configuration['BMMAJ']))
                                               #no_rings = 2+10+round((est_rings-12)/2.)
     else:

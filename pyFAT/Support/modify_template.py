@@ -309,7 +309,7 @@ check_size.__doc__ = '''
 
 '''
 
-def fix_profile(Configuration, key, profile, Tirific_Template, hdr, debug= False, singular = False ):
+def fix_profile(Configuration, key, profile, Tirific_Template, hdr, debug= False, singular = False,only_inner = False ):
     if debug:
         print_log(f'''FIX_PROFILE: Starting to fix {key} with the input values:
 {'':8s}{profile}
@@ -342,11 +342,13 @@ def fix_profile(Configuration, key, profile, Tirific_Template, hdr, debug= False
 
 
     for i in indexes:
-        if Configuration['LAST_RELIABLE_RINGS'][i] < len(profile[i,:]):
+        if Configuration['LAST_RELIABLE_RINGS'][i] < len(profile[i,:]) and not only_inner:
             if debug:
                 print_log(f'''FIX_PROFILE: From ring {Configuration['LAST_RELIABLE_RINGS'][i]} on we do not trust these rings.
 ''', Configuration['OUTPUTLOG'])
+            profile[i,Configuration['LAST_RELIABLE_RINGS'][i]:] = profile[i,Configuration['LAST_RELIABLE_RINGS'][i]:]*0.25+profile[i,Configuration['LAST_RELIABLE_RINGS'][i]-1]*0.75
             profile[i,Configuration['LAST_RELIABLE_RINGS'][i]:] = profile[i,Configuration['LAST_RELIABLE_RINGS'][i]-1]
+
         if key == 'VROT':
             profile[i] =fix_outer_rotation(Configuration,profile[i], Tirific_Template, hdr,debug= debug)
         if key in ['PA','INCL','Z0']:
@@ -459,7 +461,6 @@ def regularise_profile(Configuration,Tirific_Template, key ,hdr,min_error= [0.],
 ''',Configuration['OUTPUTLOG'],screen=True,debug = True)
     # get a smoothed profiles
     sm_profile = smooth_profile(Configuration,Tirific_Template, key,hdr ,min_error=min_error,debug=debug,no_apply=True)
-    sm_profile = fix_profile(Configuration, key, sm_profile, Tirific_Template, hdr, debug=debug)
 
     error = get_error(Configuration,profile,sm_profile,min_error=min_error,debug=debug)
 
@@ -498,17 +499,18 @@ def regularise_profile(Configuration,Tirific_Template, key ,hdr,min_error= [0.],
         error[1] = error[0]
 #then we want to fit the profiles with a polynomial
     if key not in ['SBR','VROT']:
-        profile = fix_profile(Configuration, key, profile, Tirific_Template, hdr,debug=debug)
+        #We should not fix the profile again as the fitted profile is fixed should be good
+        #profile = fix_profile(Configuration, key, profile, Tirific_Template, hdr,only_inner = True, debug=debug)
         original = np.array(get_from_template(Tirific_Template, [key,f"{key}_2"]),dtype=float)
         profile = modify_flat(Configuration, profile, original, error,debug=debug)
         error = get_error(Configuration, original, profile,min_error=error,debug=debug)
-        for i in [0,1]:
-            if Configuration['LAST_RELIABLE_RINGS'][i] < len(profile[i,:]):
-                if debug:
-                    print_log(f'''REGULARISE_PROFILE: From ring {Configuration['LAST_RELIABLE_RINGS'][i]} on  the rings were reset so we use {max_error[key]} as the error.
-    ''', Configuration['OUTPUTLOG'])
-                for j in range(Configuration['LAST_RELIABLE_RINGS'][i], len(profile[i,:])):
-                    error[i,j] = np.nanmin([max_error[key],error[i,j]])
+        #for i in [0,1]:
+        #    if Configuration['LAST_RELIABLE_RINGS'][i] < len(profile[i,:]):
+        #        if debug:
+        #            print_log(f'''REGULARISE_PROFILE: From ring {Configuration['LAST_RELIABLE_RINGS'][i]} on  the rings were reset so we use {max_error[key]} as the error.
+#''', Configuration['OUTPUTLOG'])
+#                for j in range(Configuration['LAST_RELIABLE_RINGS'][i], len(profile[i,:])):
+#                    error[i,j] = np.nanmin([max_error[key],error[i,j]])
 
     format = set_format(key)
 
@@ -746,8 +748,10 @@ def fit_polynomial(Configuration,radii,profile,sm_profile,error, key, Tirific_Te
 {'':8s} sm_profile = {sm_profile}
 {'':8s} error = {error}
 ''',Configuration['OUTPUTLOG'],screen =True, debug=debug)
+    only_inner = False
     if key in ['PA','INCL','Z0']:
         fixed = Configuration['INNER_FIX']
+        only_inner =True
     elif key in ['VROT']:
         fixed =len(radii)-Configuration['OUTER_SLOPE_START']
     else:
@@ -783,7 +787,7 @@ def fit_polynomial(Configuration,radii,profile,sm_profile,error, key, Tirific_Te
     for ord in order:
         fit_prof = np.poly1d(np.polyfit(radii[st_fit:],profile[st_fit:],ord,w=1./error[st_fit:]))
         fit_profile = fit_prof(radii)
-        fit_profile = fix_profile(Configuration, key, fit_profile, Tirific_Template, hdr,debug =debug, singular = True)
+        fit_profile = fix_profile(Configuration, key, fit_profile, Tirific_Template, hdr,debug =debug, singular = True,only_inner =only_inner)
         red_chi = np.sum((profile[st_fit:]-fit_profile[st_fit:])**2/error[st_fit:])/(len(radii[st_fit:])-ord)
         reduced_chi.append(red_chi)
     reduced_chi = np.array(reduced_chi,dtype = float)
@@ -795,7 +799,7 @@ def fit_polynomial(Configuration,radii,profile,sm_profile,error, key, Tirific_Te
         new_profile = fit_profile(radii)
     #if key in ['VROT'] and profile[1] < profile[2]:
     #    new_profile[1] = profile[1]
-    new_profile = fix_profile(Configuration, key, new_profile, Tirific_Template, hdr,debug =debug, singular = True)
+    new_profile = fix_profile(Configuration, key, new_profile, Tirific_Template, hdr,debug =debug, singular = True,only_inner =only_inner)
     new_error = get_error(Configuration, profile, new_profile,min_error=min_error,singular = True,debug = debug)
 
     return new_profile,new_error
@@ -995,7 +999,7 @@ def set_fitting_parameters(Configuration, Tirific_Template, \
         modifiers['Z0'][0:1] = np.array(modifiers['Z0'][0:1],dtype=float)*(0.4/0.5)
         modifiers['Z0'][2] = float(modifiers['Z0'][2])*1.2
         modifiers['INCL'][0:1] =np.array( modifiers['INCL'][0:1],dtype=float)*(0.75/1.0)
-        modifiers['INCL'][2] = float(modifiers['INCL'][2])*1.2
+        modifiers['INCL'][2] = float(modifiers['INCL'][2])*0.8
     elif initial_estimates['INCL'][0] > 75.:
         modifiers['Z0'][0:1] = np.array(modifiers['Z0'][0:1],dtype=float)*(1.25)
         modifiers['Z0'][2] = float(modifiers['Z0'][2])*0.5
@@ -1063,11 +1067,12 @@ def set_fitting_parameters(Configuration, Tirific_Template, \
             for fit_key in fitting_keys:
                 if  fit_key in fitting_settings[key]:
 
-                    if fit_key == 'MIN_DELTA':
+                    if fit_key == 'MINDELTA':
                         # This should never be 0.
                         format = set_format(key)
-                        for i in range(fitting_settings[key][fit_key]):
-                            while float(f'{fitting_settings[key][fit_key][i]:{format}}') == 0.:
+                        print(fitting_settings[key][fit_key])
+                        for i,x in enumerate(fitting_settings[key][fit_key]):
+                            while float(f'{x:{format}}') == 0.:
                                 fitting_settings[key][fit_key][i] += 0.05
 
                     if fit_key == 'VARY':

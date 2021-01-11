@@ -488,7 +488,7 @@ def extract_pv(cube_in,angle,center=[-1,-1,-1],finalsize=[-1,-1],convert=-1, deb
 
     del (TwoD_hdr['NAXIS3'])
     TwoD_hdr['CRVAL1'] = 0.
-    TwoD_hdr['CDELT1'] = abs(((abs(x2-x1)*abs(hdr['CDELT1']))/nx)*np.sin(np.radians(angle)))+abs((abs(y2-y1)*abs(hdr['CDELT2']))/ny*np.cos(np.radians(angle)))
+    TwoD_hdr['CDELT1'] = abs(((abs(x2-x1)*abs(hdr['CDELT1']))/nx)*np.sin(np.radians(angle)))+abs((abs(y2-y1)*abs(hdr['CDELT2']))/ny*np.cos(np.radians(angle)))*3600.
     TwoD_hdr['CTYPE1'] = 'OFFSET'
     TwoD_hdr['CUNIT1'] = 'ARCSEC'
     # Then we change the cube and rteturn the PV construct

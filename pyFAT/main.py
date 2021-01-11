@@ -166,10 +166,9 @@ def main(argv):
                 else:
                     Catalogue[key] = Full_Catalogue[key]
             if Configuration['DEBUG']:
-                    print(current_galaxy_index)
-                    sf.print_log(f'''Catalogue:
-    {'':8s}{Catalogue}
-    ''',None,screen=True, debug = True )
+                    sf.print_log(f'''MAIN: Current Catalogue values
+{'':8s}{Catalogue}
+''',None,screen=True, debug = Configuration['DEBUG'])
             Configuration['DISTANCE'] = Catalogue['DISTANCE']
             ini_mode_factor =25
             # We initially set the variations to fixed for all parameters
@@ -247,8 +246,8 @@ def main(argv):
             # Check if the input cube exists
             if not os.path.exists(f"{Configuration['FITTING_DIR']}/{Fits_Files['ORIGINAL_CUBE']}"):
                 log_statement = f'''We cannot find the cube {Fits_Files['ORIGINAL_CUBE']} in the directory {Configuration['FITTING_DIR']}.
-             We skip this galaxy.
-    '''
+{'':8s}We skip this galaxy.
+'''
                 sf.print_log(log_statement,Configuration['OUTPUTLOG'], screen =True)
                 Configuration['FINAL_COMMENT'] = "This galaxy has no fits cube to work with, it is skipped."
                 cf.finish_galaxy(Configuration,maximum_directory_length)
@@ -446,14 +445,14 @@ def main(argv):
                     while not Configuration['EC_ACCEPTED'] and Configuration['EC_LOOPS'] < allowed_loops:
                         Configuration['EC_LOOPS'] = Configuration['EC_LOOPS']+1
                         sf.print_log(f'''We are starting loop {Configuration['EC_LOOPS']} of trying to converge the extent.
-        ''',Configuration['OUTPUTLOG'],screen =True, debug = Configuration['DEBUG'])
+''',Configuration['OUTPUTLOG'],screen =True, debug = Configuration['DEBUG'])
                         if Configuration['DEBUG']:
                                 sf.print_log(f'''Settings for the variations will be.
-                    {'':8s} INCLINATION: Fixed = {Original_Configuration['FIX_INCLINATION']}
-                    {'':8s} PA: Fixed = {Original_Configuration['FIX_PA']}
-                    {'':8s} SDIS: Fixed = {Original_Configuration['FIX_SDIS']}
-                    {'':8s} Z0: Fixed = {Original_Configuration['FIX_Z0']}
-        ''',Configuration['OUTPUTLOG'],debug=Configuration['DEBUG'],screen =True)
+{'':8s} INCLINATION: Fixed = {Original_Configuration['FIX_INCLINATION']}
+{'':8s} PA: Fixed = {Original_Configuration['FIX_PA']}
+{'':8s} SDIS: Fixed = {Original_Configuration['FIX_SDIS']}
+{'':8s} Z0: Fixed = {Original_Configuration['FIX_Z0']}
+''',Configuration['OUTPUTLOG'],debug=Configuration['DEBUG'],screen =True)
                         if Configuration['SIZE_IN_BEAMS'] > Configuration['MINIMUM_WARP_SIZE']:
                             Configuration['FIX_INCLINATION'] = Original_Configuration['FIX_INCLINATION']
                             Configuration['FIX_SDIS'] = Original_Configuration['FIX_SDIS']
@@ -470,7 +469,7 @@ def main(argv):
 
                     if Configuration['EC_ACCEPTED']:
                         sf.print_log(f'''The extent has converged and we make a smoothed version.
-            ''',Configuration['OUTPUTLOG'],screen =True, debug = Configuration['DEBUG'])
+''',Configuration['OUTPUTLOG'],screen =True, debug = Configuration['DEBUG'])
                         current_run = runf.fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run,cube_hdr,stage = 'after_ec', fit_stage = 'Extent_Convergence',debug = Configuration['DEBUG'])
                         Configuration['FINAL_COMMENT'] = 'The galaxy has succesfully been fitted'
                         if Configuration['OPTIMIZED']:
