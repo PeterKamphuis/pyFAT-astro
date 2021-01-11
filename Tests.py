@@ -24,6 +24,7 @@ import pyFAT.Support.read_functions as rf
 import pyFAT.Support.run_functions as runf
 import pyFAT.Support.write_functions as wf
 import pyFAT.Support.support_functions as sf
+import pyFAT.Support.fits_functions as ff
 
 
 def Test_Regularise():
@@ -213,5 +214,16 @@ def Test_Parameterized():
     accepted,current_run = runf.run_parameterized_tirific(Configuration,Tirific_Template,current_run,stage = 'paramiterized', fit_stage = 'Parameterized', debug= True)
 
 
+def Test_Extract_PV():
+    PA =53.53
+    Center = [187.218,4.293,4221*1000.]
+    cube = fits.open(f"/home/peter/Misc/Aditya_Shit/PV_Scale/1440_data_nostokes.fits")
+    PV = ff.extract_pv(cube,PA, \
+                        center = Center, \
+                        convert=1000.)
+
+    fits.writeto(f"/home/peter/Misc/Aditya_Shit/PV_Scale/test.fits",PV[0].data,PV[0].header,overwrite = True)
+
+
 if __name__ == '__main__':
-    Test_Orientation()
+    Test_Extract_PV()

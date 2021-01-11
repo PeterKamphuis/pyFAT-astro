@@ -425,12 +425,12 @@ def extract_pv(cube_in,angle,center=[-1,-1,-1],finalsize=[-1,-1],convert=-1, deb
     # if the center is not set assume the crval values
 
     x1,x2,y1,y2 = obtain_border_pix(hdr,angle,[xcenter,ycenter])
-    linex,liney,linez = np.linspace(x1,x2,nx), np.linspace(y1,y2,nx), np.linspace(0,nz-1,nz)
+    linex,liney,linez = np.linspace(x1,x2,nx), np.linspace(y1,y2,ny), np.linspace(0,nz-1,nz)
     new_coordinates = np.array([(z,y,x)
                         for z in linez
                         for y,x in zip(liney,linex)
                         ],dtype=float).transpose().reshape((-1,nz,nx))
-    spatial_resolution = abs((abs(x2-x1)/nx)*np.sin(np.radians(angle)))+abs(abs(y2-y1)/ny*np.cos(np.radians(angle)))
+    #spatial_resolution = abs((abs(x2-x1)/nx)*np.sin(np.radians(angle)))+abs(abs(y2-y1)/ny*np.cos(np.radians(angle)))
     PV = ndimage.map_coordinates(data, new_coordinates,order=1)
     if hdr['CDELT1'] < 0:
         PV = PV[:,::-1]
@@ -488,7 +488,9 @@ def extract_pv(cube_in,angle,center=[-1,-1,-1],finalsize=[-1,-1],convert=-1, deb
 
     del (TwoD_hdr['NAXIS3'])
     TwoD_hdr['CRVAL1'] = 0.
-    TwoD_hdr['CDELT1'] = abs(((abs(x2-x1)*abs(hdr['CDELT1']))/nx)*np.sin(np.radians(angle)))+abs((abs(y2-y1)*abs(hdr['CDELT2']))/ny*np.cos(np.radians(angle)))*3600.
+    #TwoD_hdr['CDELT1'] = abs(((abs(x2-x1)*abs(hdr['CDELT1']))/nx)*np.sin(np.radians(angle)))+abs((abs(y2-y1)*abs(hdr['CDELT2']))/ny*np.cos(np.radians(angle)))*3600.
+    TwoD_hdr['CDELT1'] = np.sqrt(((x2-x1)*abs(hdr['CDELT1'])/nx)**2+((y2-y1)*abs(hdr['CDELT2'])/ny)**2)*3600.
+
     TwoD_hdr['CTYPE1'] = 'OFFSET'
     TwoD_hdr['CUNIT1'] = 'ARCSEC'
     # Then we change the cube and rteturn the PV construct
