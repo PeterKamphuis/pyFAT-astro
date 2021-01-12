@@ -292,7 +292,8 @@ def extract_vrot(Configuration, hdr,map ,angle,center, debug= False):
 ''',Configuration['OUTPUTLOG'], debug = True,screen = True)
     x1,x2,y1,y2 = obtain_border_pix(hdr,angle,center)
     linex,liney = np.linspace(x1,x2,1000), np.linspace(y1,y2,1000)
-    maj_resolution = abs((abs(x2-x1)/1000.)*np.sin(np.radians(angle)))+abs(abs(y2-y1)/1000.*np.cos(np.radians(angle)))
+    maj_resolution = np.sqrt(((x2-x1)/1000.)**2+((y2-y1)/1000.)**2)
+    #maj_resolution = abs((abs(x2-x1)/1000.)*np.sin(np.radians(angle)))+abs(abs(y2-y1)/1000.*np.cos(np.radians(angle)))
     maj_profile = ndimage.map_coordinates(map, np.vstack((liney,linex)),order=1)
     maj_axis =  np.linspace(0,1000*maj_resolution,1000)- (abs((abs(center[0]))*np.sin(np.radians(angle)))+abs(abs(center[1])*np.cos(np.radians(angle))))
     #neg_index = np.where(maj_axis < 0.)[0]
@@ -424,7 +425,8 @@ def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
     # From these estimates we also get an initial SBR
     x1,x2,y1,y2 = obtain_border_pix(hdr,pa[0],center)
     linex,liney = np.linspace(x1,x2,1000), np.linspace(y1,y2,1000)
-    maj_resolution = abs((abs(x2-x1)/1000.)*np.sin(np.radians(pa[0])))+abs(abs(y2-y1)/1000.*np.cos(np.radians(pa[0])))
+    maj_resolution = np.sqrt(((x2-x1)/1000.)**2+((y2-y1)/1000.)**2)
+    #maj_resolution = abs((abs(x2-x1)/1000.)*np.sin(np.radians(pa[0])))+abs(abs(y2-y1)/1000.*np.cos(np.radians(pa[0])))
     maj_profile = ndimage.map_coordinates(map, np.vstack((liney,linex)),order=1)
     maj_axis =  np.linspace(0,1000*maj_resolution,1000)- (abs((abs(center[0]))*np.sin(np.radians(pa[0])))+abs(abs(center[1])*np.cos(np.radians(pa[0]))))
 
@@ -497,7 +499,8 @@ def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
 
     x1,x2,y1,y2 = obtain_border_pix(hdr,pa[0],center)
     linex,liney = np.linspace(x1,x2,1000), np.linspace(y1,y2,1000)
-    maj_resolution = abs((abs(x2-x1)/1000.)*np.sin(np.radians(pa[0])))+abs(abs(y2-y1)/1000.*np.cos(np.radians(pa[0])))
+    #maj_resolution = abs((abs(x2-x1)/1000.)*np.sin(np.radians(pa[0])))+abs(abs(y2-y1)/1000.*np.cos(np.radians(pa[0])))
+    maj_resolution = np.sqrt(((x2-x1)/1000.)**2+((y2-y1)/1000.)**2)
     maj_profile = ndimage.map_coordinates(map, np.vstack((liney,linex)),order=1)
     maj_axis =  np.linspace(0,1000*maj_resolution,1000)- (abs((abs(center[0]))*np.sin(np.radians(pa[0])))+abs(abs(center[1])*np.cos(np.radians(pa[0]))))
     loc_max = np.mean(maj_axis[np.where(maj_profile == np.nanmax(maj_profile))[0]])
