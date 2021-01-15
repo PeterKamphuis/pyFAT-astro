@@ -500,7 +500,7 @@ def regularise_profile(Configuration,Tirific_Template, key ,hdr,min_error= [0.],
         sides = [0]
     radii =set_rings(Configuration)
     for i in sides:
-        
+
         if key == 'SDIS':
             try:
                 fit_profile = fit_arc(Configuration,radii,profile[i],sm_profile[i],error[i],min_error=min_error,debug= debug)
@@ -802,17 +802,18 @@ def fit_polynomial(Configuration,radii,profile,sm_profile,error, key, Tirific_Te
         start_order = int(len(radii)/5)
     else:
         start_order = 0
-    max_order = set_limits(len(radii)-fixed,3,8)
+    #This needs another -1 because the 0 and 1/5. ring are more or less 1 ring
+    max_order = set_limits(len(radii)-fixed-1,3,8)
     st_fit = int(1)
     if key in ['VROT']:
         #The rotation curve varies a lot so the lower limit should be as high as possible
         #But at least 3 less than max order and maximally 4
         if len(radii) < 6:
-            lower_limit=set_limits(3,3,max_order-1)
+            lower_limit=set_limits(3,3,max_order-2)
         elif len(radii) < 10:
-            lower_limit=set_limits(4,3,max_order-1)
+            lower_limit=set_limits(4,3,max_order-2)
         else:
-            lower_limit=set_limits(5,3,max_order-1)
+            lower_limit=set_limits(5,3,max_order-2)
         start_order = set_limits(start_order,lower_limit,max_order)
         if debug:
             print_log(f'''FIT_POLYNOMIAL: For VROT we start at {start_order} because we have {len(radii)} rings of which {fixed} are fixed
