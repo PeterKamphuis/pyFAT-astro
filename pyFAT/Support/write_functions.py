@@ -505,14 +505,15 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
 
 #__________________------------------------------------------------------------PV Diagram
 
-        PV = extract_pv(cube,FAT_Model[0,Vars_to_plot.index('PA')], \
+        extract_angle = np.mean(FAT_Model[0:round(len(FAT_Model[:,Vars_to_plot.index('PA')])/2.),Vars_to_plot.index('PA')])
+        PV = extract_pv(cube,extract_angle, \
                         center = [float(FAT_Model[0,Vars_to_plot.index('XPOS')]),float(FAT_Model[0,Vars_to_plot.index('YPOS')]),float(FAT_Model[0,Vars_to_plot.index('VSYS')]*1000.)], \
-                        convert=1000.)
+                        convert=1000.,log = Configuration['OUTPUTLOG'])
         if not os.path.exists(f"{Configuration['FITTING_DIR']}/Finalmodel/{Configuration['BASE_NAME']}_final_xv.fits"):
             fits.writeto(f"{Configuration['FITTING_DIR']}/Finalmodel/{Configuration['BASE_NAME']}_final_xv.fits",PV[0].data,PV[0].header)
-        PV_model = extract_pv(cube_mod,FAT_Model[0,Vars_to_plot.index('PA')], \
+        PV_model = extract_pv(cube_mod,extract_angle, \
                         center = [float(FAT_Model[0,Vars_to_plot.index('XPOS')]),float(FAT_Model[0,Vars_to_plot.index('YPOS')]),float(FAT_Model[0,Vars_to_plot.index('VSYS')]*1000.)], \
-                        convert=1000.)
+                        convert=1000.,log = Configuration['OUTPUTLOG'])
         if not os.path.exists(f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel_xv.fits"):
             fits.writeto(f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel_xv.fits",PV_model[0].data,PV_model[0].header)
         ratio=PV[0].header['NAXIS2']/PV[0].header['NAXIS1']

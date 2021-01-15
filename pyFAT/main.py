@@ -88,6 +88,7 @@ def main(argv):
         # if the number of beams across the major axis/2. is less than this size we will only fit a flat disc
         Original_Configuration['MINIMUM_WARP_SIZE'] = 2.
         Original_Configuration['MINIMUM_RINGS'] = 3. # we need at least this amount of rings (Including 0 and 1/5 beam)
+
         # if the number of beams across the major axis/2 is less than this we will not fit the galaxy
         Original_Configuration['TOO_SMALL_GALAXY'] = 1.
         Original_Configuration['FINAL_COMMENT'] = "This fitting stopped with an unregistered exit."
@@ -277,6 +278,18 @@ def main(argv):
             Configuration['PIX_PER_BEAM'] = beamarea/(abs(cube_hdr['CDELT1'])*abs(cube_hdr['CDELT2']))
             # Ad the major beam to configuration as we need it in many places
             Configuration['BMMAJ'] = float(cube_hdr['BMAJ']*3600.)
+            #Let's set some maximum errors based on the input cube
+            Configuration['MAX_ERROR'] = {'VROT': cube_hdr['CDELT3']/1000.*5., \
+                                          'VSYS': cube_hdr['CDELT3']/1000.*1.5, \
+                                          'SBR': cube_hdr['FATNOISE']/beamarea*cube_hdr['CDELT3']/1000.*3.,\
+                                          'PA' : 15.,\
+                                          'INCL': 15.,\
+                                          'SDIS': cube_hdr['CDELT3']/1000.*2.5,\
+                                          'Z0' : Configuration['BMMAJ'],\
+                                          'XPOS': cube_hdr['BMAJ']/2.5,\
+                                          'YPOS': cube_hdr['BMAJ']/2.5,\
+            }
+
             #If we have Sofia Preprocessed Output request make sure it all exists
 
             if Configuration['START_POINT'] >= 3:

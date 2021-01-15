@@ -472,6 +472,24 @@ def get_inner_fix(Configuration,Tirific_Template, debug =False):
     tmp = np.where(column_levels > 1e20)[0]
     return set_limits(int(np.floor(tmp[-1]/1.5-1)), 4, int(Configuration['NO_RINGS']*0.9))
 
+def get_ring_weights(Configuration,hdr,Tirific_Template,debug = False):
+    if debug:
+        print_log(f'''GET_RING_WEIGTHS: Getting the importance of the rings in terms of SBR.
+''',Configuration['OUTPUTLOG'], debug = debug)
+    sbr = np.array(get_from_template(Tirific_Template, ["SBR",f"SBR_2"]),dtype=float)
+    systemic = np.array(get_from_template(Tirific_Template, ["VSYS"]),dtype=float)
+    systemic = systemic[0,0]
+    radii,cut_off_limits = sbr_limits(Configuration,hdr, systemic= systemic , debug = debug)
+    weights= [[],[]]
+    for i in [0,1]:
+        weights[i] = [set_limits(x/y,0.1,10.) for x,y in zip(sbr[i],cut_off_limits)]
+        weights[i] = weights[i]/np.nanmax(weights[i])
+    if debug:
+        print_log(f'''GET_RING_WEIGTHS: Obtained the following weights.
+{'':8s}{weights}
+''',Configuration['OUTPUTLOG'], debug = False)
+    return np.array(weights,dtype = float)
+
 def get_usage_statistics(process_id, debug = False):
     result = subprocess.check_output(['top',f'-p {process_id}','-d 1','-n 1'])
     #result = subprocess.check_output(['ps','u'])
@@ -653,7 +671,7 @@ def obtain_ratios(map, hdr, center, angles, noise = 0. ,debug = False):
         else:
             x1,x2,y1,y2 = obtain_border_pix(hdr,angle-90,center)
         linex,liney = np.linspace(x1,x2,1000), np.linspace(y1,y2,1000)
-        maj_resolution = np.sqrt(((x2-x1)/1000.)**2+((y2-y1)/1000.)**2)
+        min_resolution = np.sqrt(((x2-x1)/1000.)**2+((y2-y1)/1000.)**2)
         #min_resolution =abs((abs(x2-x1)/1000.)*np.sin(np.radians(angle+90)))+abs(abs(y2-y1)/1000.*np.cos(np.radians(angle+90)))
         min_axis =  np.linspace(0,1000*min_resolution,1000)
         min_profile = ndimage.map_coordinates(map, np.vstack((liney,linex)),order=1)

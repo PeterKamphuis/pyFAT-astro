@@ -392,7 +392,16 @@ cut_cubes.__doc__ = '''
 '''
 
 # Extract a PV-Diagrams
-def extract_pv(cube_in,angle,center=[-1,-1,-1],finalsize=[-1,-1],convert=-1, debug = False):
+def extract_pv(cube_in,angle,center=[-1,-1,-1],finalsize=[-1,-1],convert=-1, debug = False, log= None):
+    if debug:
+        print_log(f'''EXTRACT_PV: We are the extraction of a PV-Diagram
+{'':8s} PA = {angle}
+{'':8s} center = {center}
+{'':8s} finalsize = {finalsize}
+{'':8s} convert = {convert}
+''', log, debug =True)
+
+
     cube = copy.deepcopy(cube_in)
     hdr = copy.deepcopy(cube[0].header)
     TwoD_hdr= copy.deepcopy(cube[0].header)
@@ -423,9 +432,15 @@ def extract_pv(cube_in,angle,center=[-1,-1,-1],finalsize=[-1,-1],convert=-1, deb
         if finalsize[0] > nx:
             finalsize[0] = nx
     # if the center is not set assume the crval values
-
+    if debug:
+        print_log(f'''EXTRACT_PV: The shape of the output
+{'':8s} nz = {nz}
+{'':8s} ny = {ny}
+{'':8s} nx = {nx}
+''', log, debug = False)
     x1,x2,y1,y2 = obtain_border_pix(hdr,angle,[xcenter,ycenter])
-    linex,liney,linez = np.linspace(x1,x2,nx), np.linspace(y1,y2,ny), np.linspace(0,nz-1,nz)
+    linex,liney,linez = np.linspace(x1,x2,nx), np.linspace(y1,y2,nx), np.linspace(0,nz-1,nz)
+    #This only works when ny == nx hence nx is used in liney
     new_coordinates = np.array([(z,y,x)
                         for z in linez
                         for y,x in zip(liney,linex)
@@ -488,10 +503,12 @@ def extract_pv(cube_in,angle,center=[-1,-1,-1],finalsize=[-1,-1],convert=-1, deb
 
     del (TwoD_hdr['NAXIS3'])
     TwoD_hdr['CRVAL1'] = 0.
-    TwoD_hdr['CDELT1'] = np.sqrt(((x2-x1)*abs(hdr['CDELT1'])/nx)**2+((y2-y1)*abs(hdr['CDELT2'])/ny)**2)*3600.
+    #Because we used nx in the linspace for linez we also use it here
+    TwoD_hdr['CDELT1'] = np.sqrt(((x2-x1)*abs(hdr['CDELT1'])/nx)**2+((y2-y1)*abs(hdr['CDELT2'])/nx)**2)*3600.
 
     TwoD_hdr['CTYPE1'] = 'OFFSET'
     TwoD_hdr['CUNIT1'] = 'ARCSEC'
+    TwoD_hdr['HISTORY'] = f'EXTRACT_PV: PV diagram extracted with angle {angle} and center {center}'
     # Then we change the cube and rteturn the PV construct
     cube[0].header = TwoD_hdr
     cube[0].data = PV
