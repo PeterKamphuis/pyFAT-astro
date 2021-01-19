@@ -72,8 +72,8 @@ def fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run,hd
         print_log(f'''FIT_SMOOTHED_CHECK: Starting stage {stage} and fit_stage {fit_stage}.
 ''',Configuration['OUTPUTLOG'],debug = debug)
     #if we have only a few rings we only smooth. else we fit a polynomial to the RC and smooth the SBR
-    smoothed_sbr = smooth_profile(Configuration,Tirific_Template,'SBR',hdr, min_error= np.max([float(Tirific_Template['CFLUX']),float(Tirific_Template['CFLUX_2'])]),debug = debug)
-    fix_sbr(Configuration,Tirific_Template,hdr,debug = debug)
+    #smoothed_sbr = smooth_profile(Configuration,Tirific_Template,'SBR',hdr, min_error= np.max([float(Tirific_Template['CFLUX']),float(Tirific_Template['CFLUX_2'])]),debug = debug)
+    fix_sbr(Configuration,Tirific_Template,hdr,smooth = True, debug = debug)
     if stage == 'after_cc':
         smoothed_vrot = smooth_profile(Configuration,Tirific_Template,'VROT',hdr,min_error = float(hdr['CDELT3']/1000.),debug = debug)
     else:
@@ -211,7 +211,6 @@ def check_inclination(Configuration,Tirific_Template,Fits_Files, fit_stage = 'Un
         mom_chi.append(chi)
     finish_current_run(Configuration, incl_run)
     Configuration['TIRIFIC_RUNNING'] = other_run
-    print(mom_chi)
     low= np.where(mom_chi == np.nanmin(mom_chi))[0]
     new_incl = incl_to_check[low]
     if debug:
@@ -621,11 +620,10 @@ def one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run,hdr
 
         Configuration['INNER_FIX'] = get_inner_fix(Configuration, Tirific_Template,debug=debug)
         set_cflux(Configuration,Tirific_Template,debug = debug)
-        keys_to_smooth =['INCL','PA','SDIS','Z0','VROT','SBR']
+        keys_to_smooth =['INCL','PA','SDIS','Z0','VROT']
         min_errors = [2.*Configuration['LIMIT_MODIFIER'],1.,hdr['CDELT3']/(2000.*Configuration['LIMIT_MODIFIER']), \
                         convertskyangle(0.1,Configuration['DISTANCE'],physical= True)/Configuration['LIMIT_MODIFIER'],\
-                        hdr['CDELT3']/(1000.*Configuration['LIMIT_MODIFIER']),np.max([float(Tirific_Template['CFLUX']),\
-                        float(Tirific_Template['CFLUX_2'])])]
+                        hdr['CDELT3']/(1000.*Configuration['LIMIT_MODIFIER'])]
         for j,key in enumerate(keys_to_smooth):
             #Smoothing the profile also fixes it
             smoothed = smooth_profile(Configuration,Tirific_Template,key,hdr,debug=debug,min_error=min_errors[j])
@@ -947,11 +945,11 @@ def fit_warp(Configuration,Tirific_Template,current_run, fit_stage = 'None',debu
     incl_bend_2 = planet_telex(Configuration, Tirific_Template,current_run,'INCL_2',fit_stage=fit_stage,debug=debug)
     pa_bend = planet_telex(Configuration, Tirific_Template,current_run,'PA',max_bend = 50, fit_stage=fit_stage,debug=debug)
     pa_bend_2 = planet_telex(Configuration, Tirific_Template,current_run,'PA_2',max_bend = 50, fit_stage=fit_stage,debug=debug)
-
-    print(f"PA = {Tirific_Template['PA']}" )
-    print(f"PA_2 = {Tirific_Template['PA_2']}" )
-    print(f"INCL = {Tirific_Template['INCL']}" )
-    print(f"INCL_2 = {Tirific_Template['INCL_2']}" )
+    if debug:
+        print(f"PA = {Tirific_Template['PA']}" )
+        print(f"PA_2 = {Tirific_Template['PA_2']}" )
+        print(f"INCL = {Tirific_Template['INCL']}" )
+        print(f"INCL_2 = {Tirific_Template['INCL_2']}" )
 
     return current_run,[Tirific_Template['INCL'],Tirific_Template['INCL_2'],Tirific_Template['PA'],Tirific_Template['PA_2']]
 

@@ -152,7 +152,6 @@ def config_file(input_parameters, start_dir, debug = False):
         test_files = ['FAT_Input_Catalogue.txt','NGC_2903.fits']
         test_dir = start_dir+'/FAT_Installation_Check/'
         if not os.path.isdir(test_dir):
-            print('We making a dir?)')
             os.mkdir(test_dir)
         else:
             for file in test_files:
@@ -163,8 +162,6 @@ def config_file(input_parameters, start_dir, debug = False):
         my_resources = import_res.files("pyFAT.Installation_Check")
         for file in test_files:
             data = (my_resources / file).read_bytes()
-            print('Is it the opening')
-            print(test_dir+file)
             with open(test_dir+file,'w+b') as tmp:
                 tmp.write(data)
         Configuration['CATALOGUE'] = test_dir+'FAT_Input_Catalogue.txt'
@@ -417,10 +414,19 @@ def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
     if debug:
         print_log(f'''GUESS_ORIENTATION: We find SNR = {SNR} and a scale factor {scale_factor} and the noise median {median_noise_in_map}
 {'':8s} minimum {minimum_noise_in_map}
-''',Configuration['OUTPUTLOG'], debug = True)
+''',Configuration['OUTPUTLOG'], debug = False)
     inclination, pa, maj_extent = get_inclination_pa(Configuration, map,mom0, hdr, center, cutoff = scale_factor* median_noise_in_map, debug = debug)
 
-    maj_extent = maj_extent+(hdr['BMAJ']*0.2/scale_factor)
+    # For very small galaxies we do not want to correct the extend
+    if maj_extent/hdr['BMAJ'] > 3.:
+        maj_extent = maj_extent+(hdr['BMAJ']*0.2/scale_factor)
+
+    if debug:
+        print_log(f'''GUESS_ORIENTATION: From the maps we find
+{'':8s} inclination = {inclination}
+{'':8s} pa = {pa}
+{'':8s} size in beams = {maj_extent/hdr['BMAJ']}
+''',Configuration['OUTPUTLOG'], debug = False)
             #map[3*minimum_noise_in_map > noise_map] = 0.
     # From these estimates we also get an initial SBR
     x1,x2,y1,y2 = obtain_border_pix(hdr,pa[0],center)
@@ -452,7 +458,7 @@ def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
     # if the center of the profile is more than half a beam off from the Sofia center let's see which on provides a more symmetric profile
     if abs(center_of_profile) > hdr['BMAJ']*0.5/np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])]):
         if debug:
-                print_log(f'''GUESS_ORIENTATION: The SoFiA center and that of the SBR profile are separated by more than half a bemea apart.
+                print_log(f'''GUESS_ORIENTATION: The SoFiA center and that of the SBR profile are separated by more than half a beam.
 {'':8s}GUESS_ORIENTATION: Determining the more symmetric profile.
 ''',Configuration['OUTPUTLOG'], debug = False)
         neg_index = np.where(maj_axis < center_of_profile)[0]

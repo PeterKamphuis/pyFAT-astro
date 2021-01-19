@@ -788,8 +788,6 @@ def plot_parameters(Vars_to_plot,FAT_Model,Input_Model,location,Figure,parameter
             ax.plot(FAT_Model[:,Vars_to_plot.index('RADI')],FAT_Model[:,Vars_to_plot.index(f'{parameter}_2')],'ro', ms = 3.,zorder=3)
 
     if len(Input_Model) > 0:
-        print(f"What is going with {parameter} wrong {np.where(Input_Model[:,Vars_to_plot.index(f'{parameter}')] != 0.)}")
-        print(f" {Vars_to_plot.index(f'{parameter}')} ")
         if np.sum(Input_Model[:,Vars_to_plot.index(f'{parameter}')]) != 0.:
             last_index = int(np.where(Input_Model[:,Vars_to_plot.index(f'{parameter}')] != 0.)[0][-1])
             try:

@@ -144,9 +144,9 @@ def columndensity(levels,systemic = 100.,beam=[1.,1.],channel_width=1.,column= F
     solarmass = 1.98855e30 #Solar mass in kg
     mHI = 1.6737236e-27 #neutral hydrogen mass in kg
     if debug:
-                print_log(f'''COLUMNDENSITY: We have the following input for calculating the columns.
+        print_log(f'''COLUMNDENSITY: We have the following input for calculating the columns.
 {'':8s}COLUMNDENSITY: level = {levels}, channel_width = {channel_width}, beam = {beam}, systemic = {systemic})
-''',None,debug=debug)
+''',None,debug=False)
     if systemic > 10000:
         systemic = systemic/1000.
     f = f0 * (1 - (systemic / c)) #Systemic frequency
@@ -218,7 +218,7 @@ columndensity.__doc__ = '''
         # a Function to convert the RA and DEC into hour angle (invert = False) and vice versa (default)
 def convertRADEC(RAin,DECin,invert=False, colon=False,debug = False):
     if debug:
-            print_log(f'''CONVERTRADEC: Starting conversion from the following input.
+        print_log(f'''CONVERTRADEC: Starting conversion from the following input.
     {'':8s}RA = {RAin}
     {'':8s}DEC = {DECin}
 ''',None,debug =True)
@@ -282,7 +282,7 @@ def convertRADEC(RAin,DECin,invert=False, colon=False,debug = False):
 
 def convertskyangle(angle, distance=1., unit='arcsec', distance_unit='Mpc', physical=False,debug = False):
     if debug:
-            print_log(f'''CONVERTSKYANGLE: Starting conversion from the following input.
+        print_log(f'''CONVERTSKYANGLE: Starting conversion from the following input.
     {'':8s}Angle = {angle}
     {'':8s}Distance = {distance}
 ''',None,debug =True)
@@ -302,8 +302,8 @@ def convertskyangle(angle, distance=1., unit='arcsec', distance_unit='Mpc', phys
     elif distance_unit.lower() == 'pc':
         distance = distance / (10 ** 3)
     else:
-        print('CONVERTSKYANGLE: ' + distance_unit + ' is an unknown unit to convertskyangle.\n')
-        print('CONVERTSKYANGLE: please use Mpc, kpc or pc.\n')
+        print_log('CONVERTSKYANGLE: ' + distance_unit + ' is an unknown unit to convertskyangle.\n',None)
+        print_log('CONVERTSKYANGLE: please use Mpc, kpc or pc.\n',None)
         raise SupportRunError('CONVERTSKYANGLE: ' + distance_unit + ' is an unknown unit to convertskyangle.')
     if not physical:
         if unit.lower() == 'arcsec':
@@ -313,8 +313,8 @@ def convertskyangle(angle, distance=1., unit='arcsec', distance_unit='Mpc', phys
         elif unit.lower() == 'degree':
             radians = angle * ((2. * np.pi) / 360.)
         else:
-            print('CONVERTSKYANGLE: ' + unit + ' is an unknown unit to convertskyangle.\n')
-            print('CONVERTSKYANGLE: please use arcsec, arcmin or degree.\n')
+            print_log('CONVERTSKYANGLE: ' + unit + ' is an unknown unit to convertskyangle.\n',None)
+            print_log('CONVERTSKYANGLE: please use arcsec, arcmin or degree.\n',None)
             raise SupportRunError('CONVERTSKYANGLE: ' + unit + ' is an unknown unit to convertskyangle.')
 
 
@@ -327,8 +327,8 @@ def convertskyangle(angle, distance=1., unit='arcsec', distance_unit='Mpc', phys
         elif unit.lower() == 'pc':
             kpc = angle * (10 ** 3)
         else:
-            print('CONVERTSKYANGLE: ' + unit + ' is an unknown unit to convertskyangle.\n')
-            print('CONVERTSKYANGLE: please use kpc, Mpc or pc.\n')
+            print_log('CONVERTSKYANGLE: ' + unit + ' is an unknown unit to convertskyangle.\n',None)
+            print_log('CONVERTSKYANGLE: please use kpc, Mpc or pc.\n',None)
             raise SupportRunError('CONVERTSKYANGLE: ' + unit + ' is an unknown unit to convertskyangle.')
 
         radians = 2. * np.arctan(kpc / (2. * distance))
@@ -342,18 +342,18 @@ def finish_current_run(Configuration,current_run,debug=False):
     if Configuration['TIRIFIC_RUNNING']:
         try:
             os.kill(Configuration['TIRIFIC_PID'], signal.SIGKILL)
-            print_log(f"FINISH_CURRENT_RUN: We killed PID = {Configuration['TIRIFIC_PID']}. \n",Configuration['OUTPUTLOG'],debug=debug,screen=True)
+            print_log(f"FINISH_CURRENT_RUN: We killed PID = {Configuration['TIRIFIC_PID']}. \n",Configuration['OUTPUTLOG'],debug=False,screen=True)
         except:
             try:
                 current_run.kill()
-                print_log(f"FINISH_CURRENT_RUN: We killed the current run although we failed on the PID = {Configuration['TIRIFIC_PID']}. \n",Configuration['OUTPUTLOG'],debug=debug,screen=True)
+                print_log(f"FINISH_CURRENT_RUN: We killed the current run although we failed on the PID = {Configuration['TIRIFIC_PID']}. \n",Configuration['OUTPUTLOG'],screen=True)
             except AttributeError:
-                print_log(f"FINISH_CURRENT_RUN: We failed to kill the current run even though we have tirific running",Configuration['OUTPUTLOG'],debug=debug,screen=True)
+                print_log(f"FINISH_CURRENT_RUN: We failed to kill the current run even though we have tirific running",Configuration['OUTPUTLOG'],screen=True)
                 raise TirificKillError('FINISH_CURRENT_RUN: Despite having an initialized tirific we could not kill it. This should not happen.')
         Configuration['TIRIFIC_RUNNING'] = False
         Configuration['TIRIFIC_PID'] = 'Not Initialized'
     else:
-        print_log(f"FINISH_CURRENT_RUN: No run is initialized.",Configuration['OUTPUTLOG'],debug=debug,screen=True)
+        print_log(f"FINISH_CURRENT_RUN: No run is initialized.",Configuration['OUTPUTLOG'],screen=True)
 
 
 def gaussian_function(axis,peak,center,sigma):
@@ -361,10 +361,10 @@ def gaussian_function(axis,peak,center,sigma):
 
 def fit_gaussian(x,y, covariance = False, debug = False):
     if debug:
-        print(f'''FIT_GAUSSIAN: Starting to fit a Gaussian.
+        print_log(f'''FIT_GAUSSIAN: Starting to fit a Gaussian.
 {'':8s}x = {x}
 {'':8s}y = {y}
-''')
+''', None,debug =True)
     # Make sure we have numpy arrays
     x= np.array(x,dtype=float)
     y= np.array(y,dtype=float)
@@ -383,15 +383,15 @@ def fit_gaussian(x,y, covariance = False, debug = False):
 def get_from_template(Tirific_Template,Variables, debug = False):
     out = []
     if debug:
-        print(f'''{'':8s}GET_FROM_TEMPLATE: Trying to get the following profiles {Variables}
-''')
+        print_log(f'''{'':8s}GET_FROM_TEMPLATE: Trying to get the following profiles {Variables}
+''',None ,debug= True)
     for key in Variables:
         out.append([float(x) for x  in Tirific_Template[key].split()])
     #Because lists are stupid i.e. sbr[0][0] = SBR[0], sbr[1][0] = SBR_2[0] but  sbr[:][0] = SBR[:] not SBR[0],SBR_2[0] as logic would demand
     if debug:
-        print(f'''{'':8s}GET_FROM_TEMPLATE: We extracted the following profiles from the Template.
+        print_log(f'''{'':8s}GET_FROM_TEMPLATE: We extracted the following profiles from the Template.
 {'':8s}GET_FROM_TEMPLATE: {out}
-''' )
+''',None,debug = False )
     #Beware that lists are stupid i.e. sbr[0][0] = SBR[0], sbr[1][0] = SBR_2[0] but  sbr[:][0] = SBR[:] not SBR[0],SBR_2[0] as logic would demand
     # However if you make a np. array from it make sure that you specify float  or have lists of the same length else you get an array of lists which behave just as dumb
     return out
@@ -411,7 +411,7 @@ def get_inclination_pa(Configuration, map, Image, hdr, center, cutoff = 0., debu
 ''',Configuration['OUTPUTLOG'], debug = True)
             else:
                 print_log(f'''GET_INCLINATION_PA: From the cleaned map we find radius of {maj_extent/hdr['BMAJ']} beams.
-''',Configuration['OUTPUTLOG'], debug = True)
+''',Configuration['OUTPUTLOG'], debug = False)
         max_index = np.where(ratios == np.nanmax(ratios))[0]
         if max_index.size > 1:
             max_index =max_index[0]
@@ -496,14 +496,14 @@ def get_usage_statistics(process_id, debug = False):
     lines = result.decode('utf8').split('\n')
     column_names = [x.upper() for x in lines[6].strip().split()]
     if debug:
-        print(f'''{'':8s}GET_usage_statistics: We extracted the following column names {column_names}
-''')
+        print_log(f'''{'':8s}GET_usage_statistics: We extracted the following column names {column_names}
+''',None,debug=True)
     CPU = float(0.)
     mem=float(0.)
     column_var = [x for x in lines[7].strip().split()]
     if debug:
-        print(f'''{'':8s}GET_usage_statistics: We extracted the following variables {column_var}
-''')
+        print_log(f'''{'':8s}GET_usage_statistics: We extracted the following variables {column_var}
+''',None,debug = False)
     try:
         if int(column_var[column_names.index('PID')]) == int(process_id):
             CPU = float(column_var[column_names.index('%CPU')])
@@ -1072,6 +1072,13 @@ def set_limit_modifier(Configuration,Inclination, debug= False):
     if not Inclination.shape:
         Inclination = [Inclination]
     modifier_list = []
+    # Correction because the noise applies to non-face on rings while the SBR is face on,correction is normalized to the average inclination
+    # The square root is because of the square root between the noise in cube and the noise in J2007
+    # The lower limit corresponds to a inclination 80 above which the cos becomes too steep
+    for inc in Inclination:
+        modifier_list.append(set_limits(np.sqrt(np.cos(np.radians(inc))/np.cos(np.radians(60.))),0.6,2.))
+
+    '''
     for inc in Inclination:
         if 40 < inc < 50:
             modifier_list.append(set_limits(1.+((50-inc)*0.05),1.,2.5))
@@ -1081,12 +1088,13 @@ def set_limit_modifier(Configuration,Inclination, debug= False):
             modifier_list.append(set_limits(75./inc,0.7,1.00))
         else:
             modifier_list.append(1.00)
+    '''
     if Configuration['OUTER_RINGS_DOUBLED']:
         if len(modifier_list) > 10:
             modifier_list[10:]= np.sqrt(modifier_list[10:])
     Configuration['LIMIT_MODIFIER'] = np.array(modifier_list,dtype=float)
     print_log(f'''SET_LIMIT_MODIFIER: We updated the LIMIT_MODIFIER to {Configuration['LIMIT_MODIFIER']}.
-''', Configuration['OUTPUTLOG'], debug=debug)
+''', Configuration['OUTPUTLOG'], debug=False)
 
 
 def set_ring_size(Configuration, debug = False, size_in_beams = 0., check_set_rings = True):
@@ -1107,7 +1115,7 @@ def set_ring_size(Configuration, debug = False, size_in_beams = 0., check_set_ri
         ring_size = set_limits(ring_size/1.5,0.5,float('NaN'),debug=debug)
         no_rings = calc_rings(Configuration,ring_size=ring_size,size_in_beams=size_in_beams,debug=debug)
         print_log(f'''SET_RING_SIZE: Because we had less than four rings we have reduced the ring size from {previous_ringsize} to {ring_size}
-''',Configuration['OUTPUTLOG'],debug = debug)
+''',Configuration['OUTPUTLOG'],debug = False)
 
     while no_rings < Configuration['MINIMUM_RINGS'] and not size_in_beams >=  Configuration['MAX_SIZE_IN_BEAMS']:
         size_in_beams = set_limits(size_in_beams+1.*ring_size,1, Configuration['MAX_SIZE_IN_BEAMS'])
@@ -1157,7 +1165,7 @@ def set_rings(Configuration,ring_size = 0.,size_in_beams = 0. , debug = False):
     #Configuration['NO_RINGS'] = Configuration['SIZE_IN_BEAMS']/Configuration['RING_SIZE']
     if Configuration['OUTER_RINGS_DOUBLED']:
         print_log(f'''SET_RINGS: This is a large galaxy (Size = {size_in_beams}) Therefore we use twice the ring size in the outer parts.
-''',Configuration['OUTPUTLOG'],debug = Configuration['DEBUG'])
+''',Configuration['OUTPUTLOG'],debug = False)
         radii = [0.,1./5.*Configuration['BMMAJ']]
         radii = np.hstack((radii,(np.linspace(Configuration['BMMAJ']*ring_size,Configuration['BMMAJ']*10.*ring_size, \
                                         10)+1./5*Configuration['BMMAJ'])))
@@ -1167,7 +1175,7 @@ def set_rings(Configuration,ring_size = 0.,size_in_beams = 0. , debug = False):
         #                                      +1./5*Configuration['BMMAJ']))
         radii = np.hstack((radii,(np.linspace(Configuration['BMMAJ']*12.*ring_size, \
                                               Configuration['BMMAJ']*ring_size*(12.+2.*round((no_rings-6.)/2.)), \
-                                              round((no_rings-5)/2.+1))) \
+                                              int(np.ceil((no_rings-5)/2.)))) \
                                               +1./5*Configuration['BMMAJ']))
                                               #no_rings = 2+10+round((est_rings-12)/2.)
     else:
@@ -1225,13 +1233,13 @@ def sofia_output_exists(Configuration,Fits_Files, debug = False):
         if os.path.exists(Configuration['FITTING_DIR']+'Sofia_Output/'+Fits_Files[file]):
             continue
         else:
-            log_statement = f"CHECK_SOFIA_OUTPUT: The file {Configuration['FITTING_DIR']+'Sofia_Output/'+Fits_Files[file]} is not found."
-            print_log(log_statement, Configuration['OUTPUTLOG'],debug = debug)
+            log_statement = f"SOFIA_OUTPUT_EXISTS: The file {Configuration['FITTING_DIR']+'Sofia_Output/'+Fits_Files[file]} is not found."
+            print_log(log_statement, Configuration['OUTPUTLOG'],debug = False)
             raise FileNotFoundError(log_statement)
 
     if not os.path.exists(Configuration['FITTING_DIR']+'Sofia_Output/'+Configuration['BASE_NAME']+'_cat.txt'):
-        log_statement = f"CHECK_SOFIA_OUTPUT: The file {Configuration['FITTING_DIR']+'Sofia_Output/'+Configuration['BASE_NAME']+'_cat.txt'} is not found."
-        print_log(log_statement, Configuration['OUTPUTLOG'],debug = debug)
+        log_statement = f"SOFIA_OUTPUT_EXISTS: The file {Configuration['FITTING_DIR']+'Sofia_Output/'+Configuration['BASE_NAME']+'_cat.txt'} is not found."
+        print_log(log_statement, Configuration['OUTPUTLOG'],debug = False)
         raise FileNotFoundError(log_statement)
 
 
