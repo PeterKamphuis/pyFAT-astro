@@ -133,7 +133,7 @@ def initialize_def_file(Configuration, Fits_Files,Tirific_Template, cube_hdr,Ini
         set_overall_parameters(Configuration, Fits_Files,Tirific_Template,loops = 10 ,fit_stage=fit_stage,hdr=cube_hdr, debug=debug,stage='initialize_ec')
         Vars_to_Set =  ['XPOS','YPOS','VSYS','VROT','INCL','PA','SDIS','SBR','SBR_2','Z0']
         if fit_stage == 'One_Step_Convergence':
-            set_model_parameters(Configuration, Tirific_Template,Initial_Parameters, hdr=cube_hdr, debug=debug)
+            set_model_parameters(Configuration, Tirific_Template,Initial_Parameters,stage='initialize_def_file', hdr=cube_hdr, debug=debug)
         FAT_Model = load_template(Tirific_Template,Variables= Vars_to_Set,unpack=False, debug=debug)
         # Finally we set how these parameters are fitted.
         set_limit_modifier(Configuration,FAT_Model[0,Vars_to_Set.index('INCL')], debug=debug)

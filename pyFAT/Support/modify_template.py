@@ -991,8 +991,22 @@ def set_errors(Configuration,Tirific_Template,key,min_error = 0.,debug = False):
 ''',Configuration['OUTPUTLOG'],debug = True)
 
 def set_fitting_parameters(Configuration, Tirific_Template, \
-                           parameters_to_adjust  = ['NO_ADJUSTMENT'], modifiers = {}, \
-                           hdr = None,stage = 'initial', initial_estimates = {},debug = False):
+                           parameters_to_adjust  = ['NO_ADJUSTMENT'], modifiers = ['EMPTY'], \
+                           hdr = None,stage = 'initial', initial_estimates = ['EMPTY'],debug = False):
+    if debug:
+        print_log(f'''SET_FITTING_PARAMETERS: We are starting with these modifiers.
+{'':8s} {modifiers}
+''',Configuration['OUTPUTLOG'],debug=True,screen = True)
+    try:
+        if modifiers[0] == 'EMPTY':
+            modifiers = {}
+    except KeyError:
+        pass
+    try:
+        if initial_estimates[0] == 'EMPTY':
+            initial_estimates = {}
+    except KeyError:
+        pass
     fitting_settings = {}
     fitting_keys = ['VARY','VARINDX','MODERATE','DELEND','DELSTART','MINDELTA','PARMAX','PARMIN']
 
@@ -1018,7 +1032,7 @@ def set_fitting_parameters(Configuration, Tirific_Template, \
         else:
             if debug:
                 print_log(f'''SET_FITTING_PARAMETERS: No default adjustment for unknown stage.
-''',Configuration['OUTPUTLOG'],debug=debug,screen = True)
+''',Configuration['OUTPUTLOG'],debug=False,screen = True)
             raise InitializeError('No default adjustment for unknown stage. ')
     if 'XPOS' in parameters_to_adjust or 'YPOS' in parameters_to_adjust or 'VSYS' in parameters_to_adjust:
         range = {}
@@ -1050,6 +1064,9 @@ def set_fitting_parameters(Configuration, Tirific_Template, \
             elif key == 'Z0':
                 initial_estimates['Z0'] = convertskyangle([0.2,0.05],Configuration['DISTANCE'], physical = True)
         if key not in modifiers:
+            if debug:
+                print_log(f'''SET_FITTING_PARAMETERS: Adding {key} to the modifiers
+''',Configuration['OUTPUTLOG'],screen =True)
             if key == 'Z0': modifiers['Z0'] = [0.5,0.5,2.]
             elif key in ['XPOS','YPOS']: modifiers[key] = [1.,1.,1.]
             elif key == 'VSYS': modifiers[key] = [3.,1.,1.]
@@ -1058,21 +1075,37 @@ def set_fitting_parameters(Configuration, Tirific_Template, \
                 elif key == 'PA': modifiers['PA'] = [1.,1.,1.]
                 elif key == 'SDIS': modifiers['SDIS'] =  [1.,1.,2.]
             else:
-                if key == 'INCL': modifiers['INCL'] = [2.,0.5,0.5]
+                if key == 'INCL': modifiers['INCL'] = [2.0,0.5,0.5]
                 elif key == 'PA': modifiers['PA'] =[1.0,1.0,2.0]
                 elif key == 'SDIS': modifiers['SDIS'] =  [1.,1.,0.5]
+    if debug:
+        for key in modifiers:
+            print_log(f'''SET_FITTING_PARAMETERS: This {key} is in modifiers
+''',Configuration['OUTPUTLOG'],screen=True)
+    if debug:
+        print_log(f'''SET_FITTING_PARAMETERS: These are the inclination modifiers
+{'':8s} {modifiers['INCL']}
+''',Configuration['OUTPUTLOG'])
     if initial_estimates['INCL'][0] < 30.:
         modifiers['Z0'][0:1] = np.array(modifiers['Z0'][0:1],dtype=float)*(0.2/0.5)
         modifiers['Z0'][2] = float(modifiers['Z0'][2])*1.5
-        modifiers['INCL'][0:1] =np.array( modifiers['INCL'][0:1],dtype=float)*(0.1/1.0)
-        modifiers['INCL'][2] = float(modifiers['INCL'][2])*3.
+        modifiers['INCL'][0:1] =np.array(modifiers['INCL'][0:1],dtype=float)*(0.1/1.0)
+        modifiers['INCL'][2] = float(modifiers['INCL'][2])*2.
         modifiers['SDIS'][0:1] = np.array(modifiers['SDIS'][0:1],dtype=float)*1.5
         modifiers['SDIS'][2] = float(modifiers['SDIS'][2])*0.5
+        if debug:
+            print_log(f'''SET_FITTING_PARAMETERS: These are the inclination modifiers after correcting < 30.
+{'':8s} {modifiers['INCL']}
+''',Configuration['OUTPUTLOG'])
     elif initial_estimates['INCL'][0] < 50.:
         modifiers['Z0'][0:1] = np.array(modifiers['Z0'][0:1],dtype=float)*(0.4/0.5)
         modifiers['Z0'][2] = float(modifiers['Z0'][2])*1.2
         modifiers['INCL'][0:1] =np.array( modifiers['INCL'][0:1],dtype=float)*(0.75/1.0)
         modifiers['INCL'][2] = float(modifiers['INCL'][2])*0.8
+        if debug:
+            print_log(f'''SET_FITTING_PARAMETERS: These are the inclination modifiers after correcting < 50.
+{'':8s} {modifiers['INCL']}
+''',Configuration['OUTPUTLOG'])
     elif initial_estimates['INCL'][0] > 75.:
         modifiers['Z0'][0:1] = np.array(modifiers['Z0'][0:1],dtype=float)*(1.25)
         modifiers['Z0'][2] = float(modifiers['Z0'][2])*0.5
@@ -1080,7 +1113,10 @@ def set_fitting_parameters(Configuration, Tirific_Template, \
         modifiers['INCL'][2] = float(modifiers['INCL'][2])*0.25
         modifiers['SDIS'][0:1] = np.array(modifiers['SDIS'][0:1],dtype=float)*0.5
         modifiers['SDIS'][2] = float(modifiers['SDIS'][2])*1.5
-
+        if debug:
+            print_log(f'''SET_FITTING_PARAMETERS: These are the inclination modifiers after correcting > 75.
+{'':8s} {modifiers['INCL']}
+''',Configuration['OUTPUTLOG'])
 
     else:
         pass
@@ -1140,12 +1176,16 @@ def set_fitting_parameters(Configuration, Tirific_Template, \
             for fit_key in fitting_keys:
                 if  fit_key in fitting_settings[key]:
 
-                    if fit_key == 'MINDELTA':
-                        # This should never be 0.
+                    if fit_key in ['DELSTART','DELEND','MINDELTA']:
+                    #if fit_key in ['DELEND','MINDELTA']:
+                        # These should never be 0.
                         format = set_format(key)
                         for i,x in enumerate(fitting_settings[key][fit_key]):
                             while float(f'{fitting_settings[key][fit_key][i]:{format}}') == 0.:
-                                fitting_settings[key][fit_key][i] += 0.05
+                                if float(fitting_settings[key][fit_key][i]) == 0.:
+                                    fitting_settings[key][fit_key][i] += 0.01
+                                else:
+                                    fitting_settings[key][fit_key][i] *= 2.
 
                     if fit_key == 'VARY':
                         if len(Tirific_Template[fit_key]) == 0:
@@ -1240,23 +1280,23 @@ def set_generic_fitting(Configuration, key , stage = 'initial', values = [60,5.]
     if all(x == 0. for x in np.array(limits).reshape(6)):
         if debug:
             print_log(f'''SET_GENERIC_FITTING: Implementing limits
-''', Configuration['OUTPUTLOG'], screen = True ,debug = debug)
+''', Configuration['OUTPUTLOG'], screen = True ,debug = False)
 
         limits = [[set_limits(values[0]-values[1]*5.,*lower_bracket),\
                     set_limits(values[0]+values[1]*5.,*upper_bracket)] for x in limits]
 
         if debug:
             print_log(f'''SET_GENERIC_FITTING: set these limits {limits}
-''', Configuration['OUTPUTLOG'], screen = True ,debug = debug)
+''', Configuration['OUTPUTLOG'], screen = True ,debug = False)
 
     input= {}
     if debug:
             print_log(f'''SET_GENERIC_FITTING: flat is {fixed}
-''', Configuration['OUTPUTLOG'], screen = True ,debug = debug)
+''', Configuration['OUTPUTLOG'], screen = True ,debug = False)
     if (stage in ['after_os','after_cc','after_ec','parameterized']) or fixed:
         if debug:
-            print_log(f'''SET_GENERIC_FITTING: implementing a flat profile
-''', Configuration['OUTPUTLOG'], screen = True ,debug = debug)
+            print_log(f'''SET_GENERIC_FITTING: Fitting all as 1.
+''', Configuration['OUTPUTLOG'], screen = True ,debug = False)
         input['VARY'] =  np.array([f"{key} 1:{NUR} {key}_2 1:{NUR}"])
         input['PARMAX'] = np.array([limits[0][1]])
         input['PARMIN'] = np.array([limits[0][0]])
@@ -1267,8 +1307,10 @@ def set_generic_fitting(Configuration, key , stage = 'initial', values = [60,5.]
     else:
         if not symmetric:
             if debug:
-                print_log(f'''SET_GENERIC_FITTING: implementing a varying non-symmetric profile
-''', Configuration['OUTPUTLOG'], screen = True ,debug = debug)
+                print_log(f'''SET_GENERIC_FITTING: implementing a varying non-symmetric profile.
+{'':8s} step_modifier = {step_modifier}
+{'':8s} values = {values}
+''', Configuration['OUTPUTLOG'], screen = True ,debug = False)
             if flat_inner+1 >= NUR:
                 input['VARY'] =  np.concatenate((np.array([f"!{key} {NUR}"]),np.array([f"!{key}_2 {NUR}"]),np.array([f"{key} 1:{NUR-1} {key}_2 1:{NUR-1}"])))
 
@@ -1364,6 +1406,16 @@ def set_model_parameters(Configuration, Tirific_Template,Model_Values, hdr = Non
         vsys =Model_Values['VSYS'][0]/1000.
     else:
         vsys=100.
+    scramble = np.zeros(len(parameters_to_set))
+    # If the inclination is low we want to throw the inclination and VROT out of Vobs hence we scramble with random values
+    #if stage == 'initialize_def_file':
+    #        if 'INCL' in parameters_to_set:
+    #            if Model_Values['INCL'][0] < 40.:
+    #                scramble[parameters_to_set.index('INCL')] = np.random.uniform(-5,5,1)[0]
+                    #if 'VROT_profile' in parameters_to_set:
+                    #    Model_Values['VROT_profile'] = [set_limits(x+np.random.uniform(-2.*Configuration['CHANNEL_WIDTH'],2.*Configuration['CHANNEL_WIDTH'],1)[0], 0,600.) for x in Model_Values['VROT_profile'] ]
+                    #    scramble[parameters_to_set.index('VROT_profile')] = np.mean([x*np.sin(np.radians(Model_Values['INCL'][0]))/np.sin(np.radians(Model_Values['INCL'][0]))])
+
     for key in parameters_to_set:
         if key in Model_Values:
             if key in ['VROT_profile','SBR_profile']:
@@ -1373,17 +1425,17 @@ def set_model_parameters(Configuration, Tirific_Template,Model_Values, hdr = Non
             # if 2 long we have a value and error
             format = set_format(key_to_set)
             if len(Model_Values[key]) == 2:
-                Tirific_Template[key_to_set]= f"{Model_Values[key][0]:{format}}"
+                Tirific_Template[key_to_set]= f"{Model_Values[key][0]+scramble[parameters_to_set.index(key)]:{format}}"
             else:
-                Tirific_Template[key_to_set]= f"{' '.join([f'{x:{format}}' for x in Model_Values[key][:int(Configuration['NO_RINGS'])]])}"
+                Tirific_Template[key_to_set]= f"{' '.join([f'{x+scramble[parameters_to_set.index(key)]:{format}}' for x in Model_Values[key][:int(Configuration['NO_RINGS'])]])}"
             if key_to_set != 'RADI':
                 key_write = f"{key_to_set}_2"
                 if f"{key}_2" in Model_Values:
                     key = f"{key}_2"
                 if len(Model_Values[key]) == 2:
-                    Tirific_Template[key_write]= f"{Model_Values[key][0]:{format}}"
+                    Tirific_Template[key_write]= f"{Model_Values[key][0]+scramble[parameters_to_set.index(key)]:{format}}"
                 else:
-                    Tirific_Template[key_write]= f"{' '.join([f'{x:{format}}' for x in Model_Values[key][:int(Configuration['NO_RINGS'])]])}"
+                    Tirific_Template[key_write]= f"{' '.join([f'{x+scramble[parameters_to_set.index(key)]:{format}}' for x in Model_Values[key][:int(Configuration['NO_RINGS'])]])}"
 
             check_parameters.append(key)
         else:
@@ -1983,13 +2035,13 @@ def modify_flat(Configuration,profile,original_profile,errors,key,debug=False):
     for side in [0,1]:
          flatness.append(check_flat(Configuration,profile[side],errors[side],debug=debug))
     if all(flatness):
-        profile[:] = np.nanmedian(original_profile)
+        profile[:] = np.nanmedian(original_profile[:,:round(len(original_profile)/2.)])
         errors = get_error(Configuration,original_profile,profile,apply_max_error = True,key=key,min_error =np.nanmin(errors) , debug=debug)
     else:
         if any(flatness):
             for side in [0,1]:
                 if flatness[side]:
-                    profile[side]  = np.median(original_profile[side])
+                    profile[side]  = np.median(original_profile[side,:round(len(original_profile)/2.)])
                     flat_val = profile[side,0]
                     errors[side] = get_error(Configuration,original_profile[side],profile[side],apply_max_error = True,key=key,min_error =np.nanmin(errors[side]),singular = True ,debug=debug)
             profile[:,0:3] = flat_val

@@ -101,8 +101,10 @@ Clean up the sofia output files by putting them in a dedicated directory.
 '''
 # cleanup dirty files before starting fitting
 def cleanup(Configuration,Fits_Files, debug = False):
-    #clean the log directory of all files except those named Previous_ and not the Log as it is already moved if existing
-    files_in_log = ['restart_Centre_Convergence.txt','restart_Extent_Convergence.txt','Usage_Statistics.txt']
+    #clean the log directory of all files except those named Prev_ and not the Log as it is already moved if existing
+    files_in_log = ['restart_One_Step_Convergence.txt''restart_Centre_Convergence.txt',\
+                    'restart_Extent_Convergence.txt','Usage_Statistics.txt', 'clean_map.fits',\
+                    'dep_map.fits','minimum_map.fits','rot_map.fits','Convolved_Cube_FAT_opt.fits']
 
     for file in files_in_log:
         try:
@@ -110,13 +112,16 @@ def cleanup(Configuration,Fits_Files, debug = False):
         except FileNotFoundError:
             pass
     directories = ['Finalmodel','Sofia_Output','Def_Files']
-    files = [Configuration['BASE_NAME']+'-BasicInfo.txt']
+    files = [Configuration['BASE_NAME']+'-Basic_Info.txt','Overview.png']
     if Configuration['TWO_STEP']:
         directories.append('Centre_Convergence')
         directories.append('Extent_Convergence')
         files.append('Centre_Convergence_In.def')
         files.append('Extent_Convergence_In.def')
     else:
+
+
+
         directories.append('One_Step_Convergence')
         files.append('One_Step_Convergence_In.def')
     if Configuration['START_POINT'] == 1:
@@ -146,6 +151,26 @@ def cleanup(Configuration,Fits_Files, debug = False):
         moments = ['mom0','mom1','mom2', 'xv']
         #then specific files in the working directory
         os.chdir(Configuration['FITTING_DIR'])
+        #for configuration purposes we remove the old dirs
+        if debug:
+            if Configuration['TWO_STEP']:
+                try:
+                    os.system(f'rm -Rf One_Step_Convergence/')
+                except:
+                    pass
+            else:
+                try:
+                    os.system(f'rm -Rf Centre_Convergence/')
+                except:
+                    pass
+                try:
+                    os.system(f'rm -Rf Extent_Convergence/')
+                except:
+                    pass
+                try:
+                    os.system(f'rm -f Finalmodel/Convolved_Cube_FAT_final_xv.fits')
+                except:
+                    pass
 
         for dir in directories:
             if os.path.isdir(dir):
@@ -157,6 +182,7 @@ def cleanup(Configuration,Fits_Files, debug = False):
                             try:
                                 os.unlink(f'{dir}/{dir}{fe}')
                             except FileNotFoundError:
+
                                 pass
                         else:
                             try:
@@ -164,8 +190,6 @@ def cleanup(Configuration,Fits_Files, debug = False):
                             except FileNotFoundError:
                                 pass
                             os.system(f'rm -f {dir}/{dir}_*{fe}')
-
-
                     for mom in moments:
                         try:
                             os.remove(f'{dir}/{dir}_{mom}.fits')
@@ -359,7 +383,7 @@ def finish_galaxy(Configuration,maximum_directory_length,current_run = 'Not init
                     traceback.print_exc(file=log_file)
         traceback.print_exc()
         print_log(log_statement,Configuration['OUTPUTLOG'], screen = False)
-    elif Configuration['MAPS_OUTPUT'] != 4:
+    elif Configuration['MAPS_OUTPUT'] < 4:
         log_statement = f'''Producing final output in {Configuration['FITTING_DIR']}.
 '''
         #
