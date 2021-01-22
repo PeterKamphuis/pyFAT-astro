@@ -134,7 +134,7 @@ def config_file(input_parameters, start_dir, debug = False):
                         value = False
                         invalid_input = False
                     else:
-                        inp = input("The parameter {} in the configuration file  must be true/false or yes/no. Please give the correct value. \n".format(add_key))
+                        inp = input(f"The parameter {add_key} in the configuration file  must be true/false or yes/no. Please give the correct value. \n".format(add_key))
                 Configuration[add_key] = value
             elif add_key in string_keys:
                 Configuration[add_key] = tmp.split('=', 1)[1].strip()
@@ -172,24 +172,24 @@ def config_file(input_parameters, start_dir, debug = False):
         Configuration['MAINDIR'] = Configuration['MAINDIR']+'/'
 
     while not os.path.isdir(Configuration['MAINDIR']):
-        Configuration['MAINDIR'] = input('''
-                    Your main fitting directory ({}) does not exist.
+        Configuration['MAINDIR'] = input(f'''
+                    Your main fitting directory ({Configuration['MAINDIR']}) does not exist.
                     Please provide the correct directory.
-                    '''.format(Configuration['MAINDIR']))
+                    ''')
     while not os.path.exists(Configuration['CATALOGUE']):
-        Configuration['CATALOGUE'] = input('''
-                    Your input catalogue ({}) does not exist.
+        Configuration['CATALOGUE'] = input(f'''
+                    Your input catalogue ({Configuration['CATALOGUE']}) does not exist.
                     Please provide the correct file name.
-                    '''.format(Configuration['CATALOGUE']))
+                    ''')
     #The output catalogue only needs to be in a valid directory as we create it
     output_catalogue_dir = Configuration['OUTPUTCATALOGUE'].split('/')
     if len(output_catalogue_dir) > 1:
         check_dir = '/'.join(output_catalogue_dir[:-1])
         while not os.path.isdir(check_dir):
-            check_dir= input('''
-                    The directory for your output catalogue ({}) does not exist.
+            check_dir= input(f'''
+                    The directory for your output catalogue ({Configuration['OUTPUTCATALOGUE']}) does not exist.
                     Please provide the correct directory name.
-                    '''.format(Configuration['OUTPUTCATALOGUE']))
+                    ''')
             Configuration['OUTPUTCATALOGUE'] = check_dir+'/'+output_catalogue_dir[-1]
 
 

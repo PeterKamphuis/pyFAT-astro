@@ -72,6 +72,8 @@ def fix_sbr(Configuration,Tirific_Template,hdr, smooth = False, debug=False):
             if missed[-1] != len(sbr[i,:])-1:
                 missed = np.hstack((missed,[len(sbr[i,:])-1]))
             sbr[i,missed] = gaussian[missed]
+            if np.where(np.max(gaussian) == gaussian)[0] < 2:
+                sbr[[0,1],[0,1]] = np.mean(sm_sbr[[0,1],[0,1]])
 
     # Need to make sure there are no nans
     cutoff_limits = np.array([cutoff_limits,cutoff_limits],dtype=float)
@@ -382,8 +384,9 @@ def fix_profile(Configuration, key, profile, Tirific_Template, hdr, debug= False
         if key == 'VROT':
             profile[i] =fix_outer_rotation(Configuration,profile[i], Tirific_Template, hdr,debug= debug)
         if key in ['PA','INCL','Z0']:
+            xrange = set_limits((int(round(len(profile[0])-5.)/4.)),1,4)
         # need to make sure this connects smoothly
-            for x in [1,2,3,4]:
+            for x in range(1,xrange):
                 if Configuration['INNER_FIX']+x < len(profile[i,:]):
                     profile[i,Configuration['INNER_FIX']+x] = 1/(x+0.5)*inner_mean+ (1-1/(x+0.5))*profile[i,Configuration['INNER_FIX']+x]
 
@@ -826,22 +829,23 @@ def fit_polynomial(Configuration,radii,profile,sm_profile,error, key, Tirific_Te
     else:
         start_order = 0
 
-    st_fit = int(1)
+    st_fit = int(0)
     if key in ['VROT']:
+        st_fit = int(1)
         #This needs another -1 because the 0 and 1/5. ring are more or less 1 ring
-        max_order = set_limits(len(radii)-fixed-1,3,8)
+        max_order = set_limits(len(radii)-fixed-2,3,8)
         #The rotation curve varies a lot so the lower limit should be as high as possible
         #But at least 3 less than max order and maximally 4
-        if len(radii) < 6:
+        if len(radii)-fixed-2 <= 6:
             lower_limit=set_limits(3,3,max_order-2)
-        elif len(radii) < 10:
+        elif len(radii)-fixed-2 <= 10:
             lower_limit=set_limits(4,3,max_order-2)
         else:
             lower_limit=set_limits(5,3,max_order-2)
         start_order = set_limits(start_order,lower_limit,max_order)
 
     else:
-        max_order = set_limits(len(radii)-fixed-2,3,7)
+        max_order = set_limits(len(radii)-fixed-1,3,7)
 
     if start_order >= max_order:
         max_order = max_order+1
@@ -859,12 +863,19 @@ def fit_polynomial(Configuration,radii,profile,sm_profile,error, key, Tirific_Te
 {'':8s}{sm_profile[st_fit:]}''',Configuration['OUTPUTLOG'],screen =True, debug=False)
     for ord in order:
         fit_prof = np.poly1d(np.polyfit(radii[st_fit:],profile[st_fit:],ord,w=1./error[st_fit:]))
-        fit_profile = fit_prof(radii)
-        fit_profile = fix_profile(Configuration, key, fit_profile, Tirific_Template, hdr,debug =debug, singular = True,only_inner =only_inner)
+        if st_fit > 0.:
+            fit_profile = np.concatenate(([sm_profile[0]],[e for e in fit_prof(radii[st_fit:])]))
+        else:
+            fit_profile = fit_prof(radii)
+        #fit_profile = fit_prof(radii)
+        fit_profile = fix_profile(Configuration, key, fit_profile, Tirific_Template, hdr, singular = True,only_inner =only_inner)
         red_chi = np.sum((profile[st_fit:]-fit_profile[st_fit:])**2/error[st_fit:])/(len(radii[st_fit:])-ord)
         reduced_chi.append(red_chi)
     reduced_chi = np.array(reduced_chi,dtype = float)
     final_order = order[np.where(np.min(reduced_chi ) == reduced_chi )[0][0]]
+    if debug:
+            print_log(f'''FIT_POLYNOMIAL: find {final_order} as the polynomial order to regularise {key}
+''',Configuration['OUTPUTLOG'],screen =True, debug=False)
     fit_profile = np.poly1d(np.polyfit(radii[st_fit:],profile[st_fit:],final_order,w=1./error[st_fit:]))
     if st_fit > 0.:
         new_profile = np.concatenate(([sm_profile[0]],[e for e in fit_profile(radii[st_fit:])]))
@@ -1678,7 +1689,7 @@ def set_overall_parameters(Configuration, Fits_Files,Tirific_Template,stage = 'i
                 Tirific_Template['INTY'] = 0
                 #Tirific_Template['INDINTY'] = 0
             else:
-                #This should not be used with < 8 rings.
+                #This should not be used with 8 <  rings.
                 Tirific_Template['INTY'] = 1
                 #preferably we'd use the akima spline but there is an issue with that where the final ring does not get modified
                 #Tirific_Template['INDINTY'] = 2

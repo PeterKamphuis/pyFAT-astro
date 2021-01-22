@@ -23,7 +23,13 @@ from astropy.wcs import WCS
 def basicinfo(Configuration,initialize = False,first_fit = False, second_fit = False, debug = False,
               RA=[0.,0.], DEC=[0.,0.], VSYS =[0.,0.],
               PA=[0,0], Inclination = [0,0], Max_Vrot = [0,0], Tot_Flux = [0,0], V_mask = [0,0],
-              Distance = 0 , DHI = 0,Fits_Files = [], template ={}):
+              Distance = 0 , DHI = 0,Fits_Files = [], template = ['EMPTY']):
+
+    try:
+        if template[0] == 'EMPTY':
+            template = {}
+    except KeyError:
+        pass
     if initialize:
         with open(f"{Configuration['FITTING_DIR']}{Configuration['BASE_NAME']}-Basic_Info.txt",'w') as file:
             file.write(f'''#This file contains the basic parameters of the Galaxy
@@ -109,7 +115,13 @@ basicinfo.__doc__ = '''
 
 
 # Function to write the first def file for a galaxy
-def initialize_def_file(Configuration, Fits_Files,Tirific_Template, cube_hdr,Initial_Parameters = {}, fit_stage = 'Undefined_Stage',debug = False):
+def initialize_def_file(Configuration, Fits_Files,Tirific_Template, cube_hdr,Initial_Parameters = ['EMPTY'], fit_stage = 'Undefined_Stage',debug = False):
+    try:
+        if Initial_Parameters[0] == 'EMPTY':
+            Initial_Parameters = {}
+    except KeyError:
+        pass
+    
     #First we set some basic parameters that will hardly change
     if fit_stage == 'Centre_Convergence':
 
