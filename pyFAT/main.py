@@ -27,6 +27,7 @@ def main(argv):
     try:
         #Get the directory we are running from, This is for the Installation Check
         start_dir = os.getcwd()
+        #Random
         #Then check the input options
         parser  = ArgumentParser()
         parser.add_argument('-c','--cf','--configuration_file', action ="store" ,dest = "configfile", default = 'FAT_INPUT.config', help = 'Define the input configuration file.')
