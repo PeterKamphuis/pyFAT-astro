@@ -121,7 +121,7 @@ def initialize_def_file(Configuration, Fits_Files,Tirific_Template, cube_hdr,Ini
             Initial_Parameters = {}
     except KeyError:
         pass
-    
+
     #First we set some basic parameters that will hardly change
     if fit_stage == 'Centre_Convergence':
 
@@ -721,11 +721,11 @@ BMAJ = {cube[0].header['BMAJ']*3600.:.1f} arcsec''',rotation=0, va='center',ha='
             plt.scatter(float(Extra_Model[0,Vars_to_plot.index('VSYS')]),float(Configuration['DISTANCE']),c='r',alpha = 0.5,zorder=1)
         if len(Input_Model) > 0:
             plt.scatter(float(Input_Model[0,Vars_to_plot.index('VSYS')]),float(Configuration['DISTANCE']),c='b',zorder= 2)
-        plt.scatter(sof_basic_vsys[0],float(Configuration['DISTANCE']),marker='x',alpha=0.5)
+        plt.scatter(sof_basic_vsys[0],float(Configuration['DISTANCE']),marker='x',alpha=0.5, c = 'k')
         xmin,xmax = ax_VSYS.get_xlim()
         ymin,ymax = ax_VSYS.get_ylim()
 
-        plt.scatter(sof_basic_vsys[0],float(Configuration['DISTANCE']),marker='x',alpha=0.5, c = 'k')
+        #plt.scatter(sof_basic_vsys[0],float(Configuration['DISTANCE']),marker='x',alpha=0.5, c = 'k')
         vall= np.linspace(0,15000,100)
         Distanc=vall/70.
         plt.plot(vall,Distanc,'k--',alpha=0.5)

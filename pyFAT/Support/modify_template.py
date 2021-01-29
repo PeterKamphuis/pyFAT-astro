@@ -1684,7 +1684,7 @@ def set_overall_parameters(Configuration, Fits_Files,Tirific_Template,stage = 'i
             else:
                 Tirific_Template['INIMODE'] = '3'
 
-            if Configuration['NO_RINGS'] > 8:
+            if Configuration['NO_RINGS'] > 3.:
 
                 Tirific_Template['INTY'] = 0
                 #Tirific_Template['INDINTY'] = 0
