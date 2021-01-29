@@ -5,7 +5,7 @@ import sys
 import os
 import copy
 import numpy as np
-from optparse import OptionParser
+from argparse import ArgumentParser
 import traceback
 from datetime import datetime
 from astropy.io import fits
@@ -28,19 +28,18 @@ def main(argv):
         #Get the directory we are running from, This is for the Installation Check
         start_dir = os.getcwd()
         #Then check the input options
-        parser  = OptionParser()
-        parser.add_option('-c','--cf','--configuration_file', action ="store" ,dest = "configfile", default = 'FAT_INPUT.config', help = 'Define the input configuration file.',metavar='CONFIGURATION_FILE')
-        parser.add_option('-d','--debug', action ="store_true" ,dest = "debug", default = False, help = 'Print debug messages',metavar = '')
+        parser  = ArgumentParser()
+        parser.add_argument('-c','--cf','--configuration_file', action ="store" ,dest = "configfile", default = 'FAT_INPUT.config', help = 'Define the input configuration file.')
+        parser.add_argument('-d','--debug', action ="store_true" ,dest = "debug", default = False, help = 'Print debug messages')
         #parser.add_option('-s','--sd','--support_directory', action ="store" ,dest = "supportdir", default=f'{start_dir}/Support', help = 'location where the support files reside. Only required when FAT is not started in the directory where the Support dir resides.',metavar='SUPPORT_DIR')
-        parser.add_option('-i','--ic','--installation_check', action ="store_true" ,dest = "installation_check", default = False, help = 'Run the installation _check.',metavar = '')
-        parser.add_option('--LVT','--LVHIS_TEST', action ="store_true" ,dest = "lvhis_test", default = False, help = 'Run the LVHIS Test. Developer Only.')
-        parser.add_option('--PT','--PAPER_TEST', action ="store_true" ,dest = "paper_test", default = False, help = 'Run the PAPER Test. Developer Only.')
-        parser.add_option('--FD','--FULL_DATABASE', action ="store_true" ,dest = "full_test", default = False, help = 'Run the Full Database Test. Developer Only.')
-        parser.add_option('-p','--problems', action ="store_true" ,dest = "problems", default = False, help = 'Run the Problem test set. Developer Only.')
-        parser.add_option('-t','--timing', action ="store_true" ,dest = "timing", default = False, help = 'Create a file in the maindir that provides start and stop times for each galaxy.')
-        parser.add_option('-n','--ncpu', action ="store" ,dest = "ncpu", default = 6, help = 'Number of CPUs to use.')
-        input_parameters,args = parser.parse_args()
-
+        parser.add_argument('-i','--ic','--installation_check', action ="store_true" ,dest = "installation_check", default = False, help = 'Run the installation _check.')
+        parser.add_argument('--LVT','--LVHIS_TEST', action ="store_true" ,dest = "lvhis_test", default = False, help = 'Run the LVHIS Test. Developer Only.')
+        parser.add_argument('--PT','--PAPER_TEST', action ="store_true" ,dest = "paper_test", default = False, help = 'Run the PAPER Test. Developer Only.')
+        parser.add_argument('--FD','--FULL_DATABASE', action ="store_true" ,dest = "full_test", default = False, help = 'Run the Full Database Test. Developer Only.')
+        parser.add_argument('-p','--problems', action ="store_true" ,dest = "problems", default = False, help = 'Run the Problem test set. Developer Only.')
+        parser.add_argument('-t','--timing', action ="store_true" ,dest = "timing", default = False, help = 'Create a file in the maindir that provides start and stop times for each galaxy.')
+        parser.add_argument('-n','--ncpu', action ="store" ,dest = "ncpu", default = 6, help = 'Number of CPUs to use.')
+        input_parameters = parser.parse_args()
         basic_info  = 'BasicInfo'
         if input_parameters.installation_check:
             input_parameters.configfile = 'ChecK.ConfiG'
