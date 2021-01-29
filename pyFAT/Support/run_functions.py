@@ -340,8 +340,8 @@ def check_source(Configuration, Fits_Files, Catalogue, header, debug = False):
         warnings.simplefilter("ignore")
         cube_wcs = WCS(header)
     # convert the boundaries to real coordinates
-    ralow,declow,vellow = cube_wcs.wcs_pix2world(x_min,y_min,z_min,0.)
-    rahigh,dechigh,velhigh = cube_wcs.wcs_pix2world(x_max,y_max,z_max,0.)
+    ralow,declow,vellow = cube_wcs.wcs_pix2world(x_min,y_min,z_min,1)
+    rahigh,dechigh,velhigh = cube_wcs.wcs_pix2world(x_max,y_max,z_max,1)
     DECboun = np.sort([float(declow),float(dechigh)])
     RAboun = np.sort([float(ralow),float(rahigh)])
     VELboun = np.sort([float(vellow),float(velhigh)])
@@ -365,7 +365,7 @@ def check_source(Configuration, Fits_Files, Catalogue, header, debug = False):
     if x_new != x or y_new != y:
         x=x_new
         y=y_new
-        ra,dec,v_app = cube_wcs.wcs_pix2world(x,y,z,0.)
+        ra,dec,v_app = cube_wcs.wcs_pix2world(x,y,z,1)
         print_log(f'''CHECK_SOURCE: The center is updated to.
 {"":8s}CHECK_SOURCE: RA center = {ra} with boundaries {','.join(convert_type(RAboun,type='str'))}
 {"":8s}CHECK_SOURCE: DEC center = {dec} with boundaries {','.join(convert_type(DECboun,type='str'))}

@@ -880,7 +880,7 @@ def remove_inhomogeneities(Configuration,fits_map,inclination=30., pa = 90. , ce
         map_wcs = WCS(fits_map[0].header)
     # convert the boundaries to real coordinates
     if WCS_center:
-        x, y = map_wcs.wcs_world2pix(*center, 0.)
+        x, y = map_wcs.wcs_world2pix(*center, 1)
     else:
         x = center[0]
         y = center[1]

@@ -312,7 +312,7 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
             diff = int(ymax-xmax)/2.
             ax_moment0.set_xlim(xmin-diff,xmax+diff)
             xmin, xmax = ax_moment0.get_xlim()
-        ghxloc, ghyloc = im_wcs.wcs_pix2world(float(xmin+(xmax-xmin)/18.), float(ymin+(ymax-ymin)/18.), 0.)
+        ghxloc, ghyloc = im_wcs.wcs_pix2world(float(xmin+(xmax-xmin)/18.), float(ymin+(ymax-ymin)/18.), 1.)
         localoc = [float(ghxloc),float(ghyloc) ]
         widthb = moment0[0].header['BMIN']
         heightb = moment0[0].header['BMAJ']
@@ -403,7 +403,7 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
         else:
             diff = int(ymax-xmax)/2.
             ax_moment1.set_xlim(xmin-diff,xmax+diff)
-        ghxloc, ghyloc = im_wcs.wcs_pix2world(float(xmin+(xmax-xmin)/18.), float(ymin+(ymax-ymin)/18.), 0.)
+        ghxloc, ghyloc = im_wcs.wcs_pix2world(float(xmin+(xmax-xmin)/18.), float(ymin+(ymax-ymin)/18.), 1.)
         localoc = [float(ghxloc),float(ghyloc) ]
         widthb = moment1[0].header['BMIN']
         heightb = moment1[0].header['BMAJ']
@@ -473,7 +473,7 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
             ax_moment2.set_xlim(xmin-diff,xmax+diff)
             xmin, xmax = ax_moment2.get_xlim()
 
-        ghxloc, ghyloc = im_wcs.wcs_pix2world(float(xmin+(xmax-xmin)/18.), float(ymin+(ymax-ymin)/18.), 0.)
+        ghxloc, ghyloc = im_wcs.wcs_pix2world(float(xmin+(xmax-xmin)/18.), float(ymin+(ymax-ymin)/18.), 1.)
         localoc = [float(ghxloc),float(ghyloc) ]
         widthb = moment2[0].header['BMIN']
         heightb = moment2[0].header['BMAJ']
