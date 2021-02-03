@@ -73,7 +73,6 @@ def main(argv):
         #import write_functions as wf
         #from modify_template import write_new_to_template,flatten_the_curve
         #Check the existence of the config file and read it
-
         try:
             Original_Configuration = rf.config_file(input_parameters,start_dir)
         except Exception as e:
