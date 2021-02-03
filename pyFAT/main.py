@@ -7,6 +7,7 @@ import copy
 import numpy as np
 from argparse import ArgumentParser
 import traceback
+import warnings
 from datetime import datetime
 from astropy.io import fits
 import pyFAT
@@ -231,6 +232,23 @@ def main(argv):
 
             # then we want to read the template
             Tirific_Template = rf.tirific_template()
+            if Configuration['DEBUG']:
+                from numpy import __version__ as npversion
+                from scipy import __version__ as spversion
+                from astropy import __version__ as apversion
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    from matplotlib import __version__ as mpversion
+                #from subprocess import __version__ as subversion
+
+                sf.print_log(f'''MAIN: We are using the following versions
+{'':8s}NumPy {npversion}
+{'':8s}SciPy {spversion}
+{'':8s}AstroPy {apversion}
+{'':8s}Matplotlib {mpversion}
+''',Configuration['OUTPUTLOG'], screen =True)
+        
+
 
             log_statement = f'''We are in loop {current_galaxy_index}. This is catalogue number {Catalogue['NUMBER']} and the directory {Catalogue['DIRECTORYNAME']}.'''
             sf.print_log(log_statement,Configuration['OUTPUTLOG'], screen =True)
