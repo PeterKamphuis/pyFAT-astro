@@ -537,6 +537,8 @@ def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
                 if debug:
                     print_log(f'''GUESS_ORIENTATION: We found the lengths for the initial rotation curve:
 {'':8s}GUESS_ORIENTATION: RC length = {RC_length}, min_RC length = {min_RC_length}, Vrot ini = {len(VROT_initial)}, tmnp = {len(tmp)}
+{'':8s}GUESS_ORIENTATION: Vrot {VROT_initial}
+{'':8s}GUESS_ORIENTATION: Vrot {tmp}
 ''',Configuration['OUTPUTLOG'], debug = False, screen =True)
                 VROT_initial = np.vstack((VROT_initial[:min_RC_length],tmp[:min_RC_length]))
         VROT_initial = np.mean(VROT_initial,axis=0)
