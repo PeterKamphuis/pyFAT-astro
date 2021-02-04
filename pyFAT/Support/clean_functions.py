@@ -112,7 +112,7 @@ def cleanup(Configuration,Fits_Files, debug = False):
         except FileNotFoundError:
             pass
     directories = ['Finalmodel','Sofia_Output','Def_Files']
-    files = [Configuration['BASE_NAME']+'-Basic_Info.txt','Overview.png']
+    files = [Configuration['BASE_NAME']+'-Basic_Info.txt']
     if Configuration['TWO_STEP']:
         directories.append('Centre_Convergence')
         directories.append('Extent_Convergence')
@@ -129,10 +129,7 @@ def cleanup(Configuration,Fits_Files, debug = False):
         files.append(Fits_Files['OPTIMIZED_CUBE'])
     elif Configuration['START_POINT'] == 2:
         pass
-    elif Configuration['START_POINT'] == 3:
-        directories.remove('Sofia_Output')
     elif Configuration['START_POINT'] == 4 and Configuration['FINISHAFTER'] > 1:
-        directories.remove('Sofia_Output')
         if Configuration['TWO_STEP']:
                 directories.remove('Centre_Convergence')
         files = ['Centre_Convergence_In.def',]
@@ -283,6 +280,16 @@ def cleanup_final(Configuration,Fits_Files, debug =False):
                     except FileNotFoundError:
                         pass
 
+
+def copy_homemade_sofia(Configuration,Fits_Files,debug=False):
+    files =['_mask.fits','_mom0.fits','_mom1.fits','_chan.fits','_mom2.fits','_cat.txt']
+    for file in files:
+        try:
+            os.system(f'''cp {Configuration['SOFIA_BASENAME']+file} {Configuration['FITTING_DIR']}Sofia_Output/{Configuration['BASE_NAME']+file}''')
+        except:
+            pass
+
+
 def installation_check(Configuration, debug =False):
     if debug:
          print_log(f'''INSTALLATION_CHECK: Starting to compare the output to what is expected.
@@ -346,11 +353,12 @@ def finish_galaxy(Configuration,maximum_directory_length,current_run = 'Not init
     check_legitimacy(Configuration,debug=debug)
 
     # Need to write to results catalog
-    with open(Configuration['OUTPUTCATALOGUE'],'a') as output_catalogue:
-        if Configuration['TWO_STEP']:
-            output_catalogue.write(f"{Configuration['FITTING_DIR'].split('/')[-2]:{maximum_directory_length}s} {str(Configuration['CC_ACCEPTED']):>6s} {str(Configuration['EC_ACCEPTED']):>6s} {Configuration['FINAL_COMMENT']} \n")
-        else:
-            output_catalogue.write(f"{Configuration['FITTING_DIR'].split('/')[-2]:{maximum_directory_length}s} {str(Configuration['OS_ACCEPTED']):>6s} {Configuration['FINAL_COMMENT']} \n")
+    if Configuration['OUTPUTCATALOGUE']:
+        with open(Configuration['OUTPUTCATALOGUE'],'a') as output_catalogue:
+            if Configuration['TWO_STEP']:
+                output_catalogue.write(f"{Configuration['FITTING_DIR'].split('/')[-2]:{maximum_directory_length}s} {str(Configuration['CC_ACCEPTED']):>6s} {str(Configuration['EC_ACCEPTED']):>6s} {Configuration['FINAL_COMMENT']} \n")
+            else:
+                output_catalogue.write(f"{Configuration['FITTING_DIR'].split('/')[-2]:{maximum_directory_length}s} {str(Configuration['OS_ACCEPTED']):>6s} {Configuration['FINAL_COMMENT']} \n")
 
     if Configuration['MAPS_OUTPUT'] == 'error':
         error_message = '''

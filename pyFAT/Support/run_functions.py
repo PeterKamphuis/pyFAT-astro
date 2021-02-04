@@ -297,7 +297,7 @@ def check_source(Configuration, Fits_Files, Catalogue, header, debug = False):
 ''',Configuration['OUTPUTLOG'],debug = debug)
 
     name,x,x_min,x_max,y,y_min,y_max,z,z_min,z_max,ra,dec,v_app,f_sum,kin_pa, \
-        w50,err_f_sum, err_x,err_y,err_z= rf.sofia_catalogue(Configuration,header=header,debug=debug)
+        w50,err_f_sum, err_x,err_y,err_z= rf.sofia_catalogue(Configuration,Fits_Files,header=header,debug=debug)
 
     x_min,x_max,y_min,y_max,z_min,z_max = convert_type([x_min,x_max,y_min,y_max,z_min,z_max], type = 'int',debug=debug)
     x,y,z,ra,dec,v_app,f_sum,kin_pa,f_sum_err , err_x,err_y,err_z= convert_type([x,y,z,ra,dec,v_app,f_sum,kin_pa,err_f_sum, err_x,err_y,err_z],debug=debug)
@@ -381,7 +381,7 @@ def check_source(Configuration, Fits_Files, Catalogue, header, debug = False):
         raise BadSourceError("No initial estimates. Likely the source is too faint.")
      # Determine whether the centre is blanked or not
     Central_Flux = np.mean(data[int(round(z-1)):int(round(z+1)),int(round(y-bmmaj_in_pixels/2.)):int(round(y+bmmaj_in_pixels/2.)),int(round(x-bmmaj_in_pixels/2.)):int(round(x+bmmaj_in_pixels/2.))])
-    print_log(f'''CHECK_SOURCE: In the center we find {Central_Flux} Jy/beam at the location:
+    print_log(f'''CHECK_SOURCE: In the center we find an average flux of  {Central_Flux} Jy/beam around the location:
 {"":8s}CHECK_SOURCE: x,y,z = {int(round(x))}, {int(round(y))}, {int(round(z))}.
 ''',Configuration['OUTPUTLOG'],debug = debug)
 
@@ -407,14 +407,14 @@ def check_source(Configuration, Fits_Files, Catalogue, header, debug = False):
     else:
         if np.isfinite(kin_pa):
             pa[0] = kin_pa
-
+    
     # Size of the galaxy in beams
     Configuration['SIZE_IN_BEAMS'] = set_limits(maj_extent/(header['BMAJ']),1.0,Configuration['MAX_SIZE_IN_BEAMS'])
     if Configuration['SIZE_IN_BEAMS'] <= Configuration['TOO_SMALL_GALAXY']:
         print_log(f'''CHECK_SOURCE: This galaxy has an estimated size of  {2*Configuration['SIZE_IN_BEAMS']} beams in diameter.
 {'':8s}This is not large enough too fit. We will exit this fit.
 ''',Configuration['OUTPUTLOG'],debug = debug)
-        raise BadSourceError('We found an initial negative total flux.')
+        raise BadSourceError('The extracted source is too small')
     set_ring_size(Configuration, debug = debug)
     new_radii = set_rings(Configuration, debug = debug)
     old_radii = np.linspace(0.,Configuration['BMMAJ']*(len(SBR_initial)-1),len(SBR_initial))
@@ -1059,7 +1059,7 @@ def sofia(Configuration, Fits_Files, hdr, debug = False):
         spatial_kernels.append(beam_in_pixels*3)
         log_statement=f'''RUN_SOFIA: Adding an extra kernel scale as the cube is more than 30 beams across.
 '''
-        print_log(log_statement, Configuration['OUTPUTLOG'],debug = debug)
+        print_log(log_statement, Configuration['OUTPUTLOG'],debug = False)
 
     velocity_kernels = [0,3,6,12]
     if hdr['NAXIS3'] > 52:
@@ -1067,7 +1067,7 @@ def sofia(Configuration, Fits_Files, hdr, debug = False):
         Configuration['VEL_SMOOTH_EXTENDED'] = True
         log_statement=f'''RUN_SOFIA: Adding an extra kernel scale as the cube has more than 52 channels.
 '''
-        print_log(log_statement, Configuration['OUTPUTLOG'],debug = debug)
+        print_log(log_statement, Configuration['OUTPUTLOG'],debug = False)
     sofia_template['scfind.kernelsXY'] = ','.join([str(x) for x in spatial_kernels])
     sofia_template['scfind.kernelsZ'] = ','.join([str(x) for x in velocity_kernels])
     sofia_ok = False
@@ -1075,17 +1075,17 @@ def sofia(Configuration, Fits_Files, hdr, debug = False):
         clean_before_sofia(Configuration,debug=debug)
         sofia_template['scfind.threshold'] = str(threshold)
         wf.sofia(sofia_template,'sofia_input.par',debug=debug)
-        print_log("RUN_SOFIA: Running SoFiA. \n",Configuration['OUTPUTLOG'],screen = True,debug = debug)
+        print_log("RUN_SOFIA: Running SoFiA. \n",Configuration['OUTPUTLOG'],screen = True,debug = False)
         sfrun = subprocess.Popen(["sofia2",'sofia_input.par'], stdout = subprocess.PIPE, stderr = subprocess.PIPE)
         sofia_run, sofia_warnings_are_annoying = sfrun.communicate()
-        print_log(sofia_run.decode("utf-8"), Configuration['OUTPUTLOG'],debug = debug)
+        print_log(sofia_run.decode("utf-8"), Configuration['OUTPUTLOG'],debug = False)
 
         if sfrun.returncode == 8:
             if threshold > 3.:
                 log_statement = f'''RUN_SOFIA: We did not find a source at a threshold of {threshold}
 {"":8s} RUN_SOFIA: Lowering the threshold and trying again."
 '''
-                print_log(log_statement,Configuration['OUTPUTLOG'],debug = debug)
+                print_log(log_statement,Configuration['OUTPUTLOG'],debug = False)
                 threshold -= 1
             else:
                 clean_after_sofia(Configuration)
@@ -1093,29 +1093,19 @@ def sofia(Configuration, Fits_Files, hdr, debug = False):
 {"":8s}RUN_SOFIA: We cannot lower the threshold lower as the risk of fitting noise becomes too high.
 {"":8s}Continuing to the next galaxy.
 '''
-                print_log(log_statement,Configuration['OUTPUTLOG'],debug = debug)
+                print_log(log_statement,Configuration['OUTPUTLOG'],debug = False)
                 raise SofiaFaintError("RUN_SOFIA:Sofia cannot find a source above a threshold of 3.")
         elif sfrun.returncode == 0:
             sofia_ok = True
         else:
-            print_log(sofia_warnings_are_annoying.decode("utf-8"), Configuration['OUTPUTLOG'],debug = debug)
+            print_log(sofia_warnings_are_annoying.decode("utf-8"), Configuration['OUTPUTLOG'],debug = False)
             raise SofiaRunError("RUN_SOFIA:Sofia did not execute properly. See log for details")
 
     #Move sofia output to the desired Directory
     clean_after_sofia(Configuration,debug=debug)
 
     os.chdir(Configuration['START_DIR'])
-# to ensure compatible units and calculations with th models we make the maps ourselves
-    mask = fits.open(f"{Configuration['FITTING_DIR']}/Sofia_Output/{Fits_Files['MASK']}")
-    del mask[0].header['C*3']
-    mask[0].data[mask[0].data> 0.5] = 1.
-    chan_map = np.array(np.nansum(mask[0].data,axis=0),dtype =float)
-    mask[0].header['BITPIX'] = -32
-    fits.writeto(f"{Configuration['FITTING_DIR']}/Sofia_Output/{Configuration['BASE_NAME']}_chan.fits",chan_map,header=mask[0].header,overwrite = True)
-    mask.close()
-    make_moments(filename = f"{Configuration['FITTING_DIR']}{Fits_Files['FITTING_CUBE']}",\
-                 basename = f"{Configuration['BASE_NAME']}", directory = f"{Configuration['FITTING_DIR']}/Sofia_Output/",\
-                 mask_cube = f"{Configuration['FITTING_DIR']}/Sofia_Output/{Fits_Files['MASK']}",vel_unit = 'm/s',debug=debug)
+
 
 sofia.__doc__ ='''
 ;+

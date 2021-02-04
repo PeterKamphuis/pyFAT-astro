@@ -3,6 +3,7 @@
 
 from pyFAT.Support.support_functions import Proper_Dictionary,print_log,convertRADEC,set_limits, remove_inhomogeneities, \
                                 obtain_border_pix, obtain_ratios, get_inclination_pa,get_vel_pa
+from pyFAT.Support.fits_functions import check_mask
 from astropy.io import fits
 from scipy import ndimage
 import warnings
@@ -38,6 +39,7 @@ class NoConfigFile(Exception):
     pass
 def catalogue(filename, debug = False):
     Catalogue = Proper_Dictionary({})
+
     tmpfile = open(filename,'r')
     #Define the exsiting catalogue input()
     input_columns = [x.strip().upper() for x in tmpfile.readline().split('|')]
@@ -103,6 +105,9 @@ def config_file(input_parameters, start_dir, debug = False):
             if input_parameters.configfile == 'ChecK.ConfiG':
                 from pyFAT import Installation_Check as IC
                 tmpfile = import_res.open_text(IC,'FAT_INPUT.config')
+            elif input_parameters.configfile == 'No Default' and input_parameters.single_cube != 'CataloguE' :
+                import pyFAT
+                tmpfile = import_res.open_text(pyFAT,'FAT_INPUT.config')
             else:
                 with open(input_parameters.configfile, 'r') as tmp:
                     tmpfile = tmp.readlines()
@@ -167,6 +172,17 @@ def config_file(input_parameters, start_dir, debug = False):
         Configuration['CATALOGUE'] = test_dir+'FAT_Input_Catalogue.txt'
         Configuration['MAINDIR'] = test_dir
         Configuration['OUTPUTCATALOGUE'] =test_dir+'Output_N2903.txt'
+    elif input_parameters.single_cube != 'CataloguE':
+        from pyFAT.Support.write_functions import write_config
+        file_location = input_parameters.single_cube.split('/')
+        single_dir = start_dir+'/'.join(file_location[:-1])+'/'
+        Configuration['MAINDIR'] = single_dir
+        Configuration['OUTPUTCATALOGUE'] = None
+        Configuration['CATALOGUE'] = None
+        if Configuration['OUTPUTLOG'] == 'Logfileforthepergalaxyfit.txt':
+            Configuration['OUTPUTLOG'] = f'Log_{os.path.splitext(file_location[-1])[0]}.txt'
+        write_config(f'{single_dir}FAT_INPUT_{os.path.splitext(file_location[-1])[0]}.config', Configuration,debug=debug)
+
     #Make the input idiot safe
     if Configuration['MAINDIR'][-1] != '/':
         Configuration['MAINDIR'] = Configuration['MAINDIR']+'/'
@@ -176,21 +192,23 @@ def config_file(input_parameters, start_dir, debug = False):
                     Your main fitting directory ({Configuration['MAINDIR']}) does not exist.
                     Please provide the correct directory.
                     ''')
-    while not os.path.exists(Configuration['CATALOGUE']):
-        Configuration['CATALOGUE'] = input(f'''
-                    Your input catalogue ({Configuration['CATALOGUE']}) does not exist.
-                    Please provide the correct file name.
-                    ''')
+    if Configuration['CATALOGUE']:
+        while not os.path.exists(Configuration['CATALOGUE']):
+            Configuration['CATALOGUE'] = input(f'''
+                        Your input catalogue ({Configuration['CATALOGUE']}) does not exist.
+                        Please provide the correct file name.
+                        ''')
     #The output catalogue only needs to be in a valid directory as we create it
-    output_catalogue_dir = Configuration['OUTPUTCATALOGUE'].split('/')
-    if len(output_catalogue_dir) > 1:
-        check_dir = '/'.join(output_catalogue_dir[:-1])
-        while not os.path.isdir(check_dir):
-            check_dir= input(f'''
-                    The directory for your output catalogue ({Configuration['OUTPUTCATALOGUE']}) does not exist.
-                    Please provide the correct directory name.
-                    ''')
-            Configuration['OUTPUTCATALOGUE'] = check_dir+'/'+output_catalogue_dir[-1]
+    if Configuration['OUTPUTCATALOGUE']:
+        output_catalogue_dir = Configuration['OUTPUTCATALOGUE'].split('/')
+        if len(output_catalogue_dir) > 1:
+            check_dir = '/'.join(output_catalogue_dir[:-1])
+            while not os.path.isdir(check_dir):
+                check_dir= input(f'''
+                        The directory for your output catalogue ({Configuration['OUTPUTCATALOGUE']}) does not exist.
+                        Please provide the correct directory name.
+                        ''')
+                Configuration['OUTPUTCATALOGUE'] = check_dir+'/'+output_catalogue_dir[-1]
 
 
     required_configuration_keys = ['FIX_INCLINATION','FIX_PA','FIX_SDIS','FIX_Z0','HANNING',\
@@ -298,8 +316,7 @@ def extract_vrot(Configuration, hdr,map ,angle,center, debug= False):
     neg_index = np.where(maj_profile > 0.)[0]
     pos_index = np.where(maj_profile < 0.)[0]
     if debug:
-        print_log(f'''EXTRACT_VROT: The extracted major axis velocities
-{'':8s} {maj_profile}
+        print_log(f'''EXTRACT_VROT: The resolutoin on the extracted axis
 {'':8s} resolution = {maj_resolution}
 ''',Configuration['OUTPUTLOG'], debug = False)
     avg_profile = []
@@ -314,24 +331,11 @@ def extract_vrot(Configuration, hdr,map ,angle,center, debug= False):
         beam_back = -1*int(hdr['BMAJ']/(np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])*maj_resolution))
 
         if i > hdr['BMAJ']/(np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])*maj_resolution) and i < -2.*beam_back:
-
-        #if i*np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])*maj_resolution < 1.5*hdr['BMAJ'] and i > int() :
             avg_profile[beam_back] = avg_profile[beam_back]+0.5*avg_profile[int(beam_back/2.)]+0.1*avg_profile[-1]
             neg_profile[beam_back] = neg_profile[beam_back]+0.5*neg_profile[int(beam_back/2.)]+0.1*neg_profile[-1]
             pos_profile[beam_back] = pos_profile[beam_back]+0.5*pos_profile[int(beam_back/2.)]+0.1*pos_profile[-1]
-
-
-        #if neg_profile[-1]/pos_profile[-1] < 0.:
-        #    avg_profile.append(np.nanmean([maj_profile[neg_index[neg_index.size-i-1]],-1*maj_profile[pos_index[i]]]))
-        #elif neg_profile[-1] < 0.:
-        #    avg_profile.append(np.nanmin([maj_profile[neg_index[neg_index.size-i-1]],-1*maj_profile[pos_index[i]]]))
-        #else:
-        #    avg_profile.append(np.nanmax([maj_profile[neg_index[neg_index.size-i-1]],-1*maj_profile[pos_index[i]]]))
     if debug:
         print_log(f'''EXTRACT_VROT: starting extraction of initial VROT.
-{'':8s} negative= {neg_profile}
-{'':8s} positive= {pos_profile}
-{'':8s} avreage= {avg_profile}
 ''',Configuration['OUTPUTLOG'], debug = False)
 
     ring_size_req = hdr['BMAJ']/(np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])*maj_resolution)
@@ -542,7 +546,7 @@ def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
 ''',Configuration['OUTPUTLOG'], debug = False, screen =True)
                 VROT_initial = np.vstack((VROT_initial[:min_RC_length],tmp[:min_RC_length]))
                 VROT_initial = np.mean(VROT_initial,axis=0)
-    
+
     map= []
     VROT_initial[0] = 0
     VROT_initial = VROT_initial/np.sin(np.radians(inclination[0]))
@@ -701,7 +705,7 @@ def load_tirific(filename,Variables = ['BMIN','BMAJ','BPA','RMS','DISTANCE','NUR
         return outputarray
 
 # function to read the sofia catalogue
-def sofia_catalogue(Configuration, Variables =['name','x','x_min','x_max','y','y_min','y_max','z','z_min','z_max','ra',\
+def sofia_catalogue(Configuration,Fits_Files, Variables =['id','x','x_min','x_max','y','y_min','y_max','z','z_min','z_max','ra',\
                     'dec','v_app','f_sum','kin_pa','w50','err_f_sum','err_x','err_y','err_z'], header = None , debug = False):
     if debug:
         print_log(f'''SOFIA_CATLOGUE: Reading the source from the catalogue.
@@ -761,7 +765,7 @@ def sofia_catalogue(Configuration, Variables =['name','x','x_min','x_max','y','y
     if len(outlist[0]) > 1 and 'f_sum' in Variables and header:
         if debug:
             print_log(f'''SOFIA_CATALOGUE: Multiple sources were found we will try to select the correct one.
-''',Configuration['OUTPUTLOG'],debug= debug)
+''',Configuration['OUTPUTLOG'],debug= False)
         found = False
         beam_edge=2.
         if Configuration['VEL_SMOOTH_EXTENDED']:
@@ -772,29 +776,14 @@ def sofia_catalogue(Configuration, Variables =['name','x','x_min','x_max','y','y
             many_sources  = copy.deepcopy(outlist)
             # We want to exclude any edge sources
             for i in range(len(many_sources[0])):
-                edge = False
-                diff = np.array([many_sources[Variables.index('x_min')][i],
-                        abs(float(many_sources[Variables.index('x_max')][i])-header['NAXIS1']),
-                        many_sources[Variables.index('y_min')][i],
-                        abs(float(many_sources[Variables.index('y_max')][i])-header['NAXIS2'])
-                        ],dtype=float)
-                if debug:
-                    print_log(f'''SOFIA_CATALOGUE: We find these differences and this edge size {beam_edge*header['BMAJ']/((abs(header['CDELT1'])+abs(header['CDELT2']))/2.)}
-    {'':8s} diff  = {diff}
-    ''',Configuration['OUTPUTLOG'],debug= debug,screen = True)
-                if np.where(diff < beam_edge*header['BMAJ']/((abs(header['CDELT1'])+abs(header['CDELT2']))/2.))[0].size:
-                    edge = True
-                diff = np.array([many_sources[Variables.index('z_min')][i],
-                        abs(float(many_sources[Variables.index('z_max')][i])-float(header['NAXIS3']))],dtype=float)
-                if debug:
-                    print_log(f'''SOFIA_CATALOGUE: And for velocity edge =  2
-    {'':8s} diff  = {diff}
-    ''',Configuration['OUTPUTLOG'],debug= debug,screen = True)
-                if np.where(diff < vel_edge)[0].size:
-                    edge = True
-                if debug:
-                    print_log(f'''SOFIA_CATALOGUE: Edge = {edge}
-    ''',Configuration['OUTPUTLOG'],debug= debug,screen = True)
+
+                edge = check_edge_limits(float(many_sources[Variables.index('x_min')][i]),
+                                float(many_sources[Variables.index('x_max')][i]),
+                                float(many_sources[Variables.index('y_min')][i]),
+                                float(many_sources[Variables.index('y_max')][i]),
+                                float(many_sources[Variables.index('z_min')][i]),
+                                float(many_sources[Variables.index('z_max')][i]),
+                                header, Configuration, debug = debug,beam_edge = beam_edge, vel_edge= vel_edge)
                 if edge:
                     many_sources[Variables.index('f_sum')][i]=0.
             if np.nansum(many_sources[Variables.index('f_sum')]) == 0.:
@@ -804,27 +793,52 @@ def sofia_catalogue(Configuration, Variables =['name','x','x_min','x_max','y','y
                     vel_edge = vel_edge/2.
                 else:
                     raise BadCatalogueError("The found sources are too close to the edges of the cube.")
-
             else:
                 found = True
+        # We need to check we are not throwing away a source that is infinitely brighter
+        print(many_sources[Variables.index('f_sum')])
+        fluxes = np.array(many_sources[Variables.index('f_sum')],dtype =float)
+        if np.any(fluxes == 0.):
+            no_edge_fluxes = np.array(outlist[Variables.index('f_sum')],dtype =float)
+            if np.nanmax(no_edge_fluxes) > 10.* np.nanmax(fluxes):
+                if debug:
+                    print_log(f'''SOFIA_CATALOGUE: We discarded a very bright source, let's check wether it satisfies our minimum boundaries.
+''',Configuration['OUTPUTLOG'],debug= False)
+                index = np.where(np.nanmax(no_edge_fluxes) == no_edge_fluxes)[0][0]
+                edge = check_edge_limits(float(outlist[Variables.index('x_min')][index]),
+                                float(outlist[Variables.index('x_max')][index]),
+                                float(outlist[Variables.index('y_min')][index]),
+                                float(outlist[Variables.index('y_max')][index]),
+                                float(outlist[Variables.index('z_min')][index]),
+                                float(outlist[Variables.index('z_max')][index]),
+                                header, Configuration,debug = debug)
+
+                if edge:
+                    print_log(f'''SOFIA_CATALOGUE: The bright source is very close to limits
+''',Configuration['OUTPUTLOG'],debug= False)
+                else:
+                    print_log(f'''SOFIA_CATALOGUE: The bright source is acceptable, restoring its flux
+''',Configuration['OUTPUTLOG'],debug= False)
+                    many_sources  = copy.deepcopy(outlist)
+                    fluxes = np.array(outlist[Variables.index('f_sum')],dtype =float)
         if debug:
             print_log(f'''SOFIA_CATALOGUE: after checking edges we find these fluxes
 {'':8s}{many_sources[Variables.index('f_sum')]}
-''',Configuration['OUTPUTLOG'],debug= debug,screen = True)
-
-        fluxes = np.array(many_sources[Variables.index('f_sum')],dtype= float)
+''',Configuration['OUTPUTLOG'],debug= False)
         outlist = []
         #We want the source with the most total flux.
         index = np.where(np.nanmax(fluxes) == fluxes)[0][0]
         print_log(f'''SOFIA_CATALOGUE: We select the {index} source of this list.
-''',Configuration['OUTPUTLOG'],debug= debug, screen =True)
+''',Configuration['OUTPUTLOG'],debug= False)
         outlist = [x[index] for x in many_sources]
+        # check that our mask has the selected source
+        check_mask(Configuration,outlist[Variables.index('id')],Fits_Files,debug=debug)
     else:
         outlist = [x[0] for x in outlist]
     if debug:
         print_log(f'''SOFIA_CATALOGUE: we found these values
 {'':8s}{outlist}
-''',Configuration['OUTPUTLOG'],debug= debug,screen = True)
+''',Configuration['OUTPUTLOG'],debug= False)
     return outlist
 
 sofia_catalogue.__doc__ ='''
@@ -864,7 +878,24 @@ sofia_catalogue.__doc__ ='''
 ;
 '''
 
-
+def check_edge_limits(xmin,xmax,ymin,ymax,zmin,zmax,header,Configuration,debug=False ,beam_edge = 0.5, vel_edge = 0.5 ):
+    diff = np.array([xmin,abs(xmax - header['NAXIS1']),
+                     ymin,abs(ymax - header['NAXIS2'])],dtype = float)
+    if debug:
+        print_log(f'''CHECK_EDGE_LIMIT: We find these differences and this edge size {beam_edge*header['BMAJ']/((abs(header['CDELT1'])+abs(header['CDELT2']))/2.)}
+{'':8s} diff  = {diff}
+''',Configuration['OUTPUTLOG'],debug= True)
+    if np.where(diff < beam_edge*header['BMAJ']/((abs(header['CDELT1'])+abs(header['CDELT2']))/2.))[0].size:
+        return True
+    diff = np.array([zmin,abs(zmax-header['NAXIS3'])],dtype=float)
+    if debug:
+        print_log(f'''CHECK_EDGE_LIMIT: And for velocity edge =  {vel_edge}
+{'':8s} diff  = {diff}
+''',Configuration['OUTPUTLOG'],debug= False)
+    if np.where(diff < vel_edge)[0].size:
+        return True
+    else:
+        return False
 
 
 def tirific_template(filename = '', debug = False):

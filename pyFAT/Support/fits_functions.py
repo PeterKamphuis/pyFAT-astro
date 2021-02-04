@@ -14,6 +14,37 @@ class BadHeaderError(Exception):
     pass
 class BadCubeError(Exception):
     pass
+class BadMaskError(Exception):
+    pass
+#Check that the mask only contains the selected sources
+def check_mask(Configuration,id,Fits_Files,debug=False):
+    mask = fits.open(f"{Configuration['FITTING_DIR']}/Sofia_Output/{Fits_Files['MASK']}",uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
+
+    if float(id) not in mask[0].data:
+        print_log(f'''CHECK_MASK: We cannot find the selected source in the mask. This will lead to errors. Aborting the fit.
+''',Configuration['OUTPUTLOG'],screen = True,debug=debug)
+    else:
+        data = copy.deepcopy(mask[0].data)
+        data[data != float(id)] = 0.
+        diff = data-mask[0].data
+        neg_index = np.where(diff < 0.)[0]
+        if neg_index.shape:
+            if debug:
+                print_log(f'''CHECK_MASK: The initial mask had more than a single source. redoing the moment maps.
+''',Configuration['OUTPUTLOG'],screen = True,debug=debug)
+            mask[0].data = data
+            fits.writeto(f"{Configuration['FITTING_DIR']}/Sofia_Output/{Fits_Files['MASK']}",mask[0].data,mask[0].header, overwrite = True)
+# to ensure compatible units and calculations with th models we make the maps ourselves
+    del mask[0].header['C*3']
+    mask[0].data[mask[0].data> 0.5] = 1.
+    chan_map = np.array(np.nansum(mask[0].data,axis=0),dtype =float)
+    mask[0].header['BITPIX'] = -32
+    fits.writeto(f"{Configuration['FITTING_DIR']}/Sofia_Output/{Configuration['BASE_NAME']}_chan.fits",chan_map,header=mask[0].header,overwrite = True)
+    mask.close()
+    make_moments(filename = f"{Configuration['FITTING_DIR']}{Fits_Files['FITTING_CUBE']}",\
+                 basename = f"{Configuration['BASE_NAME']}", directory = f"{Configuration['FITTING_DIR']}/Sofia_Output/",\
+                 mask_cube = f"{Configuration['FITTING_DIR']}/Sofia_Output/{Fits_Files['MASK']}",vel_unit = 'm/s',debug=debug)
+
 
 
 # clean the header

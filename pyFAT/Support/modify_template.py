@@ -39,6 +39,8 @@ def fix_sbr(Configuration,Tirific_Template,hdr, smooth = False, debug=False):
 
     #cutoff_limits = np.array([cutoff_limits,cutoff_limits],dtype=float)
     # We interpolate negative values as well as values below the limits inner part with a cubi
+    if smooth:
+        store_gaussian = []
     for i in [0,1]:
         corr_val = np.where(sbr[i,2:] > cutoff_limits[2:])[0]+2
         if corr_val.size > 0:
@@ -72,6 +74,8 @@ def fix_sbr(Configuration,Tirific_Template,hdr, smooth = False, debug=False):
             if missed[-1] != len(sbr[i,:])-1:
                 missed = np.hstack((missed,[len(sbr[i,:])-1]))
             sbr[i,missed] = gaussian[missed]
+            if smooth:
+                store_gaussian.append(gaussian)
             if np.where(np.max(gaussian) == gaussian)[0] < 2:
                 sbr[[0,1],[0,1]] = np.mean(sm_sbr[[0,1],[0,1]])
 
@@ -82,17 +86,14 @@ def fix_sbr(Configuration,Tirific_Template,hdr, smooth = False, debug=False):
     sbr[np.where(sbr<cutoff_limits)] = 1.2*cutoff_limits[np.where(sbr<cutoff_limits)]
 
     if smooth:
-        sbr = smooth_profile(Configuration,Tirific_Template,'SBR',hdr,
-                        min_error= np.max([float(Tirific_Template['CFLUX']),
-                        float(Tirific_Template['CFLUX_2'])]),profile = sbr, fix_sbr_call = True ,debug=debug)
+        #If we smooth we take the fit
+        sbr = np.array(store_gaussian)
+        if np.where(np.max(gaussian) == gaussian)[0] < 2:
+                sbr[[0,1],[0,1]] = np.mean(sm_sbr[[0,1],[0,1]])
+        #sbr = smooth_profile(Configuration,Tirific_Template,'SBR',hdr,
+        #            min_error= np.max([float(Tirific_Template['CFLUX']),
+        #            float(Tirific_Template['CFLUX_2'])]),profile = sbr, fix_sbr_call = True ,debug=debug)
 
-    #rid the sawtooth
-
-    #if sbr[0,1]/3. > np.mean([sbr[0,0],sbr[0,2]]):
-    #    sbr[0,1] = np.mean([sbr[0,0],sbr[0,2]])
-    #if sbr[1,1]/3. > np.mean([sbr[1,0],sbr[1,2]]):
-    #    sbr[1,1] = np.mean([sbr[1,0],sbr[1,2]])
-    #equalize the first two rings
     for i in[0,1]:
         sbr[:,i] = np.mean(sbr[:,i])
     # write back to template

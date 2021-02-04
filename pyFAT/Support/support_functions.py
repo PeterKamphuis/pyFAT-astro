@@ -402,9 +402,7 @@ def get_inclination_pa(Configuration, map, Image, hdr, center, cutoff = 0., debu
         # now we need to get profiles under many angles let's say 100
         #extract the profiles under a set of angles
         angles = np.linspace(0, 180, 180)
-
         ratios, maj_extent = obtain_ratios(map, hdr, center, angles,noise = cutoff)
-
         if debug:
             if i == 0:
                 print_log(f'''GET_INCLINATION_PA: We initially find radius of {maj_extent/hdr['BMAJ']} beams.
@@ -668,7 +666,6 @@ def obtain_ratios(map, hdr, center, angles, noise = 0. ,debug = False):
 
         if width_maj > max_extent:
             max_extent = width_maj
-            set_resolution = maj_resolution
         #minor axis
         if angle < 90:
             x1,x2,y1,y2 = obtain_border_pix(hdr,angle+90,center)
@@ -693,13 +690,12 @@ def obtain_ratios(map, hdr, center, angles, noise = 0. ,debug = False):
                 width_min = min_resolution
             if width_min > max_extent:
                 max_extent = width_min
-                set_resolution = min_resolution
         if width_min != 0. and width_maj != 0.:
             ratios.append(width_maj/width_min)
     #as the extend is at 25% let's take 2 time the sigma of that
     #max_extent = (max_extent/(2.*np.sqrt(2*np.log(2))))*2.
     max_extent = max_extent/2.
-    return np.array(ratios,dtype=float), max_extent*np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])*set_resolution
+    return np.array(ratios,dtype=float), max_extent*np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])
 obtain_ratios.__doc__ = '''
 ;+
 ; NAME:

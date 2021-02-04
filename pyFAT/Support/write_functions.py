@@ -200,9 +200,18 @@ initialize_def_file.__doc__ = '''
 def make_overview_plot(Configuration,Fits_Files, debug = False):
         if os.path.exists(f"{Configuration['FITTING_DIR']}Overview.png"):
             if os.path.exists(f"{Configuration['FITTING_DIR']}Overview_Prev.png"):
+                if debug:
+                    print_log(f'''MAKE_OVERVIEW_PLOT: Removing an old Overview_Prev
+''',Configuration['OUTPUTLOG'],screen = True,debug =True )
                 os.remove(f"{Configuration['FITTING_DIR']}Overview_Prev.png")
+            if debug:
+                    print_log(f'''MAKE_OVERVIEW_PLOT: Moving an old Overview
+''',Configuration['OUTPUTLOG'],screen = True,debug =True )
             os.rename( f"{Configuration['FITTING_DIR']}Overview.png",f"{Configuration['FITTING_DIR']}Overview_Prev.png")
-
+        else:
+            if debug:
+                    print_log(f'''MAKE_OVERVIEW_PLOT: No Old overview found in {Configuration['FITTING_DIR']}Overview.png
+''',Configuration['OUTPUTLOG'],screen = True,debug =True )
         # open the cube
         if debug:
             print_log(f'''MAKE_OVERVIEW_PLOT: We are starting the overview plot.
@@ -1042,3 +1051,13 @@ tirific.__doc__ = '''
 ;
 ;
 '''
+
+
+def write_config(file,Configuration,debug = False):
+    if debug:
+        print_log(f'''WRITE_CONFIG: writing the configuration to {file}
+''', Configuration['OUTPUTLOG'],debug = True)
+    # Separate the keyword names
+    with open(file,'w') as tmp:
+        for key in Configuration:
+            tmp.write(f'{key} = {Configuration[key]} \n')

@@ -31,9 +31,9 @@ def main(argv):
         #Random
         #Then check the input options
         parser  = ArgumentParser()
-        parser.add_argument('-c','--cf','--configuration_file', action ="store" ,dest = "configfile", default = 'FAT_INPUT.config', help = 'Define the input configuration file.')
+        parser.add_argument('-c','--cf','--configuration_file', action ="store" ,dest = "configfile", default = 'No Default', help = 'Define the input configuration file.')
         parser.add_argument('-d','--debug', action ="store_true" ,dest = "debug", default = False, help = 'Print debug messages')
-        #parser.add_option('-s','--sd','--support_directory', action ="store" ,dest = "supportdir", default=f'{start_dir}/Support', help = 'location where the support files reside. Only required when FAT is not started in the directory where the Support dir resides.',metavar='SUPPORT_DIR')
+        parser.add_argument('-s','--sg','--single_galaxy', action ="store" ,dest = "single_cube", default=f'CataloguE', help = 'If set the locations in the config file are ignored and only this cube will be fitted in the directory it is located.')
         parser.add_argument('-i','--ic','--installation_check', action ="store_true" ,dest = "installation_check", default = False, help = 'Run the installation _check.')
         parser.add_argument('--LVT','--LVHIS_TEST', action ="store_true" ,dest = "lvhis_test", default = False, help = 'Run the LVHIS Test. Developer Only.')
         parser.add_argument('--PT','--PAPER_TEST', action ="store_true" ,dest = "paper_test", default = False, help = 'Run the PAPER Test. Developer Only.')
@@ -74,11 +74,13 @@ def main(argv):
         #import write_functions as wf
         #from modify_template import write_new_to_template,flatten_the_curve
         #Check the existence of the config file and read it
+        print('WTF')
         try:
             Original_Configuration = rf.config_file(input_parameters,start_dir)
         except Exception as e:
             print(e)
             exit()
+        print('WTF')
         # Add the starting directory to the Configuration
         Original_Configuration['START_DIR'] = start_dir
         # Also add the timing input and some other recurring parameters
@@ -118,8 +120,19 @@ def main(argv):
         Original_Configuration['OUTER_SLOPE_START'] = 1
         Original_Configuration['OLD_RINGS'] = []
         #Then read the input Catalogue
-        Full_Catalogue = rf.catalogue(Original_Configuration['CATALOGUE'])
-        stop_individual_errors = ['SmallSourceError','BadSourceError','SofiaFaintError','BadHeaderError','BadCubeError']
+        print('WTF')
+        if input_parameters.single_cube != 'CataloguE':
+            Full_Catalogue = sf.Proper_Dictionary({})
+            Full_Catalogue['ENTRIES'] = ['ENTRIES','NUMBER','DISTANCE','DIRECTORYNAME','CUBENAME']
+            Full_Catalogue['NUMBER'] = ['0']
+            Full_Catalogue['DISTANCE'] = [-1]
+            Full_Catalogue['DIRECTORYNAME'] = ['./']
+            print(os.path.splitext(input_parameters.single_cube.split('/')[-1])[0])
+            Full_Catalogue['CUBENAME'] = [f"{os.path.splitext(input_parameters.single_cube.split('/')[-1])[0]}"]
+        else:
+            Full_Catalogue = rf.catalogue(Original_Configuration['CATALOGUE'])
+        print(Full_Catalogue)
+        stop_individual_errors = ['SmallSourceError','BadSourceError','SofiaFaintError','BadHeaderError','BadCubeError','BadMaskError']
         # Get the longest directory name to format the output directory properly
         dirname = 'Directory Name'
         maximum_directory_length = len(dirname)
@@ -130,16 +143,17 @@ def main(argv):
                 maximum_directory_length = len(directory)
 
         # Create a file to write the results to if if required
-        if not os.path.exists(Original_Configuration['OUTPUTCATALOGUE']) or Original_Configuration['NEW_OUTPUT']:
-            with open(Original_Configuration['OUTPUTCATALOGUE'],'w') as output_catalogue:
-                comment = 'Comments on Fit Result'
-                if Original_Configuration['TWO_STEP']:
-                    AC1 = 'CC'
-                    AC2 = 'EC'
-                    output_catalogue.write(f"{dirname:<{maximum_directory_length}s} {AC1:>6s} {AC2:>6s} {comment}\n")
-                else:
-                    AC1 = 'OS'
-                    output_catalogue.write(f"{dirname:<{maximum_directory_length}s} {AC1:>6s} {comment}\n")
+        if Original_Configuration['OUTPUTCATALOGUE']:
+            if not os.path.exists(Original_Configuration['OUTPUTCATALOGUE']) or Original_Configuration['NEW_OUTPUT']:
+                with open(Original_Configuration['OUTPUTCATALOGUE'],'w') as output_catalogue:
+                    comment = 'Comments on Fit Result'
+                    if Original_Configuration['TWO_STEP']:
+                        AC1 = 'CC'
+                        AC2 = 'EC'
+                        output_catalogue.write(f"{dirname:<{maximum_directory_length}s} {AC1:>6s} {AC2:>6s} {comment}\n")
+                    else:
+                        AC1 = 'OS'
+                        output_catalogue.write(f"{dirname:<{maximum_directory_length}s} {AC1:>6s} {comment}\n")
 
         if Original_Configuration['TIMING']:
             timing_result = open(Original_Configuration['MAINDIR']+'/Timing_Result.txt','w')
@@ -201,15 +215,17 @@ def main(argv):
                 #If it exists move the previous Log
                 if os.path.exists(Configuration['OUTPUTLOG']):
                     os.rename(Configuration['OUTPUTLOG'],f"{Configuration['LOG_DIR']}/Previous_Log.txt")
-            sf.print_log(log_statement,Configuration['OUTPUTLOG'])
+
+            with open(Configuration['OUTPUTLOG'],'w') as log:
+                log.write(log_statement)
 
 
             # Adapt configuration to hold some specifics to this galaxy
             #Never use the original cube only a fat modified one
             if 'BASENAME' in Catalogue['ENTRIES']:
-                Configuration['BASE_NAME'] = Catalogue['BASENAME']
-            else:
-                Configuration['BASE_NAME'] = Catalogue['CUBENAME']+'_FAT'
+                Configuration['SOFIA_BASENAME'] = Catalogue['BASENAME']
+
+            Configuration['BASE_NAME'] = Catalogue['CUBENAME']+'_FAT'
             #Fits_Files['NOISEMAP'] = f"{Configuration['BASE_NAME']}_noisemap.fits"
             Fits_Files['FITTING_CUBE'] = f"{Catalogue['CUBENAME']}_FAT.fits"
             Fits_Files['OPTIMIZED_CUBE'] = f"{Catalogue['CUBENAME']}_FAT_opt.fits"
@@ -228,7 +244,6 @@ def main(argv):
                 Configuration['FITTING_DIR'] = Configuration['FITTING_DIR'][:-2]+'/'
             # run cleanup
             cf.cleanup(Configuration,Fits_Files)
-            # cleanup removes any existing log file so now we add the start statement
 
             # then we want to read the template
             Tirific_Template = rf.tirific_template()
@@ -247,14 +262,11 @@ def main(argv):
 {'':8s}AstroPy {apversion}
 {'':8s}Matplotlib {mpversion}
 ''',Configuration['OUTPUTLOG'], screen =True)
-        
+
 
 
             log_statement = f'''We are in loop {current_galaxy_index}. This is catalogue number {Catalogue['NUMBER']} and the directory {Catalogue['DIRECTORYNAME']}.'''
             sf.print_log(log_statement,Configuration['OUTPUTLOG'], screen =True)
-            #Run cleanup
-            cf.cleanup(Configuration,Fits_Files)
-
 
 
 
@@ -310,22 +322,12 @@ def main(argv):
             #If we have Sofia Preprocessed Output request make sure it all exists
 
             if Configuration['START_POINT'] >= 3:
-                try:
-                    sf.sofia_output_exists(Configuration,Fits_Files)
-                except Exception as e:
-                    Configuration['FINAL_COMMENT'] = e
-                    if e.__class__.__name__ in stop_individual_errors:
-                        Configuration['MAPS_OUTPUT'] = 5
-                    else:
-                        Configuration['MAPS_OUTPUT'] = 'error'
-                    cf.finish_galaxy(Configuration,maximum_directory_length,current_run =current_run,debug=Configuration['DEBUG'])
-                    continue
+                cf.copy_homemade_sofia(Configuration,Fits_Files,debug=debug)
+
             else:
                 # Run sofia2
                 try:
                     runf.sofia(Configuration, Fits_Files,cube_hdr,debug=Configuration['DEBUG'])
-                    # check that all is well
-                    sf.sofia_output_exists(Configuration,Fits_Files,debug=Configuration['DEBUG'])
                 except Exception as e:
                     Configuration['FINAL_COMMENT'] = e
                     if e.__class__.__name__ in stop_individual_errors:
@@ -342,8 +344,8 @@ def main(argv):
             try:
                 current_run = 'Not Initialized'
                 # Process the found source in sofia to set up the proper fitting and make sure source can be fitted
-
                 Initial_Parameters = runf.check_source(Configuration, Fits_Files, Catalogue, cube_hdr,debug=Configuration['DEBUG'])
+                sf.sofia_output_exists(Configuration,Fits_Files)
 
                 sf.print_log(f'''The source is well defined and we will now setup the initial tirific file
 ''' ,Configuration['OUTPUTLOG'], screen =True, debug = Configuration['DEBUG'])
