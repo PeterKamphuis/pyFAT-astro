@@ -832,9 +832,9 @@ def sofia_catalogue(Configuration,Fits_Files, Variables =['id','x','x_min','x_ma
 ''',Configuration['OUTPUTLOG'],debug= False)
         outlist = [x[index] for x in many_sources]
         # check that our mask has the selected source
-        check_mask(Configuration,outlist[Variables.index('id')],Fits_Files,debug=debug)
     else:
         outlist = [x[0] for x in outlist]
+    check_mask(Configuration,outlist[Variables.index('id')],Fits_Files,debug=debug)
     if debug:
         print_log(f'''SOFIA_CATALOGUE: we found these values
 {'':8s}{outlist}
