@@ -89,7 +89,7 @@ def fix_sbr(Configuration,Tirific_Template,hdr, smooth = False, debug=False):
         #If we smooth we take the fit
         if corr_val.size > 3.:
             sbr = np.array(store_gaussian)
-            if np.where(np.max(store_gaussian) == stoe_gaussian)[0] < 2:
+            if np.where(np.max(store_gaussian) == store_gaussian)[0] < 2:
                 sbr[[0,1],[0,1]] = np.mean(sm_sbr[[0,1],[0,1]])
         else:
             sbr = smooth_profile(Configuration,Tirific_Template,'SBR',hdr,
