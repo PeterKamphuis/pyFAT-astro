@@ -87,12 +87,15 @@ def fix_sbr(Configuration,Tirific_Template,hdr, smooth = False, debug=False):
 
     if smooth:
         #If we smooth we take the fit
-        sbr = np.array(store_gaussian)
-        if np.where(np.max(gaussian) == gaussian)[0] < 2:
+        if corr_val.size > 3.:
+            sbr = np.array(store_gaussian)
+            if np.where(np.max(store_gaussian) == stoe_gaussian)[0] < 2:
                 sbr[[0,1],[0,1]] = np.mean(sm_sbr[[0,1],[0,1]])
-        #sbr = smooth_profile(Configuration,Tirific_Template,'SBR',hdr,
-        #            min_error= np.max([float(Tirific_Template['CFLUX']),
-        #            float(Tirific_Template['CFLUX_2'])]),profile = sbr, fix_sbr_call = True ,debug=debug)
+        else:
+            sbr = smooth_profile(Configuration,Tirific_Template,'SBR',hdr,
+                    min_error= np.max([float(Tirific_Template['CFLUX']),
+                    float(Tirific_Template['CFLUX_2'])]),profile = sbr, fix_sbr_call = True ,debug=debug)
+
 
     for i in[0,1]:
         sbr[:,i] = np.mean(sbr[:,i])
