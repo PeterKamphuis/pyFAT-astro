@@ -822,7 +822,9 @@ def fit_polynomial(Configuration,radii,profile,sm_profile,error, key, Tirific_Te
         only_inner =True
         error[:fixed] = error[:fixed]/10.
     elif key in ['VROT']:
-        fixed =len(radii)-Configuration['OUTER_SLOPE_START']
+        #fixed =len(radii)-Configuration['OUTER_SLOPE_START']
+        fixed =len(radii)-np.min(Configuration['LAST_RELIABLE_RINGS'])
+        error[np.min(Configuration['LAST_RELIABLE_RINGS']):] = Configuration['CHANNEL_WIDTH']/5.
     else:
         fixed = 1
     if len(radii) > 15.:
@@ -861,7 +863,8 @@ def fit_polynomial(Configuration,radii,profile,sm_profile,error, key, Tirific_Te
         print_log(f'''FIT_POLYNOMIAL: We will fit the following radii.
 {'':8s}{radii[st_fit:]}
 {'':8s} and the following profile:
-{'':8s}{sm_profile[st_fit:]}''',Configuration['OUTPUTLOG'],screen =True, debug=False)
+{'':8s}{sm_profile[st_fit:]}
+''',Configuration['OUTPUTLOG'],screen =True, debug=False)
     for ord in order:
         fit_prof = np.poly1d(np.polyfit(radii[st_fit:],profile[st_fit:],ord,w=1./error[st_fit:]))
         if st_fit > 0.:
@@ -875,7 +878,7 @@ def fit_polynomial(Configuration,radii,profile,sm_profile,error, key, Tirific_Te
     reduced_chi = np.array(reduced_chi,dtype = float)
     final_order = order[np.where(np.min(reduced_chi ) == reduced_chi )[0][0]]
     if debug:
-            print_log(f'''FIT_POLYNOMIAL: find {final_order} as the polynomial order to regularise {key}
+            print_log(f'''FIT_POLYNOMIAL: finds {final_order} as the polynomial order to regularise {key}
 ''',Configuration['OUTPUTLOG'],screen =True, debug=False)
     fit_profile = np.poly1d(np.polyfit(radii[st_fit:],profile[st_fit:],final_order,w=1./error[st_fit:]))
     if st_fit > 0.:
