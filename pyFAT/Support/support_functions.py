@@ -657,14 +657,18 @@ def obtain_ratios(map, hdr, center, angles, noise = 0. ,debug = False):
         #gauss =fit_gaussian(maj_axis[tmp], maj_profile[tmp])
         #maj_gaus = gaussian_function(maj_profile, *gauss)
         #tmp = np.where(maj_gaus > 0.2*np.nanmax(maj_gaus))[0]
-        width_maj = (tmp[-1]-tmp[0])*maj_resolution
-        if width_maj**2 > (hdr['BMAJ']/(np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])))**2:
-            width_maj = np.sqrt(width_maj**2 - (hdr['BMAJ']/(np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])))**2)
+        if tmp.shape[0] == 0.:
+             width_maj = 0.
         else:
-            width_maj = maj_resolution
+            width_maj = (tmp[-1]-tmp[0])*maj_resolution
+            if width_maj**2 > (hdr['BMAJ']/(np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])))**2:
+                width_maj = np.sqrt(width_maj**2 - (hdr['BMAJ']/(np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])))**2)
+            else:
+                width_maj = maj_resolution
 
         if width_maj > max_extent:
             max_extent = width_maj
+            set_resolution = maj_resolution
         #minor axis
         if angle < 90:
             x1,x2,y1,y2 = obtain_border_pix(hdr,angle+90,center)
@@ -679,19 +683,23 @@ def obtain_ratios(map, hdr, center, angles, noise = 0. ,debug = False):
         #gauss =fit_gaussian(min_axis[tmp], maj_profile[tmp])
         #min_gaus = gaussian_function(min_profile,*gauss)
         #tmp = np.where(min_gaus > 0.2*np.nanmax(min_gaus))[0]
-        width_min = (tmp[-1]-tmp[0])*min_resolution
-        if width_min**2 > (hdr['BMAJ']/(np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])))**2 :
-            width_min = np.sqrt(width_min**2 - (hdr['BMAJ']/(np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])))**2)
+        if tmp.shape[0] == 0.:
+             width_min = 0.
         else:
-            width_min = min_resolution
-
-        if width_min > max_extent:
-            max_extent = width_min
-        ratios.append(width_maj/width_min)
+            width_min = (tmp[-1]-tmp[0])*min_resolution
+            if width_min**2 > (hdr['BMAJ']/(np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])))**2 :
+                width_min = np.sqrt(width_min**2 - (hdr['BMAJ']/(np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])))**2)
+            else:
+                width_min = min_resolution
+            if width_min > max_extent:
+                max_extent = width_min
+                set_resolution = min_resolution
+        if width_min != 0. and width_maj != 0.:
+            ratios.append(width_maj/width_min)
     #as the extend is at 25% let's take 2 time the sigma of that
     #max_extent = (max_extent/(2.*np.sqrt(2*np.log(2))))*2.
     max_extent = max_extent/2.
-    return np.array(ratios,dtype=float), max_extent*np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])
+    return np.array(ratios,dtype=float), max_extent*np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])*set_resolution
 obtain_ratios.__doc__ = '''
 ;+
 ; NAME:
