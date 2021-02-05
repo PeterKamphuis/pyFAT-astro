@@ -76,9 +76,14 @@ def fix_sbr(Configuration,Tirific_Template,hdr, smooth = False, debug=False):
             sbr[i,missed] = gaussian[missed]
             if smooth:
                 store_gaussian.append(gaussian)
-            if np.where(np.max(gaussian) == gaussian)[0] < 2:
+            if np.any(np.where(np.max(gaussian) == gaussian)[0] < 2):
+                if debug:
+                    print_log(f'''FIX_SBR: SBR = {sbr} sm_br = {sm_sbr}.
+''',Configuration['OUTPUTLOG'],debug=True,screen=True)
                 sbr[[0,1],[0,1]] = np.mean(sm_sbr[[0,1],[0,1]])
-
+        else:
+            if smooth:
+                store_gaussian.append(sm_sbr[i,:])
     # Need to make sure there are no nans
     cutoff_limits = np.array([cutoff_limits,cutoff_limits],dtype=float)
     sbr[np.isnan(sbr)] = 2.*cutoff_limits[np.isnan(sbr)]
@@ -89,7 +94,10 @@ def fix_sbr(Configuration,Tirific_Template,hdr, smooth = False, debug=False):
         #If we smooth we take the fit
         if corr_val.size > 3.:
             sbr = np.array(store_gaussian)
-            if np.where(np.max(store_gaussian) == store_gaussian)[0] < 2:
+            if np.any(np.where(np.max(store_gaussian) == store_gaussian)[0] < 2):
+                if debug:
+                    print_log(f'''FIX_SBR: SBR = {sbr} sm_br = {sm_sbr}.
+''',Configuration['OUTPUTLOG'],debug=True,screen=True)
                 sbr[[0,1],[0,1]] = np.mean(sm_sbr[[0,1],[0,1]])
         else:
             sbr = smooth_profile(Configuration,Tirific_Template,'SBR',hdr,

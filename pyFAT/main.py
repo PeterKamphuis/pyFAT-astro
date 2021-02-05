@@ -131,7 +131,6 @@ def main(argv):
             Full_Catalogue['CUBENAME'] = [f"{os.path.splitext(input_parameters.single_cube.split('/')[-1])[0]}"]
         else:
             Full_Catalogue = rf.catalogue(Original_Configuration['CATALOGUE'])
-        print(Full_Catalogue)
         stop_individual_errors = ['SmallSourceError','BadSourceError','SofiaFaintError','BadHeaderError','BadCubeError','BadMaskError']
         # Get the longest directory name to format the output directory properly
         dirname = 'Directory Name'
@@ -156,7 +155,7 @@ def main(argv):
                         output_catalogue.write(f"{dirname:<{maximum_directory_length}s} {AC1:>6s} {comment}\n")
 
         if Original_Configuration['TIMING']:
-            timing_result = open(Original_Configuration['MAINDIR']+'/Timing_Result.txt','w')
+            timing_result = open(Original_Configuration['MAINDIR']+'Timing_Result.txt','w')
             timing_result.write("This file contains the system start and end times for the fitting of each galaxy")
             timing_result.close()
         #if start_galaxy not negative then it is catalogue ID
@@ -174,23 +173,27 @@ def main(argv):
             Configuration = copy.deepcopy(Original_Configuration)
             Configuration['START_TIME'] = datetime.now()
             # First check the starttime
-            Catalogue = {}
-            for key in Full_Catalogue:
-                if key != 'ENTRIES':
-                    Catalogue[key] = Full_Catalogue[key][current_galaxy_index]
-                else:
-                    Catalogue[key] = Full_Catalogue[key]
-            if Configuration['DEBUG']:
-                    sf.print_log(f'''MAIN: Current Catalogue values
-{'':8s}{Catalogue}
-''',None,screen=True, debug = Configuration['DEBUG'])
-            Configuration['DISTANCE'] = Catalogue['DISTANCE']
+            Configuration['ID_NR'] = Full_Catalogue['NUMBER'][current_galaxy_index]
+            Configuration['DISTANCE'] = Full_Catalogue['DISTANCE'][current_galaxy_index]
+            Configuration['SUB_DIR'] = Full_Catalogue['DIRECTORYNAME'][current_galaxy_index]
+            if 'BASENAME' in Full_Catalogue['ENTRIES']:
+                Configuration['SOFIA_BASENAME'] = Full_Catalogue['BASENAME'][current_galaxy_index]
+            Configuration['BASE_NAME'] = Full_Catalogue['CUBENAME'][current_galaxy_index]+'_FAT'
+            #Add our fitting directory to the Configuration
+            #Maindir always ends in slash already
+            if Full_Catalogue['DIRECTORYNAME'][current_galaxy_index] == './':
+                Configuration['FITTING_DIR'] = f"{Configuration['MAINDIR']}"
+            else:
+                Configuration['FITTING_DIR'] = f"{Configuration['MAINDIR']}{Full_Catalogue['DIRECTORYNAME'][current_galaxy_index]}/"
+            if Configuration['FITTING_DIR'][-2:] == '//':
+                Configuration['FITTING_DIR'] = Configuration['FITTING_DIR'][:-2]+'/'
+
             ini_mode_factor =25
             # We initially set the variations to fixed for all parameters
             #let's see what happens if we immediately
 
             #Make a dictionary for the fitsfiles we use
-            Fits_Files = {'ORIGINAL_CUBE': f"{Catalogue['CUBENAME']}.fits"}
+            Fits_Files = {'ORIGINAL_CUBE': f"{Full_Catalogue['CUBENAME'][current_galaxy_index]}.fits"}
 
             # If we have a fitting log we start writing
             log_statement = f'''This file is a log of the fitting process run at {Configuration ['START_TIME']}.
@@ -199,19 +202,11 @@ def main(argv):
 
 
             # Adapt configuration to hold some specifics to this galaxy
-            if Catalogue['DIRECTORYNAME'] == './':
-                Configuration['LOG_DIR'] = f"{Configuration['MAINDIR']}Logs/"
-            else:
-                Configuration['LOG_DIR'] = f"{Configuration['MAINDIR']}{Catalogue['DIRECTORYNAME']}/Logs/"
+            Configuration['LOG_DIR'] = f"{Configuration['FITTING_DIR']}Logs/"
             if Configuration['OUTPUTLOG']:
-                if Catalogue['DIRECTORYNAME'] == './':
-                    if not os.path.isdir(f"{Configuration['MAINDIR']}Logs/"):
-                        os.mkdir(f"{Configuration['MAINDIR']}Logs/")
-                    Configuration['OUTPUTLOG'] = f"{Configuration['MAINDIR']}Logs/{Configuration['OUTPUTLOG']}"
-                else:
-                    if not os.path.isdir(f"{Configuration['MAINDIR']}{Catalogue['DIRECTORYNAME']}/Logs/"):
-                        os.mkdir(f"{Configuration['MAINDIR']}{Catalogue['DIRECTORYNAME']}/Logs/")
-                    Configuration['OUTPUTLOG'] = f"{Configuration['MAINDIR']}{Catalogue['DIRECTORYNAME']}/Logs/{Configuration['OUTPUTLOG']}"
+                if not os.path.isdir(Configuration['LOG_DIR']):
+                    os.mkdir(Configuration['LOG_DIR'])
+                Configuration['OUTPUTLOG'] = f"{Configuration['LOG_DIR']}{Configuration['OUTPUTLOG']}"
                 #If it exists move the previous Log
                 if os.path.exists(Configuration['OUTPUTLOG']):
                     os.rename(Configuration['OUTPUTLOG'],f"{Configuration['LOG_DIR']}/Previous_Log.txt")
@@ -220,28 +215,17 @@ def main(argv):
                 log.write(log_statement)
 
 
-            # Adapt configuration to hold some specifics to this galaxy
-            #Never use the original cube only a fat modified one
-            if 'BASENAME' in Catalogue['ENTRIES']:
-                Configuration['SOFIA_BASENAME'] = Catalogue['BASENAME']
 
-            Configuration['BASE_NAME'] = Catalogue['CUBENAME']+'_FAT'
-            #Fits_Files['NOISEMAP'] = f"{Configuration['BASE_NAME']}_noisemap.fits"
-            Fits_Files['FITTING_CUBE'] = f"{Catalogue['CUBENAME']}_FAT.fits"
-            Fits_Files['OPTIMIZED_CUBE'] = f"{Catalogue['CUBENAME']}_FAT_opt.fits"
+            #Make a dictionary for the fitsfiles we use
+            Fits_Files = {'ORIGINAL_CUBE': f"{Full_Catalogue['CUBENAME'][current_galaxy_index]}.fits"}
+            Fits_Files['FITTING_CUBE'] = f"{Full_Catalogue['CUBENAME'][current_galaxy_index]}_FAT.fits"
+            Fits_Files['OPTIMIZED_CUBE'] = f"{Full_Catalogue['CUBENAME'][current_galaxy_index]}_FAT_opt.fits"
             Fits_Files['MOMENT0'] = f"{Configuration['BASE_NAME']}_mom0.fits"
             Fits_Files['MOMENT1'] = f"{Configuration['BASE_NAME']}_mom1.fits"
             Fits_Files['MOMENT2'] = f"{Configuration['BASE_NAME']}_mom2.fits"
             Fits_Files['MASK'] = f"{Configuration['BASE_NAME']}_mask.fits"
             Fits_Files['CHANNEL_MAP'] = f"{Configuration['BASE_NAME']}_chan.fits"
 
-            #Add our fitting directory to the Configuration
-            if Catalogue['DIRECTORYNAME'] == './':
-                Configuration['FITTING_DIR'] = f"{Configuration['MAINDIR']}/"
-            else:
-                Configuration['FITTING_DIR'] = f"{Configuration['MAINDIR']}/{Catalogue['DIRECTORYNAME']}/"
-            if Configuration['FITTING_DIR'][-2:] == '//':
-                Configuration['FITTING_DIR'] = Configuration['FITTING_DIR'][:-2]+'/'
             # run cleanup
             cf.cleanup(Configuration,Fits_Files)
 
@@ -265,7 +249,7 @@ def main(argv):
 
 
 
-            log_statement = f'''We are in loop {current_galaxy_index}. This is catalogue number {Catalogue['NUMBER']} and the directory {Catalogue['DIRECTORYNAME']}.'''
+            log_statement = f'''We are in loop {current_galaxy_index}. This is catalogue number {Configuration['ID_NR']} and the directory {Configuration['SUB_DIR']}.'''
             sf.print_log(log_statement,Configuration['OUTPUTLOG'], screen =True)
 
 
@@ -274,7 +258,7 @@ def main(argv):
                 with open(f"{Configuration['FITTING_DIR']}Logs/Usage_Statistics.txt",'w') as file:
                     file.write("Creating a CPU RAM Log for analysis. \n")
             # Check if the input cube exists
-            if not os.path.exists(f"{Configuration['FITTING_DIR']}/{Fits_Files['ORIGINAL_CUBE']}"):
+            if not os.path.exists(f"{Configuration['FITTING_DIR']}{Fits_Files['ORIGINAL_CUBE']}"):
                 log_statement = f'''We cannot find the cube {Fits_Files['ORIGINAL_CUBE']} in the directory {Configuration['FITTING_DIR']}.
 {'':8s}We skip this galaxy.
 '''
@@ -287,7 +271,7 @@ def main(argv):
 
 
             # Let's see if our base cube exists, Note that cleanup removes it if we want to start from the original dir so no need to check start_point
-            if not os.path.exists(f"{Configuration['FITTING_DIR']}/{Fits_Files['FITTING_CUBE']}"):
+            if not os.path.exists(f"{Configuration['FITTING_DIR']}{Fits_Files['FITTING_CUBE']}"):
                 try:
                     ff.create_fat_cube(Configuration, Fits_Files)
                 except Exception as e:
@@ -300,7 +284,7 @@ def main(argv):
                     continue
 
             # We open the header of the fitting cube and get some parameters and make a header wcs structure
-            cube_hdr = fits.getheader(f"{Configuration['FITTING_DIR']}/{Fits_Files['FITTING_CUBE']}")
+            cube_hdr = fits.getheader(f"{Configuration['FITTING_DIR']}{Fits_Files['FITTING_CUBE']}")
             Configuration['NOISE'] = cube_hdr['FATNOISE']
             # We write the pixels per beam info to Configuration such that it is easily accesible
             beamarea=(np.pi*abs(cube_hdr['BMAJ']*cube_hdr['BMIN']))/(4.*np.log(2.))
@@ -344,7 +328,7 @@ def main(argv):
             try:
                 current_run = 'Not Initialized'
                 # Process the found source in sofia to set up the proper fitting and make sure source can be fitted
-                Initial_Parameters = runf.check_source(Configuration, Fits_Files, Catalogue, cube_hdr,debug=Configuration['DEBUG'])
+                Initial_Parameters = runf.check_source(Configuration, Fits_Files, cube_hdr,debug=Configuration['DEBUG'])
                 sf.sofia_output_exists(Configuration,Fits_Files)
 
                 sf.print_log(f'''The source is well defined and we will now setup the initial tirific file
@@ -354,8 +338,8 @@ def main(argv):
                     cf.finish_galaxy(Configuration,maximum_directory_length,debug=Configuration['DEBUG'])
                     continue
                 if not Configuration['TWO_STEP']:
-                    if not os.path.isdir(Configuration['FITTING_DIR']+'/One_Step_Convergence'):
-                        os.mkdir(Configuration['FITTING_DIR']+'/One_Step_Convergence')
+                    if not os.path.isdir(Configuration['FITTING_DIR']+'One_Step_Convergence'):
+                        os.mkdir(Configuration['FITTING_DIR']+'One_Step_Convergence')
                     wf.initialize_def_file(Configuration, Fits_Files,Tirific_Template, \
                                             cube_hdr,Initial_Parameters= Initial_Parameters,fit_stage='One_Step_Convergence',debug=Configuration['DEBUG'])
                     sf.print_log(f'''The initial def file is written and we will now start fitting.
@@ -402,8 +386,8 @@ def main(argv):
                         Configuration['PREP_END_TIME'] = datetime.now()
                         current_run = 'Not Initialized'
                         # If we have no directory to put the output we create it
-                        if not os.path.isdir(Configuration['FITTING_DIR']+'/Centre_Convergence'):
-                            os.mkdir(Configuration['FITTING_DIR']+'/Centre_Convergence')
+                        if not os.path.isdir(Configuration['FITTING_DIR']+'Centre_Convergence'):
+                            os.mkdir(Configuration['FITTING_DIR']+'Centre_Convergence')
                         #We skip the first fit atm
                         #Configuration['CC_ACCEPTED'] = True
                         #write_new_to_template(Configuration,f"{Configuration['FITTING_DIR']}Cen_Conv.def", Tirific_Template)
@@ -471,8 +455,8 @@ def main(argv):
                     #Then we want to setup for the next fit.
                     wf.initialize_def_file(Configuration, Fits_Files,Tirific_Template, \
                                             cube_hdr,fit_stage='Extent_Convergence',debug=Configuration['DEBUG'])
-                    if not os.path.isdir(Configuration['FITTING_DIR']+'/Extent_Convergence'):
-                        os.mkdir(Configuration['FITTING_DIR']+'/Extent_Convergence')
+                    if not os.path.isdir(Configuration['FITTING_DIR']+'Extent_Convergence'):
+                        os.mkdir(Configuration['FITTING_DIR']+'Extent_Convergence')
 
                     while not Configuration['EC_ACCEPTED'] and Configuration['EC_LOOPS'] < allowed_loops:
                         Configuration['EC_LOOPS'] = Configuration['EC_LOOPS']+1

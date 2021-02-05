@@ -291,7 +291,7 @@ def check_central_convergence(Configuration,Tirific_Template,hdr,accepted, fit_s
         write_new_to_template(Configuration,f"{Configuration['FITTING_DIR']}{fit_stage}/{fit_stage}.def", Tirific_Template,debug=debug)
         return accepted
 
-def check_source(Configuration, Fits_Files, Catalogue, header, debug = False):
+def check_source(Configuration, Fits_Files, header, debug = False):
     if debug:
         print_log(f'''CHECK_SOURCE: Starting.
 ''',Configuration['OUTPUTLOG'],debug = debug)
@@ -308,15 +308,16 @@ def check_source(Configuration, Fits_Files, Catalogue, header, debug = False):
 ''',Configuration['OUTPUTLOG'],debug = debug)
         raise BadSourceError('We found an initial negative total flux.')
     galaxy_box = [[z_min,z_max],[y_min,y_max],[x_min,x_max]]
-
+    if debug:
+        print_log(f'''CHECK_SOURCE:  From the catalogue we got {Configuration['DISTANCE']}
+''',Configuration['OUTPUTLOG'],debug = False,screen=True)
     # If the provided distance  = -1 we assume a Hubble follow
-    if float(Catalogue['DISTANCE']) == -1.:
+    if float(Configuration['DISTANCE']) == -1.:
         Configuration['DISTANCE'] = v_app/(1000.*H_0)
     if float(Configuration['DISTANCE']) < 0.5:
         Configuration['DISTANCE'] = 0.5
     if debug:
         print_log(f'''CHECK_SOURCE: We use a distance of {Configuration['DISTANCE']}.
-{'':8s} Where the catalogue stated {Catalogue['DISTANCE']}
 ''',Configuration['OUTPUTLOG'],debug = False,screen=True)
     #Check whether the cube is very large, if so cut it down
 
@@ -407,7 +408,7 @@ def check_source(Configuration, Fits_Files, Catalogue, header, debug = False):
     else:
         if np.isfinite(kin_pa):
             pa[0] = kin_pa
-    
+
     # Size of the galaxy in beams
     Configuration['SIZE_IN_BEAMS'] = set_limits(maj_extent/(header['BMAJ']),1.0,Configuration['MAX_SIZE_IN_BEAMS'])
     if Configuration['SIZE_IN_BEAMS'] <= Configuration['TOO_SMALL_GALAXY']:
