@@ -224,6 +224,37 @@ def Test_Extract_PV():
 
     fits.writeto(f"/home/peter/Misc/Aditya_Stuff/PV_Scale/test.fits",PV[0].data,PV[0].header,overwrite = True)
 
+def basic():
+    print(f" fstring use double or triple quotes")
+    print(f" Dictionary entries use single quotes")
+    print(f"Below the basic doc structure")
+basic.__doc__ =f'''
+ NAME:
+
+ PURPOSE:
+
+ CATEGORY:
+    _functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+
+ OPTIONAL INPUTS:
+    debug = False
+
+ KEYWORD PARAMETERS:
+
+ OUTPUTS:
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ EXAMPLE:
+'''
+
+
 
 if __name__ == '__main__':
     Test_Extract_PV()

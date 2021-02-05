@@ -11,7 +11,7 @@ class SofiaFaintError(Exception):
 from pyFAT.Support.support_functions import print_log, convert_type,set_limits,sbr_limits,rename_fit_products,\
                               set_ring_size,calc_rings,get_usage_statistics,get_inner_fix,convertskyangle,\
                               finish_current_run, rotateImage, remove_inhomogeneities,the_bends,get_from_template,set_format, \
-                              wait_for_tirific,set_rings
+                              wait_for_tirific,set_rings, convertRADEC
 from pyFAT.Support.clean_functions import clean_before_sofia,clean_after_sofia
 from pyFAT.Support.fits_functions import cut_cubes,extract_pv,make_moments
 from pyFAT.Support.modify_template import write_new_to_template,smooth_profile,set_cflux,fix_sbr, \
@@ -346,14 +346,15 @@ def check_source(Configuration, Fits_Files, header, debug = False):
     DECboun = np.sort([float(declow),float(dechigh)])
     RAboun = np.sort([float(ralow),float(rahigh)])
     VELboun = np.sort([float(vellow),float(velhigh)])
+    rahr,dechr = convertRADEC(ra,dec)
     # We write the results of the cut cube to the log
     print_log(f'''CHECK_SOURCE: The source finder found the following center in pixels.
 {"":8s}CHECK_SOURCE: RA center = {x} with boundaries {x_min}, {x_max}
 {"":8s}CHECK_SOURCE: DEC center = {y} with boundaries {y_min}, {y_max}
 {"":8s}CHECK_SOURCE: V_sys center = {z} with boundaries {z_min}, {z_max}
 {"":8s}CHECK_SOURCE: This should correspond to the WCS coordinates:
-{"":8s}CHECK_SOURCE: RA center = {ra} with boundaries {','.join(convert_type(RAboun,type='str'))}
-{"":8s}CHECK_SOURCE: DEC center = {dec} with boundaries {','.join(convert_type(DECboun,type='str'))}
+{"":8s}CHECK_SOURCE: RA center = {ra} deg or {rahr}  with boundaries {','.join(convert_type(RAboun,type='str'))}
+{"":8s}CHECK_SOURCE: DEC center = {dec} deg  or {dechr}  with boundaries {','.join(convert_type(DECboun,type='str'))}
 {"":8s}CHECK_SOURCE: V_sys center = {v_app/1000.:.2f} with boundaries {','.join(convert_type(VELboun/1000.,type='str'))}
 ''', Configuration['OUTPUTLOG'],debug = debug)
     bmmaj_in_pixels = header['BMAJ']/np.mean([abs(header['CDELT1']),abs(header['CDELT2'])])
@@ -470,7 +471,7 @@ def check_source(Configuration, Fits_Files, header, debug = False):
 
     # extract a PV-Diagram
     if Configuration['START_POINT'] < 3 or not os.path.exists(f"{Configuration['FITTING_DIR']}/Sofia_Output/{Configuration['BASE_NAME']}_sofia_xv.fits"):
-        PV =extract_pv(Cube, pa[0], center=[ra,dec,v_app], convert = 1000.,
+        PV =extract_pv(Configuration,Cube, pa[0], center=[ra,dec,v_app], convert = 1000.,
                        finalsize = [int(round(maj_extent/np.mean([abs(header['CDELT1']),abs(header['CDELT2'])])*1.25+header['NAXIS1']*0.2)),
                                     int(round(z_max-z_min)+10.)],debug=debug)
         if not os.path.isdir(Configuration['FITTING_DIR']+'/Sofia_Output'):
@@ -490,38 +491,36 @@ def check_source(Configuration, Fits_Files, header, debug = False):
     Initial_Parameters['INCL'] = inclination
     Initial_Parameters['FLUX'] = [f_sum,f_sum_err]
     return Initial_Parameters
-check_source.__doc__='''
 
-; NAME:
-;       check_source(Configuration, Fits_Files, Tirific_Template, Catalogue)
-;
-; PURPOSE:
-;       Check that the source found by sofia can be fitted and the cube is suitable for fitting
-;
-; CATEGORY:
-;       run function
-;
-;
-; INPUTS:
-;
-; OPTIONAL INPUTS:
-;
-;
-; KEYWORD PARAMETERS:
-;       -
-;
-; OUTPUTS:
-;
-;
-; OPTIONAL OUTPUTS:
-;       -
-;
-; PROCEDURES CALLED:
-;      set_limits, print_log
-;
-; EXAMPLE:
-;
-;
+check_source.__doc__='''
+ NAME:
+    check_source
+
+ PURPOSE:
+    Check that the source found by sofia can be fitted and the cube is suitable for fitting
+
+ CATEGORY:
+    run_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    Fits_Files = Locations of the Fits files used by FAT
+    header = header of the input cube
+
+ OPTIONAL INPUTS:
+    debug = False
+
+ KEYWORD PARAMETERS:
+
+ OUTPUTS:
+    Initial_Parameters = Dictionary with all initial values obtained from the Sofia source finding and processing.
+    
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ EXAMPLE:
 '''
 
 

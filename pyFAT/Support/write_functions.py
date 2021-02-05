@@ -527,14 +527,14 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
 #__________________------------------------------------------------------------PV Diagram
 
         extract_angle = np.mean(FAT_Model[0:round(len(FAT_Model[:,Vars_to_plot.index('PA')])/2.),Vars_to_plot.index('PA')])
-        PV = extract_pv(cube,extract_angle, \
+        PV = extract_pv(Configuration,cube,extract_angle, \
                         center = [float(FAT_Model[0,Vars_to_plot.index('XPOS')]),float(FAT_Model[0,Vars_to_plot.index('YPOS')]),float(FAT_Model[0,Vars_to_plot.index('VSYS')]*1000.)], \
-                        convert=1000.,log = Configuration['OUTPUTLOG'])
+                        convert=1000.)
         if not os.path.exists(f"{Configuration['FITTING_DIR']}/Finalmodel/{Configuration['BASE_NAME']}_final_xv.fits"):
             fits.writeto(f"{Configuration['FITTING_DIR']}/Finalmodel/{Configuration['BASE_NAME']}_final_xv.fits",PV[0].data,PV[0].header)
-        PV_model = extract_pv(cube_mod,extract_angle, \
+        PV_model = extract_pv(Configuration,cube_mod,extract_angle, \
                         center = [float(FAT_Model[0,Vars_to_plot.index('XPOS')]),float(FAT_Model[0,Vars_to_plot.index('YPOS')]),float(FAT_Model[0,Vars_to_plot.index('VSYS')]*1000.)], \
-                        convert=1000.,log = Configuration['OUTPUTLOG'])
+                        convert=1000.)
         if not os.path.exists(f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel_xv.fits"):
             fits.writeto(f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel_xv.fits",PV_model[0].data,PV_model[0].header)
         ratio=PV[0].header['NAXIS2']/PV[0].header['NAXIS1']
@@ -781,6 +781,37 @@ BMAJ = {cube[0].header['BMAJ']*3600.:.1f} arcsec''',rotation=0, va='center',ha='
 
         plt.savefig(f"{Configuration['FITTING_DIR']}Overview.png", bbox_inches='tight')
         plt.close()
+
+make_overview_plot.__doc__ =f'''
+ NAME:
+    make_overview_plot(Configuration,Fits_Files, debug = False):
+
+ PURPOSE:
+    Create a plot that shows the various stages of the fitting and output in a handy overview
+
+ CATEGORY:
+    write_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    Fits_Files = Locations of the Fits files used by FAT
+
+ OPTIONAL INPUTS:
+    debug = False
+
+ KEYWORD PARAMETERS:
+
+ OUTPUTS:
+    The overview plot
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ EXAMPLE:
+'''
+
 
 
 def plot_parameters(Vars_to_plot,FAT_Model,Input_Model,location,Figure,parameter, legend = ['Empty','Empty','Empty','Empty'],initial = 'No Value', Extra_Model = [], debug = False):

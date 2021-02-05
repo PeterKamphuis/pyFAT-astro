@@ -423,14 +423,14 @@ cut_cubes.__doc__ = '''
 '''
 
 # Extract a PV-Diagrams
-def extract_pv(cube_in,angle,center=[-1,-1,-1],finalsize=[-1,-1],convert=-1, debug = False, log= None):
+def extract_pv(Configuration,cube_in,angle,center=[-1,-1,-1],finalsize=[-1,-1],convert=-1, debug = False):
     if debug:
         print_log(f'''EXTRACT_PV: We are the extraction of a PV-Diagram
 {'':8s} PA = {angle}
 {'':8s} center = {center}
 {'':8s} finalsize = {finalsize}
 {'':8s} convert = {convert}
-''', log, debug =True)
+''', Configuration['OUTPUTLOG'], debug =True)
 
 
     cube = copy.deepcopy(cube_in)
@@ -468,8 +468,8 @@ def extract_pv(cube_in,angle,center=[-1,-1,-1],finalsize=[-1,-1],convert=-1, deb
 {'':8s} nz = {nz}
 {'':8s} ny = {ny}
 {'':8s} nx = {nx}
-''', log, debug = False)
-    x1,x2,y1,y2 = obtain_border_pix(hdr,angle,[xcenter,ycenter])
+''', Configuration['OUTPUTLOG'], debug = False)
+    x1,x2,y1,y2 = obtain_border_pix(Configuration,hdr,angle,[xcenter,ycenter],debug=debug)
     linex,liney,linez = np.linspace(x1,x2,nx), np.linspace(y1,y2,nx), np.linspace(0,nz-1,nz)
     #This only works when ny == nx hence nx is used in liney
     new_coordinates = np.array([(z,y,x)
@@ -547,40 +547,44 @@ def extract_pv(cube_in,angle,center=[-1,-1,-1],finalsize=[-1,-1],convert=-1, deb
     return cube
 
 extract_pv.__doc__ = '''
+ NAME:
+    extract_pv
 
-;+
-; NAME:
-;       extract_pv(cube_in, angle, center, finalsize, ):
-;
-; PURPOSE:
-;       extract a PV diagram from a cube object. Angle is the PA and center the central location. The profile is extracted over the full length of the cube and afterwards cut back to the finalsize.
-;
-; CATEGORY:
-;       Fits
-;
-;
-; INPUTS:
-;        cube = is a fits cube object
-;       angle = Pa of the slice
-;      center = the central location of the slice in WCS map_coordinates [RA,DEC,VSYS]
-;      finalsize = final size of the PV-diagram in pixels
-; OPTIONAL INPUTS:
-;
-;
-; KEYWORD PARAMETERS:
-;       -
-;
-; OUTPUTS:
-;
-;
-; OPTIONAL OUTPUTS:
-;       -
-;
-; PROCEDURES CALLED:
-;       ndimage.map_coordinates, WCS, numpy
-;
-;
-;
+ PURPOSE:
+    extract a PV diagram from a cube object. Angle is the PA and center the central location. The profile is extracted over the full length of the cube and afterwards cut back to the finalsize.
+
+ CATEGORY:
+     fits_functions
+
+ INPUTS:
+    Configuration = Standard FAT Configuration
+    cube_in = is a fits cube object
+    angle = Pa of the slice
+    center = the central location of the slice in WCS map_coordinates [RA,DEC,VSYS]
+    finalsize = final size of the PV-diagram in pixels
+
+ OPTIONAL INPUTS:
+    center = [-1,-1,-1]
+    the central location of the slice in WCS map_coordinates [RA,DEC,VSYS], default is the CRVAL values in the header
+
+    finalsize = [-1,-1,-1]
+    final size of the PV-diagram in pixels, default is no cutting
+
+    convert=-1
+    conversion factor for velocity axis, default no conversion
+
+    debug = False
+
+ KEYWORD PARAMETERS:
+
+ OUTPUTS:
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ EXAMPLE:
 '''
 
 

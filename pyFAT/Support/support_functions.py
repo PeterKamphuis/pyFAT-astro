@@ -353,7 +353,7 @@ def finish_current_run(Configuration,current_run,debug=False):
         Configuration['TIRIFIC_RUNNING'] = False
         Configuration['TIRIFIC_PID'] = 'Not Initialized'
     else:
-        print_log(f"FINISH_CURRENT_RUN: No run is initialized.",Configuration['OUTPUTLOG'],screen=True)
+        print_log(f"FINISH_CURRENT_RUN: No run is initialized. \n",Configuration['OUTPUTLOG'],screen=True)
 
 
 def gaussian_function(axis,peak,center,sigma):
@@ -402,7 +402,7 @@ def get_inclination_pa(Configuration, map, Image, hdr, center, cutoff = 0., debu
         # now we need to get profiles under many angles let's say 100
         #extract the profiles under a set of angles
         angles = np.linspace(0, 180, 180)
-        ratios, maj_extent = obtain_ratios(map, hdr, center, angles,noise = cutoff)
+        ratios, maj_extent = obtain_ratios(Configuration,map, hdr, center, angles,noise = cutoff,debug=debug)
         if debug:
             if i == 0:
                 print_log(f'''GET_INCLINATION_PA: We initially find radius of {maj_extent/hdr['BMAJ']} beams.
@@ -639,13 +639,13 @@ def linenumber(debug=False):
                 break
     return line
 
-def obtain_ratios(map, hdr, center, angles, noise = 0. ,debug = False):
+def obtain_ratios(Configuration, map, hdr, center, angles, noise = 0. ,debug = False):
     ratios = []
     max_extent = 0.
     for angle in angles:
         #major axis
 
-        x1,x2,y1,y2 = obtain_border_pix(hdr,angle,center)
+        x1,x2,y1,y2 = obtain_border_pix(Configuration,hdr,angle,center,debug=debug)
         linex,liney = np.linspace(x1,x2,1000), np.linspace(y1,y2,1000)
         maj_resolution = np.sqrt(((x2-x1)/1000.)**2+((y2-y1)/1000.)**2)
         #maj_resolution = abs((abs(x2-x1)/1000.)*np.sin(np.radians(angle)))+abs(abs(y2-y1)/1000.*np.cos(np.radians(angle)))
@@ -668,9 +668,9 @@ def obtain_ratios(map, hdr, center, angles, noise = 0. ,debug = False):
             max_extent = width_maj
         #minor axis
         if angle < 90:
-            x1,x2,y1,y2 = obtain_border_pix(hdr,angle+90,center)
+            x1,x2,y1,y2 = obtain_border_pix(Configuration,hdr,angle+90,center,debug=debug)
         else:
-            x1,x2,y1,y2 = obtain_border_pix(hdr,angle-90,center)
+            x1,x2,y1,y2 = obtain_border_pix(Configuration,hdr,angle-90,center,debug=debug)
         linex,liney = np.linspace(x1,x2,1000), np.linspace(y1,y2,1000)
         min_resolution = np.sqrt(((x2-x1)/1000.)**2+((y2-y1)/1000.)**2)
         #min_resolution =abs((abs(x2-x1)/1000.)*np.sin(np.radians(angle+90)))+abs(abs(y2-y1)/1000.*np.cos(np.radians(angle+90)))
@@ -697,45 +697,53 @@ def obtain_ratios(map, hdr, center, angles, noise = 0. ,debug = False):
     max_extent = max_extent/2.
     return np.array(ratios,dtype=float), max_extent*np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])
 obtain_ratios.__doc__ = '''
-;+
-; NAME:
-;       obtain_ratios(map, hdr, center, angles)
-;
-; PURPOSE:
-;       Obtain the ratio between an axis along the specified angle as well as one rotated 90 degrees to determine the pa and inclination.
-;       Additionally keep track of the maximum width.
-; CATEGORY:
-;       read
-;
-;
-; INPUTS:
-;       Configuration
-;
-; OPTIONAL INPUTS:
-;
-;
-; KEYWORD PARAMETERS:
-;       -
-;
-; OUTPUTS:
-;          ratios =  ratios corresponding to the input angles
-;         maj_width = the maximum extend of any profile analysed (in degree)
-; OPTIONAL OUTPUTS:
-;       -
-;
-; PROCEDURES CALLED:
-;      np.mean, ndimage.map_coordinates, np.linspace, np.vstack, np.cos, np.radians, np.sin
-;
-; EXAMPLE:
-;
-;
+ NAME:
+       obtain_ratios
+
+ PURPOSE:
+       Obtain the ratio between an axis along the specified angle as well as one rotated 90 degrees to determine the pa and inclination.
+       Additionally keep track of the maximum width.
+
+ CATEGORY:
+       support_functions
+
+ INPUTS:
+       Configuration
+       map = moment 0 map
+       hdr = hdr of the map
+       center = estimated center
+       angles = angles to look for the ratios
+       noise = 0. ,debug = False
+
+ OPTIONAL INPUTS:
+       noise = 0.
+       nois level in the map
+
+       debug = False
+
+ KEYWORD PARAMETERS:
+
+ OUTPUTS:
+         ratios =  ratios corresponding to the input angles
+         max_extent = the maximum extend of any profile analysed (in degree)
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+      np.mean, ndimage.map_coordinates, np.linspace, np.vstack, np.cos, np.radians, np.sin
+
+ EXAMPLE:
 '''
 
 
 
 
 
-def obtain_border_pix(hdr,angle,center, debug = False):
+def obtain_border_pix(Configuration, hdr,angle,center, debug = False):
+    rotate = False
+    # only setup for 0-180 but 180.-360 is the same but -180
+    if angle > 180.:
+        angle -= 180.
+        rotate = True
 
     if angle < 90.:
         x1 = center[0]-(hdr['NAXIS2']-center[1])*np.tan(np.radians(angle))
@@ -765,8 +773,44 @@ def obtain_border_pix(hdr,angle,center, debug = False):
             y2 = center[1]+(center[0])*np.tan(np.radians(angle-90))
         else:
             y2 = hdr['NAXIS2']
+    # if the orginal angle was > 180 we need to give the line 180 deg rotation
+    x = [x1,x2]
+    y = [y1,y2]
+    if rotate:
+        x.reverse()
+        y.reverse()
+    return (*x,*y)
+obtain_border_pix.__doc__ =f'''
+ NAME:
+    obtain_border_pix
+ PURPOSE:
+    Get the pixel locations of a line across a map
 
-    return x1,x2,y1,y2
+ CATEGORY:
+    support_functions
+
+ INPUTS:
+    Configuration = standard FAT Configuration
+    hdr = header of the map
+    angle = the angle of the line running through the map
+    center = center of the line running through the map
+
+ OPTIONAL INPUTS:
+    debug = False
+
+ KEYWORD PARAMETERS:
+
+ OUTPUTS:
+    x,y
+    pixel locations of how the line runs through the map
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ EXAMPLE:
+'''
 
 def print_log(log_statement,log, screen = False,debug = False):
     log_statement = f"{linenumber(debug=debug)}{log_statement}"

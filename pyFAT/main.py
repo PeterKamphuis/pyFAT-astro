@@ -28,7 +28,6 @@ def main(argv):
     try:
         #Get the directory we are running from, This is for the Installation Check
         start_dir = os.getcwd()
-        #Random
         #Then check the input options
         parser  = ArgumentParser()
         parser.add_argument('-c','--cf','--configuration_file', action ="store" ,dest = "configfile", default = 'No Default', help = 'Define the input configuration file.')
@@ -58,29 +57,11 @@ def main(argv):
             fat_main_test_dir = os.environ["FAT_TEST_DIR"]
             input_parameters.configfile=fat_main_test_dir+'/Problems/FAT_INPUT.config'
 
-        #Add the support dir to the system path and read the functions from there
-        #sys.path.insert(1, input_parameters.supportdir)
-        # Functions that read files
-        #import read_functions as rf
-        # functions that are used often for menial tasks
-        #import support_functions as sf
-        # Functions that run external programs such as tirific and sofia
-        #import run_functions as runf
-        # function that keep things orderly and nicely
-        #import clean_functions as cf
-        # Functions that modify or produce fat fits file
-        #import fits_functions as ff
-        #functions that write files
-        #import write_functions as wf
-        #from modify_template import write_new_to_template,flatten_the_curve
-        #Check the existence of the config file and read it
-        print('WTF')
         try:
             Original_Configuration = rf.config_file(input_parameters,start_dir)
         except Exception as e:
             print(e)
             exit()
-        print('WTF')
         # Add the starting directory to the Configuration
         Original_Configuration['START_DIR'] = start_dir
         # Also add the timing input and some other recurring parameters
@@ -120,7 +101,6 @@ def main(argv):
         Original_Configuration['OUTER_SLOPE_START'] = 1
         Original_Configuration['OLD_RINGS'] = []
         #Then read the input Catalogue
-        print('WTF')
         if input_parameters.single_cube != 'CataloguE':
             Full_Catalogue = sf.Proper_Dictionary({})
             Full_Catalogue['ENTRIES'] = ['ENTRIES','NUMBER','DISTANCE','DIRECTORYNAME','CUBENAME']
@@ -249,7 +229,7 @@ def main(argv):
 
 
 
-            log_statement = f'''We are in loop {current_galaxy_index}. This is catalogue number {Configuration['ID_NR']} and the directory {Configuration['SUB_DIR']}.'''
+            log_statement = f'''We are in loop {current_galaxy_index}. This is catalogue number {Configuration['ID_NR']} and the directory {Configuration['SUB_DIR']}.\n'''
             sf.print_log(log_statement,Configuration['OUTPUTLOG'], screen =True)
 
 
