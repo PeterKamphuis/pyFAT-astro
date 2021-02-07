@@ -111,7 +111,7 @@ def main(argv):
             Full_Catalogue['CUBENAME'] = [f"{os.path.splitext(input_parameters.single_cube.split('/')[-1])[0]}"]
         else:
             Full_Catalogue = rf.catalogue(Original_Configuration['CATALOGUE'])
-        stop_individual_errors = ['SmallSourceError','BadSourceError','SofiaFaintError','BadHeaderError','BadCubeError','BadMaskError']
+        stop_individual_errors = ['SmallSourceError','BadSourceError','SofiaFaintError','BadHeaderError','BadCubeError','BadMaskError','BadCatalogueError']
         # Get the longest directory name to format the output directory properly
         dirname = 'Directory Name'
         maximum_directory_length = len(dirname)

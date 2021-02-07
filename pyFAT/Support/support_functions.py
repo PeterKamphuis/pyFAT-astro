@@ -358,25 +358,98 @@ def finish_current_run(Configuration,current_run,debug=False):
 
 def gaussian_function(axis,peak,center,sigma):
     return peak*np.exp(-(axis-center)**2/(2*sigma**2))
+gaussian_function.__doc__ =f'''
+ NAME:
+    gaussian_function
+ PURPOSE:
+    Describe a Gaussian function
 
-def fit_gaussian(x,y, covariance = False, debug = False):
+ CATEGORY:
+    support_functions
+
+ INPUTS:
+    axis = the points where to evaluate the gaussian
+    peak = amplitude of the peak of the Gaussian
+    center = location of the peak on axis
+    sigma = dispersion of the gaussian
+
+ OPTIONAL INPUTS:
+
+ KEYWORD PARAMETERS:
+
+ OUTPUTS:
+    The gaussian function
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ EXAMPLE:
+'''
+
+
+
+
+def fit_gaussian(Configuration,x,y, covariance = False, debug = False):
     if debug:
         print_log(f'''FIT_GAUSSIAN: Starting to fit a Gaussian.
 {'':8s}x = {x}
 {'':8s}y = {y}
-''', None,debug =True)
+''', Configuration['OUTPUTLOG'],debug =True)
     # Make sure we have numpy arrays
     x= np.array(x,dtype=float)
     y= np.array(y,dtype=float)
     # First get some initial estimates
     est_peak = np.nanmax(y)
-    est_center = float(x[np.where(y == est_peak)[0]])
+    peak_location = np.where(y == est_peak)[0]
+    if peak_location.size > 1:
+        peak_location = peak_location[0]
+    est_center = float(x[peak_location])
+
     est_sigma = np.nansum(y*(x-est_center)**2)/np.nansum(y)
     gauss_parameters, gauss_covariance = curve_fit(gaussian_function, x, y,p0=[est_peak,est_center,est_sigma])
     if covariance:
         return gauss_parameters, gauss_covariance
     else:
         return gauss_parameters
+fit_gaussian.__doc__ =f'''
+ NAME:
+    fit_gaussian
+ PURPOSE:
+    Fit a gaussian to a profile, with initial estimates
+ CATEGORY:
+    supprt_functions
+
+ INPUTS:
+    x = x-axis of profile
+    y = y-axis of profile
+    Configuration = Standard FAT configuration
+
+ OPTIONAL INPUTS:
+    covariance = false
+    return to covariance matrix of the fit or not
+
+    debug = False
+
+ KEYWORD PARAMETERS:
+
+ OUTPUTS:
+    gauss_parameters
+    the parameters describing the fitted Gaussian
+
+ OPTIONAL OUTPUTS:
+    gauss_covariance
+    The co-variance matrix of the fit
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ EXAMPLE:
+'''
+
+
+
 #Put template values in a list !!!!!!!! This is very similar to load_template in read_funtcions maybe use one?
 #No this returns unchecked list whereas load_template return a np array with length NUR
 #Also the orader is swapped

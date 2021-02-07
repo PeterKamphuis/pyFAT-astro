@@ -58,7 +58,7 @@ def fix_sbr(Configuration,Tirific_Template,hdr, smooth = False, debug=False):
                 print_log(f'''FIX_SBR: The values used for fitting are {fit_sbr}.
 ''',Configuration['OUTPUTLOG'],debug=True,screen=True)
             try:
-                vals = fit_gaussian(radii[corr_val],fit_sbr)
+                vals = fit_gaussian(Configuration,radii[corr_val],fit_sbr,debug=debug)
                 gaussian = gaussian_function(radii,*vals)
             except RuntimeError:
                 # If we fail we try a CubicSpline interpolation
@@ -118,6 +118,44 @@ def fix_sbr(Configuration,Tirific_Template,hdr, smooth = False, debug=False):
     Tirific_Template['SBR_2'] = f"{' '.join([f'{x:.2e}' for x in sbr[1]])}"
     print_log(f'''FIX_SBR: We checked the surface brightness profiles.
 ''',Configuration['OUTPUTLOG'])
+
+fix_sbr.__doc__ =f'''
+ NAME:
+    fix_sbr
+ PURPOSE:
+    Correct the surface brightness profile againsta outliers.
+
+ CATEGORY:
+    modify_template
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    Tirific_Template = standard tirific template
+    hdr = header of the cube under investigation
+
+ OPTIONAL INPUTS:
+    debug = False
+    smooth= False
+    Normally only bad points (Not bright enough) and problematic points are corrected.
+    When smooth is set the profile is either fitted  with a Gaussian function or smoothed with a savgol kernel
+
+ KEYWORD PARAMETERS:
+
+ OUTPUTS:
+    The template is corrected
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ EXAMPLE:
+'''
+
+
+
+
+
 
 def check_size(Configuration,Tirific_Template,hdr, fit_stage = 'Unitialized_Stage', stage = 'initial',
                 Fits_Files= 'No Files' ,debug = False,fix_rc = False,current_run='Not Initialized'):
