@@ -120,7 +120,7 @@ def config_file(input_parameters, start_dir, debug = False):
                         Else press CTRL-C to abort.
                 ''')
     Configuration = Proper_Dictionary({})
-    boolean_keys = ['NEW_OUTPUT', 'HANNING','FIX_INCLINATION','FIX_PA','FIX_SDIS','FIX_Z0','WARP_OUTPUT','TWO_STEP']
+    boolean_keys = ['NEW_OUTPUT', 'HANNING','FIX_INCLINATION','FIX_PA','FIX_SDIS','FIX_Z0','FIX_SBR','FIX_VROT','WARP_OUTPUT','TWO_STEP']
     string_keys = ['OUTPUTLOG', 'OUTPUTCATALOGUE','MAINDIR','CATALOGUE']
     integer_keys = ['STARTGALAXY','ENDGALAXY','MAPS_OUTPUT','OPT_PIXELBEAM','FINISHAFTER']
     # Separate the keyword names
@@ -211,7 +211,7 @@ def config_file(input_parameters, start_dir, debug = False):
                 Configuration['OUTPUTCATALOGUE'] = f"{check_dir}/{output_catalogue_dir[-1]}"
 
 
-    required_configuration_keys = ['FIX_INCLINATION','FIX_PA','FIX_SDIS','FIX_Z0','HANNING',\
+    required_configuration_keys = ['FIX_INCLINATION','FIX_PA','FIX_SDIS','FIX_Z0','FIX_SBR','FIX_VROT','HANNING',\
                                    'STARTGALAXY', 'ENDGALAXY', 'TESTING', 'START_POINT',\
                                    'RING_SIZE', 'FINISHAFTER', 'CATALOGUE', 'MAINDIR',\
                                     'OUTPUTCATALOGUE', 'OUTPUTLOG', 'NEW_OUTPUT', 'OPT_PIXELBEAM',\
@@ -242,6 +242,10 @@ def config_file(input_parameters, start_dir, debug = False):
             elif key == 'FIX_PA':
                 Configuration[key] = False
             elif key == 'FIX_SDIS':
+                Configuration[key] = False
+            elif key == 'FIX_SBR':
+                Configuration[key] = False
+            elif key == 'FIX_VROT':
                 Configuration[key] = False
             elif key == 'FIX_Z0':
                 Configuration[key] = True

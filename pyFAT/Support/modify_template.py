@@ -16,99 +16,94 @@ from pyFAT.Support.support_functions import set_rings,convertskyangle,sbr_limits
 import numpy as np
 from scipy.optimize import curve_fit
 from scipy.signal import savgol_filter
-from scipy.interpolate import CubicSpline
+from scipy.interpolate import CubicSpline,Akima1DInterpolator
 
 def fix_sbr(Configuration,Tirific_Template,hdr, smooth = False, debug=False):
     if debug:
         print_log(f'''FIX_SBR: Starting a SBR check.
-''',Configuration['OUTPUTLOG'],debug=True,screen=True)
-    sbr = np.array(get_from_template(Tirific_Template,['SBR','SBR_2']),dtype=float)
-    # Let's use a smoothed profile for the fittings
-    sm_sbr = smooth_profile(Configuration,Tirific_Template,'SBR',hdr,
-                            min_error= np.max([float(Tirific_Template['CFLUX']),
-                            float(Tirific_Template['CFLUX_2'])]),fix_sbr_call = True ,debug=debug)
+''',Configuration['OUTPUTLOG'],debug=True)
 
-    if debug:
-        print_log(f'''FIX_SBR: Before modify.
-{sbr}
-''',Configuration['OUTPUTLOG'],debug=False,screen=False)
     # get the cutoff limits
     vsys = float(Tirific_Template['VSYS'].split()[0])
     radii,cutoff_limits = sbr_limits(Configuration,hdr, systemic=vsys)
+    cutoff_limits = np.array([cutoff_limits,cutoff_limits],dtype=float)
+    # Then get the profile from the template
+    sbr = np.array(get_from_template(Tirific_Template,['SBR','SBR_2']),dtype=float)
+    # First make a correction on the inner 2 values
+    sbr = inner_sbr_fix(Configuration,sbr,cutoff_limits,debug=debug)
+    # Let's use a smoothed profile for the fittings
+    sm_sbr = smooth_profile(Configuration,Tirific_Template,'SBR',hdr,
+                            min_error= np.max([float(Tirific_Template['CFLUX']),
+                            float(Tirific_Template['CFLUX_2'])]),no_apply = True,
+                            fix_sbr_call = True,profile = sbr ,debug=debug)
 
+    if debug:
+        print_log(f'''FIX_SBR: Before modify.
+{'':8s}sbr  = {sbr}
+{'':8s}sm_sbr  = {sm_sbr}
+''',Configuration['OUTPUTLOG'],debug=False,screen=False)
 
-    #cutoff_limits = np.array([cutoff_limits,cutoff_limits],dtype=float)
     # We interpolate negative values as well as values below the limits inner part with a cubi
-    if smooth:
-        store_gaussian = []
+    errors = get_error(Configuration,sbr,sm_sbr,min_error=cutoff_limits,debug=debug)
+    store_gaussian = []
     for i in [0,1]:
-        corr_val = np.where(sbr[i,2:] > cutoff_limits[2:])[0]+2
+        corr_val = np.where(sbr[i,2:] > cutoff_limits[i,2:])[0]+2
         if corr_val.size > 0:
             if debug:
                 print_log(f'''FIX_SBR: From the list {corr_val} we select {corr_val[-1]} as the last reliable ring.
-''',Configuration['OUTPUTLOG'],debug=False,screen=True)
+''',Configuration['OUTPUTLOG'],debug=False)
             Configuration['LAST_RELIABLE_RINGS'][i] = corr_val[-1]+1
-
         else:
             Configuration['LAST_RELIABLE_RINGS'][i] = Configuration['NO_RINGS']
-        if corr_val.size > 3.:
 
+        # If we have enough safe values in the profile we attempt to fit it
+        if corr_val.size > 3.:
             fit_sbr = sm_sbr[i,corr_val]
             if debug:
                 print_log(f'''FIX_SBR: The values used for fitting are {fit_sbr}.
-''',Configuration['OUTPUTLOG'],debug=True,screen=True)
+''',Configuration['OUTPUTLOG'],debug=False)
             try:
-                vals = fit_gaussian(Configuration,radii[corr_val],fit_sbr,debug=debug)
-                gaussian = gaussian_function(radii,*vals)
+                if Configuration['FIX_SBR']:
+                    vals = fit_gaussian(Configuration,radii[corr_val],fit_sbr,errors=errors[i,corr_val],debug=debug)
+                    gaussian = gaussian_function(radii,*vals)
+                else:
+                    gaussian = fit_polynomial(Configuration,radii,sbr[i,:],sm_sbr[i,:],errors[i,:],'SBR', Tirific_Template, hdr,min_error=cutoff_limits[i,:],debug= debug)
+                # if the peak of this gaussian is in the inner two points replace it with the smoothed profile
+                if np.any(np.where(np.max(gaussian) == gaussian)[0] < 2):
+                    if debug:
+                        print_log(f'''FIX_SBR: We are trying to replace the inner gaussian.
+{'':8s} gaussian = {gaussian[[0,1]]}
+{'':8s} sm_sbr = {sm_sbr[i,[0,1]]}
+''',Configuration['OUTPUTLOG'],debug=False)
+                    gaussian[[0,1]] = sm_sbr[i,[0,1]]
             except RuntimeError:
                 # If we fail we try a CubicSpline interpolation
                 try:
                     tmp = CubicSpline(radii[corr_val],fit_sbr,extrapolate = True,bc_type ='natural')
                     gaussian = tmp(radii)
                 except:
-                    # and if that fails we just let the values be what they are
+                    # and if that fails we just let the values be what they are in the smoothed profile
                     gaussian= sm_sbr[i,:]
-
-
-            missed =np.hstack(([0,1], np.where(sbr[i,2:] < cutoff_limits[2:])[0]+2))
-            if missed[-1] != len(sbr[i,:])-1:
-                missed = np.hstack((missed,[len(sbr[i,:])-1]))
-            sbr[i,missed] = gaussian[missed]
-            if smooth:
-                store_gaussian.append(gaussian)
-            if np.any(np.where(np.max(gaussian) == gaussian)[0] < 2):
-                if debug:
-                    print_log(f'''FIX_SBR: SBR = {sbr} sm_br = {sm_sbr}.
-''',Configuration['OUTPUTLOG'],debug=True,screen=True)
-                sbr[[0,1],[0,1]] = np.mean(sm_sbr[[0,1],[0,1]])
+            store_gaussian.append(gaussian)
         else:
-            if smooth:
-                store_gaussian.append(sm_sbr[i,:])
-    # Need to make sure there are no nans
-    cutoff_limits = np.array([cutoff_limits,cutoff_limits],dtype=float)
-    sbr[np.isnan(sbr)] = 2.*cutoff_limits[np.isnan(sbr)]
-    # and where we are lower than the cutoff we replace with the 1.2 *cutoff
-    sbr[np.where(sbr<cutoff_limits)] = 1.2*cutoff_limits[np.where(sbr<cutoff_limits)]
+            #if there are not enough points we simply use the smoothed profile
+            store_gaussian.append(sm_sbr[i,:])
 
+    store_gaussian = np.array(store_gaussian,dtype=float)
     if smooth:
-        #If we smooth we take the fit
-        if corr_val.size > 3.:
-            sbr = np.array(store_gaussian)
-            if np.any(np.where(np.max(store_gaussian) == store_gaussian)[0] < 2):
-                if debug:
-                    print_log(f'''FIX_SBR: SBR = {sbr} sm_br = {sm_sbr}.
-''',Configuration['OUTPUTLOG'],debug=True,screen=True)
-                sbr[[0,1],[0,1]] = np.mean(sm_sbr[[0,1],[0,1]])
-        else:
-            sbr = smooth_profile(Configuration,Tirific_Template,'SBR',hdr,
-                    min_error= np.max([float(Tirific_Template['CFLUX']),
-                    float(Tirific_Template['CFLUX_2'])]),profile = sbr, fix_sbr_call = True ,debug=debug)
+        #If we smooth we take the fit in total
+        sbr = store_gaussian
+    else:
+        sbr[np.where(sbr<cutoff_limits)] = store_gaussian[np.where(sbr<cutoff_limits)]
+        sbr[:,[0,1,-1]] = store_gaussian[:,[0,1,-1]]
 
-
-    for i in[0,1]:
-        sbr[:,i] = np.mean(sbr[:,i])
-    # write back to template
-    # the inner points are tricky lets do a spline interpolation on them
+    # Need to make sure there are no nans
+    sbr[np.isnan(sbr)] = 2.*cutoff_limits[np.isnan(sbr)]
+    # and where we are lower than the cutoff we replace with the 1.2 *cutoff unless we smoothed
+    if not smooth:
+        sbr[np.where(sbr<cutoff_limits)] = 1.2*cutoff_limits[np.where(sbr<cutoff_limits)]
+    else:
+        sbr[np.where(sbr<cutoff_limits)] = 1e-16
 
     if debug:
         print_log(f'''FIX_SBR: After modify.
@@ -123,7 +118,7 @@ fix_sbr.__doc__ =f'''
  NAME:
     fix_sbr
  PURPOSE:
-    Correct the surface brightness profile againsta outliers.
+    Correct the surface brightness profile against outliers.
 
  CATEGORY:
     modify_template
@@ -136,8 +131,8 @@ fix_sbr.__doc__ =f'''
  OPTIONAL INPUTS:
     debug = False
     smooth= False
-    Normally only bad points (Not bright enough) and problematic points are corrected.
-    When smooth is set the profile is either fitted  with a Gaussian function or smoothed with a savgol kernel
+    Normally only bad points (Not bright enough) and problematic inner points are corrected.
+    When smooth is set the profile is either fitted  with a Gaussian function, Interpolated with a cubic spline or smoothed with a savgol kernel
 
  KEYWORD PARAMETERS:
 
@@ -531,7 +526,55 @@ get_warp_slope.__doc__ = '''
 ;
 ; PROCEDURES CALLED:
 ;       MAX(), FLOOR()
+'''
 
+def inner_sbr_fix(Configuration,sbr,cutoff_limits,debug=False):
+    if debug:
+        print_log(f'''INNER_SBR_FIX: Checking the SBR inner points for runaway values
+''',Configuration['OUTPUTLOG'], debug = True)
+
+    if np.all(sbr[:,0] > 2*sbr[:,2]) or np.all(sbr[:,1] > 2*sbr[:,2]):
+        if np.mean(sbr[:,2]) > cutoff_limits[0,2]:
+            sbr[:,[0,1]] = np.mean(sbr[:,2])
+        else:
+            sbr[:,[0,1,2]] = 1.5*cutoff_limits[0,2]
+    if np.any(sbr[:,0] > sbr[:,1]):
+        sbr[:,0] = np.mean(sbr[:,1])
+
+    for i in [0,1]:
+        if np.any(sbr[:,i] < cutoff_limits[:,2]):
+            sbr[:,i] = 1.5*cutoff_limits[0,2]
+
+    return sbr
+inner_sbr_fix.__doc__ =f'''
+ NAME:
+    inner_sbr_fix
+
+ PURPOSE:
+    Make sure the inner two points of the SBR are not run away
+
+ CATEGORY:
+    modify_template
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    sbr = SBR profile for bothe sides
+    cutoff_limits = The reliability limits of the fit
+
+ OPTIONAL INPUTS:
+    debug = False
+
+ KEYWORD PARAMETERS:
+
+ OUTPUTS:
+    sbr = profile with the modified inner points if required
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ EXAMPLE:
 '''
 
 
@@ -679,6 +722,7 @@ def get_error(Configuration,profile,sm_profile,min_error = [0.],singular = False
         error = np.array(error[0],dtype=float)
     else:
         error = np.array(error,dtype=float)
+    error[error == 0.] = np.min(error[error > 0.])
     if debug:
         print_log(f'''GET_ERROR: error =
 {'':8s}{error}
@@ -699,11 +743,11 @@ def fix_outer_rotation(Configuration,profile, Tirific_Template,hdr, debug = Fals
     #inner_slope = int(round(set_limits(NUR*(4.-Configuration['LIMIT_MODIFIER'][0])/4.,round(NUR/2.),NUR-2)))
     if inner_slope != NUR-1 and np.mean(profile[1:3]) > 180.:
         profile[inner_slope:] = profile[inner_slope-1]
-    # For galaxies with more than 10 rings let's make sure the last quarter is not declinining steeply
-    if Configuration['NO_RINGS'] > 10:
-        for i in range(int(Configuration['NO_RINGS']*3./4),Configuration['NO_RINGS']-1):
-            if profile[i+1] < profile[i]*0.8:
-                profile[i+1] = profile[i]*0.8
+
+    for i in range(int(Configuration['NO_RINGS']*3./4),Configuration['NO_RINGS']-1):
+        if profile[i+1] > profile[i]*1.3:
+            profile[i+1] = profile[i]*1.3
+
     if debug:
         print_log(f'''FIX_OUTER_ROTATION: this is corrected profile:
 {profile}
@@ -738,7 +782,7 @@ def no_declining_vrot(Configuration, Tirific_Template, profile = None, debug = F
             print_log(f'''NO_DECLINING_VROT: We shan't adapt the RC
 ''',Configuration['OUTPUTLOG'],debug = False)
     else:
-        for i in range(len(profile)-1):
+        for i in range(int(len(profile)/2.),len(profile)-1):
             if profile[i+1] < profile[i]:
                 profile[i:] =profile[i]
                 if debug:
@@ -746,6 +790,18 @@ def no_declining_vrot(Configuration, Tirific_Template, profile = None, debug = F
     ''',Configuration['OUTPUTLOG'],debug = False)
                 Configuration['OUTER_SLOPE_START'] = i+2
                 break
+
+    #and we check that the last parts are not declining too much in anycase
+    # For galaxies with more than 10 rings let's make sure the last quarter is not declinining steeply
+    if Configuration['NO_RINGS'] > 10:
+        for i in range(int(Configuration['NO_RINGS']*3./4),Configuration['NO_RINGS']-1):
+            if profile[i+1] < profile[i]*0.85:
+                profile[i+1] = profile[i]*0.85
+    else:
+        if profile[-1] < profile[-2]*0.8:
+            profile[-1] = profile[-2]*0.8
+
+
     if Configuration['OUTER_SLOPE_START'] > Configuration['NO_RINGS']:
         Configuration['OUTER_SLOPE_START'] = Configuration['NO_RINGS']
     format = set_format('VROT')
@@ -872,7 +928,7 @@ def fit_polynomial(Configuration,radii,profile,sm_profile,error, key, Tirific_Te
         error[:fixed] = error[:fixed]/10.
     elif key in ['VROT']:
         #fixed =len(radii)-Configuration['OUTER_SLOPE_START']
-        fixed =len(radii)-np.min(Configuration['LAST_RELIABLE_RINGS'])
+        fixed =set_limits(len(radii)-np.min(Configuration['LAST_RELIABLE_RINGS']),1,len(radii))
         error[np.min(Configuration['LAST_RELIABLE_RINGS']):] = Configuration['CHANNEL_WIDTH']/5.
     else:
         fixed = 1
@@ -913,6 +969,7 @@ def fit_polynomial(Configuration,radii,profile,sm_profile,error, key, Tirific_Te
 {'':8s}{radii[st_fit:]}
 {'':8s} and the following profile:
 {'':8s}{sm_profile[st_fit:]}
+{'':8s} weights = {1./error[st_fit:]}
 ''',Configuration['OUTPUTLOG'],screen =True, debug=False)
     for ord in order:
         fit_prof = np.poly1d(np.polyfit(radii[st_fit:],profile[st_fit:],ord,w=1./error[st_fit:]))
@@ -921,7 +978,8 @@ def fit_polynomial(Configuration,radii,profile,sm_profile,error, key, Tirific_Te
         else:
             fit_profile = fit_prof(radii)
         #fit_profile = fit_prof(radii)
-        fit_profile = fix_profile(Configuration, key, fit_profile, Tirific_Template, hdr, singular = True,only_inner =only_inner)
+        if key != 'SBR':
+            fit_profile = fix_profile(Configuration, key, fit_profile, Tirific_Template, hdr, singular = True,only_inner =only_inner)
         red_chi = np.sum((profile[st_fit:]-fit_profile[st_fit:])**2/error[st_fit:])/(len(radii[st_fit:])-ord)
         reduced_chi.append(red_chi)
     reduced_chi = np.array(reduced_chi,dtype = float)
@@ -936,7 +994,8 @@ def fit_polynomial(Configuration,radii,profile,sm_profile,error, key, Tirific_Te
         new_profile = fit_profile(radii)
     #if key in ['VROT'] and profile[1] < profile[2]:
     #    new_profile[1] = profile[1]
-    new_profile = fix_profile(Configuration, key, new_profile, Tirific_Template, hdr,debug =debug, singular = True,only_inner =only_inner)
+    if key != 'SBR':
+        new_profile = fix_profile(Configuration, key, new_profile, Tirific_Template, hdr,debug =debug, singular = True,only_inner =only_inner)
     #new_error = get_error(Configuration, profile, new_profile,min_error=min_error,singular = True,debug = debug)
 
     return new_profile#,new_error
@@ -1223,7 +1282,7 @@ def set_fitting_parameters(Configuration, Tirific_Template, \
 
             if key != 'SDIS':
                 limits = set_boundary_limits(Configuration,Tirific_Template,key, tolerance = 0.1, values = initial_estimates[key],\
-                                upper_bracket = brackets[0],lower_bracket = brackets[1],fixed = fixed)
+                                upper_bracket = brackets[0],lower_bracket = brackets[1],fixed = fixed,debug=debug)
                 flat_slope = False
             else:
                 flat_slope = True
@@ -1303,11 +1362,21 @@ set_fitting_parameters.__doc__ = '''
 def set_boundary_limits(Configuration,Tirific_Template,key, tolerance = 0.01, values = [10,1],\
                         upper_bracket = [10.,100.], lower_bracket=[0., 50.], fixed = False,increase=10., debug = False):
     profile = np.array(get_from_template(Tirific_Template, [key,f"{key}_2"]),dtype = float)
-    if f"{key}_CURRENT_BOUNDARY" in Configuration:
-        current_boundaries = Configuration[f"{key}_CURRENT_BOUNDARY"]
-    else:
+
+    current_boundaries = Configuration[f"{key}_CURRENT_BOUNDARY"]
+    if debug:
+        print_log(f'''SET_BOUNDARY_LIMITS: We have found the following limits,
+{'':8s} current Boundaries = {current_boundaries}
+''',Configuration['OUTPUTLOG'],debug = True)
+
+    if np.sum(current_boundaries) == 0.:
         current_boundaries =[[set_limits(values[0]-values[1]*5.,*lower_bracket),\
                     set_limits(values[0]+values[1]*5.,*upper_bracket)] for x in range(3)]
+        if debug:
+            print_log(f'''SET_BOUNDARY_LIMITS: We have set the boundaries to as all were 0.
+{'':8s} current Boundaries = {current_boundaries}
+''',Configuration['OUTPUTLOG'],debug = False)
+
     if fixed:
         range_to_check = [0]
     else:
@@ -1963,7 +2032,7 @@ def set_vrot_fitting(Configuration,Tirific_Template,hdr = None,systemic = 100., 
             else:
                 forvarindex = forvarindex+f"VROT {NUR}:{inner_slope} VROT_2 {NUR}:{inner_slope} "
             vrot_input['VARINDX'] = np.array([forvarindex])
-        elif stage in ['initialize_ec','run_ec']:
+        elif stage in ['initialize_ec','run_ec','run_os']:
             if inner_slope >= NUR-1:
                 forvarindex = forvarindex+f"VROT {NUR-1} VROT_2 {NUR-1} "
             else:
@@ -2007,16 +2076,19 @@ set_vrot_fitting.__doc__ = '''
 '''
 
 def smooth_profile(Configuration,Tirific_Template,key,hdr,min_error = 0.,debug=False ,profile = None, no_apply =False,fix_sbr_call = False):
+
+    if key == 'SBR' and not fix_sbr_call:
+        error_message = f'''SMOOTH_PROFILE: Do not use smooth_profile for the SBR, SBR is regularised in fix_sbr'''
+        print_log(error_message,Configuration['OUTPUTLOG'],screen=True,debug = debug)
+        raise FunctionCallError(error_message)
+
     if debug:
         print_log(f'''SMOOTH_PROFILE: Starting to smooth the {key} profile.
 ''',Configuration['OUTPUTLOG'],debug = True)
-    if key == 'SBR' and not fix_sbr_call:
-        error_message = f'''SMOOTH_PROFILE: Do not use smooth_profile for the SBR, SBR is regularised in fix_sbr'''
-        print_log(error_message,Configuration['OUTPUTLOG'],screen=True,debug = False)
-        raise FunctionCallError(error_message)
 
     if profile is None:
         profile = np.array(get_from_template(Tirific_Template,[key,f"{key}_2"]),dtype = float)
+
     original_profile = copy.deepcopy(profile)
     #he sbr profile is already fixed before geting to the smoothing
     if not fix_sbr_call:
@@ -2045,8 +2117,6 @@ def smooth_profile(Configuration,Tirific_Template,key,hdr,min_error = 0.,debug=F
             profile[i] = savgol_filter(profile[i], 7, 3)
         else:
             profile[i] = savgol_filter(profile[i], 9, 4)
-    if fix_sbr_call:
-        return profile
     # Fix the settings
     format = set_format(key)
     if key == 'VROT':
@@ -2058,7 +2128,8 @@ def smooth_profile(Configuration,Tirific_Template,key,hdr,min_error = 0.,debug=F
         else:
             profile[:,0] = 0.
 
-    profile =fix_profile(Configuration, key, profile, Tirific_Template, hdr,debug=debug)
+    if not fix_sbr_call:
+        profile =fix_profile(Configuration, key, profile, Tirific_Template, hdr,debug=debug)
 
     if debug:
         print_log(f'''SMOOTH_PROFILE: profile after smoothing.
@@ -2084,6 +2155,51 @@ def smooth_profile(Configuration,Tirific_Template,key,hdr,min_error = 0.,debug=F
 ''',Configuration['OUTPUTLOG'],screen=True,debug = False)
 
     return profile
+smooth_profile.__doc__ =f'''
+ NAME:
+    smooth_profile
+
+ PURPOSE:
+    Read a profile from the tirific template and smooth it using a savgol smoothing.
+
+ CATEGORY:
+    modify_template
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    Tirific_Template = Standard FAT Template
+    key = Tirific value to be smoothed
+    hdr = header of the cube to be fitted
+
+ OPTIONAL INPUTS:
+    debug = False
+    min_error = 0.
+    The minimum eror that should be used
+
+    profile = None
+    if provided this will be smoothed instead of the key being extrcated from the Template
+
+    no_apply =False
+    If true the smoothed profile will only be returned but not applied to the template
+
+    fix_sbr_call = True
+    If true the smooth_profile comes from the fix_sbr routine, this is the only routine allowed to smooth the SBR profile
+
+ KEYWORD PARAMETERS:
+
+ OUTPUTS:
+    profile = the smoothed profile
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ EXAMPLE:
+'''
+
+
+
 
 
 def modify_flat(Configuration,profile,original_profile,errors,key,debug=False):

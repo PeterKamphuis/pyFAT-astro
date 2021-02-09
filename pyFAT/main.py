@@ -62,44 +62,86 @@ def main(argv):
         except Exception as e:
             print(e)
             exit()
+        # All Configuration parameters that are not set in the config file should be set here
         # Add the starting directory to the Configuration
+        # Keys read in the config file
+        #required_configuration_keys = ['FIX_INCLINATION','FIX_PA','FIX_SDIS','FIX_Z0','FIX_SBR','FIX_VROT','HANNING',\
+        #                               'STARTGALAXY', 'ENDGALAXY', 'TESTING', 'START_POINT',\
+        #                               'RING_SIZE', 'FINISHAFTER', 'CATALOGUE', 'MAINDIR',\
+        #                                'OUTPUTCATALOGUE', 'OUTPUTLOG', 'NEW_OUTPUT', 'OPT_PIXELBEAM',\
+        #                                 'MAPS_OUTPUT','WARP_OUTPUT','TWO_STEP']
         Original_Configuration['START_DIR'] = start_dir
         # Also add the timing input and some other recurring parameters
         Original_Configuration['TIMING'] = input_parameters.timing
         Original_Configuration['DEBUG'] = input_parameters.debug
         Original_Configuration['NCPU'] = input_parameters.ncpu
-        # if the number of beams across the major axis/2. is less than this size we will only fit a flat disc
-        Original_Configuration['MINIMUM_WARP_SIZE'] = 2.
-        Original_Configuration['MINIMUM_RINGS'] = 3. # we need at least this amount of rings (Including 0 and 1/5 beam)
-
-        # if the number of beams across the major axis/2 is less than this we will not fit the galaxy
-        Original_Configuration['TOO_SMALL_GALAXY'] = 1.
         Original_Configuration['FINAL_COMMENT'] = "This fitting stopped with an unregistered exit."
-        Original_Configuration['PREP_END_TIME'] = 'Not completed'
-        Original_Configuration['CC_END_TIME'] = 'Not completed'
-        Original_Configuration['EC_END_TIME'] = 'Not completed'
-        Original_Configuration['CC_LOOPS'] = 0
-        Original_Configuration['OS_LOOPS'] = 0
-        Original_Configuration['EC_LOOPS'] = 0
-        Original_Configuration['CC_ACCEPTED'] = False
-        Original_Configuration['EC_ACCEPTED'] = False
-        Original_Configuration['OS_ACCEPTED'] = False
-        Original_Configuration['CURRENT_STAGE'] = 'initial'
-        #Add some tracking paramaters
-        Original_Configuration['MAX_SIZE_IN_BEAMS'] = 30
-        Original_Configuration['NEW_RING_SIZE'] = False
-        Original_Configuration['OPTIMIZED'] = False
-        Original_Configuration['OUTER_RINGS_DOUBLED'] = False
-        Original_Configuration['LAST_RELIABLE_RINGS'] = [0.,0.]
-        Original_Configuration['TIRIFIC_RUNNING'] = False
-        Original_Configuration['VEL_SMOOTH_EXTENDED'] = False
-        Original_Configuration['TIRIFIC_PID'] = 'Not Initialized'
-        Original_Configuration['RUN_COUNTER'] = 0
-        Original_Configuration['LIMIT_MODIFIER'] = [1.]
-        Original_Configuration['INNER_FIX'] = 3
-        Original_Configuration['WARP_SLOPE'] = [0.,0.]
-        Original_Configuration['OUTER_SLOPE_START'] = 1
-        Original_Configuration['OLD_RINGS'] = []
+
+        # Keys that change depending on which type of fitting is run
+        loop_counters=['RUN_COUNTER']
+        timing_keys = ['PREP_END_TIME','START_TIME']
+        if Original_Configuration['TWO_STEP']:
+            fitting_status = ['CC_ACCEPTED','EC_ACCEPTED']
+            loop_counters.extend(['CC_LOOPS','EC_LOOPS'])
+            timing_keys.extend(['CC_END_TIME','EC_END_TIME'])
+        else:
+            fitting_status = ['OS_ACCEPTED']
+            loop_counters.append('OS_LOOPS')
+        for key in timing_keys:
+            Original_Configuration[key] = 'Not completed'
+        for key in loop_counters:
+            Original_Configuration[key] = 0
+        for key in fitting_status:
+            Original_Configuration[key] = False
+
+
+        boolean_keys = ['OPTIMIZED','TIRIFIC_RUNNING','OUTER_RINGS_DOUBLED','NEW_RING_SIZE','VEL_SMOOTH_EXTENDED','EXCLUDE_CENTRAL']
+        for key in boolean_keys:
+            Original_Configuration[key] = False
+
+        other_keys =  {'MINIMUM_WARP_SIZE': 2., # if the number of beams across the major axis/2. is less than this size we will only fit a flat disc,set here.
+                       'MINIMUM_RINGS': 3,  # we need at least this amount of rings (Including 0 and 1/5 beam), set here
+                       'TOO_SMALL_GALAXY': 1., # if the number of beams across the major axis/2 is less than this we will not fit the galaxy, set here
+
+                       'DISTANCE': 'Unset', # Distance to the galaxy, set from the catalogue at start of loop
+                       'ID_NR': 'Unset', # ID of the galaxy in the catalogue , set from the catalogue at start of loop
+                       'SUB_DIR': 'Unset', # Name of the directory in which galaxy resides, set from the catalogue at start of loop
+                       'FITTING_DIR': 'Unset', # Full path of the directory in which the fitting takes place, set at start of loop
+                       'SOFIA_BASENAME': 'Unset', #Basename of pre-processed sofia products, only set when provided in catalogue at start of loop
+                       'BASENAME': 'Unset', #Basename for FAT products, typically {input_cube}_FAT, set at start of loop
+                       'LOG_DIR': 'Unset', #Directory to put log files from run, set at start of loop
+
+                       'CURRENT_STAGE': 'initial', #Current stage of the fitting process, set at switiching stages
+                       'TIRIFIC_PID': 'Not Initialized', #Process ID of tirific that is running
+
+                       'MAX_SIZE_IN_BEAMS': 30, # The galaxy is not allowed to extend beyond this number of beams, set in check_source
+                       'MIN_SIZE_IN_BEAMS': 0., # Minimum allowed size of the galaxy, set in check_source
+                       'SIZE_IN_BEAMS': 0, # The size of the galaxy in number of beams, adapted after running Sofia
+                       'NO_RINGS': 0., # The number of rings in the fit
+                       'LAST_RELIABLE_RINGS': [0.,0.], # Location of the rings where the SBR drops below the cutoff limits, adapted after every run.
+                       'LIMIT_MODIFIER': [1.], #Modifier for the cutoff limits based on the inclination , adapted after every run.
+                       'OLD_RINGS': [], # List to keep track of the ring sizes that have been fitted.
+
+                       'NO_POINTSOURCES': 0. , # Number of point sources, set in run_tirific
+
+                       'INNER_FIX': 3, #Number of rings that are fixed in the inner part for the INCL and PA, , adapted after every run.
+                       'WARP_SLOPE': [0.,0.], #Ring numbers from which outwards the warping should be fitted as a slope,  , adapted after every run.
+                       'OUTER_SLOPE_START': 1, # Ring number from where the RC is fitted as a slope
+
+                       'NOISE': 0. , #Noise of the input cube, set in main
+                       'PIX_PER_BEAM': 0., #Number of pixels in a beam, set in main
+                       'BMMAJ': 0., # Major axis FWHM beam in arcsec, set in main
+                       'MAX_ERROR': {}, #The maximum allowed erros for the parameters, set in main derived from cube
+                       'CHANNEL_WIDTH': 0., #Width of the channel in the cube in km/s, set in check_source
+                       }
+
+        for key in other_keys:
+            Original_Configuration[key] = other_keys[key]
+
+        # The parameters that need boundary limits are set here
+        boundary_limit_keys = ['PA','INCL', 'SDIS', 'Z0','VSYS','XPOS','YPOS']
+        for key in boundary_limit_keys:
+            Original_Configuration[f"{key}_CURRENT_BOUNDARY"] = [0.,0.]
         #Then read the input Catalogue
         if input_parameters.single_cube != 'CataloguE':
             Full_Catalogue = sf.Proper_Dictionary({})

@@ -436,10 +436,11 @@ def finish_galaxy(Configuration,maximum_directory_length,current_run = 'Not init
         plot_usage_stats(Configuration,debug = debug)
         timing_result = open(Configuration['MAINDIR']+'/Timing_Result.txt','a')
         timing_result.write(f'''The galaxy in directory {Configuration['FITTING_DIR']} started at {Configuration['START_TIME']}.
-Finished preparations at {Configuration['PREP_END_TIME']}
-Converged to a central position at {Configuration['CC_END_TIME']}.
-Converged to a galaxy size at {Configuration['EC_END_TIME']}.
-It finished the whole process at {datetime.now()}
+Finished preparations at {Configuration['PREP_END_TIME']} \n''')
+        if Configuration['TWO_STEP']:
+            timing_result.write(f'''Converged to a central position at {Configuration['CC_END_TIME']}.
+Converged to a galaxy size at {Configuration['EC_END_TIME']}. \n''')
+        timing_result.write(f'''It finished the whole process at {datetime.now()}
 ''')
         timing_result.close()
         log_statement = f'''Finished timing statistics for the galaxy in {Configuration['FITTING_DIR']}.
