@@ -485,8 +485,14 @@ def get_inclination_pa(Configuration, map, Image, hdr, center, cutoff = 0., debu
             if i == 0:
                 print_log(f'''GET_INCLINATION_PA: We initially find radius of {maj_extent/hdr['BMAJ']} beams.
 ''',Configuration['OUTPUTLOG'], debug = True)
+                print_log(f'''GET_INCLINATION_PA: We initially find the ratios:
+{'':8s} ratios = {ratios}
+''',Configuration['OUTPUTLOG'], debug = False)
             else:
                 print_log(f'''GET_INCLINATION_PA: From the cleaned map we find radius of {maj_extent/hdr['BMAJ']} beams.
+''',Configuration['OUTPUTLOG'], debug = False)
+                print_log(f'''GET_INCLINATION_PA: We  find these ratios from the cleaned map:
+{'':8s} ratios = {ratios}
 ''',Configuration['OUTPUTLOG'], debug = False)
         max_index = np.where(ratios == np.nanmax(ratios))[0]
         if max_index.size > 1:
@@ -494,6 +500,13 @@ def get_inclination_pa(Configuration, map, Image, hdr, center, cutoff = 0., debu
         min_index = np.where(ratios == np.nanmin(ratios))[0]
         if min_index.size > 1:
             min_index =min_index[0]
+        if debug:
+            if i == 0:
+                print_log(f'''GET_INCLINATION_PA: We initially find these indeces min {min_index } {angles[min_index]} max {max_index} {angles[max_index]}.
+''',Configuration['OUTPUTLOG'], debug = False)
+            else:
+                print_log(f'''GET_INCLINATION_PA: From the cleaned map we find these indeces min {min_index }  {angles[min_index]} max {max_index} {angles[max_index]}.
+''',Configuration['OUTPUTLOG'], debug = False)
         #get a 10% bracket
 
         tenp_max_index = np.where(ratios > np.nanmax(ratios)*0.9)[0]
@@ -502,7 +515,23 @@ def get_inclination_pa(Configuration, map, Image, hdr, center, cutoff = 0., debu
             tenp_max_index= [max_index-2,max_index+2]
         if tenp_min_index.size <= 1:
             tenp_min_index= [min_index-2,min_index+2]
-        pa = float(np.mean([angles[min_index],angles[max_index]-90.]))
+        if angles[min_index]-90 > 0.:
+            if angles[max_index] > 165:
+                pa = float(np.mean([angles[min_index]+90,angles[max_index]]))
+            else:
+                pa = float(np.mean([angles[min_index]-90,angles[max_index]]))
+        else:
+            if angles[max_index] < 15:
+                pa = float(np.mean([angles[min_index]-90,angles[max_index]]))
+            else:
+                pa = float(np.mean([angles[min_index]+90,angles[max_index]]))
+        if debug:
+            if i == 0:
+                print_log(f'''GET_INCLINATION_PA: We initially find a pa of {pa}.
+''',Configuration['OUTPUTLOG'], debug = False)
+            else:
+                print_log(f'''GET_INCLINATION_PA: From the cleaned map we find pa = {pa}.
+''',Configuration['OUTPUTLOG'], debug = False)
         pa_error = set_limits(np.mean([abs(angles[tenp_min_index[0]]-angles[min_index]),\
                             abs(angles[tenp_min_index[-1]]-angles[min_index]),\
                             abs(angles[tenp_max_index[0]]-angles[max_index]), \
@@ -512,6 +541,13 @@ def get_inclination_pa(Configuration, map, Image, hdr, center, cutoff = 0., debu
         ratios[1./ratios < 0.204] = 1./0.204
         inclination = np.mean([np.degrees(np.arccos(np.sqrt((ratios[min_index]**2-0.2**2)/0.96))) \
                               ,np.degrees(np.arccos(np.sqrt(((1./ratios[max_index])**2-0.2**2)/0.96))) ])
+        if debug:
+            if i == 0:
+                print_log(f'''GET_INCLINATION_PA: We initially find an inclinatio of {inclination}.
+''',Configuration['OUTPUTLOG'], debug = False)
+            else:
+                print_log(f'''GET_INCLINATION_PA: From the cleaned map we find inclinatio = {inclination}.
+''',Configuration['OUTPUTLOG'], debug = False)
 
         if i == 0:
             inclination_error = set_limits(np.nanmean([abs(np.degrees(np.arccos(np.sqrt((ratios[min_index]**2-0.2**2)/0.96))) - np.degrees(np.arccos(np.sqrt((ratios[tenp_min_index[0]]**2-0.2**2)/0.96)))),\
@@ -531,7 +567,7 @@ def get_inclination_pa(Configuration, map, Image, hdr, center, cutoff = 0., debu
                 inclination_error = float(inclination_error*4./(maj_extent/hdr['BMAJ']))
         # this leads to trouble for small sources due to uncertain PA and inclination estimates
         if inclination < 70. and maj_extent/hdr['BMAJ'] > 4:
-            Image = remove_inhomogeneities(Configuration,Image,inclination=inclination, pa = pa, center = center,WCS_center = False, debug=debug)
+            Image = remove_inhomogeneities(Configuration,Image,inclination=inclination, pa = pa,iteration=i, center = center,WCS_center = False, debug=debug)
             map = Image[0].data
         else:
             break
@@ -560,6 +596,8 @@ def get_ring_weights(Configuration,hdr,Tirific_Template,debug = False):
     for i in [0,1]:
         weights[i] = [set_limits(x/y,0.1,10.) for x,y in zip(sbr[i],cut_off_limits)]
         weights[i] = weights[i]/np.nanmax(weights[i])
+        weights[i][0:1] = np.nanmin(weights[i])
+
     if debug:
         print_log(f'''GET_RING_WEIGTHS: Obtained the following weights.
 {'':8s}{weights}
@@ -619,9 +657,27 @@ def get_vel_pa(Configuration,velocity_field,center= [0.,0.], debug =False):
     if debug:
             print_log(f'''GET_VEL_PA: This is the location of the maximum {max_pos} and minimum {min_pos}
 ''',Configuration['OUTPUTLOG'],debug = False)
-    pa_from_max = np.arctan((center[1]-max_pos[1])/(center[0]-max_pos[0]))
-    pa_from_min = np.arctan((center[1]-min_pos[1])/(center[0]-min_pos[0]))
-    pa_max_to_min = np.arctan((max_pos[1]-min_pos[1])/(max_pos[0]-min_pos[0]))
+    try:
+        pa_from_max = np.arctan((center[1]-max_pos[1])/(center[0]-max_pos[0]))
+    except ZeroDivisionError:
+        if center[1]-max_pos[1] >= 0.:
+            pa_from_max = np.radians(90.)
+        else:
+            pa_from_max = np.radians(-90.)
+    try:
+        pa_from_min = np.arctan((center[1]-min_pos[1])/(center[0]-min_pos[0]))
+    except ZeroDivisionError:
+        if center[1]-min_pos[1] >= 0.:
+            pa_from_min = np.radians(90.)
+        else:
+            pa_from_min = np.radians(-90.)
+    try:
+        pa_max_to_min = np.arctan((max_pos[1]-min_pos[1])/(max_pos[0]-min_pos[0]))
+    except ZeroDivisionError:
+        if max_pos[1]-min_pos[1] >= 0.:
+            pa_max_to_min = np.radians(90.)
+        else:
+            pa_max_to_min = np.radians(-90.)
 
     for i in [0,1,2]:
         if i == 0:
@@ -991,7 +1047,7 @@ rename_fit_products.__doc__ = '''
 
 '''
 
-def remove_inhomogeneities(Configuration,fits_map,inclination=30., pa = 90. , center = [0.,0.],WCS_center = True, debug=False):
+def remove_inhomogeneities(Configuration,fits_map,inclination=30., pa = 90. , center = [0.,0.],WCS_center = True, iteration= 0. , debug=False):
     if debug:
         print_log(f'''REMOVE_INHOMOGENEITIES: These are the values we get as input
 {'':8s}Inclination = {inclination}
@@ -1015,8 +1071,8 @@ def remove_inhomogeneities(Configuration,fits_map,inclination=30., pa = 90. , ce
     dep_map = deproject(copy.deepcopy(rot_map),inclination,center = y, debug=debug)
 
     if debug:
-        fits.writeto(f"{Configuration['FITTING_DIR']}rot_map.fits",rot_map,fits_map[0].header,overwrite = True)
-        fits.writeto(f"{Configuration['FITTING_DIR']}dep_map.fits",dep_map,fits_map[0].header,overwrite = True)
+        fits.writeto(f"{Configuration['FITTING_DIR']}rot_map_{iteration}.fits",rot_map,fits_map[0].header,overwrite = True)
+        fits.writeto(f"{Configuration['FITTING_DIR']}dep_map_{iteration}.fits",dep_map,fits_map[0].header,overwrite = True)
 
     angles = np.linspace(5.,360.,71)
     minimum_map = copy.deepcopy(dep_map)
@@ -1028,8 +1084,8 @@ def remove_inhomogeneities(Configuration,fits_map,inclination=30., pa = 90. , ce
     clean_map = rotateImage(deproject(copy.deepcopy(minimum_map),inclination,center = y,invert= True,debug=debug),-1*(pa-90),[x,y],debug=debug)
 
     if debug:
-        fits.writeto(f"{Configuration['FITTING_DIR']}minimum_map.fits",minimum_map,fits_map[0].header,overwrite = True)
-        fits.writeto(f"{Configuration['FITTING_DIR']}clean_map.fits",clean_map,fits_map[0].header,overwrite = True)
+        fits.writeto(f"{Configuration['FITTING_DIR']}minimum_map_{iteration}.fits",minimum_map,fits_map[0].header,overwrite = True)
+        fits.writeto(f"{Configuration['FITTING_DIR']}clean_map_{iteration}.fits",clean_map,fits_map[0].header,overwrite = True)
     fits_map[0].data = clean_map
     return fits_map
 

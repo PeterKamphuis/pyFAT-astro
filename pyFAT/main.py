@@ -181,17 +181,28 @@ def main(argv):
             timing_result.write("This file contains the system start and end times for the fitting of each galaxy")
             timing_result.close()
         #if start_galaxy not negative then it is catalogue ID
-        if 0 <= Original_Configuration['STARTGALAXY']:
+        if -1 != Original_Configuration['STARTGALAXY']:
             Original_Configuration['STARTGALAXY'] = np.where(Original_Configuration['STARTGALAXY'] == Full_Catalogue['NUMBER'])[0][0]
         else:
             Original_Configuration['STARTGALAXY'] = 0
         # If the end galaxy is -1 fit the whole catalogue
+        print(Original_Configuration['ENDGALAXY'])
         if Original_Configuration['ENDGALAXY'] == -1:
             Original_Configuration['ENDGALAXY'] = len(Full_Catalogue['NUMBER'])
             if Original_Configuration['ENDGALAXY'] == 0:
                 Original_Configuration['ENDGALAXY'] = 1
+        else:
+            Original_Configuration['ENDGALAXY'] = np.where(Original_Configuration['ENDGALAXY'] == Full_Catalogue['NUMBER'])[0][0]
         # start the main fitting loop
+
+        if float(Original_Configuration['STARTGALAXY']) > float(Original_Configuration['ENDGALAXY']):
+            print()
+            print(f''' Your starting galaxy (Line nr = {Original_Configuration['STARTGALAXY']}) is listed after your ending galaxy (Line nr = {Original_Configuration['ENDGALAXY']}), maybe you have double catalogue ids?''')
+            exit()
+
+
         for current_galaxy_index in range(Original_Configuration['STARTGALAXY'],Original_Configuration['ENDGALAXY']):
+
             Configuration = copy.deepcopy(Original_Configuration)
             Configuration['START_TIME'] = datetime.now()
             # First check the starttime

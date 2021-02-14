@@ -29,22 +29,41 @@ def fix_sbr(Configuration,Tirific_Template,hdr, smooth = False, debug=False):
     cutoff_limits = np.array([cutoff_limits,cutoff_limits],dtype=float)
     # Then get the profile from the template
     sbr = np.array(get_from_template(Tirific_Template,['SBR','SBR_2']),dtype=float)
+    if debug:
+        print_log(f'''FIX_SBR: Before modify.
+{'':8s}sbr from template = {sbr}
+''',Configuration['OUTPUTLOG'],debug=False,screen=True)
     # First make a correction on the inner 2 values
     sbr = inner_sbr_fix(Configuration,sbr,cutoff_limits,debug=debug)
     # Let's use a smoothed profile for the fittings
     sm_sbr = smooth_profile(Configuration,Tirific_Template,'SBR',hdr,
-                            min_error= np.max([float(Tirific_Template['CFLUX']),
-                            float(Tirific_Template['CFLUX_2'])]),no_apply = True,
-                            fix_sbr_call = True,profile = sbr ,debug=debug)
+                            min_error= cutoff_limits,no_apply = True,
+                            fix_sbr_call = True,profile_in = sbr ,debug=debug)
 
     if debug:
         print_log(f'''FIX_SBR: Before modify.
 {'':8s}sbr  = {sbr}
 {'':8s}sm_sbr  = {sm_sbr}
-''',Configuration['OUTPUTLOG'],debug=False,screen=False)
+''',Configuration['OUTPUTLOG'],debug=False,screen=True)
 
     # We interpolate negative values as well as values below the limits inner part with a cubi
-    errors = get_error(Configuration,sbr,sm_sbr,min_error=cutoff_limits,debug=debug)
+    errors = get_error(Configuration,sbr,sm_sbr,'SBR',min_error=cutoff_limits,debug=debug)
+    if debug:
+        print_log(f'''FIX_SBR: retrieved errors.
+{'':8s}errors  = {errors}
+''',Configuration['OUTPUTLOG'],debug=False,screen=True)
+    error_weights = cutoff_limits/sm_sbr*1./np.nanmin(cutoff_limits[:,2:]/sm_sbr[:,2:])
+    error_weights[:,0] = 3.
+    errors =errors*error_weights
+    if debug:
+        print_log(f'''FIX_SBR: weighed errors errors.
+{'':8s}sm_sbr = {sm_sbr}
+{'':8s}cutoff_limits  = {cutoff_limits}
+{'':8s}errors  = {errors}
+{'':8s}weights  = {error_weights}
+''',Configuration['OUTPUTLOG'],debug=False,screen=True)
+
+
     store_gaussian = []
     for i in [0,1]:
         corr_val = np.where(sbr[i,2:] > cutoff_limits[i,2:])[0]+2
@@ -531,19 +550,43 @@ get_warp_slope.__doc__ = '''
 def inner_sbr_fix(Configuration,sbr,cutoff_limits,debug=False):
     if debug:
         print_log(f'''INNER_SBR_FIX: Checking the SBR inner points for runaway values
-''',Configuration['OUTPUTLOG'], debug = True)
+{'':8s} sbr in  = {sbr}
+''',Configuration['OUTPUTLOG'], debug = True, screen = True)
 
     if np.all(sbr[:,0] > 2*sbr[:,2]) or np.all(sbr[:,1] > 2*sbr[:,2]):
+        if debug:
+            print_log(f'''INNER_SBR_FIX: We need to correct
+{'':8s} sbr 0  = {sbr[:,0]} sbr 1  = {sbr[:,1]} sbr 2  = {sbr[:,2]}
+''',Configuration['OUTPUTLOG'], debug = True, screen = True)
         if np.mean(sbr[:,2]) > cutoff_limits[0,2]:
             sbr[:,[0,1]] = np.mean(sbr[:,2])
+            if debug:
+                print_log(f'''INNER_SBR_FIX: We need to correct with mean
+{'':8s} mean = {np.mean(sbr[:,2])}
+''',Configuration['OUTPUTLOG'], debug = True, screen = True)
         else:
+            if debug:
+                print_log(f'''INNER_SBR_FIX: We need to correct with cut_off_limits
+{'':8s} limit = {1.5*cutoff_limits[0,2]}
+''',Configuration['OUTPUTLOG'], debug = True, screen = True)
             sbr[:,[0,1,2]] = 1.5*cutoff_limits[0,2]
     if np.any(sbr[:,0] > sbr[:,1]):
+        if debug:
+                print_log(f'''INNER_SBR_FIX: We correct 0 point
+{'':8s} mean 1 = {np.mean(sbr[:,1])}
+''',Configuration['OUTPUTLOG'], debug = True, screen = True)
         sbr[:,0] = np.mean(sbr[:,1])
 
     for i in [0,1]:
         if np.any(sbr[:,i] < cutoff_limits[:,2]):
+            if debug:
+                print_log(f'''INNER_SBR_FIX: correcting ring {i}
+''',Configuration['OUTPUTLOG'], debug = True, screen = True)
             sbr[:,i] = 1.5*cutoff_limits[0,2]
+
+    if debug:
+                print_log(f'''INNER_SBR_FIX: the fixed sbr {sbr}
+''',Configuration['OUTPUTLOG'], debug = True, screen = True)
 
     return sbr
 inner_sbr_fix.__doc__ =f'''
@@ -596,7 +639,7 @@ def regularise_profile(Configuration,Tirific_Template, key ,hdr,min_error= [0.],
     # get a smoothed profiles
     sm_profile = smooth_profile(Configuration,Tirific_Template, key,hdr ,min_error=min_error,debug=debug,no_apply=True)
 
-    error = get_error(Configuration,profile,sm_profile,min_error=min_error,weights = weights,debug=debug)
+    error = get_error(Configuration,profile,sm_profile,key,min_error=min_error,weights = weights,debug=debug)
 
     #Check that we have two profiles
     diff = np.sum(profile[0]-profile[1])
@@ -620,7 +663,6 @@ def regularise_profile(Configuration,Tirific_Template, key ,hdr,min_error= [0.],
                 fit_profile = fit_arc(Configuration,radii,profile[i],sm_profile[i],error[i],min_error=min_error,debug= debug)
             except:
                 fit_profile = np.full(len(sm_profile[i]), np.mean(sm_profile[i]))
-                #fit_err = get_error(Configuration,sm_profile[i],fit_profile,min_error=min_error,debug=debug,singular = True)
 
         else:
             fit_profile = fit_polynomial(Configuration,radii,profile[i],sm_profile[i],error[i],key, Tirific_Template, hdr,min_error=min_error,debug= debug)
@@ -630,7 +672,7 @@ def regularise_profile(Configuration,Tirific_Template, key ,hdr,min_error= [0.],
         profile[1] = profile[0]
 
     original = np.array(get_from_template(Tirific_Template, [key,f"{key}_2"]),dtype=float)
-    error = get_error(Configuration,original,profile,weights=weights,key=key,apply_max_error = True,min_error=min_error,debug=debug)
+    error = get_error(Configuration,original,profile,key,weights=weights,apply_max_error = True,min_error=min_error,debug=debug)
     if debug:
             print_log(f'''REGULARISE_PROFILE: This the fitted profile without corrections:
 {'':8s}{profile}
@@ -638,17 +680,9 @@ def regularise_profile(Configuration,Tirific_Template, key ,hdr,min_error= [0.],
 #then we want to fit the profiles with a polynomial
     if key not in ['SBR','VROT']:
         #We should not fix the profile again as the fitted profile is fixed should be good
-        #profile = fix_profile(Configuration, key, profile, Tirific_Template, hdr,only_inner = True, debug=debug)
-        #original = np.array(get_from_template(Tirific_Template, [key,f"{key}_2"]),dtype=float)
+
         profile,error = modify_flat(Configuration, profile, original, error,key,debug=debug)
-        #error = get_error(Configuration, original, profile,weightsmin_error=error,debug=debug)
-        #for i in [0,1]:
-        #    if Configuration['LAST_RELIABLE_RINGS'][i] < len(profile[i,:]):
-        #        if debug:
-        #            print_log(f'''REGULARISE_PROFILE: From ring {Configuration['LAST_RELIABLE_RINGS'][i]} on  the rings were reset so we use {max_error[key]} as the error.
-#''', Configuration['OUTPUTLOG'])
-#                for j in range(Configuration['LAST_RELIABLE_RINGS'][i], len(profile[i,:])):
-#                    error[i,j] = np.nanmin([max_error[key],error[i,j]])
+
 
     format = set_format(key)
 
@@ -668,8 +702,8 @@ def regularise_profile(Configuration,Tirific_Template, key ,hdr,min_error= [0.],
     return profile
 
 
-def get_error(Configuration,profile,sm_profile,min_error = [0.],singular = False,weights= [1.],\
-                apply_max_error = False, key = 'UNSET'  ,debug=False):
+def get_error(Configuration,profile,sm_profile,key,min_error = [0.],singular = False,weights= [1.],\
+                apply_max_error = False,debug=False):
 
     try:
         size= len(min_error)
@@ -708,21 +742,24 @@ def get_error(Configuration,profile,sm_profile,min_error = [0.],singular = False
 ''',Configuration['OUTPUTLOG'],screen=True,debug = False)
     for i in sides:
         error[i] = abs(profile[i]-sm_profile[i])
+        error[i]= error[i]/weights[i]
         if len(min_error.shape) == 2:
             error[i] = [np.max([y,x]) for x,y in zip(error[i],min_error[i])]
         elif len(min_error) == len(error[i]):
             error[i] = [np.max([y,x]) for x,y in zip(error[i],min_error)]
         else:
             error[i] = [np.max([x,min_error[0]]) for x in error[i]]
-        error[i]=error[i]/weights[i]
         if apply_max_error:
                 error[i] = [np.nanmin([x,Configuration['MAX_ERROR'][key]]) for x in error[i]]
-
+        if key in ['PA','INCL','Z0']:
+            error[i][:Configuration['INNER_FIX']] = [np.min(min_error) for x in error[i][:Configuration['INNER_FIX']]]
     if singular:
         error = np.array(error[0],dtype=float)
     else:
         error = np.array(error,dtype=float)
     error[error == 0.] = np.min(error[error > 0.])
+
+
     if debug:
         print_log(f'''GET_ERROR: error =
 {'':8s}{error}
@@ -875,7 +912,7 @@ def fit_arc(Configuration,radii,profile,sm_profile,error,min_error = 0. ,fixed =
     arc_par,arc_cov  =  curve_fit(arc_tan_function, radii, sm_profile,p0=[est_center,est_length,est_amp,est_mean])
     new_profile = arc_tan_function(radii,*arc_par)
     new_profile[:3] = np.mean(new_profile[:3])
-    #new_error = get_error(Configuration,profile,new_profile,min_error=min_error,debug=debug, singular = True)
+
     return new_profile#,new_error
 fit_arc.__doc__ = '''
 ;+
@@ -971,6 +1008,12 @@ def fit_polynomial(Configuration,radii,profile,sm_profile,error, key, Tirific_Te
 {'':8s}{sm_profile[st_fit:]}
 {'':8s} weights = {1./error[st_fit:]}
 ''',Configuration['OUTPUTLOG'],screen =True, debug=False)
+
+    #make sure there are no 0. in the errors
+    zero_locations = np.where(error[st_fit:] == 0.)[0]
+    if zero_locations.size > 0.:
+        error[zero_locations+st_fit] = 1./np.nanmax(1./error)
+
     for ord in order:
         fit_prof = np.poly1d(np.polyfit(radii[st_fit:],profile[st_fit:],ord,w=1./error[st_fit:]))
         if st_fit > 0.:
@@ -996,7 +1039,6 @@ def fit_polynomial(Configuration,radii,profile,sm_profile,error, key, Tirific_Te
     #    new_profile[1] = profile[1]
     if key != 'SBR':
         new_profile = fix_profile(Configuration, key, new_profile, Tirific_Template, hdr,debug =debug, singular = True,only_inner =only_inner)
-    #new_error = get_error(Configuration, profile, new_profile,min_error=min_error,singular = True,debug = debug)
 
     return new_profile#,new_error
 fit_polynomial.__doc__ = '''
@@ -2075,7 +2117,7 @@ set_vrot_fitting.__doc__ = '''
     ;
 '''
 
-def smooth_profile(Configuration,Tirific_Template,key,hdr,min_error = 0.,debug=False ,profile = None, no_apply =False,fix_sbr_call = False):
+def smooth_profile(Configuration,Tirific_Template,key,hdr,min_error = 0.,debug=False ,profile_in = None, no_apply =False,fix_sbr_call = False):
 
     if key == 'SBR' and not fix_sbr_call:
         error_message = f'''SMOOTH_PROFILE: Do not use smooth_profile for the SBR, SBR is regularised in fix_sbr'''
@@ -2086,10 +2128,16 @@ def smooth_profile(Configuration,Tirific_Template,key,hdr,min_error = 0.,debug=F
         print_log(f'''SMOOTH_PROFILE: Starting to smooth the {key} profile.
 ''',Configuration['OUTPUTLOG'],debug = True)
 
-    if profile is None:
+    if profile_in is None:
         profile = np.array(get_from_template(Tirific_Template,[key,f"{key}_2"]),dtype = float)
+    else:
+        profile= copy.deepcopy(profile_in)
 
     original_profile = copy.deepcopy(profile)
+    min_error = np.array(min_error)
+    if min_error.size == 1:
+        min_error = np.full(profile.size,min_error)
+
     #he sbr profile is already fixed before geting to the smoothing
     if not fix_sbr_call:
         profile =fix_profile(Configuration, key, profile, Tirific_Template, hdr,debug=debug)
@@ -2117,6 +2165,12 @@ def smooth_profile(Configuration,Tirific_Template,key,hdr,min_error = 0.,debug=F
             profile[i] = savgol_filter(profile[i], 7, 3)
         else:
             profile[i] = savgol_filter(profile[i], 9, 4)
+        if fix_sbr_call:
+            below_zero = np.where(profile[i] < 0.)[0]
+            if below_zero.size > 0.:
+                profile[i,below_zero] = min_error[i,below_zero]
+
+
     # Fix the settings
     format = set_format(key)
     if key == 'VROT':
@@ -2131,16 +2185,17 @@ def smooth_profile(Configuration,Tirific_Template,key,hdr,min_error = 0.,debug=F
     if not fix_sbr_call:
         profile =fix_profile(Configuration, key, profile, Tirific_Template, hdr,debug=debug)
 
+
     if debug:
         print_log(f'''SMOOTH_PROFILE: profile after smoothing.
 {'':8s}{profile}
 ''',Configuration['OUTPUTLOG'],debug = False)
     if not no_apply:
-        errors = get_error(Configuration,original_profile,profile,min_error=min_error,debug=debug)
+        errors = get_error(Configuration,original_profile,profile,key,min_error=min_error,debug=debug)
         if key not in ['VROT']:
             # Check whether it should be flat
             profile,errors =modify_flat(Configuration,profile,original_profile,errors,key,debug=debug)
-            #errors = get_error(Configuration,original_profile,profile,min_error=min_error,debug=debug)
+
         Tirific_Template[key]= f"{' '.join([f'{x:{format}}' for x in profile[0,:int(Configuration['NO_RINGS'])]])}"
         Tirific_Template[f"{key}_2"]= f"{' '.join([f'{x:{format}}' for x in profile[1,:int(Configuration['NO_RINGS'])]])}"
         Tirific_Template.insert(key,f"# {key}_ERR",f"{' '.join([f'{x:{format}}' for x in errors[0,:int(Configuration['NO_RINGS'])]])}")
@@ -2216,14 +2271,14 @@ def modify_flat(Configuration,profile,original_profile,errors,key,debug=False):
          flatness.append(check_flat(Configuration,profile[side],errors[side],debug=debug))
     if all(flatness):
         profile[:] = np.nanmedian(original_profile[:,:round(len(original_profile)/2.)])
-        errors = get_error(Configuration,original_profile,profile,apply_max_error = True,key=key,min_error =np.nanmin(errors) , debug=debug)
+        errors = get_error(Configuration,original_profile,profile,key,apply_max_error = True,min_error =np.nanmin(errors) , debug=debug)
     else:
         if any(flatness):
             for side in [0,1]:
                 if flatness[side]:
                     profile[side]  = np.median(original_profile[side,:round(len(original_profile)/2.)])
                     flat_val = profile[side,0]
-                    errors[side] = get_error(Configuration,original_profile[side],profile[side],apply_max_error = True,key=key,min_error =np.nanmin(errors[side]),singular = True ,debug=debug)
+                    errors[side] = get_error(Configuration,original_profile[side],profile[side],key,apply_max_error = True,min_error =np.nanmin(errors[side]),singular = True ,debug=debug)
             profile[:,0:3] = flat_val
             profile[:,4] = (flat_val+profile[:,4])/2.
     if debug:
