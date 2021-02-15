@@ -918,9 +918,16 @@ def plot_usage_stats(Configuration,debug = False):
             tmp = line.split(' ')
             tmp2 = tmp[0].split('-')
             if len(tmp2) == 3:
-                date =  datetime.datetime.strptime(f"{tmp[0]} {tmp[1]}", '%Y-%m-%d %H:%M:%S.%f')
+                try:
+                    date =  datetime.datetime.strptime(f"{tmp[0]} {tmp[1]}", '%Y-%m-%d %H:%M:%S.%f')
+                except ValueError:
+                    date =  datetime.datetime.strptime(f"{tmp[0]} {tmp[1]}", '%Y-%m-%d %H:%M:%S')
+
                 if startdate == 0:
-                    startdate  =  datetime.datetime.strptime(f"{tmp[0]} {tmp[1]}", '%Y-%m-%d %H:%M:%S.%f')
+                    try:
+                        startdate  =  datetime.datetime.strptime(f"{tmp[0]} {tmp[1]}", '%Y-%m-%d %H:%M:%S.%f')
+                    except ValueError:
+                        startdate  =  datetime.datetime.strptime(f"{tmp[0]} {tmp[1]}", '%Y-%m-%d %H:%M:%S')
                 diff = date - startdate
                 if len(times) > 0 :
                     if times[-1] == 'No Time':

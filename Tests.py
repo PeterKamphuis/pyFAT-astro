@@ -242,16 +242,12 @@ basic.__doc__ =f'''
  OPTIONAL INPUTS:
     debug = False
 
- KEYWORD PARAMETERS:
-
  OUTPUTS:
 
  OPTIONAL OUTPUTS:
 
  PROCEDURES CALLED:
     Unspecified
-
- EXAMPLE:
 '''
 
 

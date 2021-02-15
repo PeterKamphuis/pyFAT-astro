@@ -153,8 +153,6 @@ fix_sbr.__doc__ =f'''
     Normally only bad points (Not bright enough) and problematic inner points are corrected.
     When smooth is set the profile is either fitted  with a Gaussian function, Interpolated with a cubic spline or smoothed with a savgol kernel
 
- KEYWORD PARAMETERS:
-
  OUTPUTS:
     The template is corrected
 
@@ -162,8 +160,6 @@ fix_sbr.__doc__ =f'''
 
  PROCEDURES CALLED:
     Unspecified
-
- EXAMPLE:
 '''
 
 
@@ -607,8 +603,6 @@ inner_sbr_fix.__doc__ =f'''
  OPTIONAL INPUTS:
     debug = False
 
- KEYWORD PARAMETERS:
-
  OUTPUTS:
     sbr = profile with the modified inner points if required
 
@@ -616,8 +610,6 @@ inner_sbr_fix.__doc__ =f'''
 
  PROCEDURES CALLED:
     Unspecified
-
- EXAMPLE:
 '''
 
 
@@ -794,8 +786,6 @@ def fix_outer_rotation(Configuration,profile, Tirific_Template,hdr, debug = Fals
 
 
 def no_declining_vrot(Configuration, Tirific_Template, profile = None, debug = False):
-
-
     if debug:
         print_log(f'''NO_DECLINING_VROT: make RC flat from highest point on.
 {'':8s}NO_DECLINING_VROT: But only for low value RCs
@@ -848,6 +838,37 @@ def no_declining_vrot(Configuration, Tirific_Template, profile = None, debug = F
     else:
         return profile
 
+no_declining_vrot.__doc__ =f'''
+ NAME:
+    no_declining_vrot
+
+ PURPOSE:
+    Ensure that the RC is not declining in an unphysical manner, i.e. if the maximum lies in the outer rings it should be the last ring.
+
+ CATEGORY:
+    modify_template
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    Tirific_Template = Standard tirific template
+
+ OPTIONAL INPUTS:
+    debug = False
+    profile = None
+    Normally the RC is read from the Template however if profile is set it is taken from there.
+    This allows for the profile to be modified before it is checked.
+
+ OUTPUTS:
+    If profile was set the modified profile is returned else the new profile is written to the template which return modified.
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+'''
+
+
+
 def check_flat(Configuration,profile,error, debug = False):
     if debug:
         print_log(f'''CHECK_FLAT: checking flatness)
@@ -855,47 +876,43 @@ def check_flat(Configuration,profile,error, debug = False):
 {'':8s}error = {error}
 ''',Configuration['OUTPUTLOG'],debug = True)
     flat = True
+    inner = np.mean(profile[:Configuration['INNER_FIX']])
+    median_error = np.median(error[Configuration['INNER_FIX']:])
+    outer = np.mean(profile[Configuration['INNER_FIX']+1:])
+    outer_std = np.std(profile[Configuration['INNER_FIX']+1:])
+    if abs(outer-inner) < 3*median_error and outer_std  < median_error:
+        return True
     for e,x,y in zip(error[1:],profile[1:],profile[0:]):
         if not x-e < y < x+e:
-            flat = False
-            break
-    if debug:
-        print_log(f'''CHECK_FLAT: profile is flat is {flat}.
-''',Configuration['OUTPUTLOG'],debug = False)
-    return flat
+            return False
+    return True
 check_flat.__doc__ = '''
-;+
-; NAME:
-;       check_flat(profile,error)
-;
-; PURPOSE:
-;       Check whether within its errors a routine is varying compared to the prvious rings
-;
-; CATEGORY:
-;       modify_template
-;
-; CALLING SEQUENCE:
-;
-; INPUTS:
-;       profile = the profile to examine
-;       error = The accompanying error
-; OPTIONAL INPUTS:
-;       -
-;
-; KEYWORD PARAMETERS:
-;       /DEBUG      - Set this keyword to get printed output during
-;                     the running
-;
-; OUTPUTS:
-;       True if no variation is found false if variation is found
-;
-; OPTIONAL OUTPUTS:
-;       -
-;
-; PROCEDURES CALLED:
-;      zip()
+ NAME:
+    check_flat
 
+ PURPOSE:
+       Check whether within its errors a routine is varying compared to the prvious rings
+
+ CATEGORY:
+       modify_template
+
+ INPUTS:
+    Configuration  = Standard FAT configuration
+    profile = the profile to examine
+    error = The accompanying error
+
+ OPTIONAL INPUTS:
+    debug = False
+
+ OUTPUTS:
+       True if no variation is found false if variation is found
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+      zip(),np.std,np.mean,abs,print_log
 '''
+
 def arc_tan_function(axis,center,length,amplitude,mean):
     # to prevent instant turnover
     c = axis[-1]*0.1
@@ -1154,6 +1171,37 @@ def set_errors(Configuration,Tirific_Template,key,min_error = 0.,debug = False):
 {'':8s}# {key}_ERR ={Tirific_Template[f"# {key}_ERR"]}
 {'':8s}# {key}_2_ERR ={Tirific_Template[f"# {key}_2_ERR"]}
 ''',Configuration['OUTPUTLOG'],debug = True)
+set_errors.__doc__ =f'''
+ NAME:
+    set_errors
+
+ PURPOSE:
+    Write the errors for flat profiles to the template
+
+ CATEGORY:
+    modify_template
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    Tirific_Template = Standard tirific template
+    key = parameter to write the errors for
+
+ OPTIONAL INPUTS:
+    debug = False
+
+    min_error =0 .
+    the error to be used for all rings
+
+ OUTPUTS:
+    Updated Tirific Template
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+'''
+
+
 
 def set_fitting_parameters(Configuration, Tirific_Template, \
                            parameters_to_adjust  = ['NO_ADJUSTMENT'], modifiers = ['EMPTY'], \
@@ -1308,13 +1356,13 @@ def set_fitting_parameters(Configuration, Tirific_Template, \
             elif key == 'SDIS':
                 fixed = Configuration['FIX_SDIS'][0]
                 if stage in ['initial','run_cc','after_cc','after_ec','after_os']:
-                    limits = [[Configuration['CHANNEL_WIDTH'], 15],\
-                              [Configuration['CHANNEL_WIDTH']/4., 15.], \
-                              [Configuration['CHANNEL_WIDTH']/4., 15.]]
+                    limits = [[Configuration['CHANNEL_WIDTH'], 16.],\
+                              [Configuration['CHANNEL_WIDTH']/4., 16.], \
+                              [Configuration['CHANNEL_WIDTH']/4., 16.]]
                 else:
-                    limits = [[Configuration['CHANNEL_WIDTH'], initial_estimates['SDIS'][1]], \
-                             [Configuration['CHANNEL_WIDTH']/4., initial_estimates['SDIS'][1]],\
-                             [Configuration['CHANNEL_WIDTH']/4., initial_estimates['SDIS'][1]]]
+                    limits = [[Configuration['CHANNEL_WIDTH'], set_limits(initial_estimates['SDIS'][0]*2.,Configuration['CHANNEL_WIDTH'],25.)], \
+                             [Configuration['CHANNEL_WIDTH']/4., set_limits(initial_estimates['SDIS'][0]*2.,Configuration['CHANNEL_WIDTH']/2.,25.)],\
+                             [Configuration['CHANNEL_WIDTH']/4., set_limits(initial_estimates['SDIS'][0]*2.,Configuration['CHANNEL_WIDTH']/2.,25.)]]
             if key in ['PA','INCL','Z0']:
                 slope = Configuration['WARP_SLOPE']
                 inner =  Configuration['INNER_FIX']
@@ -1364,42 +1412,58 @@ def set_fitting_parameters(Configuration, Tirific_Template, \
                             format = set_format(key)
                         Tirific_Template[fit_key] = f"{Tirific_Template[fit_key]} {' '.join([f'{x:{format}}' for x in fitting_settings[key][fit_key]])}"
 set_fitting_parameters.__doc__ = '''
+ NAME:
+    set_fitting_parameters
 
-    ; NAME:
-    ;      set_fitting_parameters(Configuration, Tirific_Template, \
-                               parameters_to_adjust  = ['NO_ADJUSTMENT'],
-                               hdr = None,stage = 'initial',systemic = [100.,2], \
-                               inclination = [60.,2.], pa = [90,1], \
-                               rotation = [100.,5.],ra = [180,1e-4], dec= [0,1e-4]):
-    ;
-    ; PURPOSE:
-    ;      Set the parameters that control the fitting in the Tirific template
-    ;
-    ; CATEGORY:
-    ;       modify_template
-    ;
-    ;
-    ; INPUTS:
-    ;
-    ; OPTIONAL INPUTS:
-    ;
-    ;
-    ; KEYWORD PARAMETERS:
-    ;       -
-    ;
-    ; OUTPUTS:
-    ;
-    ;
-    ; OPTIONAL OUTPUTS:
-    ;       -
-    ;
-    ; PROCEDURES CALLED:
-    ;      split, strip, open
-    ;
-    ; EXAMPLE:
-    ;
-    ;
+ PURPOSE:
+    Set the parameters that control the fitting in the Tirific template
+
+ CATEGORY:
+    modify_template
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    Tirific_Template = The tirific template to be modified
+
+ OPTIONAL INPUTS:
+    debug = False
+    parameters_to_adjust  = ['NO_ADJUSTMENT']
+    a list of parameters that have to be set
+
+    hdr = None
+    header of the cube to be Fitted
+
+    stage = 'initial'
+    fitting stage
+
+    systemic = [100.,2]
+    initial estimate and error for VSYS
+
+    inclination = [60.,2.]
+    initial estimate and error for INCL
+
+    pa = [90,1]
+    initial estimate and error for PA
+
+    rotation = [100.,5.]
+    initial estimate and error for VROT
+
+    ra = [180,1e-4]
+    initial estimate and error for XPOS
+
+    dec= [0,1e-4])
+    initial estimate and error for YPOS
+
+ OUTPUTS:
+    Nothing is returned but the Tirific Template is updated
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
 '''
+
+
 
 def set_boundary_limits(Configuration,Tirific_Template,key, tolerance = 0.01, values = [10,1],\
                         upper_bracket = [10.,100.], lower_bracket=[0., 50.], fixed = False,increase=10., debug = False):
@@ -1448,21 +1512,19 @@ def set_generic_fitting(Configuration, key , stage = 'initial', values = [60,5.]
                         flat_inner = 3):
     if debug:
             print_log(f'''SET_GENERIC_FITTING: We are processing {key}.
-''', Configuration['OUTPUTLOG'], screen = True ,debug = debug)
+''', Configuration['OUTPUTLOG'] ,debug = debug)
     NUR = Configuration['NO_RINGS']
     if all(x == 0. for x in np.array(slope)):
         slope = [NUR,NUR]
     if all(x == 0. for x in np.array(limits).reshape(6)):
         if debug:
             print_log(f'''SET_GENERIC_FITTING: Implementing limits
-''', Configuration['OUTPUTLOG'], screen = True ,debug = False)
+''', Configuration['OUTPUTLOG'] ,debug = False)
 
         limits = [[set_limits(values[0]-values[1]*5.,*lower_bracket),\
                     set_limits(values[0]+values[1]*5.,*upper_bracket)] for x in limits]
 
-        if debug:
-            print_log(f'''SET_GENERIC_FITTING: set these limits {limits}
-''', Configuration['OUTPUTLOG'], screen = True ,debug = False)
+
 
     input= {}
     if debug:
@@ -1485,6 +1547,7 @@ def set_generic_fitting(Configuration, key , stage = 'initial', values = [60,5.]
                 print_log(f'''SET_GENERIC_FITTING: implementing a varying non-symmetric profile.
 {'':8s} step_modifier = {step_modifier}
 {'':8s} values = {values}
+{'':8s} limits = {limits}
 ''', Configuration['OUTPUTLOG'], screen = True ,debug = False)
             if flat_inner+1 >= NUR:
                 input['VARY'] =  np.concatenate((np.array([f"!{key} {NUR}"]),np.array([f"!{key}_2 {NUR}"]),np.array([f"{key} 1:{NUR-1} {key}_2 1:{NUR-1}"])))
@@ -1500,7 +1563,10 @@ def set_generic_fitting(Configuration, key , stage = 'initial', values = [60,5.]
         else:
             if debug:
                 print_log(f'''SET_GENERIC_FITTING: implementing a varying symmetric profile
-''', Configuration['OUTPUTLOG'], screen = True ,debug = debug)
+{'':8s} step_modifier = {step_modifier}
+{'':8s} values = {values}
+{'':8s} limits = {limits}
+''', Configuration['OUTPUTLOG'], debug = False)
             if flat_inner+1 >= NUR:
                 input['VARY'] =  np.concatenate((np.array([f"!{key} {NUR} {key}_2 {NUR}"]),np.array([f"{key} 1:{NUR-1} {key}_2 1:{NUR-1}"])))
             else:
@@ -1797,8 +1863,8 @@ def set_new_size(Configuration,Tirific_Template, Fits_Files, fit_stage = 'Unitia
     Tirific_Template['VARINDX'] = Tirific_Template['VARINDX'].replace(f"{old_rings-1}",f"{current_rings-1}")
     Tirific_Template['NUR'] = f"{current_rings}"
     # if we cut we want to flatten things
-    if current_rings < old_rings:
-        flatten_the_curve(Configuration,Tirific_Template,debug=debug)
+    #if current_rings < old_rings:
+    #    flatten_the_curve(Configuration,Tirific_Template,debug=debug)
     # Check whether the galaxy has become to small for variations
     if Configuration['SIZE_IN_BEAMS'] > Configuration['MINIMUM_WARP_SIZE']:
         Configuration['FIX_INCLINATION'][0] =Configuration['FIX_INCLINATION'][1]
@@ -2270,13 +2336,19 @@ def modify_flat(Configuration,profile,original_profile,errors,key,debug=False):
     for side in [0,1]:
          flatness.append(check_flat(Configuration,profile[side],errors[side],debug=debug))
     if all(flatness):
-        profile[:] = np.nanmedian(original_profile[:,:round(len(original_profile)/2.)])
+        if key in ['PA']:
+            profile[:] = profile[0,0]
+        else:
+            profile[:] = np.nanmedian(original_profile[:,:round(len(original_profile)/2.)])
         errors = get_error(Configuration,original_profile,profile,key,apply_max_error = True,min_error =np.nanmin(errors) , debug=debug)
     else:
         if any(flatness):
             for side in [0,1]:
                 if flatness[side]:
-                    profile[side]  = np.median(original_profile[side,:round(len(original_profile)/2.)])
+                    if key in ['PA']:
+                        profile[side,:] = profile[side,0]
+                    else:
+                        profile[side,:]  = np.median(original_profile[side,:round(len(original_profile)/2.)])
                     flat_val = profile[side,0]
                     errors[side] = get_error(Configuration,original_profile[side],profile[side],key,apply_max_error = True,min_error =np.nanmin(errors[side]),singular = True ,debug=debug)
             profile[:,0:3] = flat_val

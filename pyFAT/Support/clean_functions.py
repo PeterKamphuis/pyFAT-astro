@@ -103,8 +103,9 @@ Clean up the sofia output files by putting them in a dedicated directory.
 def cleanup(Configuration,Fits_Files, debug = False):
     #clean the log directory of all files except those named Prev_ and not the Log as it is already moved if existing
     files_in_log = ['restart_One_Step_Convergence.txt''restart_Centre_Convergence.txt',\
-                    'restart_Extent_Convergence.txt','Usage_Statistics.txt', 'clean_map.fits',\
-                    'dep_map.fits','minimum_map.fits','rot_map.fits','Convolved_Cube_FAT_opt.fits']
+                    'restart_Extent_Convergence.txt','Usage_Statistics.txt', 'clean_map_0.fits','clean_map_1.fits','clean_map.fits',\
+                    'dep_map_0.fits','minimum_map_0.fits','rot_map_0.fits','dep_map.fits','minimum_map.fits','rot_map.fits',\
+                    'dep_map_1.fits','minimum_map_1.fits','rot_map_1.fits','Convolved_Cube_FAT_opt.fits']
 
     for file in files_in_log:
         try:
@@ -243,8 +244,11 @@ def cleanup_final(Configuration,Fits_Files, debug =False):
     if debug:
          print_log(f'''Starting the final cleanup of the directory.
 ''',Configuration['OUTPUTLOG'],screen =True,debug = True)
-    clean_files = [Fits_Files['OPTIMIZED_CUBE'],'Centre_Convergence_In.def', 'Extent_Convergence_In.def','clean_map.fits','dep_map.fits','minimum_map.fits','rot_map.fits','One_Step_Convergence_In.def']
-    dest_dir = ['Logs','Center_Convergence', 'Extent_Convergence', 'Logs', 'Logs', 'Logs', 'Logs','One_Step_Convergence']
+    clean_files = [Fits_Files['OPTIMIZED_CUBE'],'Centre_Convergence_In.def', 'Extent_Convergence_In.def',\
+                    'clean_map_0.fits','dep_map_0.fits','minimum_map_0.fits','rot_map_0.fits',\
+                    'clean_map_1.fits','dep_map_1.fits','minimum_map_1.fits','rot_map_1.fits',\
+                    'One_Step_Convergence_In.def']
+    dest_dir = ['Logs','Center_Convergence', 'Extent_Convergence', 'Logs', 'Logs', 'Logs', 'Logs', 'Logs', 'Logs', 'Logs', 'Logs','One_Step_Convergence']
     for file,dir in zip(clean_files,dest_dir):
     # Not remove anything but cleanup all
         try:
