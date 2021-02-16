@@ -118,7 +118,7 @@ def main(argv):
                        'MIN_SIZE_IN_BEAMS': 0., # Minimum allowed size of the galaxy, set in check_source
                        'SIZE_IN_BEAMS': 0, # The size of the galaxy in number of beams, adapted after running Sofia
                        'NO_RINGS': 0., # The number of rings in the fit
-                       'LAST_RELIABLE_RINGS': [0.,0.], # Location of the rings where the SBR drops below the cutoff limits, adapted after every run.
+                       'LAST_RELIABLE_RINGS': [0.,0.], # Location of the rings where the SBR drops below the cutoff limits, adapted after every run. Should only be set in check_size
                        'LIMIT_MODIFIER': [1.], #Modifier for the cutoff limits based on the inclination , adapted after every run.
                        'OLD_RINGS': [], # List to keep track of the ring sizes that have been fitted.
 
@@ -127,6 +127,7 @@ def main(argv):
                        'INNER_FIX': 3, #Number of rings that are fixed in the inner part for the INCL and PA, , adapted after every run.
                        'WARP_SLOPE': [0.,0.], #Ring numbers from which outwards the warping should be fitted as a slope,  , adapted after every run.
                        'OUTER_SLOPE_START': 1, # Ring number from where the RC is fitted as a slope
+                       'RC_UNRELIABLE': 1, # Ring number from where the RC values are set flat. Should only be set in check_size
 
                        'NOISE': 0. , #Noise of the input cube, set in main
                        'PIX_PER_BEAM': 0., #Number of pixels in a beam, set in main

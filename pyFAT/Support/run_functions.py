@@ -86,10 +86,10 @@ def fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run,hd
         fixed_errors = []
         if not Configuration['FIX_INCLINATION'][0]:
             pars_to_smooth.append('INCL')
-            min_error.append(2.*Configuration['LIMIT_MODIFIER'])
+            min_error.append(set_limits(3.*np.mean(Configuration['LIMIT_MODIFIER']),2,5))
         else:
             not_to_smooth.append('INCL')
-            fixed_errors.append(2.*Configuration['LIMIT_MODIFIER'])
+            fixed_errors.append(set_limits(2.*np.mean(Configuration['LIMIT_MODIFIER']),2,5))
         if not Configuration['FIX_Z0'][0]:
             pars_to_smooth.append('Z0')
             min_error.append(convertskyangle(0.1,Configuration['DISTANCE'],physical= True))
@@ -98,7 +98,7 @@ def fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run,hd
             fixed_errors.append(convertskyangle(0.1,Configuration['DISTANCE'],physical= True))
         if not Configuration['FIX_PA'][0]:
             pars_to_smooth.append('PA')
-            min_error.append(1.)
+            min_error.append(2.)
         else:
             not_to_smooth.append('PA')
             fixed_errors.append(1.)
@@ -514,7 +514,7 @@ check_source.__doc__='''
 
  OUTPUTS:
     Initial_Parameters = Dictionary with all initial values obtained from the Sofia source finding and processing.
-    
+
  OPTIONAL OUTPUTS:
 
  PROCEDURES CALLED:
@@ -552,7 +552,7 @@ def extent_converge(Configuration, Fits_Files,Tirific_Template,current_run,hdr, 
         Configuration['INNER_FIX'] = get_inner_fix(Configuration, Tirific_Template,debug=debug)
         set_cflux(Configuration,Tirific_Template,debug = debug)
         keys_to_smooth =['INCL','PA','SDIS','Z0','VROT']
-        min_errors = [2.*Configuration['LIMIT_MODIFIER'],1.,hdr['CDELT3']/(2000.*Configuration['LIMIT_MODIFIER']), \
+        min_errors = [3.*np.mean(Configuration['LIMIT_MODIFIER']),2.,hdr['CDELT3']/(2000.*Configuration['LIMIT_MODIFIER']), \
                         convertskyangle(0.1,Configuration['DISTANCE'],physical= True)/Configuration['LIMIT_MODIFIER'],\
                         hdr['CDELT3']/(1000.*Configuration['LIMIT_MODIFIER'])]
         for j,key in enumerate(keys_to_smooth):
@@ -621,7 +621,7 @@ def one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run,hdr
         Configuration['INNER_FIX'] = get_inner_fix(Configuration, Tirific_Template,debug=debug)
         set_cflux(Configuration,Tirific_Template,debug = debug)
         keys_to_smooth =['INCL','PA','SDIS','Z0','VROT']
-        min_errors = [2.*Configuration['LIMIT_MODIFIER'],1.,hdr['CDELT3']/(2000.*Configuration['LIMIT_MODIFIER']), \
+        min_errors = [3.*np.mean(Configuration['LIMIT_MODIFIER']),2.,hdr['CDELT3']/(2000.*Configuration['LIMIT_MODIFIER']), \
                         convertskyangle(0.1,Configuration['DISTANCE'],physical= True)/Configuration['LIMIT_MODIFIER'],\
                         hdr['CDELT3']/(1000.*Configuration['LIMIT_MODIFIER'])]
         for j,key in enumerate(keys_to_smooth):

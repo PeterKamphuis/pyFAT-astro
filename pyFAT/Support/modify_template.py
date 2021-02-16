@@ -168,22 +168,19 @@ fix_sbr.__doc__ =f'''
 
 
 def check_size(Configuration,Tirific_Template,hdr, fit_stage = 'Unitialized_Stage', stage = 'initial',
-                Fits_Files= 'No Files' ,debug = False,fix_rc = False,current_run='Not Initialized'):
-    if debug and not fix_rc:
+                Fits_Files= 'No Files' ,debug = False,current_run='Not Initialized'):
+    if debug:
         print_log(f'''CHECK_SIZE: Starting a new Check_size with the following parameters:
 {'':8s}CHECK_SIZE: Rings = {Configuration['NO_RINGS']}
 {'':8s}CHECK_SIZE: Size in Beams = {Configuration['SIZE_IN_BEAMS']}
-{'':8s}CHECK_SIZE: Fix_RC = {fix_rc}
 ''',Configuration['OUTPUTLOG'],debug=True,screen=True)
 
 
     radii, sbr_ring_limits = sbr_limits(Configuration,hdr,systemic = float(Tirific_Template['VSYS'].split()[0]),debug=debug)
-    if fix_rc:
-        sbr_ring_limits = 2.5*np.array(sbr_ring_limits)
     #get the sbr profiles
 
     sbr = np.array(get_from_template(Tirific_Template, ['SBR','SBR_2'],debug=debug),dtype = float)
-    if debug and not fix_rc:
+    if debug:
         print_log(f'''CHECK_SIZE: This is the sizes
 {'':8s}CHECK_SIZE: SBR = {len(sbr[0])}
 {'':8s}CHECK_SIZE: limits = {len(sbr_ring_limits)}
@@ -191,18 +188,18 @@ def check_size(Configuration,Tirific_Template,hdr, fit_stage = 'Unitialized_Stag
 ''',Configuration['OUTPUTLOG'],debug=False,screen=True)
     if len(sbr[0]) != len(sbr_ring_limits):
         #Check what the appropriate size should be
-        if debug and not fix_rc:
+        if debug:
             print_log(f'''CHECK_SIZE: Equalizing the sizes
 ''',Configuration['OUTPUTLOG'],debug=False,screen=True)
         if len(sbr[0]) != Configuration['NO_RINGS']:
-            if debug and not fix_rc:
+            if debug:
                 print_log(f'''CHECK_SIZE: Interpolating SBR
 ''',Configuration['OUTPUTLOG'],debug=False,screen=True)
             old_radii = np.array(get_from_template(Tirific_Template, ['RADI'],debug=debug),dtype = float)
             for i in [0,1]:
                 sbr[i] = np.interp(np.array(radii,dtype=float),np.array(old_radii[0],dtype=float),np.array(sbr[i],dtype=float))
 
-    if debug and not fix_rc:
+    if debug:
         print_log(f'''CHECK_SIZE: This after correcting.
 {'':8s}CHECK_SIZE: SBR = {len(sbr[0])}
 {'':8s}CHECK_SIZE: limits = {len(sbr_ring_limits)}
@@ -210,68 +207,11 @@ def check_size(Configuration,Tirific_Template,hdr, fit_stage = 'Unitialized_Stag
 ''',Configuration['OUTPUTLOG'],debug=False,screen=True)
     #sbr_ring_limits = 1.25*np.array([sbr_ring_limits,sbr_ring_limits])
     sbr_ring_limits = np.array([sbr_ring_limits,sbr_ring_limits])
-    #if debug:
-    #    print_log(f'''CHECK_SIZE: We have {sbr_ring_limits.size} values in limits and  {sbr.size} in sbr.
-#{'':8s}CHECK_SIZE: It should be {Configuration['NO_RINGS']}
-#''',Configuration['OUTPUTLOG'], screen = True, debug = debug)
-
-    new_rings = Configuration['NO_RINGS']
-    difference_with_limit = np.array(sbr-sbr_ring_limits)
+    new_rings = get_number_of_rings(Configuration,sbr,sbr_ring_limits, debug=debug)
     # if all of the last points are  below the limit we start checking how far to cut
-    if np.all(difference_with_limit[:,-1] < 0.):
-        if debug and not fix_rc:
-            print_log(f'''CHECK_SIZE: both last rings are below the limit
-''',Configuration['OUTPUTLOG'],debug=False,screen=True)
-        for i in range(len(difference_with_limit[0,:])-1,int(new_rings/2.),-1):
-            if debug and not fix_rc:
-                print_log(f'''CHECK_SIZE: Checking ring {i}
-''',Configuration['OUTPUTLOG'],debug=False,screen=True)
-            if np.all(difference_with_limit[:,i] < 0.):
-                #check that 1 any of the lesser rings are bright enough
-                if np.any(sbr[:,i-1] > 1.5 *sbr_ring_limits[:,i-1]):
-                    new_rings = i+1
-                    if debug and not fix_rc:
-                        print_log(f'''CHECK_SIZE: we find that the previous rings are bright enough, rings = {new_rings}
-''',Configuration['OUTPUTLOG'],debug=False,screen=True)
-                    break
-                else:
-                    if debug and not fix_rc:
-                        print_log(f'''CHECK_SIZE: the previous rings are not bright enough so we reduce 1, old_rings = {new_rings}, new_rings = {i}
-''',Configuration['OUTPUTLOG'],debug=False,screen=True)
-                    new_rings = i
-            else:
-                #if not both values are below than this is the extend we want
-                new_rings = i+1
-                if debug and not fix_rc:
-                        print_log(f'''CHECK_SIZE: Not both rings warrant cutting, rings = {new_rings}
-''',Configuration['OUTPUTLOG'],debug=False,screen=True)
-                break
-    else:
-        if debug and not fix_rc:
-            print_log(f'''CHECK_SIZE: Not both last rings are below the limit
-''',Configuration['OUTPUTLOG'],debug=False,screen=True)
-        # if they are not we first check wether both second to last rings are
-        if ((difference_with_limit[0,-2] < 0.) and (sbr[0,-1] < 2*sbr_ring_limits[0,-1]) and (difference_with_limit[1,-1] < 0.)) or \
-            ((difference_with_limit[1,-2] < 0.) and (sbr[1,-1] < 2*sbr_ring_limits[1,-1]) and (difference_with_limit[0,-1] < 0.)) or\
-            ((difference_with_limit[0,-2] < 0.) and (difference_with_limit[1,-2] < 0.) and (sbr[0,-1] < 3*sbr_ring_limits[0,-1]) and (sbr[1,-1] < 3*sbr_ring_limits[1,-1])):
-            new_rings -= 1
-            if debug and not fix_rc:
-                print_log(f'''CHECK_SIZE: A second ring is too faint, rings = {new_rings}
-''',Configuration['OUTPUTLOG'],debug=False,screen=True)
-        elif np.all(difference_with_limit[:,-2] < 0.) and np.all(sbr[:,-1] < 5*sbr_ring_limits[:,-1]):
-            new_rings -= 1
-            if debug and not fix_rc:
-                print_log(f'''CHECK_SIZE: Both second rings are too faint, rings = {new_rings}
-''',Configuration['OUTPUTLOG'],debug=False,screen=True)
-        else:
-            if debug and not fix_rc:
-                print_log(f'''CHECK_SIZE: The second rings are too bright and do not allow for cutting.
-''',Configuration['OUTPUTLOG'],debug=False,screen=True)
-    if fix_rc:
-        if new_rings == Configuration['NO_RINGS']:
-            new_rings -= 1
-        return new_rings-1
-
+    Configuration['RC_UNRELIABLE'] = get_number_of_rings(Configuration,sbr,2.5*sbr_ring_limits, debug=debug)-1
+    if Configuration['RC_UNRELIABLE'] == Configuration['NO_RINGS']:
+        Configuration['RC_UNRELIABLE'] -= 1
     #if we haven't subtracted we check if we should add
     if new_rings == Configuration['NO_RINGS']:
         if (np.any(sbr[:,-2] > sbr_ring_limits[:,-2]*7.) and np.any(sbr[:,-1] > sbr_ring_limits[:,-1]*3.)) or \
@@ -359,46 +299,122 @@ def check_size(Configuration,Tirific_Template,hdr, fit_stage = 'Unitialized_Stag
         # Do not move this from here else other routines such as sbr_limits are messed up
         set_new_size(Configuration,Tirific_Template,Fits_Files,fit_stage= fit_stage, stage = stage, hdr=hdr ,debug = debug,current_run = current_run)
     return False
-check_size.__doc__ = '''
-;+
-; NAME:
-;       check_size(Configuration,Tirific_Template)
-;
-; PURPOSE:
-;       This routine compares the SBR profiles and decides what the new number of ring should be
-;
-; CATEGORY:
-;       Support
-;
-; CALLING SEQUENCE:
-;
-;
-;
-; INPUTS:
-;       SBR1in = The sbr profile of the approaching side
-;       SBR2in = The sbr profile of the receding side
-;       cutoffin = Array with the cutoff values
-;
-; OPTIONAL INPUTS:
-;       -
-;
-; KEYWORD PARAMETERS:
-;       /INDIVIDUAL - Set this keyword to get an independent ring for
-;                     each sides.
-;       /DEBUG      - Set this keyword to get printed output during
-;                     the running
-;
-; OUTPUTS:
-;       newrings = the new amount of rings. a 2D array when
-;       /INDIVIDUAL is set
-;
-; OPTIONAL OUTPUTS:
-;       -
-;
-; PROCEDURES CALLED:
-;       MAX(), FLOOR()
+check_size.__doc__  =f'''
+ NAME:
+    check_size
 
+ PURPOSE:
+    Check and update the size of the model. Update RC_UNRELIABLE and LAST_RELIABLE_RINGS
+
+ CATEGORY:
+    modify_template
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    Tirific_Template = Standard Tirific Template
+    hdr = header of the cube to be fitted
+    fit_stage = type of fitting
+    stage = Stage of the fitting process,
+                Fits_Files= 'No Files' ,debug = False,current_run='Not Initialized'):
+
+ OPTIONAL INPUTS:
+    debug = False
+    fit_stage = type of fitting
+    stage = Stage of the fitting process,
+    Fits_Files= Names of the fits files
+    current_run= subproccess to be stopped for the tirific run when rings change
+
+ OUTPUTS:
+    Boolean True when rings are not updated False if they are
+    Configuration['RC_UNRELIABLE'] = modified and updated here.
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
 '''
+
+def get_number_of_rings(Configuration,sbr,sbr_ring_limits, debug=False):
+    new_rings = Configuration['NO_RINGS']
+    difference_with_limit = np.array(sbr-sbr_ring_limits)
+    if np.all(difference_with_limit[:,-1] < 0.):
+        if debug:
+            print_log(f'''GET_NUMBER_OF_RINGS: both last rings are below the limit
+''',Configuration['OUTPUTLOG'],debug=True)
+        for i in range(len(difference_with_limit[0,:])-1,int(new_rings/2.),-1):
+            if debug:
+                print_log(f'''GET_NUMBER_OF_RINGS: Checking ring {i}
+''',Configuration['OUTPUTLOG'],debug=False)
+            if np.all(difference_with_limit[:,i] < 0.):
+                #check that 1 any of the lesser rings are bright enough
+                if np.any(sbr[:,i-1] > 1.5 *sbr_ring_limits[:,i-1]):
+                    new_rings = i+1
+                    if debug:
+                        print_log(f'''GET_NUMBER_OF_RINGS: we find that the previous rings are bright enough, rings = {new_rings}
+''',Configuration['OUTPUTLOG'],debug=False,screen=True)
+                    break
+                else:
+                    if debug:
+                        print_log(f'''GET_NUMBER_OF_RINGS: the previous rings are not bright enough so we reduce 1, old_rings = {new_rings}, new_rings = {i}
+''',Configuration['OUTPUTLOG'],debug=False,screen=True)
+                    new_rings = i
+            else:
+                #if not both values are below than this is the extend we want
+                new_rings = i+1
+                if debug:
+                        print_log(f'''GET_NUMBER_OF_RINGS: Not both rings warrant cutting, rings = {new_rings}
+''',Configuration['OUTPUTLOG'],debug=False,screen=True)
+                break
+    else:
+        if debug:
+            print_log(f'''GET_NUMBER_OF_RINGS: Not both last rings are below the limit
+''',Configuration['OUTPUTLOG'],debug=False,screen=True)
+        # if they are not we first check wether both second to last rings are
+        if ((difference_with_limit[0,-2] < 0.) and (sbr[0,-1] < 2*sbr_ring_limits[0,-1]) and (difference_with_limit[1,-1] < 0.)) or \
+            ((difference_with_limit[1,-2] < 0.) and (sbr[1,-1] < 2*sbr_ring_limits[1,-1]) and (difference_with_limit[0,-1] < 0.)) or\
+            ((difference_with_limit[0,-2] < 0.) and (difference_with_limit[1,-2] < 0.) and (sbr[0,-1] < 3*sbr_ring_limits[0,-1]) and (sbr[1,-1] < 3*sbr_ring_limits[1,-1])):
+            new_rings -= 1
+            if debug:
+                print_log(f'''GET_NUMBER_OF_RINGS: A second ring is too faint, rings = {new_rings}
+''',Configuration['OUTPUTLOG'],debug=False,screen=True)
+        elif np.all(difference_with_limit[:,-2] < 0.) and np.all(sbr[:,-1] < 5*sbr_ring_limits[:,-1]):
+            new_rings -= 1
+            if debug:
+                print_log(f'''GET_NUMBER_OF_RINGS: Both second rings are too faint, rings = {new_rings}
+''',Configuration['OUTPUTLOG'],debug=False,screen=True)
+        else:
+            if debug:
+                print_log(f'''GET_NUMBER_OF_RINGS: The second rings are too bright and do not allow for cutting.
+''',Configuration['OUTPUTLOG'],debug=False,screen=True)
+    return new_rings
+
+get_number_of_rings.__doc__ =f'''
+ NAME:
+    get_number_of_rings
+
+ PURPOSE:
+    Determine whether the amount of rings is good for the limits or not should change or not
+
+ CATEGORY:
+    modify_template
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    sbr = sbr profiles
+    sbr_ring_limits = the limits to evaluate
+
+ OPTIONAL INPUTS:
+    debug = False
+
+ OUTPUTS:
+    new_rings = the required number of rings
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+'''
+
 
 def fix_profile(Configuration, key, profile, Tirific_Template, hdr, debug= False, singular = False,only_inner = False ):
     if debug:
@@ -442,7 +458,7 @@ def fix_profile(Configuration, key, profile, Tirific_Template, hdr, debug= False
             profile[i,Configuration['LAST_RELIABLE_RINGS'][i]:] = profile[i,Configuration['LAST_RELIABLE_RINGS'][i]-1]
 
         if key == 'VROT':
-            profile[i] =fix_outer_rotation(Configuration,profile[i], Tirific_Template, hdr,debug= debug)
+            profile[i] =fix_outer_rotation(Configuration,profile[i],debug= debug)
         if key in ['PA','INCL','Z0']:
             xrange = set_limits((int(round(len(profile[0])-5.)/4.)),1,4)
         # need to make sure this connects smoothly
@@ -733,7 +749,7 @@ def get_error(Configuration,profile,sm_profile,key,min_error = [0.],singular = F
 {'':8s}{weights}
 ''',Configuration['OUTPUTLOG'],screen=True,debug = False)
     for i in sides:
-        error[i] = abs(profile[i]-sm_profile[i])
+        error[i] = abs(profile[i]-sm_profile[i])/2.
         error[i]= error[i]/weights[i]
         if len(min_error.shape) == 2:
             error[i] = [np.max([y,x]) for x,y in zip(error[i],min_error[i])]
@@ -758,13 +774,13 @@ def get_error(Configuration,profile,sm_profile,key,min_error = [0.],singular = F
 ''',Configuration['OUTPUTLOG'],screen=True,debug = False)
     return error
 
-def fix_outer_rotation(Configuration,profile, Tirific_Template,hdr, debug = False):
+def fix_outer_rotation(Configuration,profile, debug = False):
     if debug:
         print_log(f'''FIX_OUTER_ROTATION: adjust last rings of VROT profile:
 {'':8s}{profile}
 ''',Configuration['OUTPUTLOG'],screen=True,debug = True)
     profile = np.array(profile,dtype=float)
-    inner_slope = check_size(Configuration,Tirific_Template,hdr, debug= debug, fix_rc = True)
+    inner_slope = Configuration['RC_UNRELIABLE']
     if debug:
         print_log(f'''FIX_OUTER_ROTATION: this is the inner slope {inner_slope}
 ''',Configuration['OUTPUTLOG'],debug = False)
@@ -869,22 +885,38 @@ no_declining_vrot.__doc__ =f'''
 
 
 
-def check_flat(Configuration,profile,error, debug = False):
+def check_flat(Configuration,profile,error, last_reliable_ring = -1, debug = False):
+    if last_reliable_ring == -1:
+        last_reliable_ring = len(profile)-1
     if debug:
-        print_log(f'''CHECK_FLAT: checking flatness)
+        print_log(f'''CHECK_FLAT: checking flatness
 {'':8s}profile = {profile}
 {'':8s}error = {error}
+{'':8s}last_reliable_ring = {last_reliable_ring}
 ''',Configuration['OUTPUTLOG'],debug = True)
-    flat = True
+
     inner = np.mean(profile[:Configuration['INNER_FIX']])
-    median_error = np.median(error[Configuration['INNER_FIX']:])
-    outer = np.mean(profile[Configuration['INNER_FIX']+1:])
-    outer_std = np.std(profile[Configuration['INNER_FIX']+1:])
-    if abs(outer-inner) < 3*median_error and outer_std  < median_error:
+    mean_error = np.mean(error[:last_reliable_ring])
+    outer = np.mean(profile[Configuration['INNER_FIX']+1:last_reliable_ring])
+    outer_std = np.std(profile[Configuration['INNER_FIX']+1:last_reliable_ring])
+    if debug:
+            print_log(f'''CHECK_FLAT: If  {abs(outer-inner)} less than {mean_error} or
+{'':8s} The outer variation {outer_std} less than the median error {mean_error} we break and set flat.
+''',Configuration['OUTPUTLOG'],debug = False)
+    if abs(outer-inner) < mean_error or outer_std  < mean_error:
         return True
-    for e,x,y in zip(error[1:],profile[1:],profile[0:]):
-        if not x-e < y < x+e:
+    for e,x,y in zip(error[1:last_reliable_ring],profile[1:last_reliable_ring],profile[0:last_reliable_ring]):
+        if debug:
+            print_log(f'''CHECK_FLAT: x = {x}, y = {y}, e = {e}
+''',Configuration['OUTPUTLOG'],debug = False)
+        if not x-e/2. < y < x+e/2.:
+            if debug:
+                print_log(f'''CHECK_FLAT: This taco is bend
+''',Configuration['OUTPUTLOG'],debug = False)
             return False
+    if debug:
+            print_log(f'''CHECK_FLAT: All values were within the error of eachother
+''',Configuration['OUTPUTLOG'],debug = False)
     return True
 check_flat.__doc__ = '''
  NAME:
@@ -903,6 +935,9 @@ check_flat.__doc__ = '''
 
  OPTIONAL INPUTS:
     debug = False
+
+    last_reliable_ring = -1
+    the last ring in the profile that can be trusted
 
  OUTPUTS:
        True if no variation is found false if variation is found
@@ -1011,10 +1046,10 @@ def fit_polynomial(Configuration,radii,profile,sm_profile,error, key, Tirific_Te
 
     if start_order >= max_order:
         max_order = max_order+1
-
-    print_log(f'''FIT_POLYNOMIAL: For {key} we start at {start_order} because we have {len(radii)} rings of which {fixed} are fixed
+    if debug:
+        print_log(f'''FIT_POLYNOMIAL: For {key} we start at {start_order} because we have {len(radii)} rings of which {fixed} are fixed
 {'':8s} this gves us a maximum order of {max_order}
-''',Configuration['OUTPUTLOG'],screen =True, debug=False)
+''',Configuration['OUTPUTLOG'], debug=False)
 
     reduced_chi = []
     order = range(start_order,max_order)
@@ -1024,7 +1059,7 @@ def fit_polynomial(Configuration,radii,profile,sm_profile,error, key, Tirific_Te
 {'':8s} and the following profile:
 {'':8s}{sm_profile[st_fit:]}
 {'':8s} weights = {1./error[st_fit:]}
-''',Configuration['OUTPUTLOG'],screen =True, debug=False)
+''',Configuration['OUTPUTLOG'], debug=False)
 
     #make sure there are no 0. in the errors
     zero_locations = np.where(error[st_fit:] == 0.)[0]
@@ -1042,11 +1077,16 @@ def fit_polynomial(Configuration,radii,profile,sm_profile,error, key, Tirific_Te
             fit_profile = fix_profile(Configuration, key, fit_profile, Tirific_Template, hdr, singular = True,only_inner =only_inner)
         red_chi = np.sum((profile[st_fit:]-fit_profile[st_fit:])**2/error[st_fit:])/(len(radii[st_fit:])-ord)
         reduced_chi.append(red_chi)
+    if debug:
+        print_log(f'''FIT_POLYNOMIAL: We have fitted these:
+{'':8s} order = {order}
+{'':8s} reducuced chi = {reduced_chi}
+''',Configuration['OUTPUTLOG'], debug=False)
     reduced_chi = np.array(reduced_chi,dtype = float)
     final_order = order[np.where(np.min(reduced_chi ) == reduced_chi )[0][0]]
-    if debug:
-            print_log(f'''FIT_POLYNOMIAL: finds {final_order} as the polynomial order to regularise {key}
-''',Configuration['OUTPUTLOG'],screen =True, debug=False)
+
+    print_log(f'''FIT_POLYNOMIAL: We have regularised {key} with a polynomial of order {final_order}.
+''',Configuration['OUTPUTLOG'], debug=False)
     fit_profile = np.poly1d(np.polyfit(radii[st_fit:],profile[st_fit:],final_order,w=1./error[st_fit:]))
     if st_fit > 0.:
         new_profile = np.concatenate(([sm_profile[0]],[e for e in fit_profile(radii[st_fit:])]))
@@ -1058,40 +1098,37 @@ def fit_polynomial(Configuration,radii,profile,sm_profile,error, key, Tirific_Te
         new_profile = fix_profile(Configuration, key, new_profile, Tirific_Template, hdr,debug =debug, singular = True,only_inner =only_inner)
 
     return new_profile#,new_error
-fit_polynomial.__doc__ = '''
-;+
-; NAME:
-;       fit_polynomial(Configuration,radii,profile,sm_profile,error, fixed = 0 ):
-;
-; PURPOSE:
-;       Fit a polynomial between 3 and 8 order and determine the one with the optimal red chi square
-;
-; CATEGORY:
-;       modify_template
-;
-; CALLING SEQUENCE:
-;
-; INPUTS:
-;       profile = the unsmoothed profile to examine
-;
-;       error = The accompanying error
-; OPTIONAL INPUTS:
-;       -
-;
-; KEYWORD PARAMETERS:
-;       /DEBUG      - Set this keyword to get printed output during
-;                     the running
-;
-; OUTPUTS:
-;       True if no variation is found false if variation is found
-;
-; OPTIONAL OUTPUTS:
-;       -
-;
-; PROCEDURES CALLED:
-;      zip()
+fit_polynomial.__doc__ =f'''
+ NAME:
+    fit_polynomial
 
+ PURPOSE:
+    Fit a polynomial between 3 and 8 order and determine the one with the optimal reduced Chi^2 and return the regularised profile
+
+ CATEGORY:
+    modify_template
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    radii = rings in arcsec of profiles to regularise
+    profile = profile to be regularised
+    sm_profile = smoothed profile
+    error = errors on the profile
+    key = parameter that is being regularised
+    hdr = Header of the cube to be fitted
+
+Configuration,radii,profile,sm_profile,error, key, Tirific_Template, hdr,min_error =0., debug = False
+ OPTIONAL INPUTS:
+    debug = False
+
+ OUTPUTS:
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
 '''
+
 def flatten_the_curve(Configuration,Tirific_Template,debug = False):
     to_flatten = ['INCL','Z0','PA','SDIS']
     for key in to_flatten:
@@ -1336,7 +1373,7 @@ def set_fitting_parameters(Configuration, Tirific_Template, \
 
     for key in parameters_to_adjust:
         if key == 'VROT':
-            fitting_settings['VROT'] = set_vrot_fitting(Configuration,Tirific_Template, hdr = hdr,stage = stage, rotation = initial_estimates['VROT'], debug = debug )
+            fitting_settings['VROT'] = set_vrot_fitting(Configuration,stage = stage, rotation = initial_estimates['VROT'], debug = debug )
         elif key == 'SBR':
             fitting_settings['SBR'] = set_sbr_fitting(Configuration, hdr = hdr,stage = stage, systemic = initial_estimates['VSYS'][0], debug = debug)
         else:
@@ -2097,10 +2134,10 @@ set_sbr_fitting.__doc__ = '''
     ;
 '''
 
-def set_vrot_fitting(Configuration,Tirific_Template,hdr = None,systemic = 100., stage = 'initial', rotation = [100,5.], debug = False):
+def set_vrot_fitting(Configuration, stage = 'initial', rotation = [100,5.], debug = False):
     NUR = Configuration['NO_RINGS']
     vrot_input = {}
-    vrot_limits = [set_limits(rotation[0]-rotation[1]-10,hdr['CDELT3']/1000.,360.), \
+    vrot_limits = [set_limits(rotation[0]-rotation[1]-10,Configuration['CHANNEL_WIDTH'],360.), \
                    set_limits(rotation[0]+rotation[1]+10,80.,600.)]
     if debug:
         print_log(f'''SET_VROT_FITTING: We are setting the VROT limits.
@@ -2115,17 +2152,17 @@ def set_vrot_fitting(Configuration,Tirific_Template,hdr = None,systemic = 100., 
         vrot_input['PARMAX'] = np.array([vrot_limits[1]])
         vrot_input['PARMIN'] = np.array([vrot_limits[0]])
         vrot_input['MODERATE'] = np.array([5]) #How many steps from del start to del end
-        vrot_input['DELSTART'] = np.array([2.*hdr['CDELT3']/1000.*Configuration['LIMIT_MODIFIER'][0]]) # Starting step
+        vrot_input['DELSTART'] = np.array([2.*Configuration['CHANNEL_WIDTH']*Configuration['LIMIT_MODIFIER'][0]]) # Starting step
         #These were lower in the original fat
-        vrot_input['DELEND'] = np.array([0.1*hdr['CDELT3']/1000.*Configuration['LIMIT_MODIFIER'][0]]) #Ending step
-        vrot_input['MINDELTA'] = np.array([0.1*hdr['CDELT3']/1000.*Configuration['LIMIT_MODIFIER'][0]]) #saturation criterum when /SIZE SIZE should be 10 troughout the code
+        vrot_input['DELEND'] = np.array([0.1*Configuration['CHANNEL_WIDTH']*Configuration['LIMIT_MODIFIER'][0]]) #Ending step
+        vrot_input['MINDELTA'] = np.array([0.1*Configuration['CHANNEL_WIDTH']*Configuration['LIMIT_MODIFIER'][0]]) #saturation criterum when /SIZE SIZE should be 10 troughout the code
         #if there is not values in the center we connect the inner ring to the next ring
         forvarindex = ''
         if Configuration['EXCLUDE_CENTRAL'] or rotation[0] > 150.:
             forvarindex = 'VROT 2 VROT_2 2 '
         if Configuration['OUTER_SLOPE_START'] == NUR:
             if Configuration['NO_RINGS'] > 5:
-                inner_slope =  int(round(set_limits(check_size(Configuration,Tirific_Template,hdr, debug = debug,fix_rc = True),round(NUR/2.),NUR-1)))
+                inner_slope =  int(round(set_limits(Configuration['RC_UNRELIABLE'],round(NUR/2.),NUR-1)))
             else:
                 inner_slope = NUR
             if Configuration['NO_RINGS'] > 15 and inner_slope > int(Configuration['NO_RINGS']*4./5.) :
@@ -2232,10 +2269,12 @@ def smooth_profile(Configuration,Tirific_Template,key,hdr,min_error = 0.,debug=F
         else:
             profile[i] = savgol_filter(profile[i], 9, 4)
         if fix_sbr_call:
-            below_zero = np.where(profile[i] < 0.)[0]
+            below_zero = np.where(profile[i,:int(len(profile)/2.)] < 0.)[0]
             if below_zero.size > 0.:
                 profile[i,below_zero] = min_error[i,below_zero]
-
+            below_zero = np.where(profile[i,int(len(profile)/2.):] < 0.)[0]+int(len(profile)/2.)
+            if below_zero.size > 0.:
+                profile[i,below_zero] = profile[i,below_zero-1]/2.
 
     # Fix the settings
     format = set_format(key)
@@ -2257,7 +2296,8 @@ def smooth_profile(Configuration,Tirific_Template,key,hdr,min_error = 0.,debug=F
 {'':8s}{profile}
 ''',Configuration['OUTPUTLOG'],debug = False)
     if not no_apply:
-        errors = get_error(Configuration,original_profile,profile,key,min_error=min_error,debug=debug)
+        weights = get_ring_weights(Configuration,hdr,Tirific_Template,debug=debug)
+        errors = get_error(Configuration,original_profile,profile,key,weights = weights, min_error=min_error,debug=debug)
         if key not in ['VROT']:
             # Check whether it should be flat
             profile,errors =modify_flat(Configuration,profile,original_profile,errors,key,debug=debug)
@@ -2323,7 +2363,7 @@ smooth_profile.__doc__ =f'''
 
 
 
-def modify_flat(Configuration,profile,original_profile,errors,key,debug=False):
+def modify_flat(Configuration,profile,original_profile,errors,key, debug=False):
 
     if debug:
          print_log(f'''MODIFY_FLAT: These {key} profiles are checked to be flat.
@@ -2334,7 +2374,12 @@ def modify_flat(Configuration,profile,original_profile,errors,key,debug=False):
 
     flatness = []
     for side in [0,1]:
-         flatness.append(check_flat(Configuration,profile[side],errors[side],debug=debug))
+         flatness.append(check_flat(Configuration,profile[side],errors[side],last_reliable_ring= Configuration['LAST_RELIABLE_RINGS'][side],debug=debug))
+    if debug:
+         print_log(f'''MODIFY_FLAT: Side 0 is flat = {flatness[0]}
+{'':8s} Side 1 is flat = {flatness[1]}
+''',Configuration['OUTPUTLOG'],debug = False)
+
     if all(flatness):
         if key in ['PA']:
             profile[:] = profile[0,0]

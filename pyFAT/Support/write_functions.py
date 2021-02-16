@@ -2,7 +2,7 @@
 # This module contains a set of functions and classes that are used to write text files to Disk
 
 from pyFAT.Support.support_functions import convert_type, print_log,convertRADEC,convertskyangle,set_limit_modifier,columndensity,set_limits,get_inner_fix
-from pyFAT.Support.modify_template import set_model_parameters, set_overall_parameters, set_fitting_parameters,check_size,get_warp_slope, update_disk_angles
+from pyFAT.Support.modify_template import set_model_parameters, set_overall_parameters, set_fitting_parameters,get_warp_slope, update_disk_angles
 from pyFAT.Support.fits_functions import extract_pv
 from pyFAT.Support.read_functions import load_tirific,load_basicinfo, load_template
 import numpy as np
@@ -141,7 +141,6 @@ def initialize_def_file(Configuration, Fits_Files,Tirific_Template, cube_hdr,Ini
     elif fit_stage in ['Extent_Convergence','One_Step_Convergence']:
         if 'VSYS' in Initial_Parameters and fit_stage == 'One_Step_Convergence':
             Initial_Parameters['VSYS'] = [x/1000. for x in Initial_Parameters['VSYS']]
-        #accepted = check_size(Configuration,Tirific_Template,cube_hdr, debug=debug)
         set_overall_parameters(Configuration, Fits_Files,Tirific_Template,loops = 10 ,fit_stage=fit_stage,hdr=cube_hdr, debug=debug,stage='initialize_ec')
         Vars_to_Set =  ['XPOS','YPOS','VSYS','VROT','INCL','PA','SDIS','SBR','SBR_2','Z0']
         if fit_stage == 'One_Step_Convergence':
