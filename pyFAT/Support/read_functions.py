@@ -2,7 +2,7 @@
 # This module contains a set of functions and classes that are used in FAT to read input files
 
 from pyFAT.Support.support_functions import Proper_Dictionary,print_log,convertRADEC,set_limits, remove_inhomogeneities, \
-                                obtain_border_pix, obtain_ratios, get_inclination_pa,get_vel_pa
+                                obtain_border_pix, get_inclination_pa,get_vel_pa
 from pyFAT.Support.fits_functions import check_mask
 from astropy.io import fits
 from scipy import ndimage
@@ -120,7 +120,7 @@ def config_file(input_parameters, start_dir, debug = False):
                         Else press CTRL-C to abort.
                 ''')
     Configuration = Proper_Dictionary({})
-    boolean_keys = ['NEW_OUTPUT', 'HANNING','FIX_INCLINATION','FIX_PA','FIX_SDIS','FIX_Z0','FIX_SBR','FIX_VROT','WARP_OUTPUT','TWO_STEP']
+    boolean_keys = ['NEW_OUTPUT', 'HANNING','FIX_INCLINATION','FIX_PA','FIX_SDIS','FIX_Z0','FIX_SBR','FIX_VROT','WARP_OUTPUT']
     string_keys = ['OUTPUTLOG', 'OUTPUTCATALOGUE','MAINDIR','CATALOGUE']
     integer_keys = ['STARTGALAXY','ENDGALAXY','MAPS_OUTPUT','OPT_PIXELBEAM','FINISHAFTER']
     # Separate the keyword names
@@ -215,14 +215,12 @@ def config_file(input_parameters, start_dir, debug = False):
                                    'STARTGALAXY', 'ENDGALAXY', 'TESTING', 'START_POINT',\
                                    'RING_SIZE', 'FINISHAFTER', 'CATALOGUE', 'MAINDIR',\
                                     'OUTPUTCATALOGUE', 'OUTPUTLOG', 'NEW_OUTPUT', 'OPT_PIXELBEAM',\
-                                     'MAPS_OUTPUT','WARP_OUTPUT','TWO_STEP']
+                                     'MAPS_OUTPUT','WARP_OUTPUT']
 
     for key in required_configuration_keys:
         if key not in Configuration:
-            if key == 'TWO_STEP':
-                Configuration[key] = False
-            elif key == 'STARTGALAXY':
-                Configuration[key] = 0
+            if key == 'STARTGALAXY':
+                Configuration[key] = -1
             elif key == 'FINISHAFTER':
                 Configuration[key] = 2
             elif key == 'TESTING':
@@ -309,7 +307,7 @@ def extract_vrot(Configuration, hdr,map ,angle,center, debug= False):
 {'':8s} PA= {angle}
 {'':8s} center= {center}
 ''',Configuration['OUTPUTLOG'], debug = True,screen = True)
-    x1,x2,y1,y2 = obtain_border_pix(Configuration,hdr,angle,center,debug=debug)
+    x1,x2,y1,y2 = obtain_border_pix(Configuration,angle,center,debug=debug)
     linex,liney = np.linspace(x1,x2,1000), np.linspace(y1,y2,1000)
     maj_resolution = np.sqrt(((x2-x1)/1000.)**2+((y2-y1)/1000.)**2)
     if debug:
@@ -336,9 +334,9 @@ def extract_vrot(Configuration, hdr,map ,angle,center, debug= False):
         neg_profile.append(maj_profile[neg_index[neg_index.size-i-1]])
         pos_profile.append(-1*maj_profile[pos_index[i]])
         #correct for beam smearing in the center
-        beam_back = -1*int(hdr['BMAJ']/(np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])*maj_resolution))
+        beam_back = -1*int(Configuration['BEAM_IN_PIXELS'][0]*maj_resolution)
 
-        if i > hdr['BMAJ']/(np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])*maj_resolution) and i < -2.*beam_back:
+        if Configuration['BEAM_IN_PIXELS'][0]*maj_resolution < i < -2.*beam_back:
             avg_profile[beam_back] = avg_profile[beam_back]+0.5*avg_profile[int(beam_back/2.)]+0.1*avg_profile[-1]
             neg_profile[beam_back] = neg_profile[beam_back]+0.5*neg_profile[int(beam_back/2.)]+0.1*neg_profile[-1]
             pos_profile[beam_back] = pos_profile[beam_back]+0.5*pos_profile[int(beam_back/2.)]+0.1*pos_profile[-1]
@@ -346,11 +344,11 @@ def extract_vrot(Configuration, hdr,map ,angle,center, debug= False):
         print_log(f'''EXTRACT_VROT: starting extraction of initial VROT.
 ''',Configuration['OUTPUTLOG'], debug = False)
 
-    ring_size_req = hdr['BMAJ']/(np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])*maj_resolution)
+    ring_size_req = Configuration['BEAM_IN_PIXELS'][0]/maj_resolution
     if debug:
         print_log(f'''EXTRACT_VROT: We need a rings size of
 {'':8s} ringsize= {ring_size_req}
-{'':8s} because bmaj  ={hdr['BMAJ']} cdelt = {np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])} and the resolution = {maj_resolution}
+{'':8s} because bmaj  ={Configuration['BEAM'][0]} cdelt = {Configuration['BEAM'][0]/(3600.*Configuration['BEAM_IN_PIXELS'][0])} and the resolution = {maj_resolution}
 ''',Configuration['OUTPUTLOG'], debug = False)
     profile = np.array(avg_profile[0::int(ring_size_req)],dtype=float)
     if debug:
@@ -427,26 +425,27 @@ def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
     median_noise_in_map = np.nanmedian(noise_map[noise_map > 0.])
     minimum_noise_in_map = np.nanmin(noise_map[noise_map > 0.])
     map[0.5*minimum_noise_in_map > noise_map] = 0.
+    mom0[0].data= map
     scale_factor = set_limits(SNR/3.*minimum_noise_in_map/median_noise_in_map, 0.05, 1.)
     if debug:
         print_log(f'''GUESS_ORIENTATION: We find SNR = {SNR} and a scale factor {scale_factor} and the noise median {median_noise_in_map}
 {'':8s} minimum {minimum_noise_in_map}
 ''',Configuration['OUTPUTLOG'], debug = False)
-    inclination, pa, maj_extent = get_inclination_pa(Configuration, map,mom0, hdr, center, cutoff = scale_factor* median_noise_in_map, debug = debug)
+    inclination, pa, maj_extent = get_inclination_pa(Configuration, mom0, center, cutoff = scale_factor* median_noise_in_map, debug = debug)
 
     # For very small galaxies we do not want to correct the extend
-    if maj_extent/hdr['BMAJ'] > 3.:
-        maj_extent = maj_extent+(hdr['BMAJ']*0.2/scale_factor)
+    if maj_extent/Configuration['BEAM'][0]/3600. > 3.:
+        maj_extent = maj_extent+(Configuration['BEAM'][0]/3600.*0.2/scale_factor)
 
     if debug:
         print_log(f'''GUESS_ORIENTATION: From the maps we find
 {'':8s} inclination = {inclination}
 {'':8s} pa = {pa}
-{'':8s} size in beams = {maj_extent/hdr['BMAJ']}
+{'':8s} size in beams = {maj_extent/Configuration['BEAM'][0]/3600.}
 ''',Configuration['OUTPUTLOG'], debug = False)
             #map[3*minimum_noise_in_map > noise_map] = 0.
     # From these estimates we also get an initial SBR
-    x1,x2,y1,y2 = obtain_border_pix(Configuration,hdr,pa[0],center,debug=debug)
+    x1,x2,y1,y2 = obtain_border_pix(Configuration,pa[0],center,debug=debug)
     linex,liney = np.linspace(x1,x2,1000), np.linspace(y1,y2,1000)
     maj_resolution = np.sqrt(((x2-x1)/1000.)**2+((y2-y1)/1000.)**2)
     #maj_resolution = abs((abs(x2-x1)/1000.)*np.sin(np.radians(pa[0])))+abs(abs(y2-y1)/1000.*np.cos(np.radians(pa[0])))
@@ -470,11 +469,11 @@ def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
         diff = diff+abs(pos_profile[-1]-neg_profile[-1])*abs(np.mean([pos_profile[-1],neg_profile[-1]]))
     diff = diff/np.nanmin([neg_index.size,pos_index.size])
     if debug:
-        print_log(f'''GUESS_ORIENTATION:'Beam, center of profile, center, differnece between pos and neg
-{'':8s}{hdr['BMAJ']*0.5/np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])} {center_of_profile} {center} {diff}
+        print_log(f'''GUESS_ORIENTATION:'BMAJ in pixels, center of profile, center, differnece between pos and neg
+{'':8s}{Configuration['BEAM_IN_PIXELS'][0]*0.5} {center_of_profile} {center} {diff}
 ''',Configuration['OUTPUTLOG'], debug = False)
     # if the center of the profile is more than half a beam off from the Sofia center let's see which on provides a more symmetric profile
-    if abs(center_of_profile) > hdr['BMAJ']*0.5/np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])]) and SNR > 3.:
+    if abs(center_of_profile) > Configuration['BEAM_IN_PIXELS'][0]*0.5 and SNR > 3.:
         if debug:
                 print_log(f'''GUESS_ORIENTATION: The SoFiA center and that of the SBR profile are separated by more than half a beam.
 {'':8s}GUESS_ORIENTATION: Determining the more symmetric profile.
@@ -505,8 +504,8 @@ def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
             maj_axis =  np.linspace(0,1000*maj_resolution,1000)- (abs((abs(center[0]))*np.sin(np.radians(pa[0])))+abs(abs(center[1])*np.cos(np.radians(pa[0]))))
 
 
-    ring_size_req = hdr['BMAJ']/(np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])*maj_resolution)
-    SBR_initial = avg_profile[0::int(ring_size_req)]/(np.pi*abs(hdr['BMAJ']*3600.*hdr['BMIN']*3600.)/(4.*np.log(2.))) # Jy*km/s
+    ring_size_req = Configuration['BEAM_IN_PIXELS'][0]/maj_resolution
+    SBR_initial = avg_profile[0::int(ring_size_req)]/(np.pi*Configuration['BEAM'][0]*Configuration['BEAM'][1]/(4.*np.log(2.))) # Jy*km/s
     SBR_initial =np.hstack((SBR_initial[0],SBR_initial,SBR_initial[-1]))
 
     SBR_initial[0:3] = SBR_initial[0:3] * (1.2 -float(inclination[0])/90.)
@@ -525,7 +524,7 @@ def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
     noise_map = []
     vel_pa = get_vel_pa(Configuration,map,center=center,debug=debug)
 
-    x1,x2,y1,y2 = obtain_border_pix(Configuration,hdr,pa[0],center,debug=debug)
+    x1,x2,y1,y2 = obtain_border_pix(Configuration,pa[0],center,debug=debug)
     linex,liney = np.linspace(x1,x2,1000), np.linspace(y1,y2,1000)
     #maj_resolution = abs((abs(x2-x1)/1000.)*np.sin(np.radians(pa[0])))+abs(abs(y2-y1)/1000.*np.cos(np.radians(pa[0])))
     maj_resolution = np.sqrt(((x2-x1)/1000.)**2+((y2-y1)/1000.)**2)
@@ -610,14 +609,14 @@ guess_orientation.__doc__ =f'''
 ;       -
 ;
 ; PROCEDURES CALLED:
-;      np.mean, astropy.io.fits, obtain_ratios, np.linspace , unspecified
+;      np.mean, astropy.io.fits, np.linspace , unspecified
 ;
 ; EXAMPLE:
 ;
 ;
 '''
 # load the basic info file to get the Sofia FAT Initial_Estimates
-def load_basicinfo(filename, Variables = ['RA','DEC','VSYS','PA','Inclination','Max VRot','V_mask','Tot FLux','D_HI','Distance','HI_Mass' ,'D_HI' ], unpack = True, debug = False):
+def load_basicinfo(Configuration,filename, Variables = ['RA','DEC','VSYS','PA','Inclination','Max VRot','V_mask','Tot FLux','D_HI','Distance','HI_Mass' ,'D_HI' ], unpack = True, debug = False):
     outputarray = np.zeros((2,len(Variables)), dtype=float)
     try:
         tmp = open(filename, 'r')
@@ -635,7 +634,7 @@ def load_basicinfo(filename, Variables = ['RA','DEC','VSYS','PA','Inclination','
         if var == 'RA' or var == 'DEC':
             tmp_str = invalues[Var_inFile.index('RA')].split('+/-')
             tmp_str2 = invalues[Var_inFile.index('DEC')].split('+/-')
-            RA, DEC = convertRADEC(tmp_str[0],tmp_str2[0],invert=True)
+            RA, DEC = convertRADEC(Configuration,tmp_str[0],tmp_str2[0],invert=True,debug=debug)
             if var == 'RA':
                 outputarray[:,i] = [RA,float(tmp_str[1])]
             if var == 'DEC':
@@ -831,7 +830,7 @@ load_template.__doc__ =f'''
 
 # function to read the sofia catalogue
 def sofia_catalogue(Configuration,Fits_Files, Variables =['id','x','x_min','x_max','y','y_min','y_max','z','z_min','z_max','ra',\
-                    'dec','v_app','f_sum','kin_pa','w50','err_f_sum','err_x','err_y','err_z'], header = None , debug = False):
+                    'dec','v_app','f_sum','kin_pa','w50','err_f_sum','err_x','err_y','err_z'], debug = False):
     if debug:
         print_log(f'''SOFIA_CATLOGUE: Reading the source from the catalogue.
 ''',Configuration['OUTPUTLOG'],debug= debug)
@@ -872,22 +871,22 @@ def sofia_catalogue(Configuration,Fits_Files, Variables =['id','x','x_min','x_ma
                     end = column_locations[input_columns.index(col)]
                     outlist[Variables.index(col)].append(line[start:end].strip())
     #if we have a header we convert w50 or w20
-    if ('w50' in Variables or 'w20' in Variables or 'f_sum' in Variables or 'err_f_sum' in Variables) and header:
+    if ('w50' in Variables or 'w20' in Variables or 'f_sum' in Variables or 'err_f_sum' in Variables):
         if 'w50' in Variables:
             for i in range(len(outlist[0])):
-                outlist[Variables.index('w50')][i] = float(outlist[Variables.index('w50')][i])*header['CDELT3']
+                outlist[Variables.index('w50')][i] = float(outlist[Variables.index('w50')][i])*Configuration['CHANNEL_WIDTH']
         if 'w20' in Variables:
             for i in range(len(outlist[0])):
-                outlist[Variables.index('w20')][i] = float(outlist[Variables.index('w20')][i])*header['CDELT3']
+                outlist[Variables.index('w20')][i] = float(outlist[Variables.index('w20')][i])*Configuration['CHANNEL_WIDTH']
         if 'f_sum' in Variables:
             for i in range(len(outlist[0])):
-                outlist[Variables.index('f_sum')][i] = float(outlist[Variables.index('f_sum')][i])/Configuration['PIX_PER_BEAM']*header['CDELT3']/1000.
+                outlist[Variables.index('f_sum')][i] = float(outlist[Variables.index('f_sum')][i])/Configuration['BEAM_IN_PIXELS'][2]*Configuration['CHANNEL_WIDTH']
         if 'err_f_sum' in Variables:
             for i in range(len(outlist[0])):
-                outlist[Variables.index('err_f_sum')][i] = float(outlist[Variables.index('err_f_sum')][i])/Configuration['PIX_PER_BEAM']*header['CDELT3']/1000.
+                outlist[Variables.index('err_f_sum')][i] = float(outlist[Variables.index('err_f_sum')][i])/Configuration['BEAM_IN_PIXELS'][2]*Configuration['CHANNEL_WIDTH']
 
     # we want to fit a specific source
-    if len(outlist[0]) > 1 and 'f_sum' in Variables and header:
+    if len(outlist[0]) > 1 and 'f_sum' in Variables:
         if debug:
             print_log(f'''SOFIA_CATALOGUE: Multiple sources were found we will try to select the correct one.
 ''',Configuration['OUTPUTLOG'],debug= False)
@@ -908,7 +907,7 @@ def sofia_catalogue(Configuration,Fits_Files, Variables =['id','x','x_min','x_ma
                                 float(many_sources[Variables.index('y_max')][i]),
                                 float(many_sources[Variables.index('z_min')][i]),
                                 float(many_sources[Variables.index('z_max')][i]),
-                                header, Configuration, debug = debug,beam_edge = beam_edge, vel_edge= vel_edge)
+                                Configuration, debug = debug,beam_edge = beam_edge, vel_edge= vel_edge)
                 if edge:
                     many_sources[Variables.index('f_sum')][i]=0.
             if np.nansum(many_sources[Variables.index('f_sum')]) == 0.:
@@ -936,7 +935,7 @@ def sofia_catalogue(Configuration,Fits_Files, Variables =['id','x','x_min','x_ma
                                 float(outlist[Variables.index('y_max')][index]),
                                 float(outlist[Variables.index('z_min')][index]),
                                 float(outlist[Variables.index('z_max')][index]),
-                                header, Configuration,debug = debug)
+                                Configuration,debug = debug)
 
                 if edge:
                     print_log(f'''SOFIA_CATALOGUE: The bright source is very close to limits
@@ -1004,16 +1003,16 @@ sofia_catalogue.__doc__ =f'''
  EXAMPLE:
 '''
 
-def check_edge_limits(xmin,xmax,ymin,ymax,zmin,zmax,header,Configuration,debug=False ,beam_edge = 0.5, vel_edge = 0.5 ):
-    diff = np.array([xmin,abs(xmax - header['NAXIS1']),
-                     ymin,abs(ymax - header['NAXIS2'])],dtype = float)
+def check_edge_limits(xmin,xmax,ymin,ymax,zmin,zmax,Configuration,debug=False ,beam_edge = 0.5, vel_edge = 0.5 ):
+    diff = np.array([xmin,abs(xmax - Configuration['NAXES'][0]),
+                     ymin,abs(ymax - Configuration['NAXES'][1])],dtype = float)
     if debug:
-        print_log(f'''CHECK_EDGE_LIMIT: We find these differences and this edge size {beam_edge*header['BMAJ']/((abs(header['CDELT1'])+abs(header['CDELT2']))/2.)}
+        print_log(f'''CHECK_EDGE_LIMIT: We find these differences and this edge size {beam_edge*Configuration['BEAM_IN_PIXELS'][0]}
 {'':8s} diff  = {diff}
 ''',Configuration['OUTPUTLOG'],debug= True)
-    if np.where(diff < beam_edge*header['BMAJ']/((abs(header['CDELT1'])+abs(header['CDELT2']))/2.))[0].size:
+    if np.where(diff < beam_edge*Configuration['BEAM_IN_PIXELS'][0])[0].size:
         return True
-    diff = np.array([zmin,abs(zmax-header['NAXIS3'])],dtype=float)
+    diff = np.array([zmin,abs(zmax-Configuration['NAXES'][2])],dtype=float)
     if debug:
         print_log(f'''CHECK_EDGE_LIMIT: And for velocity edge =  {vel_edge}
 {'':8s} diff  = {diff}

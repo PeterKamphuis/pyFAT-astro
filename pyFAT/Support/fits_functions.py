@@ -156,6 +156,12 @@ def clean_header(hdr,log, debug = False):
 '''
             print_log(log_statement,log)
             hdr['BMIN'] = hdr['BMAJ']
+    if not 'BPA' in hdr:
+            log_statement = f'''CLEAN_HEADER: We cannot find the Beam PA assuming it to be 0
+'''
+            print_log(log_statement,log)
+            hdr['BPA'] = 0.
+
     try:
         if len(hdr['HISTORY']) > 10:
             del hdr['HISTORY']
@@ -283,11 +289,15 @@ create_fat_cube.__doc__ = '''
 ;
 '''
 
-def cut_cubes(Configuration, Fits_Files, galaxy_box,hdr, debug = False):
+def cut_cubes(Configuration, Fits_Files, galaxy_box, debug = False):
 
-    cube_edge= [5.,3.*round(hdr['BMAJ']/(np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])]))),3.*round(hdr['BMAJ']/(np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])))]
-    cube_size = [hdr['NAXIS3'],hdr['NAXIS2'],hdr['NAXIS1']]
-    new_cube = np.array([[0,hdr['NAXIS3']],[0,hdr['NAXIS2']],[0,hdr['NAXIS1']]],dtype= int)
+    cube_edge= [5.,3.*round(Configuration['BEAM_IN_PIXELS'][0]),3.*round(Configuration['BEAM_IN_PIXELS'][0])]
+    cube_size= []
+    new_cube = []
+    for i in [2,1,0]:
+        cube_size.append(Configuration['NAXES'][i])
+        new_cube.append([0,Configuration['NAXES'][i]])
+    new_cube = np.array(new_cube,dtype=int)
     cut  = False
     for i,limit in enumerate(galaxy_box):
         if limit[0] > cube_edge[i]:
@@ -315,11 +325,11 @@ def cut_cubes(Configuration, Fits_Files, galaxy_box,hdr, debug = False):
 ''', Configuration['OUTPUTLOG'])
 
         for file in files_to_cut:
-            cutout_cube(Configuration['FITTING_DIR']+file,new_cube)
+            cutout_cube(Configuration,file,new_cube,debug=debug)
 
     #We want to check if the cube has a decent number of pixels per beam.
     if not os.path.exists(f"{Configuration['FITTING_DIR']}/{Fits_Files['OPTIMIZED_CUBE']}"):
-        optimized_cube(hdr,Configuration, Fits_Files,log = Configuration["OUTPUTLOG"])
+        optimized_cube(Configuration, Fits_Files,debug=debug)
 
     return new_cube
 cut_cubes.__doc__ = '''
@@ -360,8 +370,8 @@ cut_cubes.__doc__ = '''
 ;
 '''
 
-def cutout_cube(filename,sub_cube, debug = False):
-    Cube = fits.open(filename,uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
+def cutout_cube(Configuration,filename,sub_cube, debug = False):
+    Cube = fits.open(Configuration['FITTING_DIR']+filename,uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
     hdr = Cube[0].header
 
     if hdr['NAXIS'] == 3:
@@ -372,6 +382,14 @@ def cutout_cube(filename,sub_cube, debug = False):
         hdr['CRPIX1'] = hdr['CRPIX1'] -sub_cube[2,0]
         hdr['CRPIX2'] = hdr['CRPIX2'] -sub_cube[1,0]
         hdr['CRPIX3'] = hdr['CRPIX3'] -sub_cube[0,0]
+        #Only update when cutting the cube
+        Configuration['NAXES'] =[ hdr['NAXIS1'],hdr['NAXIS2'],hdr['NAXIS3']]
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            coordinate_frame = WCS(hdr)
+            xlow,ylow,zlow = coordinate_frame.wcs_pix2world(1,1,1., 1.)
+            xhigh,yhigh,zhigh = coordinate_frame.wcs_pix2world(*Configuration['NAXES'], 1.)
+            Configuration['NAXES_LIMITS'] = [np.sort([xlow,xhigh]),np.sort([ylow,yhigh]),np.sort([zlow,zhigh])/1000.]
     elif hdr['NAXIS'] == 2:
         data = Cube[0].data[sub_cube[1,0]:sub_cube[1,1],sub_cube[2,0]:sub_cube[2,1]]
         hdr['NAXIS1'] = sub_cube[2,1]-sub_cube[2,0]
@@ -379,9 +397,8 @@ def cutout_cube(filename,sub_cube, debug = False):
         hdr['CRPIX1'] = hdr['CRPIX1'] -sub_cube[2,0]
         hdr['CRPIX2'] = hdr['CRPIX2'] -sub_cube[1,0]
 
-
     Cube.close()
-    fits.writeto(filename,data,hdr,overwrite = True)
+    fits.writeto(Configuration['FITTING_DIR']+filename,data,hdr,overwrite = True)
 
 cut_cubes.__doc__ = '''
 
@@ -469,7 +486,7 @@ def extract_pv(Configuration,cube_in,angle,center=[-1,-1,-1],finalsize=[-1,-1],c
 {'':8s} ny = {ny}
 {'':8s} nx = {nx}
 ''', Configuration['OUTPUTLOG'], debug = False)
-    x1,x2,y1,y2 = obtain_border_pix(Configuration,hdr,angle,[xcenter,ycenter],debug=debug)
+    x1,x2,y1,y2 = obtain_border_pix(Configuration,angle,[xcenter,ycenter],debug=debug)
     linex,liney,linez = np.linspace(x1,x2,nx), np.linspace(y1,y2,nx), np.linspace(0,nz-1,nz)
     #This only works when ny == nx hence nx is used in liney
     new_coordinates = np.array([(z,y,x)
@@ -589,17 +606,16 @@ extract_pv.__doc__ = '''
 
 
 #Create an optimized cube if required
-def optimized_cube(hdr,Configuration,Fits_Files, log =None, debug = False):
-    pix_per_beam = round(hdr['BMIN']/(np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])))
-    if f"{abs(hdr['CDELT1']):.16f}" != f"{abs(hdr['CDELT1']):.16f}":
-        log_statement = f'''OPTIMIZED_CUBE: Your input cube does not have square pixels.
-{"":8s}OPTIMIZED_CUBE: FAT cannot optimize your cube.
-'''
-        print_log(log_statement, log)
-    elif pix_per_beam > Configuration['OPT_PIXELBEAM']:
+def optimized_cube(Configuration,Fits_Files, debug = False):
+    pix_per_beam = Configuration['BEAM_IN_PIXELS'][1]
+    if pix_per_beam > Configuration['OPT_PIXELBEAM']:
         cube = fits.open(Configuration['FITTING_DIR']+Fits_Files['FITTING_CUBE'])
         data = cube[0].data
         hdr = cube[0].header
+        if f"{abs(hdr['CDELT1']):.16f}" != f"{abs(hdr['CDELT2']):.16f}":
+            print_log(f'''OPTIMIZED_CUBE: Your input cube does not have square pixels.
+{"":8s}OPTIMIZED_CUBE: FAT cannot optimize your cube.
+''', Configuration['OUTPUTLOG'])
         cube.close()
         required_cdelt = hdr['BMIN']/int(Configuration['OPT_PIXELBEAM'])
         ratio = required_cdelt/abs(hdr['CDELT2'])
@@ -608,18 +624,17 @@ def optimized_cube(hdr,Configuration,Fits_Files, log =None, debug = False):
         fits.writeto(Configuration['FITTING_DIR']+Fits_Files['OPTIMIZED_CUBE'], opt_data,opt_hdr)
 
         Configuration['OPTIMIZED'] = True
-        log_statement = f'''OPTIMIZED_CUBE: Your input cube has {pix_per_beam} pixels along the minor FWHM.
+        print_log(f'''OPTIMIZED_CUBE: Your input cube has {pix_per_beam} pixels along the minor FWHM.
 {"":8s}OPTIMIZED_CUBE: You requested { Configuration['OPT_PIXELBEAM']} therefore we regridded the cube into a new cube.
 {"":8s}OPTIMIZED_CUBE: We are using the pixel size of {required_cdelt}.
-'''
-        print_log(log_statement, log)
+''', Configuration['OUTPUTLOG'])
 
     else:
-        log_statement = f'''OPTIMIZED_CUBE: Your input cube has {pix_per_beam} pixels along the minor FWHM.
-{"":8s}OPTIMIZED_CUBE: You requested { Configuration['OPT_PIXELBEAM']} but we cannot improve the resolution.
+        print_log(f'''OPTIMIZED_CUBE: Your input cube has {pix_per_beam} pixels along the minor FWHM.
+{"":8s}OPTIMIZED_CUBE: You requested {Configuration['OPT_PIXELBEAM']} but we cannot improve the resolution.
 {"":8s}OPTIMIZED_CUBE: We are using the pixel size of the original cube.
-'''
-        print_log(log_statement, log)
+''', Configuration['OUTPUTLOG'])
+
 
 optimized_cube.__doc__ = '''
 

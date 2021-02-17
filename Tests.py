@@ -234,7 +234,7 @@ basic.__doc__ =f'''
  PURPOSE:
 
  CATEGORY:
-    _functions
+    support_functions
 
  INPUTS:
     Configuration = Standard FAT configuration

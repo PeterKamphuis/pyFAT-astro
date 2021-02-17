@@ -54,9 +54,9 @@ class Proper_Dictionary(OrderedDict):
         if not done:
             print("----!!!!!!!!We were unable to add your key!!!!!!---------")
 
-
-
-#Calculate the actual number of rings in the model from ring size and the size in beams:
+Proper_Dictionary.__doc__=f'''
+A class of ordered dictionary where keys can be inserted in at specified locations or at the end.
+'''
 
 def calc_rings(Configuration,size_in_beams = 0., ring_size  = 0.,debug=False):
     if ring_size == 0.:
@@ -68,7 +68,7 @@ def calc_rings(Configuration,size_in_beams = 0., ring_size  = 0.,debug=False):
 {'':8s} size in beams = {size_in_beams}
 {'':8s} ring_size = {ring_size}
 {'':8s} the maximum amount of rings = {Configuration['MAX_SIZE_IN_BEAMS']}
-''',Configuration['OUTPUTLOG'],debug = debug)
+''',Configuration['OUTPUTLOG'],debug = True)
     est_rings = round((size_in_beams)/(ring_size)+2.)
     if est_rings > 20 and Configuration['MAX_SIZE_IN_BEAMS'] > 25:
         Configuration['OUTER_RINGS_DOUBLED'] = True
@@ -82,61 +82,57 @@ def calc_rings(Configuration,size_in_beams = 0., ring_size  = 0.,debug=False):
 ''',Configuration['OUTPUTLOG'],debug = False)
     return int(no_rings)
 
+calc_rings.__doc__ =f'''
+ NAME:
+    calc_rings
 
-#batch convert types
-def convert_type(array, type = 'float',debug = False):
-    if debug:
-        print_log(f'''CONVERT_TYPE: Start.
-''',None,debug =True)
-    if type =='int':
-        return  [int(x) for x in array]
-    elif type =='str':
-        return  [str(x) for x in array]
-    else:
-        return  [float(x) for x in array]
+ PURPOSE:
+    Calculate the actual number of rings in the model from ring size and the size in beams:
 
-convert_type.__doc__ = '''
-;+
-; NAME:
-;       def convert_type(array, type = 'float'):
-;
-; PURPOSE:
-;       Convert a list of variables from one type to another and be able to have them unpack into single varaiable again.
-;
-; CATEGORY:
-;       Support
-;
-; INPUTS:
-;     Array to convert
-;
-; OPTIONAL INPUTS:
-;
-;
-; KEYWORD PARAMETERS:
-;       -
-;
-; OUTPUTS:
-;
-; OPTIONAL OUTPUTS:
-;       -
-;
-; MODULES CALLED:
-;
-;
-; EXAMPLE:
-;
+ CATEGORY:
+    support_functions
 
+ INPUTS:
+    Configuration = Standard FAT configuration
+
+ OPTIONAL INPUTS:
+    debug = False
+
+    size_in_beams = 0.
+    Radius of the model in beams. Default from Configuration
+
+    ring_size  = 0.
+    size of the rings in the model. Default from Configuration
+
+ OUTPUTS:
+    the number of rings in the model
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
 '''
 
-#Function to convert column densities
-# levels should be n mJy/beam when flux is given
-def columndensity(levels,systemic = 100.,beam=[1.,1.],channel_width=1.,column= False,arcsquare=False,solar_mass_input =False,solar_mass_output=False, debug = False):
+
+
+
+def columndensity(Configuration,levels,systemic = 100.,beam=[-1.,-1.],channel_width=-1.,column= False,arcsquare=False,solar_mass_input =False,solar_mass_output=False, debug = False):
+
+    if beam[0] == -1:
+        if not arcsquare:
+            beam = Configuration['BEAM'][:2]
+    if channel_width == -1:
+        if arcsquare:
+            channel_width = 1.
+        else:
+            channel_width = Configuration['CHANNEL_WIDTH']
+
     if debug:
         print_log(f'''COLUMNDENSITY: Starting conversion from the following input.
 {'':8s}Levels = {levels}
 {'':8s}Beam = {beam}
 {'':8s}channel_width = {channel_width}
-''',None,debug =True)
+''',Configuration['OUTPUTLOG'],debug =True)
     beam=np.array(beam)
     f0 = 1.420405751786E9 #Hz rest freq
     c = 299792.458 # light speed in km / s
@@ -146,7 +142,7 @@ def columndensity(levels,systemic = 100.,beam=[1.,1.],channel_width=1.,column= F
     if debug:
         print_log(f'''COLUMNDENSITY: We have the following input for calculating the columns.
 {'':8s}COLUMNDENSITY: level = {levels}, channel_width = {channel_width}, beam = {beam}, systemic = {systemic})
-''',None,debug=False)
+''',Configuration['OUTPUTLOG'],debug=False)
     if systemic > 10000:
         systemic = systemic/1000.
     f = f0 * (1 - (systemic / c)) #Systemic frequency
@@ -178,50 +174,63 @@ def columndensity(levels,systemic = 100.,beam=[1.,1.],channel_width=1.,column= F
     if ~column and solar_mass_input:
         levels = levels*mHI*pc**2/solarmass
     return levels
-columndensity.__doc__ = '''
-;+
-; NAME:
-;       columndensity(levels,systemic = 100.,beam=[1.,1.],channel_width=1.,column= False,arcsquare=False,solar_mass_input =False,solar_mass_output=False)
-;
-; PURPOSE:
-;       Convert the various surface brightnesses to other values
-;
-; CATEGORY:
-;       Support
-;
-; INPUTS:
-;       levels = the values to convert
-;       systemic = the systemic velocity of the source
-;        beam  =the beam in arcse
-;       channelwidth = width of a channel in km/s
-;     column = if true input is columndensities
-;
-;
-; OPTIONAL INPUTS:
-;
-;
-; KEYWORD PARAMETERS:
-;       -
-;
-; OUTPUTS:
-;
-; OPTIONAL OUTPUTS:
-;       -
-;
-; MODULES CALLED:
-;
-;
-; EXAMPLE:
-;
 
+columndensity.__doc__ =f'''
+ NAME:
+    columndensity
+
+ PURPOSE:
+    Convert the various surface brightnesses to other units
+
+ CATEGORY:
+    support_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    levels = the values to convert
+
+ OPTIONAL INPUTS:
+    debug = False
+
+    systemic = 100.
+    the systemic velocity of the source
+
+    beam  = [-1.,-1.]
+    the FWHM of the beam in arcsec, if unset taken from Configuration
+
+    channelwidth = -1. width of a channel in km/s
+    channelwidth of the observation if unset taken from Configuration
+
+    column = false
+    if True input is columndensities else in mJy/beam
+
+    arcsquare=False
+    If true then  input is assumed to be in Jy/arcsec^2.
+    If the input is in Jy/arcsec^2*km/s then channelwidth must be 1.
+    This is assumed when channelwidth is left unset
+
+    solar_mass_input =False
+    If true input is assumed to be in M_solar/pc^2
+
+    solar_mass_output=False
+    If true output is provided in M_solar/pc^2
+
+ OUTPUTS:
+    The converted values
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
 '''
+
         # a Function to convert the RA and DEC into hour angle (invert = False) and vice versa (default)
-def convertRADEC(RAin,DECin,invert=False, colon=False,debug = False):
+def convertRADEC(Configuration,RAin,DECin,invert=False, colon=False,debug = False):
     if debug:
         print_log(f'''CONVERTRADEC: Starting conversion from the following input.
     {'':8s}RA = {RAin}
     {'':8s}DEC = {DECin}
-''',None,debug =True)
+''',Configuration['OUTPUTLOG'],debug =True)
     RA = copy.deepcopy(RAin)
     DEC = copy.deepcopy(DECin)
     if not invert:
@@ -277,15 +286,80 @@ def convertRADEC(RAin,DECin,invert=False, colon=False,debug = False):
             DEC = np.array(DEC,dtype=float)
     return RA,DEC
 
+convertRADEC.__doc__ =f'''
+ NAME:
+    convertRADEC
+
+ PURPOSE:
+    convert the RA and DEC in degre to a string with the hour angle
+
+ CATEGORY:
+    support_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    RAin = RA to be converted
+    DECin = DEC to be converted
+
+ OPTIONAL INPUTS:
+    debug = False
+
+    invert=False
+    if true input is hour angle string to be converted to degree
+
+    colon=False
+    hour angle separotor is : instead of hms
+
+ OUTPUTS:
+    converted RA, DEC as string list (hour angles) or numpy float array (degree)
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+'''
+
+def convert_type(array, type = 'float'):
+    if type =='int':
+        return  [int(x) for x in array]
+    elif type =='str':
+        return  [str(x) for x in array]
+    else:
+        return  [float(x) for x in array]
+
+convert_type.__doc__ =f'''
+ NAME:
+    convert_type
+
+ PURPOSE:
+    Convert a list of variables from one type to another and be able to have them unpack into single varaiable again.
+
+ CATEGORY:
+    support_functions
+
+ INPUTS:
+    array = array to be converted
+
+ OPTIONAL INPUTS:
+    type = 'float'
+    type to convert to
+
+ OUTPUTS:
+    converted list with requested types
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+'''
 
 # function for converting kpc to arcsec and vice versa
-
-def convertskyangle(angle, distance=1., unit='arcsec', distance_unit='Mpc', physical=False,debug = False):
+def convertskyangle(Configuration, angle, distance=1., unit='arcsec', distance_unit='Mpc', physical=False,debug = False):
     if debug:
         print_log(f'''CONVERTSKYANGLE: Starting conversion from the following input.
     {'':8s}Angle = {angle}
     {'':8s}Distance = {distance}
-''',None,debug =True)
+''',Configuration['OUTPUTLOG'],debug =True)
     try:
         _ = (e for e in angle)
     except TypeError:
@@ -302,8 +376,8 @@ def convertskyangle(angle, distance=1., unit='arcsec', distance_unit='Mpc', phys
     elif distance_unit.lower() == 'pc':
         distance = distance / (10 ** 3)
     else:
-        print_log('CONVERTSKYANGLE: ' + distance_unit + ' is an unknown unit to convertskyangle.\n',None)
-        print_log('CONVERTSKYANGLE: please use Mpc, kpc or pc.\n',None)
+        print_log('CONVERTSKYANGLE: ' + distance_unit + ' is an unknown unit to convertskyangle.\n',Configuration['OUTPUTLOG'],screen=True)
+        print_log('CONVERTSKYANGLE: please use Mpc, kpc or pc.\n',Configuration['OUTPUTLOG'],screen=True)
         raise SupportRunError('CONVERTSKYANGLE: ' + distance_unit + ' is an unknown unit to convertskyangle.')
     if not physical:
         if unit.lower() == 'arcsec':
@@ -313,8 +387,8 @@ def convertskyangle(angle, distance=1., unit='arcsec', distance_unit='Mpc', phys
         elif unit.lower() == 'degree':
             radians = angle * ((2. * np.pi) / 360.)
         else:
-            print_log('CONVERTSKYANGLE: ' + unit + ' is an unknown unit to convertskyangle.\n',None)
-            print_log('CONVERTSKYANGLE: please use arcsec, arcmin or degree.\n',None)
+            print_log('CONVERTSKYANGLE: ' + unit + ' is an unknown unit to convertskyangle.\n',Configuration['OUTPUTLOG'],screen=True)
+            print_log('CONVERTSKYANGLE: please use arcsec, arcmin or degree.\n',Configuration['OUTPUTLOG'],screen=True)
             raise SupportRunError('CONVERTSKYANGLE: ' + unit + ' is an unknown unit to convertskyangle.')
 
 
@@ -327,8 +401,8 @@ def convertskyangle(angle, distance=1., unit='arcsec', distance_unit='Mpc', phys
         elif unit.lower() == 'pc':
             kpc = angle * (10 ** 3)
         else:
-            print_log('CONVERTSKYANGLE: ' + unit + ' is an unknown unit to convertskyangle.\n',None)
-            print_log('CONVERTSKYANGLE: please use kpc, Mpc or pc.\n',None)
+            print_log('CONVERTSKYANGLE: ' + unit + ' is an unknown unit to convertskyangle.\n',Configuration['OUTPUTLOG'],screen=True)
+            print_log('CONVERTSKYANGLE: please use kpc, Mpc or pc.\n',Configuration['OUTPUTLOG'],screen=True)
             raise SupportRunError('CONVERTSKYANGLE: ' + unit + ' is an unknown unit to convertskyangle.')
 
         radians = 2. * np.arctan(kpc / (2. * distance))
@@ -336,6 +410,89 @@ def convertskyangle(angle, distance=1., unit='arcsec', distance_unit='Mpc', phys
     if len(kpc) == 1:
         kpc = float(kpc[0])
     return kpc
+
+convertskyangle.__doc__ =f'''
+ NAME:
+    convertskyangle
+
+ PURPOSE:
+    convert an angle on the sky to a distance in kpc or vice versa
+
+ CATEGORY:
+    support_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    angle = the angles or lengths to be converted
+
+ OPTIONAL INPUTS:
+    debug = False
+
+    distance=1.
+    Distance to the galaxy for the conversion
+
+    unit='arcsec'
+    Unit of the angle or length options are arcsec (default),arcmin, degree, pc, kpc(default) and Mpc
+
+    distance_unit='Mpc'
+    Unit of the distance options are pc, kpc and Mpc
+
+    physical=False
+    if true the input is a length converted to an angle
+
+ OUTPUTS:
+    converted value or values
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+'''
+
+def deproject(Configuration,map,angle, center = 0., invert = False,debug=False):
+    axis = np.array(range(len(map[:,0])),dtype=float)-center
+    if invert:
+        newaxis = axis/np.cos(np.radians(angle))
+    else:
+        newaxis = axis*np.cos(np.radians(angle))
+    for x in range(len(map[0,:])):
+        profile = copy.deepcopy(map[:,x])
+        new_profile = np.interp(np.array(newaxis,dtype=float),np.array(axis,dtype=float),np.array(profile,dtype=float))
+        map[:,x] = new_profile
+    return map
+
+deproject.__doc__ =f'''
+ NAME:
+    deproject
+
+ PURPOSE:
+    Deproject an image assuming circular orienation and an inclination given by the angle
+
+ CATEGORY:
+    support_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    map = the image to deproject
+    angle = the inclination angle
+
+ OPTIONAL INPUTS:
+    debug = False
+
+    center = 0.
+    height on the yaxis to rotate around
+
+    invert = False
+    If true the image is inclined by tangle instead of deprojected
+
+ OUTPUTS:
+    the deprojected map
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+'''
 
 def finish_current_run(Configuration,current_run,debug=False):
     print_log(f"FINISH_CURRENT_RUN: Is Tirific Running? {Configuration['TIRIFIC_RUNNING']}. \n",Configuration['OUTPUTLOG'],debug=debug,screen=True)
@@ -353,11 +510,94 @@ def finish_current_run(Configuration,current_run,debug=False):
         Configuration['TIRIFIC_RUNNING'] = False
         Configuration['TIRIFIC_PID'] = 'Not Initialized'
     else:
-        print_log(f"FINISH_CURRENT_RUN: No run is initialized. \n",Configuration['OUTPUTLOG'],screen=True)
+        print_log(f"FINISH_CURRENT_RUN: No run is initialized. \n",Configuration['OUTPUTLOG'])
 
+finish_current_run.__doc__ =f'''
+ NAME:
+    finish_current_run
+ PURPOSE:
+    make sure that the initiated tirific is cleaned when pyFAT stops
+ CATEGORY:
+    support_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    current_run = subprocess structure for the current tirific run
+
+ OPTIONAL INPUTS:
+    debug = False
+
+ OUTPUTS:
+    kills tirific if initialized or raises an error when it fails to do so while tirific is running
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+'''
+
+def fit_gaussian(Configuration,x,y, covariance = False,errors = None, debug = False):
+    if debug:
+        print_log(f'''FIT_GAUSSIAN: Starting to fit a Gaussian.
+{'':8s}x = {x}
+{'':8s}y = {y}
+''', Configuration['OUTPUTLOG'],debug =True)
+    # Make sure we have numpy arrays
+    x= np.array(x,dtype=float)
+    y= np.array(y,dtype=float)
+    # First get some initial estimates
+    est_peak = np.nanmax(y)
+    if not errors.any():
+        errors = np.full(len(y),1.)
+        absolute_sigma = False
+    else:
+        absolute_sigma = True
+    peak_location = np.where(y == est_peak)[0]
+    if peak_location.size > 1:
+        peak_location = peak_location[0]
+    est_center = float(x[peak_location])
+
+    est_sigma = np.nansum(y*(x-est_center)**2)/np.nansum(y)
+    gauss_parameters, gauss_covariance = curve_fit(gaussian_function, x, y,p0=[est_peak,est_center,est_sigma],sigma= errors,absolute_sigma= absolute_sigma)
+    if covariance:
+        return gauss_parameters, gauss_covariance
+    else:
+        return gauss_parameters
+
+fit_gaussian.__doc__ =f'''
+ NAME:
+    fit_gaussian
+ PURPOSE:
+    Fit a gaussian to a profile, with initial estimates
+ CATEGORY:
+    supprt_functions
+
+ INPUTS:
+    x = x-axis of profile
+    y = y-axis of profile
+    Configuration = Standard FAT configuration
+
+ OPTIONAL INPUTS:
+    covariance = false
+    return to covariance matrix of the fit or not
+
+    debug = False
+
+ OUTPUTS:
+    gauss_parameters
+    the parameters describing the fitted Gaussian
+
+ OPTIONAL OUTPUTS:
+    gauss_covariance
+    The co-variance matrix of the fit
+
+ PROCEDURES CALLED:
+    Unspecified
+'''
 
 def gaussian_function(axis,peak,center,sigma):
     return peak*np.exp(-(axis-center)**2/(2*sigma**2))
+
 gaussian_function.__doc__ =f'''
  NAME:
     gaussian_function
@@ -388,108 +628,65 @@ gaussian_function.__doc__ =f'''
  EXAMPLE:
 '''
 
-
-
-
-def fit_gaussian(Configuration,x,y, covariance = False,errors = None, debug = False):
-    if debug:
-        print_log(f'''FIT_GAUSSIAN: Starting to fit a Gaussian.
-{'':8s}x = {x}
-{'':8s}y = {y}
-''', Configuration['OUTPUTLOG'],debug =True)
-    # Make sure we have numpy arrays
-    x= np.array(x,dtype=float)
-    y= np.array(y,dtype=float)
-    # First get some initial estimates
-    est_peak = np.nanmax(y)
-    if not errors.any():
-        errors = np.full(len(y),1.)
-        absolute_sigma = False
-    else:
-        absolute_sigma = True
-    peak_location = np.where(y == est_peak)[0]
-    if peak_location.size > 1:
-        peak_location = peak_location[0]
-    est_center = float(x[peak_location])
-
-    est_sigma = np.nansum(y*(x-est_center)**2)/np.nansum(y)
-    gauss_parameters, gauss_covariance = curve_fit(gaussian_function, x, y,p0=[est_peak,est_center,est_sigma],sigma= errors,absolute_sigma= absolute_sigma)
-    if covariance:
-        return gauss_parameters, gauss_covariance
-    else:
-        return gauss_parameters
-fit_gaussian.__doc__ =f'''
- NAME:
-    fit_gaussian
- PURPOSE:
-    Fit a gaussian to a profile, with initial estimates
- CATEGORY:
-    supprt_functions
-
- INPUTS:
-    x = x-axis of profile
-    y = y-axis of profile
-    Configuration = Standard FAT configuration
-
- OPTIONAL INPUTS:
-    covariance = false
-    return to covariance matrix of the fit or not
-
-    debug = False
-
- KEYWORD PARAMETERS:
-
- OUTPUTS:
-    gauss_parameters
-    the parameters describing the fitted Gaussian
-
- OPTIONAL OUTPUTS:
-    gauss_covariance
-    The co-variance matrix of the fit
-
- PROCEDURES CALLED:
-    Unspecified
-
- EXAMPLE:
-'''
-
-
-
-#Put template values in a list !!!!!!!! This is very similar to load_template in read_funtcions maybe use one?
-#No this returns unchecked list whereas load_template return a np array with length NUR
-#Also the orader is swapped
-def get_from_template(Tirific_Template,Variables, debug = False):
+def get_from_template(Configuration,Tirific_Template,Variables, debug = False):
     out = []
     if debug:
         print_log(f'''{'':8s}GET_FROM_TEMPLATE: Trying to get the following profiles {Variables}
-''',None ,debug= True)
+''',Configuration['OUTPUTLOG'] ,debug= True)
     for key in Variables:
         out.append([float(x) for x  in Tirific_Template[key].split()])
     #Because lists are stupid i.e. sbr[0][0] = SBR[0], sbr[1][0] = SBR_2[0] but  sbr[:][0] = SBR[:] not SBR[0],SBR_2[0] as logic would demand
     if debug:
         print_log(f'''{'':8s}GET_FROM_TEMPLATE: We extracted the following profiles from the Template.
 {'':8s}GET_FROM_TEMPLATE: {out}
-''',None,debug = False )
+''',Configuration['OUTPUTLOG'],debug = False )
     #Beware that lists are stupid i.e. sbr[0][0] = SBR[0], sbr[1][0] = SBR_2[0] but  sbr[:][0] = SBR[:] not SBR[0],SBR_2[0] as logic would demand
     # However if you make a np. array from it make sure that you specify float  or have lists of the same length else you get an array of lists which behave just as dumb
     return out
 
-def get_inclination_pa(Configuration, map, Image, hdr, center, cutoff = 0., debug = False):
+get_from_template.__doc__ =f'''
+ NAME:
+    get_from_template
+ PURPOSE:
+    Return a specified list of prameters from the template. This puts the template values in a list !!!!!!!!
+    This is very similar to load_template in read_funtitons but this returns unchecked list whereas load_template return a np array with length NUR, thus can include zeros
 
+ CATEGORY:
+    support_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    Tirific_Template =  Standard tirific template
+    Variables = parameters to be extracted
+
+ OPTIONAL INPUTS:
+    debug = False
+
+ OUTPUTS:
+    list with the values of the requested variables
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+'''
+
+def get_inclination_pa(Configuration, Image, center, cutoff = 0., debug = False):
+    map = Image[0].data
     for i in [0,1]:
         # now we need to get profiles under many angles let's say 100
         #extract the profiles under a set of angles
         angles = np.linspace(0, 180, 180)
-        ratios, maj_extent = obtain_ratios(Configuration,map, hdr, center, angles,noise = cutoff,debug=debug)
+        ratios, maj_extent = obtain_ratios(Configuration,map, center, angles,noise = cutoff,debug=debug)
         if debug:
             if i == 0:
-                print_log(f'''GET_INCLINATION_PA: We initially find radius of {maj_extent/hdr['BMAJ']} beams.
+                print_log(f'''GET_INCLINATION_PA: We initially find radius of {maj_extent/Configuration['BEAM'][0]/3600.} beams.
 ''',Configuration['OUTPUTLOG'], debug = True)
                 print_log(f'''GET_INCLINATION_PA: We initially find the ratios:
 {'':8s} ratios = {ratios}
 ''',Configuration['OUTPUTLOG'], debug = False)
             else:
-                print_log(f'''GET_INCLINATION_PA: From the cleaned map we find radius of {maj_extent/hdr['BMAJ']} beams.
+                print_log(f'''GET_INCLINATION_PA: From the cleaned map we find radius of {maj_extent/Configuration['BEAM'][0]/3600.} beams.
 ''',Configuration['OUTPUTLOG'], debug = False)
                 print_log(f'''GET_INCLINATION_PA: We  find these ratios from the cleaned map:
 {'':8s} ratios = {ratios}
@@ -561,37 +758,99 @@ def get_inclination_pa(Configuration, map, Image, hdr, center, cutoff = 0., debu
             inclination = float(inclination-(inclination*0.01/(ratios[max_index]-ratios[min_index])))
             if i == 0:
                 inclination_error = float(inclination_error*0.4/(ratios[max_index]-ratios[min_index]))
-        if maj_extent/hdr['BMAJ'] < 4:
-            inclination = float(inclination+(inclination/10.*np.sqrt(4./(maj_extent/hdr['BMAJ']))))
+        if maj_extent/Configuration['BEAM'][0]*3600. < 4:
+            inclination = float(inclination+(inclination/10.*np.sqrt(4./(maj_extent/Configuration['BEAM'][0]*3600.))))
             if i == 0:
-                inclination_error = float(inclination_error*4./(maj_extent/hdr['BMAJ']))
+                inclination_error = float(inclination_error*4./(maj_extent/Configuration['BEAM'][0]*3600.))
         # this leads to trouble for small sources due to uncertain PA and inclination estimates
-        if inclination < 70. and maj_extent/hdr['BMAJ'] > 4:
+        if inclination < 70. and maj_extent/Configuration['BEAM'][0]/3600. > 4:
             Image = remove_inhomogeneities(Configuration,Image,inclination=inclination, pa = pa,iteration=i, center = center,WCS_center = False, debug=debug)
             map = Image[0].data
         else:
             break
     return [inclination,inclination_error], [pa,pa_error],maj_extent
 
+get_inclination_pa.__doc__ =f'''
+ NAME:
+    get_inclination_pa
+ PURPOSE:
+    Get estimates for the PA, inclination and radius from a intensity map.
+
+ CATEGORY:
+    support_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    Image = the intensity map to be evaluated, this should be an astropy structure
+    center = center of the galaxy in pixels
+
+ OPTIONAL INPUTS:
+    debug = False
+
+    cutoff = 0.
+    Limit to trust the map to, below this values are not evaluated
+
+ OUTPUTS:
+    inclination,inclination_error = inclination and error
+    pa,pa_error =  pa and errror
+    maj_extent = the estimated radius of the galaxy
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+'''
+
+
 # Function to get the amount of inner rings to fix
 def get_inner_fix(Configuration,Tirific_Template, debug =False):
     if debug:
         print_log(f'''GET_INNER_FIX: Attempting to get the inner rings to be fixed.
-''',Configuration['OUTPUTLOG'], debug = debug, screen = True)
+''',Configuration['OUTPUTLOG'], debug = True)
     sbr_av = np.array([(float(x)+float(y))/2. for x,y  in zip(Tirific_Template['SBR'].split(),Tirific_Template['SBR_2'].split())],dtype = float)
-    column_levels = columndensity(sbr_av, arcsquare = True, debug = debug)
+    column_levels = columndensity(Configuration,sbr_av, arcsquare = True, debug = debug)
     column_levels[0]= 1e21
     tmp = np.where(column_levels > 1e20)[0]
     return set_limits(int(np.floor(tmp[-1]/1.5-1)), 4, int(Configuration['NO_RINGS']*0.9))
 
-def get_ring_weights(Configuration,hdr,Tirific_Template,debug = False):
+get_inner_fix.__doc__ =f'''
+ NAME:
+    get_inner_fix
+
+ PURPOSE:
+    Obtain the number of rings that should be fixed to a single value in the inner parts
+    All ring > 1e20 column density should be fixed upt to a maximum of 90% and a minimu of 4 rings.
+    !!!!!!!!!!!!!This appears to currently not be working well.
+
+ CATEGORY:
+    support_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    Tirific_Template = Standard Tirific template containing the SBR profiles
+
+ OPTIONAL INPUTS:
+    debug = False
+
+ OUTPUTS:
+    The number of inner rings to be fixed
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+'''
+
+
+
+def get_ring_weights(Configuration,Tirific_Template,debug = False):
     if debug:
         print_log(f'''GET_RING_WEIGTHS: Getting the importance of the rings in terms of SBR.
-''',Configuration['OUTPUTLOG'], debug = debug)
-    sbr = np.array(get_from_template(Tirific_Template, ["SBR",f"SBR_2"]),dtype=float)
-    systemic = np.array(get_from_template(Tirific_Template, ["VSYS"]),dtype=float)
+''',Configuration['OUTPUTLOG'], debug = True)
+    sbr = np.array(get_from_template(Configuration,Tirific_Template, ["SBR",f"SBR_2"]),dtype=float)
+    systemic = np.array(get_from_template(Configuration,Tirific_Template, ["VSYS"]),dtype=float)
     systemic = systemic[0,0]
-    radii,cut_off_limits = sbr_limits(Configuration,hdr, systemic= systemic , debug = debug)
+    radii,cut_off_limits = sbr_limits(Configuration, systemic= systemic , debug = debug)
     weights= [[],[]]
     for i in [0,1]:
         weights[i] = [set_limits(x/y,0.1,10.) for x,y in zip(sbr[i],cut_off_limits)]
@@ -604,20 +863,47 @@ def get_ring_weights(Configuration,hdr,Tirific_Template,debug = False):
 ''',Configuration['OUTPUTLOG'], debug = False)
     return np.array(weights,dtype = float)
 
-def get_usage_statistics(process_id, debug = False):
+get_ring_weights.__doc__=f'''
+ NAME:
+    get_ring_weights
+
+ PURPOSE:
+    Get the importance of the rings based on how much the SBR lies above the noise limit for each ring
+
+ CATEGORY:
+    support_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    Tirific_Template = Standard Tirific template containg the SBR profiles
+
+ OPTIONAL INPUTS:
+    debug = False
+
+ OUTPUTS:
+    numpy array with the weight normalized to the the maximum, i.e weight 1 is most important, weight 0. least important
+    errors should be divided by these weights to reflect the importance
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+'''
+
+def get_usage_statistics(Configuration,process_id, debug = False):
     result = subprocess.check_output(['top',f'-p {process_id}','-d 1','-n 1'])
     #result = subprocess.check_output(['ps','u'])
     lines = result.decode('utf8').split('\n')
     column_names = [x.upper() for x in lines[6].strip().split()]
     if debug:
         print_log(f'''{'':8s}GET_usage_statistics: We extracted the following column names {column_names}
-''',None,debug=True)
+''',Configuration['OUTPUTLOG'],debug=True)
     CPU = float(0.)
     mem=float(0.)
     column_var = [x for x in lines[7].strip().split()]
     if debug:
         print_log(f'''{'':8s}GET_usage_statistics: We extracted the following variables {column_var}
-''',None,debug = False)
+''',Configuration['OUTPUTLOG'],debug = False)
     try:
         if int(column_var[column_names.index('PID')]) == int(process_id):
             CPU = float(column_var[column_names.index('%CPU')])
@@ -630,13 +916,37 @@ def get_usage_statistics(process_id, debug = False):
                 mem = float(column_var[column_names.index('RES')-1])/1024**2
         except:
             pass
-
     return CPU,mem
 
+get_usage_statistics.__doc__ =f'''
+ NAME:
+    get_usage_statistics
+ PURPOSE:
+    use top to get the current CPU and memory usage of tirific
+
+ CATEGORY:
+    support_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    process_id = process id of the tirific currently running.
+
+ OPTIONAL INPUTS:
+    debug = False
+
+ OUTPUTS:
+    CPU = The current CPU usage
+    mem = current memory usage in Mb
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+'''
 
 def get_vel_pa(Configuration,velocity_field,center= [0.,0.], debug =False):
     if debug:
-            print_log(f'''GET_VEL_PA: This is the center we use {center}
+        print_log(f'''GET_VEL_PA: This is the center we use {center}
 ''',Configuration['OUTPUTLOG'],debug = True)
     # because python is stupid the ceneter should be reversed to match the map
     center.reverse()
@@ -655,7 +965,7 @@ def get_vel_pa(Configuration,velocity_field,center= [0.,0.], debug =False):
     min_pos = [float(min_pos[0]),float(min_pos[1])]
 
     if debug:
-            print_log(f'''GET_VEL_PA: This is the location of the maximum {max_pos} and minimum {min_pos}
+        print_log(f'''GET_VEL_PA: This is the location of the maximum {max_pos} and minimum {min_pos}
 ''',Configuration['OUTPUTLOG'],debug = False)
     try:
         pa_from_max = np.arctan((center[1]-max_pos[1])/(center[0]-max_pos[0]))
@@ -712,51 +1022,38 @@ def get_vel_pa(Configuration,velocity_field,center= [0.,0.], debug =False):
     center.reverse()
     return np.degrees([np.nanmean([pa,pa_from_max,pa_from_min]), np.nanstd([pa,pa_from_max,pa_from_min])])
 
+get_vel_pa.__doc__ =f'''
+ NAME:
+    get_vel_pa
 
+ PURPOSE:
+    Routine to obtain the PA from a moment 1 map of a galaxy
 
-get_vel_pa.__doc__='''
-;+
-; NAME:
-;       GET_VEL_PA
-;
-; PURPOSE:
-;       Routine to obtain the PA from a moment 1 map of a galaxy
-;
-; CATEGORY:
-;       Support
-;
-; CALLING SEQUENCE:
-;       GET_VEL_PA,map,CENTER=center
-;
-;
-; INPUTS:
-;       map = moment 1 map of the galaxy
-;
-; OPTIONAL INPUTS:
-;       -
-;
-; KEYWORD PARAMETERS:
-;       CENTER = center of the galaxy in pixels
-;    INTENSITY = Moment0 map to identify edges.
-;        DEBUG = option to have verbose running
-;
-; OUTPUTS:
-;       PA = the positional angle
-;
-; OPTIONAL OUTPUTS:
-;       -
-;
-; PROCEDURES CALLED:
-;
-;
-; EXAMPLE:
+ CATEGORY:
+    support_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    velocity_field = the VF
+
+ OPTIONAL INPUTS:
+    debug = False
+    center = center of the galaxy
+
+ OUTPUTS:
+    mean and standard deviation of the pa from minimum value to center, maxmum to center and minimum to maximum
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
 '''
 
 # A simple function to return the line numbers in the stack from where the functions are called
 def linenumber(debug=False):
     line = []
     for key in stack():
-        if key[1] == 'FAT.py':
+        if key[1] == 'main.py':
             break
         if key[3] != 'linenumber' and key[3] != 'print_log':
             file = key[1].split('/')
@@ -768,18 +1065,115 @@ def linenumber(debug=False):
             line = f'{"":8s}'
     else:
         for key in stack():
-            if key[1] == 'FAT.py':
+            if key[1] == 'main.py':
                 line = f"{'('+str(key[2])+')':8s}"
                 break
     return line
 
-def obtain_ratios(Configuration, map, hdr, center, angles, noise = 0. ,debug = False):
+linenumber.__doc__ =f'''
+ NAME:
+    linenumber
+
+ PURPOSE:
+    get the line number of the print statement in the main. Not sure how well this is currently working
+
+ CATEGORY:
+    support_functions
+
+ INPUTS:
+
+ OPTIONAL INPUTS:
+    debug = False
+
+ OUTPUTS:
+    the line nummber of the print statement
+
+ OPTIONAL OUTPUTS:
+    If debug = True the full stack of the line print will be given, in principle the first debug message in every function should set this to true and later messages not.
+
+ PROCEDURES CALLED:
+    Unspecified
+'''
+
+
+
+def obtain_border_pix(Configuration,angle,center, debug = False):
+    rotate = False
+    # only setup for 0-180 but 180.-360 is the same but -180
+    if angle > 180.:
+        angle -= 180.
+        rotate = True
+
+    if angle < 90.:
+        x1 = center[0]-(Configuration['NAXES'][1]-center[1])*np.tan(np.radians(angle))
+        x2 = center[0]+(center[1])*np.tan(np.radians(angle))
+        if x1 < 0:
+            x1 = 0
+            y1 = center[1]+(center[0])*np.tan(np.radians(90-angle))
+        else:
+            y1 = Configuration['NAXES'][1]
+        if x2 > Configuration['NAXES'][0]:
+            x2 = Configuration['NAXES'][0]
+            y2 = center[1]-(center[0])*np.tan(np.radians(90-angle))
+        else:
+            y2 = 0
+    elif angle == 90:
+        x1 = 0 ; y1 = center[1] ; x2 = Configuration['NAXES'][0]; y2 = center[1]
+    else:
+        x1 = center[0]-(center[1])*np.tan(np.radians(180.-angle))
+        x2 = center[0]+(Configuration['NAXES'][1]-center[1])*np.tan(np.radians(180-angle))
+        if x1 < 0:
+            x1 = 0
+            y1 = center[1]-(center[0])*np.tan(np.radians(angle-90))
+        else:
+            y1 = 0
+        if x2 > Configuration['NAXES'][0]:
+            x2 = Configuration['NAXES'][0]
+            y2 = center[1]+(center[0])*np.tan(np.radians(angle-90))
+        else:
+            y2 = Configuration['NAXES'][1]
+    # if the orginal angle was > 180 we need to give the line 180 deg rotation
+    x = [x1,x2]
+    y = [y1,y2]
+    if rotate:
+        x.reverse()
+        y.reverse()
+    return (*x,*y)
+
+obtain_border_pix.__doc__ =f'''
+ NAME:
+    obtain_border_pix
+ PURPOSE:
+    Get the pixel locations of where a line across a map exits the map
+
+ CATEGORY:
+    support_functions
+
+ INPUTS:
+    Configuration = standard FAT Configuration
+    hdr = header of the map
+    angle = the angle of the line running through the map
+    center = center of the line running through the map
+
+ OPTIONAL INPUTS:
+    debug = False
+
+ OUTPUTS:
+    x,y
+    pixel locations of how the line runs through the map
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    np.tan,np.radians,.reverse()
+'''
+
+def obtain_ratios(Configuration, map, center, angles, noise = 0. ,debug = False):
     ratios = []
     max_extent = 0.
     for angle in angles:
         #major axis
-
-        x1,x2,y1,y2 = obtain_border_pix(Configuration,hdr,angle,center,debug=debug)
+        x1,x2,y1,y2 = obtain_border_pix(Configuration,angle,center,debug=debug)
         linex,liney = np.linspace(x1,x2,1000), np.linspace(y1,y2,1000)
         maj_resolution = np.sqrt(((x2-x1)/1000.)**2+((y2-y1)/1000.)**2)
         #maj_resolution = abs((abs(x2-x1)/1000.)*np.sin(np.radians(angle)))+abs(abs(y2-y1)/1000.*np.cos(np.radians(angle)))
@@ -793,8 +1187,8 @@ def obtain_ratios(Configuration, map, hdr, center, angles, noise = 0. ,debug = F
              width_maj = 0.
         else:
             width_maj = (tmp[-1]-tmp[0])*maj_resolution
-            if width_maj**2 > (hdr['BMAJ']/(np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])))**2:
-                width_maj = np.sqrt(width_maj**2 - (hdr['BMAJ']/(np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])))**2)
+            if width_maj**2 > Configuration['BEAM_IN_PIXELS'][0]**2:
+                width_maj = np.sqrt(width_maj**2 - Configuration['BEAM_IN_PIXELS'][0]**2)
             else:
                 width_maj = maj_resolution
 
@@ -802,9 +1196,9 @@ def obtain_ratios(Configuration, map, hdr, center, angles, noise = 0. ,debug = F
             max_extent = width_maj
         #minor axis
         if angle < 90:
-            x1,x2,y1,y2 = obtain_border_pix(Configuration,hdr,angle+90,center,debug=debug)
+            x1,x2,y1,y2 = obtain_border_pix(Configuration,angle+90,center,debug=debug)
         else:
-            x1,x2,y1,y2 = obtain_border_pix(Configuration,hdr,angle-90,center,debug=debug)
+            x1,x2,y1,y2 = obtain_border_pix(Configuration,angle-90,center,debug=debug)
         linex,liney = np.linspace(x1,x2,1000), np.linspace(y1,y2,1000)
         min_resolution = np.sqrt(((x2-x1)/1000.)**2+((y2-y1)/1000.)**2)
         #min_resolution =abs((abs(x2-x1)/1000.)*np.sin(np.radians(angle+90)))+abs(abs(y2-y1)/1000.*np.cos(np.radians(angle+90)))
@@ -818,8 +1212,8 @@ def obtain_ratios(Configuration, map, hdr, center, angles, noise = 0. ,debug = F
              width_min = 0.
         else:
             width_min = (tmp[-1]-tmp[0])*min_resolution
-            if width_min**2 > (hdr['BMAJ']/(np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])))**2 :
-                width_min = np.sqrt(width_min**2 - (hdr['BMAJ']/(np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])))**2)
+            if width_min**2 > Configuration['BEAM_IN_PIXELS'][0]**2:
+                width_min = np.sqrt(width_min**2 - Configuration['BEAM_IN_PIXELS'][0]**2)
             else:
                 width_min = min_resolution
             if width_min > max_extent:
@@ -829,7 +1223,8 @@ def obtain_ratios(Configuration, map, hdr, center, angles, noise = 0. ,debug = F
     #as the extend is at 25% let's take 2 time the sigma of that
     #max_extent = (max_extent/(2.*np.sqrt(2*np.log(2))))*2.
     max_extent = max_extent/2.
-    return np.array(ratios,dtype=float), max_extent*np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])
+    return np.array(ratios,dtype=float), max_extent*Configuration['PIXEL_SIZE']
+
 obtain_ratios.__doc__ = '''
  NAME:
        obtain_ratios
@@ -847,15 +1242,12 @@ obtain_ratios.__doc__ = '''
        hdr = hdr of the map
        center = estimated center
        angles = angles to look for the ratios
-       noise = 0. ,debug = False
 
  OPTIONAL INPUTS:
        noise = 0.
-       nois level in the map
+       noise level in the map
 
        debug = False
-
- KEYWORD PARAMETERS:
 
  OUTPUTS:
          ratios =  ratios corresponding to the input angles
@@ -864,86 +1256,6 @@ obtain_ratios.__doc__ = '''
 
  PROCEDURES CALLED:
       np.mean, ndimage.map_coordinates, np.linspace, np.vstack, np.cos, np.radians, np.sin
-
- EXAMPLE:
-'''
-
-
-
-
-
-def obtain_border_pix(Configuration, hdr,angle,center, debug = False):
-    rotate = False
-    # only setup for 0-180 but 180.-360 is the same but -180
-    if angle > 180.:
-        angle -= 180.
-        rotate = True
-
-    if angle < 90.:
-        x1 = center[0]-(hdr['NAXIS2']-center[1])*np.tan(np.radians(angle))
-        x2 = center[0]+(center[1])*np.tan(np.radians(angle))
-        if x1 < 0:
-            x1 = 0
-            y1 = center[1]+(center[0])*np.tan(np.radians(90-angle))
-        else:
-            y1 = hdr['NAXIS2']
-        if x2 > hdr['NAXIS1']:
-            x2 = hdr['NAXIS1']
-            y2 = center[1]-(center[0])*np.tan(np.radians(90-angle))
-        else:
-            y2 = 0
-    elif angle == 90:
-        x1 = 0 ; y1 = center[1] ; x2 = hdr['NAXIS1'] ; y2 = center[1]
-    else:
-        x1 = center[0]-(center[1])*np.tan(np.radians(180.-angle))
-        x2 = center[0]+(hdr['NAXIS2']-center[1])*np.tan(np.radians(180-angle))
-        if x1 < 0:
-            x1 = 0
-            y1 = center[1]-(center[0])*np.tan(np.radians(angle-90))
-        else:
-            y1 = 0
-        if x2 > hdr['NAXIS1']:
-            x2 = hdr['NAXIS1']
-            y2 = center[1]+(center[0])*np.tan(np.radians(angle-90))
-        else:
-            y2 = hdr['NAXIS2']
-    # if the orginal angle was > 180 we need to give the line 180 deg rotation
-    x = [x1,x2]
-    y = [y1,y2]
-    if rotate:
-        x.reverse()
-        y.reverse()
-    return (*x,*y)
-obtain_border_pix.__doc__ =f'''
- NAME:
-    obtain_border_pix
- PURPOSE:
-    Get the pixel locations of a line across a map
-
- CATEGORY:
-    support_functions
-
- INPUTS:
-    Configuration = standard FAT Configuration
-    hdr = header of the map
-    angle = the angle of the line running through the map
-    center = center of the line running through the map
-
- OPTIONAL INPUTS:
-    debug = False
-
- KEYWORD PARAMETERS:
-
- OUTPUTS:
-    x,y
-    pixel locations of how the line runs through the map
-
- OPTIONAL OUTPUTS:
-
- PROCEDURES CALLED:
-    Unspecified
-
- EXAMPLE:
 '''
 
 def print_log(log_statement,log, screen = False,debug = False):
@@ -954,40 +1266,121 @@ def print_log(log_statement,log, screen = False,debug = False):
         with open(log,'a') as log_file:
             log_file.write(log_statement)
 
-print_log.__doc__ = '''
-;+
-; NAME:
-;       print_log
-;
-; PURPOSE:
-;       Print statements to log if existent and screen if Requested
-;
-; CATEGORY:
-;       Support
-;
-; CALLING SEQUENCE:
-;       cleanup(Configuration)
-;
-; INPUTS:
-;     Configuration = Structure that has the current fitting directory and expected steps
-;
-; OPTIONAL INPUTS:
-;
-;
-; KEYWORD PARAMETERS:
-;       -
-;
-; OUTPUTS:
-;
-; OPTIONAL OUTPUTS:
-;       -
-;
-; MODULES CALLED:
-;       os
-;
-; EXAMPLE:
-;
+print_log.__doc__ =f'''
+ NAME:
+    print_log
+ PURPOSE:
+    Print statements to log if existent and screen if Requested
+ CATEGORY:
+    support_functions
 
+ INPUTS:
+    log_statement = statement to be printed
+    log = log to print to, can be None
+
+ OPTIONAL INPUTS:
+    debug = False
+
+    screen = False
+    also print the statement to the screen
+
+ OUTPUTS:
+    line in the log or on the screen
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    linenumber, .write
+'''
+
+def remove_inhomogeneities(Configuration,fits_map,inclination=30., pa = 90. , center = [0.,0.],WCS_center = True, iteration= 0. , debug=False):
+    if debug:
+        print_log(f'''REMOVE_INHOMOGENEITIES: These are the values we get as input
+{'':8s}Inclination = {inclination}
+{'':8s}pa = {pa}
+{'':8s}center = {center}, WCS = {WCS_center}
+{'':8s}map shape = {np.shape(fits_map[0].data)}
+''',Configuration['OUTPUTLOG'],debug = True)
+    map = fits_map[0].data
+    # first rotate the pa
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        map_wcs = WCS(fits_map[0].header)
+    # convert the boundaries to real coordinates
+    if WCS_center:
+        x, y = map_wcs.wcs_world2pix(*center, 1)
+    else:
+        x = center[0]
+        y = center[1]
+    rot_map = rotateImage(Configuration,map,pa-90,[x,y],debug=debug)
+    # deproject
+    dep_map = deproject(Configuration,copy.deepcopy(rot_map),inclination,center = y, debug=debug)
+
+    if debug:
+        fits.writeto(f"{Configuration['FITTING_DIR']}rot_map_{iteration}.fits",rot_map,fits_map[0].header,overwrite = True)
+        fits.writeto(f"{Configuration['FITTING_DIR']}dep_map_{iteration}.fits",dep_map,fits_map[0].header,overwrite = True)
+
+    angles = np.linspace(5.,360.,71)
+    minimum_map = copy.deepcopy(dep_map)
+    for angle in angles:
+        rot_dep_map =  rotateImage(Configuration,copy.deepcopy(dep_map),angle,[x,y],debug=debug)
+
+        #tmp = np.where(rot_dep_map < minimum_map)[0]
+        minimum_map[rot_dep_map < minimum_map] =rot_dep_map[rot_dep_map < minimum_map]
+    clean_map = rotateImage(Configuration,deproject(Configuration,copy.deepcopy(minimum_map),inclination,center = y,invert= True,debug=debug),-1*(pa-90),[x,y],debug=debug)
+
+    if debug:
+        fits.writeto(f"{Configuration['FITTING_DIR']}minimum_map_{iteration}.fits",minimum_map,fits_map[0].header,overwrite = True)
+        fits.writeto(f"{Configuration['FITTING_DIR']}clean_map_{iteration}.fits",clean_map,fits_map[0].header,overwrite = True)
+    fits_map[0].data = clean_map
+    return fits_map
+
+remove_inhomogeneities.__doc__ =f'''
+ NAME:
+remove_inhomogeneities
+
+ PURPOSE:
+    Remove the inhomogeneities from a galaxy by deprojecting the map and rotating the map in steps of 5 deg over 360 degrees.
+    Only keep the minimum values from every angle to ensure obtaining the underlying disk only not the overdensities.
+
+ CATEGORY:
+    support_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    fits_map = intensity map of the galaxy as an astropy structure, i.e fits_map[0].header and fits_map[0].data
+
+ OPTIONAL INPUTS:
+    debug = False
+
+    inclination=30.
+    inclination of the galaxy
+
+    pa = 90.
+    PA of the galaxy
+
+    center = [0.,0.]
+    center of the galaxy, used for rotation and deprojection
+
+    WCS_center = True
+    Boolean, if True the center is assumed to be in RA, DEC (degrees)
+    If false the center is in pixels.
+
+    iteration= 0.
+    counter for outputting the intermediate maps (See optional outputs)
+
+ OUTPUTS:
+    The cleaned minimum value map
+
+ OPTIONAL OUTPUTS:
+    If debug is True all intemediate step map are written to fits file in the fitting directory.
+    With rot_map_{{iteration}}.fits = the input map rotated such that the major axis as defined by pa is along the x-axis
+    dep_map_{{iteration}}.fits = the deprojected original map
+    minimum_map_{{iteration}}.fits = the deprojected map with only minimum values from each angle
+    clean_map_{{iteration}}.fits = the final map reprojected and rotated back to the original angle
+
+ PROCEDURES CALLED:
+    Unspecified
 '''
 
 def rename_fit_products(Configuration,stage = 'initial', fit_stage='Undefined_Stage',debug = False):
@@ -1012,115 +1405,81 @@ def rename_fit_products(Configuration,stage = 'initial', fit_stage='Undefined_St
             elif os.path.exists(f"{Configuration['FITTING_DIR']}{fit_stage}/{fit_stage}.{filetype}"):
                 os.system(f"mv {Configuration['FITTING_DIR']}{fit_stage}/{fit_stage}.{filetype} {Configuration['FITTING_DIR']}{fit_stage}/{fit_stage}_Prev.{filetype}")
 
+rename_fit_products.__doc__ =f'''
+ NAME:
+    rename_fit_products
+ PURPOSE:
+    rename the tirific products from the previous stage.
 
-rename_fit_products.__doc__ = '''
-;+
-; NAME:
-;       rename_fit_products(Configuration,stage)
-;
-; PURPOSE:
-;       rename the tirific product from the previous stage.
-;
-; CATEGORY:
-;       Support
-;
-;
-; INPUTS:
-;     Configuration, and the cube header
-;
-; OPTIONAL INPUTS:
-;
-;
-; KEYWORD PARAMETERS:
-;       -
-;
-; OUTPUTS:
-;
-; OPTIONAL OUTPUTS:
-;       -
-;
-; MODULES CALLED:
-;
-;
-; EXAMPLE:
-;
+ CATEGORY:
+    support_functions
 
+ INPUTS:
+    Configuration = Standard FAT configuration
+
+ OPTIONAL INPUTS:
+    debug = False
+
+    stage = 'initial'
+    stage of the type of fitting
+
+    fit_stage='Undefined_Stage'
+    Type of fitting
+
+ OUTPUTS:
+    renamed files
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
 '''
 
-def remove_inhomogeneities(Configuration,fits_map,inclination=30., pa = 90. , center = [0.,0.],WCS_center = True, iteration= 0. , debug=False):
-    if debug:
-        print_log(f'''REMOVE_INHOMOGENEITIES: These are the values we get as input
-{'':8s}Inclination = {inclination}
-{'':8s}pa = {pa}
-{'':8s}center = {center}, WCS = {WCS_center}
-{'':8s}map shape = {np.shape(fits_map[0].data)}
-''',Configuration['OUTPUTLOG'],debug = True)
-    map = fits_map[0].data
-    # first rotate the pa
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        map_wcs = WCS(fits_map[0].header)
-    # convert the boundaries to real coordinates
-    if WCS_center:
-        x, y = map_wcs.wcs_world2pix(*center, 1)
-    else:
-        x = center[0]
-        y = center[1]
-    rot_map = rotateImage(map,pa-90,[x,y],debug=debug)
-    # deproject
-    dep_map = deproject(copy.deepcopy(rot_map),inclination,center = y, debug=debug)
-
-    if debug:
-        fits.writeto(f"{Configuration['FITTING_DIR']}rot_map_{iteration}.fits",rot_map,fits_map[0].header,overwrite = True)
-        fits.writeto(f"{Configuration['FITTING_DIR']}dep_map_{iteration}.fits",dep_map,fits_map[0].header,overwrite = True)
-
-    angles = np.linspace(5.,360.,71)
-    minimum_map = copy.deepcopy(dep_map)
-    for angle in angles:
-        rot_dep_map =  rotateImage(copy.deepcopy(dep_map),angle,[x,y],debug=debug)
-
-        #tmp = np.where(rot_dep_map < minimum_map)[0]
-        minimum_map[rot_dep_map < minimum_map] =rot_dep_map[rot_dep_map < minimum_map]
-    clean_map = rotateImage(deproject(copy.deepcopy(minimum_map),inclination,center = y,invert= True,debug=debug),-1*(pa-90),[x,y],debug=debug)
-
-    if debug:
-        fits.writeto(f"{Configuration['FITTING_DIR']}minimum_map_{iteration}.fits",minimum_map,fits_map[0].header,overwrite = True)
-        fits.writeto(f"{Configuration['FITTING_DIR']}clean_map_{iteration}.fits",clean_map,fits_map[0].header,overwrite = True)
-    fits_map[0].data = clean_map
-    return fits_map
-
-def deproject(map,angle, center = 0., invert = False,debug=False):
-    axis = np.array(range(len(map[:,0])),dtype=float)-center
-    if invert:
-        newaxis = axis/np.cos(np.radians(angle))
-    else:
-        newaxis = axis*np.cos(np.radians(angle))
-    for x in range(len(map[0,:])):
-        profile = copy.deepcopy(map[:,x])
-        new_profile = np.interp(np.array(newaxis,dtype=float),np.array(axis,dtype=float),np.array(profile,dtype=float))
-        map[:,x] = new_profile
-    return map
-
-
 #function to rotate a cube without losing info
-def rotateImage(Cube, angle, pivot, debug = False):
-    padX = [int(Cube.shape[1] - pivot[0]), int(pivot[0])]
-    padY = [int(Cube.shape[0] - pivot[1]), int(pivot[1])]
-    imgP = np.pad(Cube, [padY, padX], 'constant')
+def rotateImage(Configuration,image, angle, pivot, debug = False):
+    padX = [int(image.shape[1] - pivot[0]), int(pivot[0])]
+    padY = [int(image.shape[0] - pivot[1]), int(pivot[1])]
+    imgP = np.pad(image, [padY, padX], 'constant')
     imgR = ndimage.rotate(imgP, angle, axes=(1, 0), reshape=False)
     return imgR[padY[0]: -padY[1], padX[0]: -padX[1]]
 
-def sbr_limits(Configuration,hdr, systemic= 100. , debug = False):
+rotateImage.__doc__ =f'''
+ NAME:
+    rotateImage
+
+ PURPOSE:
+    Rotate an image around a specified center
+
+ CATEGORY:
+    support_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    image = Image to rotate
+    angle =  the angle to rotate the image by
+    pivot = the center around which to rotate
+
+ OPTIONAL INPUTS:
+    debug = False
+
+ OUTPUTS:
+    The rotated image is returned
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+'''
+
+def sbr_limits(Configuration, systemic= 100. , debug = False):
     radii = set_rings(Configuration,debug=debug)
     if debug:
         print_log(f'''SBR_LIMITS: Got {len(radii)} radii
-''',Configuration['OUTPUTLOG'], debug=debug,screen =True)
-    level = hdr['FATNOISE']*1000
-    bm = [hdr['BMAJ']*3600.,hdr['BMIN']*3600.]
-    noise_in_column = columndensity(level,beam = bm,systemic = systemic,channel_width=hdr['CDELT3']/1000.)
+''',Configuration['OUTPUTLOG'], debug=True)
+    level = Configuration['NOISE']*1000
+    noise_in_column = columndensity(Configuration,level,systemic = systemic)
     J2007col=9.61097e+19
     ratio=(noise_in_column/J2007col)**0.5
-    beamsolid=(np.pi*bm[0]*bm[1])/(4.*np.log(2.))
+    beamsolid=(np.pi*Configuration['BEAM'][0]*Configuration['BEAM'][1])/(4.*np.log(2.))
     ringarea= [0 if radii[0] == 0 else np.pi*((radii[0]+radii[1])/2.)**2]
     ringarea = np.hstack((ringarea,
                          [np.pi*(((y+z)/2.)**2-((y+x)/2.)**2) for x,y,z in zip(radii,radii[1:],radii[2:])],
@@ -1145,56 +1504,37 @@ def sbr_limits(Configuration,hdr, systemic= 100. , debug = False):
         print_log(f'''SBR_LIMITS: Retrieved these radii and limits:
 {'':8s}{radii}
 {'':8s}{sbr_ring_limits}
-''',Configuration['OUTPUTLOG'], debug=False,screen =True)
+''',Configuration['OUTPUTLOG'], debug=False)
     return radii,sbr_ring_limits
 
+sbr_limits.__doc__ =f'''
+ NAME:
+    sbr_limits
 
-sbr_limits.__doc__ = '''
-;+
-; NAME:
-;       sbr_limits(Configuration,hdr)
-;
-; PURPOSE:
-;       Create the radii at which to evaluate  the model and a corresponding array that has the sbr reliability sbr_limits
-;
-; CATEGORY:
-;       Support
-;
-;
-; INPUTS:
-;     Configuration, and the cube header
-;
-; OPTIONAL INPUTS:
-;
-;
-; KEYWORD PARAMETERS:
-;       -
-;
-; OUTPUTS:
-;
-; OPTIONAL OUTPUTS:
-;       -
-;
-; MODULES CALLED:
-;
-;
-; EXAMPLE:
-;
+ PURPOSE:
+    Calculate the sbr limits below which rings can not be trusted.
 
+ CATEGORY:
+    support_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+
+ OPTIONAL INPUTS:
+    debug = False
+
+    systemic= 100.
+    systemic velocity
+
+ OUTPUTS:
+    radii = the radii of the rings in arcsec
+    sbr_ring_limits = the limits of reliability for each ring based on the noise in the cube in Jy/arcsec^2 x km/s
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
 '''
-
-def the_bends(profile,radii,start,outer_diff):
-    profile = np.array(profile,dtype=float)
-    mean = np.mean(profile[0])   # This is necessary to keep both sides conneccted and the same
-    radii = np.array(radii,dtype=float)
-    length = float((radii[-1] -start)/2.)
-    amplitude =  float(outer_diff)
-    center = float(radii[-1])
-    mod_profile = np.arctan((radii-center)/(abs(length)))/(0.5*np.pi)
-    mod_profile = mod_profile/np.nanmax(abs(mod_profile))
-    add = mean-np.mean(mod_profile-mod_profile[0])*amplitude
-    mod_profile = (mod_profile-mod_profile[0])*amplitude+mean
-    return mod_profile
 
 def set_format(key):
     if key in ['SBR', 'SBR_2']:
@@ -1205,52 +1545,35 @@ def set_format(key):
         format = '.2f'
     return format
 
-def set_limits(value,minv,maxv,debug = False):
-    if value < minv:
-        return minv
-    elif value > maxv:
-        return maxv
-    else:
-        return value
+set_format.__doc__ =f'''
+ NAME:
+    set_format
 
-set_limits.__doc__ = '''
-;+
-; NAME:
-;       set_limits(value,min,max)
-;
-; PURPOSE:
-;       Make sure Value is between min and max else set to min when smaller or max when larger.
-;
-; CATEGORY:
-;       Support
-;
-;
-; INPUTS:
-;     value
-;
-; OPTIONAL INPUTS:
-;
-;
-; KEYWORD PARAMETERS:
-;       -
-;
-; OUTPUTS:
-;
-; OPTIONAL OUTPUTS:
-;       -
-;
-; MODULES CALLED:
-;
-;
-; EXAMPLE:
-;
+ PURPOSE:
+    Get the format code for specific tirific parameter
 
+ CATEGORY:
+    support_functions
+
+ INPUTS:
+    key = Tirific parameter to get code for
+
+ OPTIONAL INPUTS:
+
+ OUTPUTS:
+    The format code
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
 '''
+
 #simple function keep track of how to modify the edge limits
 def set_limit_modifier(Configuration,Inclination, debug= False):
     if debug:
         print_log(f'''SET_LIMIT_MODIFIER: Checking the limit modifier.
-''', Configuration['OUTPUTLOG'], debug=debug)
+''', Configuration['OUTPUTLOG'], debug=True)
     if not Inclination.shape:
         Inclination = [Inclination]
     modifier_list = []
@@ -1259,18 +1582,6 @@ def set_limit_modifier(Configuration,Inclination, debug= False):
     # The lower limit corresponds to a inclination 80 above which the cos becomes too steep
     for inc in Inclination:
         modifier_list.append(set_limits(np.sqrt(np.cos(np.radians(inc))/np.cos(np.radians(60.))),0.6,2.))
-
-    '''
-    for inc in Inclination:
-        if 40 < inc < 50:
-            modifier_list.append(set_limits(1.+((50-inc)*0.05),1.,2.5))
-        elif inc < 40:
-            modifier_list.append(set_limits(np.sin(np.radians(75.))/np.sin(np.radians(inc)),1.5,2.5))
-        elif inc > 75:
-            modifier_list.append(set_limits(75./inc,0.7,1.00))
-        else:
-            modifier_list.append(1.00)
-    '''
     if Configuration['OUTER_RINGS_DOUBLED']:
         if len(modifier_list) > 10:
             modifier_list[10:]= np.sqrt(modifier_list[10:])
@@ -1278,11 +1589,67 @@ def set_limit_modifier(Configuration,Inclination, debug= False):
     print_log(f'''SET_LIMIT_MODIFIER: We updated the LIMIT_MODIFIER to {Configuration['LIMIT_MODIFIER']}.
 ''', Configuration['OUTPUTLOG'], debug=False)
 
+set_limit_modifier.__doc__ =f'''
+ NAME:
+    set_limit_modifier
 
-def set_ring_size(Configuration, debug = False, size_in_beams = 0., check_set_rings = True):
+ PURPOSE:
+    Write to the Configuration a value or list of values to modify inclination dependent values. Foremost the sbr_limits
 
+ CATEGORY:
+    support_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    Inclination = Inclination of the model, can be singular or for all rings.
+
+ OPTIONAL INPUTS:
+    debug = False
+
+ OUTPUTS:
+    'LIMIT_MODIFIER' is updated in the Configuration.
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+'''
+
+def set_limits(value,minv,maxv,debug = False):
+    if value < minv:
+        return minv
+    elif value > maxv:
+        return maxv
+    else:
+        return value
+
+set_limits.__doc__ =f'''
+ NAME:
+    set_limits
+ PURPOSE:
+    Make sure Value is between min and max else set to min when smaller or max when larger.
+ CATEGORY:
+    support_functions
+
+ INPUTS:
+    value = value to evaluate
+    minv = minimum acceptable value
+    maxv = maximum allowed value
+
+ OPTIONAL INPUTS:
+    debug = False
+
+ OUTPUTS:
+    the limited Value
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+'''
+
+def set_ring_size(Configuration, debug = False, size_in_beams = 0., check_set_rings = False):
     if size_in_beams == 0.:
-        check_set_rings = False
         size_in_beams =  Configuration['SIZE_IN_BEAMS']
     ring_size = Configuration['RING_SIZE']
     no_rings = calc_rings(Configuration,ring_size=ring_size,size_in_beams=size_in_beams,debug=debug)
@@ -1290,7 +1657,7 @@ def set_ring_size(Configuration, debug = False, size_in_beams = 0., check_set_ri
         print_log(f'''SET_RING_SIZE: Starting with the following parameters.
 {'':8s}SIZE_IN_BEAMS = {size_in_beams}
 {'':8s}RING_SIZE = {ring_size}
-''', Configuration['OUTPUTLOG'],debug=debug)
+''', Configuration['OUTPUTLOG'],debug=True)
 
     while ring_size > 0.5 and  no_rings < 8.:
         previous_ringsize = ring_size
@@ -1312,7 +1679,7 @@ def set_ring_size(Configuration, debug = False, size_in_beams = 0., check_set_ri
 {'':8s}RING_SIZE = {ring_size}
 {'':8s}NO_RINGS = {no_rings}
 ''', Configuration['OUTPUTLOG'],debug=False)
-        return size_in_beams,ring_size
+        return size_in_beams,ring_size,int(no_rings)
     else:
         if debug:
             print_log(f'''SET_RING_SIZE: Setting the following parameters.
@@ -1326,142 +1693,140 @@ def set_ring_size(Configuration, debug = False, size_in_beams = 0., check_set_ri
         if Configuration['NO_RINGS'] < Configuration['MINIMUM_RINGS']:
             print_log(f'''SET_RING_SIZE: With a ring size of {Configuration['RING_SIZE']} we still only find {Configuration['NO_RINGS']}.
     {"":8s}SET_RING_SIZE: This is not enough for a fit.
-    ''',Configuration['OUTPUTLOG'],debug = False)
+    ''',Configuration['OUTPUTLOG'],debug = False,screen=True)
             raise SmallSourceError('This source is too small to reliably fit.')
 
+set_ring_size.__doc__ =f'''
+ NAME:
+    set_ring_size
 
-def set_rings(Configuration,ring_size = 0.,size_in_beams = 0. , debug = False):
+ PURPOSE:
+    Calculate the size and number of rings and the galaxy size in beams and update them in the Configuration dictionary
+
+ CATEGORY:
+    support_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+
+ OPTIONAL INPUTS:
+    debug = False
+
+    size_in_beams = 0.
+    The size of the galaxy in beams across the major axis radius, if unset it is taken from the Configuration
+
+    check_set_rings = False
+    Set this parameter to True to not apply the calaculated ring size and number and size of the model to the
+    Configuration but to return the parameters as  size_in_beams,ring_size,no_rings
+
+ OUTPUTS:
+    Will raise an error when the number of rings goes below the minimum
+
+ OPTIONAL OUTPUTS:
+    size_in_beams,ring_size,no_rings
+
+ PROCEDURES CALLED:
+    Unspecified
+'''
+
+def set_rings(Configuration,ring_size = 0. , debug = False):
     if ring_size == 0.:
         ring_size = Configuration['RING_SIZE']
-    if size_in_beams == 0.:
-        size_in_beams = Configuration['SIZE_IN_BEAMS']
     if debug:
         print_log(f'''SET_RINGS: Starting with the following parameters.
-{'':8s}SIZE_IN_BEAMS = {size_in_beams}
 {'':8s}RING_SIZE = {ring_size}
-''', Configuration['OUTPUTLOG'],debug=debug)
+''', Configuration['OUTPUTLOG'],debug=True)
     no_rings = calc_rings(Configuration,debug=debug)
     if debug:
         print_log(f'''SET_RINGS: We find {no_rings} rings.
 ''', Configuration['OUTPUTLOG'],debug=False)
-    #Configuration['NO_RINGS'] = Configuration['SIZE_IN_BEAMS']/Configuration['RING_SIZE']
     if Configuration['OUTER_RINGS_DOUBLED']:
-        print_log(f'''SET_RINGS: This is a large galaxy (Size = {size_in_beams}) Therefore we use twice the ring size in the outer parts.
-''',Configuration['OUTPUTLOG'],debug = False)
-        radii = [0.,1./5.*Configuration['BMMAJ']]
-        radii = np.hstack((radii,(np.linspace(Configuration['BMMAJ']*ring_size,Configuration['BMMAJ']*10.*ring_size, \
-                                        10)+1./5*Configuration['BMMAJ'])))
-        #radii = np.hstack((radii,(np.linspace(Configuration['BMMAJ']*12.*ring_size, \
-        #                                      Configuration['BMMAJ']*ring_size*2.*(no_rings-5.), \
-        #                                      round((no_rings-5)/2.+1))) \
-        #                                      +1./5*Configuration['BMMAJ']))
-        radii = np.hstack((radii,(np.linspace(Configuration['BMMAJ']*12.*ring_size, \
-                                              Configuration['BMMAJ']*ring_size*(12.+2.*round((no_rings-6.)/2.)), \
+        print_log(f'''SET_RINGS: This is a large galaxy. Therefore we use twice the ring size in the outer parts.
+''',Configuration['OUTPUTLOG'],debug = False,screen =True)
+        radii = [0.,1./5.*Configuration['BEAM'][0]]
+        radii = np.hstack((radii,(np.linspace(Configuration['BEAM'][0]*ring_size,Configuration['BEAM'][0]*10.*ring_size, \
+                                        10)+1./5*Configuration['BEAM'][0])))
+        radii = np.hstack((radii,(np.linspace(Configuration['BEAM'][0]*12.*ring_size, \
+                                              Configuration['BEAM'][0]*ring_size*(12.+2.*round((no_rings-6.)/2.)), \
                                               int(np.ceil((no_rings-5)/2.)))) \
-                                              +1./5*Configuration['BMMAJ']))
-                                              #no_rings = 2+10+round((est_rings-12)/2.)
+                                              +1./5*Configuration['BEAM'][0]))
     else:
-        radii = [0.,1./5.*Configuration['BMMAJ']]
-        radii = np.hstack((radii,(np.linspace(Configuration['BMMAJ']*ring_size,Configuration['BMMAJ']*ring_size*(no_rings-2.), \
-                                        no_rings-2)+1./5.*Configuration['BMMAJ'])))
+        radii = [0.,1./5.*Configuration['BEAM'][0]]
+        radii = np.hstack((radii,(np.linspace(Configuration['BEAM'][0]*ring_size,Configuration['BEAM'][0]*ring_size*(no_rings-2.), \
+                                        no_rings-2)+1./5.*Configuration['BEAM'][0])))
     if debug:
         print_log(f'''SET_RINGS: Got the following radii.
 {'':8s}{radii}
 {'':8s}We should have {Configuration['NO_RINGS']} rings and have {len(radii)} rings.
 ''', Configuration['OUTPUTLOG'],debug=False)
-    #Configuration['NO_RINGS'] = len(radii)
-    #Configuration['SIZE_IN_BEAMS']= int((radii[-1]-1./5.*bmaj)/bmaj)
-    return np.array(radii,dtype = float)
-set_rings.__doc__ = '''
-;+
-; NAME:
-;       set_rings(Configuration,hdr)
-;
-; PURPOSE:
-;       make an array that chas all the ring radii in ARCSEC
-;
-; CATEGORY:
-;       Support
-;
-;
-; INPUTS:
-;     Configuration, and the cube header
-;
-; OPTIONAL INPUTS:
-;
-;
-; KEYWORD PARAMETERS:
-;       -
-;
-; OUTPUTS:
-;
-; OPTIONAL OUTPUTS:
-;       -
-;
-; MODULES CALLED:
-;
-;
-; EXAMPLE:
-;
 
+    return np.array(radii,dtype = float)
+
+set_rings.__doc__ =f'''
+ NAME:
+    set_rings
+ PURPOSE:
+    Calculate the radii of all rings required for the model
+
+ CATEGORY:
+    support_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+
+ OPTIONAL INPUTS:
+    debug = False
+
+    ring_size = 0.
+    Width of the rings
+
+ OUTPUTS:
+    numpy array with the central locations of the rings in arcsec.
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
 '''
 
 def sofia_output_exists(Configuration,Fits_Files, debug = False):
     if debug:
         print_log(f'''SOFIA_OUTPUT_EXISTS: Starting check
-''', Configuration['OUTPUTLOG'],debug = debug)
+''', Configuration['OUTPUTLOG'],debug = True)
     req_files= ['MOMENT1','MOMENT0','MOMENT2','MASK']
     for file in req_files:
         if os.path.exists(Configuration['FITTING_DIR']+'Sofia_Output/'+Fits_Files[file]):
             continue
         else:
             log_statement = f"SOFIA_OUTPUT_EXISTS: The file {Configuration['FITTING_DIR']+'Sofia_Output/'+Fits_Files[file]} is not found."
-            print_log(log_statement, Configuration['OUTPUTLOG'],debug = False)
+            print_log(log_statement, Configuration['OUTPUTLOG'],debug = False,screen =True)
             raise FileNotFoundError(log_statement)
 
     if not os.path.exists(Configuration['FITTING_DIR']+'Sofia_Output/'+Configuration['BASE_NAME']+'_cat.txt'):
         log_statement = f"SOFIA_OUTPUT_EXISTS: The file {Configuration['FITTING_DIR']+'Sofia_Output/'+Configuration['BASE_NAME']+'_cat.txt'} is not found."
-        print_log(log_statement, Configuration['OUTPUTLOG'],debug = False)
+        print_log(log_statement, Configuration['OUTPUTLOG'],debug = False,screen =True)
         raise FileNotFoundError(log_statement)
 
-
 sofia_output_exists.__doc__ =f'''
-Simple function to make sure all sofia output is present as expeceted
-'''
+ NAME:
 
-# Function to wait for tirific when it is too fast for stdout
-def wait_for_tirific(Configuration,req_stamp,current_run,counter = 0. ,total_fits = 1.):
-    sys.stdout.flush()
-    Chi = 0.
-    attempt = 0.
-    currentloop = 0.
-    max_loop = 0
-    time.sleep(1.0)
-    for tir_out_line in current_run.stdout:
-        tmp = re.split(r"[/: ]+",tir_out_line.strip())
-        if tmp[0] == 'L':
-            #if int(tmp[1]) != currentloop:
-                #print(f"RUN_TIRIFIC: Starting loop {tmp[1]} out of a maximum {max_loop}")
-            currentloop = int(tmp[1])
-            if max_loop == 0:
-                max_loop = int(tmp[2])
-            try:
-                Configuration['NO_POINTSOURCES'] = np.array([tmp[18],tmp[19]],dtype=float)
-            except:
-                #If this fails for some reason an old number suffices, if the code really crashed problems will occur elsewhere.
-                pass
-        if tmp[0].strip() == 'Finished':
-            Chi = float(tmp[tmp.index('C')+1])
-            break
-        if tmp[0].strip() == 'Abort':
-            break
-        attempt += 1
-        try:
-            print(f"\rWarp Loop {counter/total_fits*100.:6.2f}% Complete.", end=" ",flush = True)
-        except:
-            pass
-        if attempt > 1000.:
-            Chi = float('NaN')
-            break
-    current_run.stdout.flush()
-    return Chi
+ PURPOSE:
+    Simple function to make sure all sofia output is present as expected
+ CATEGORY:
+    support_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    Fits_Files = Standard FAT dictionary with filenames
+
+ OPTIONAL INPUTS:
+    debug = False
+
+ OUTPUTS:
+    Raises a FileNotFoundError if the files are not found.
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+'''

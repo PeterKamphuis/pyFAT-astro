@@ -25,18 +25,7 @@ def check_legitimacy(Configuration,debug=False):
         return
     else:
         if Configuration['FINISHAFTER'] > 0:
-            if Configuration['TWO_STEP']:
-                if Configuration['FINISHAFTER'] == 1 and Configuration['START_POINT'] < 4:
-                        # As tirific does not transfer the errors we have to do This
-                        outfile = f"{Configuration['FITTING_DIR']}/Centre_Convergence/Centre_Convergence.def"
-                elif Configuration['FINISHAFTER'] == 2:
-                        outfile = f"{Configuration['FITTING_DIR']}/Extent_Convergence/Extent_Convergence.def"
-                else:
-                    Configuration['FINAL_COMMENT'] = 'This is an odd occurence, FAT ran fine but the output can not be found.'
-                    Configuration['MAPS_OUTPUT'] = 5
-                    return
-            else:
-                outfile = f"{Configuration['FITTING_DIR']}/One_Step_Convergence/One_Step_Convergence.def"
+            outfile = f"{Configuration['FITTING_DIR']}/One_Step_Convergence/One_Step_Convergence.def"
     inclination = load_tirific(outfile,Variables=['INCL'],debug=debug)[0]
     low_incl_limit = 20.
     low_beam_limit = 8.
@@ -114,25 +103,14 @@ def cleanup(Configuration,Fits_Files, debug = False):
             pass
     directories = ['Finalmodel','Sofia_Output','Def_Files']
     files = [Configuration['BASE_NAME']+'-Basic_Info.txt']
-    if Configuration['TWO_STEP']:
-        directories.append('Centre_Convergence')
-        directories.append('Extent_Convergence')
-        files.append('Centre_Convergence_In.def')
-        files.append('Extent_Convergence_In.def')
-    else:
-
-
-
-        directories.append('One_Step_Convergence')
-        files.append('One_Step_Convergence_In.def')
+    directories.append('One_Step_Convergence')
+    files.append('One_Step_Convergence_In.def')
     if Configuration['START_POINT'] == 1:
         files.append(Fits_Files['FITTING_CUBE'])
         files.append(Fits_Files['OPTIMIZED_CUBE'])
     elif Configuration['START_POINT'] == 2:
         pass
     elif Configuration['START_POINT'] == 4 and Configuration['FINISHAFTER'] > 1:
-        if Configuration['TWO_STEP']:
-                directories.remove('Centre_Convergence')
         files = ['Centre_Convergence_In.def',]
     else:
         directories= None
@@ -151,24 +129,10 @@ def cleanup(Configuration,Fits_Files, debug = False):
         os.chdir(Configuration['FITTING_DIR'])
         #for configuration purposes we remove the old dirs
         if debug:
-            if Configuration['TWO_STEP']:
-                try:
-                    os.system(f'rm -Rf One_Step_Convergence/')
-                except:
-                    pass
-            else:
-                try:
-                    os.system(f'rm -Rf Centre_Convergence/')
-                except:
-                    pass
-                try:
-                    os.system(f'rm -Rf Extent_Convergence/')
-                except:
-                    pass
-                try:
-                    os.system(f'rm -f Finalmodel/Convolved_Cube_FAT_final_xv.fits')
-                except:
-                    pass
+            try:
+                os.system(f'rm -f Finalmodel/Convolved_Cube_FAT_final_xv.fits')
+            except:
+                pass
 
         for dir in directories:
             if os.path.isdir(dir):
@@ -359,10 +323,7 @@ def finish_galaxy(Configuration,maximum_directory_length,current_run = 'Not init
     # Need to write to results catalog
     if Configuration['OUTPUTCATALOGUE']:
         with open(Configuration['OUTPUTCATALOGUE'],'a') as output_catalogue:
-            if Configuration['TWO_STEP']:
-                output_catalogue.write(f"{Configuration['FITTING_DIR'].split('/')[-2]:{maximum_directory_length}s} {str(Configuration['CC_ACCEPTED']):>6s} {str(Configuration['EC_ACCEPTED']):>6s} {Configuration['FINAL_COMMENT']} \n")
-            else:
-                output_catalogue.write(f"{Configuration['FITTING_DIR'].split('/')[-2]:{maximum_directory_length}s} {str(Configuration['OS_ACCEPTED']):>6s} {Configuration['FINAL_COMMENT']} \n")
+            output_catalogue.write(f"{Configuration['FITTING_DIR'].split('/')[-2]:{maximum_directory_length}s} {str(Configuration['OS_ACCEPTED']):>6s} {Configuration['FINAL_COMMENT']} \n")
 
     if Configuration['MAPS_OUTPUT'] == 'error':
         error_message = '''
@@ -405,18 +366,10 @@ def finish_galaxy(Configuration,maximum_directory_length,current_run = 'Not init
         if Configuration['FINISHAFTER'] > 0:
             if not os.path.isdir(Configuration['FITTING_DIR']+'/Finalmodel'):
                 os.mkdir(Configuration['FITTING_DIR']+'/Finalmodel')
-            if Configuration['TWO_STEP']:
-                if Configuration['FINISHAFTER'] == 1 and Configuration['START_POINT'] < 4:
-                    # As tirific does not transfer the errors we have to do This
-                    transfer_errors(Configuration,fit_stage='Centre_Convergence')
-                    linkname = f"{Configuration['FITTING_DIR']}/Centre_Convergence/Centre_Convergence"
-                elif Configuration['FINISHAFTER'] == 2:
-                    # As tirific does not transfer the errors we have to do This
-                    transfer_errors(Configuration,fit_stage='Extent_Convergence')
-                    linkname = f"{Configuration['FITTING_DIR']}/Extent_Convergence/Extent_Convergence"
-            else:
-                transfer_errors(Configuration,fit_stage='One_Step_Convergence')
-                linkname = f"{Configuration['FITTING_DIR']}/One_Step_Convergence/One_Step_Convergence"
+
+
+            transfer_errors(Configuration,fit_stage='One_Step_Convergence')
+            linkname = f"{Configuration['FITTING_DIR']}/One_Step_Convergence/One_Step_Convergence"
             os.symlink(f"{linkname}.fits",f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel.fits")
             os.symlink(f"{linkname}.def",f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel.def")
 
@@ -441,9 +394,7 @@ def finish_galaxy(Configuration,maximum_directory_length,current_run = 'Not init
         timing_result = open(Configuration['MAINDIR']+'/Timing_Result.txt','a')
         timing_result.write(f'''The galaxy in directory {Configuration['FITTING_DIR']} started at {Configuration['START_TIME']}.
 Finished preparations at {Configuration['PREP_END_TIME']} \n''')
-        if Configuration['TWO_STEP']:
-            timing_result.write(f'''Converged to a central position at {Configuration['CC_END_TIME']}.
-Converged to a galaxy size at {Configuration['EC_END_TIME']}. \n''')
+        timing_result.write(f'''Converged to a galaxy size at {Configuration['OS_END_TIME']}. \n''')
         timing_result.write(f'''It finished the whole process at {datetime.now()}
 ''')
         timing_result.close()

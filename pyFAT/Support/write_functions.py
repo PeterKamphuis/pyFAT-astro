@@ -1,7 +1,7 @@
 # -*- coding: future_fstrings -*-
 # This module contains a set of functions and classes that are used to write text files to Disk
 
-from pyFAT.Support.support_functions import convert_type, print_log,convertRADEC,convertskyangle,set_limit_modifier,columndensity,set_limits,get_inner_fix
+from pyFAT.Support.support_functions import print_log,convertRADEC,convertskyangle,set_limit_modifier,columndensity,set_limits,get_inner_fix
 from pyFAT.Support.modify_template import set_model_parameters, set_overall_parameters, set_fitting_parameters,get_warp_slope, update_disk_angles
 from pyFAT.Support.fits_functions import extract_pv
 from pyFAT.Support.read_functions import load_tirific,load_basicinfo, load_template
@@ -42,8 +42,8 @@ def basicinfo(Configuration,initialize = False,first_fit = False, second_fit = F
     else:
         Vars_to_Set =  ['XPOS','YPOS','VSYS','VROT','INCL','PA','SDIS','SBR','SBR_2','Z0']
         FAT_Model = load_template(template,Variables= Vars_to_Set,unpack=False, debug=debug)
-        RA=[FAT_Model[0,Vars_to_Set.index('XPOS')],abs(Configuration['BMMAJ']/(3600.*2.))]
-        DEC=[FAT_Model[0,Vars_to_Set.index('YPOS')],abs(Configuration['BMMAJ']/(3600.*2.))]
+        RA=[FAT_Model[0,Vars_to_Set.index('XPOS')],abs(Configuration['BEAM'][0]/(3600.*2.))]
+        DEC=[FAT_Model[0,Vars_to_Set.index('YPOS')],abs(Configuration['BEAM'][0]/(3600.*2.))]
         VSYS =[FAT_Model[0,Vars_to_Set.index('VSYS')],1.]
         PA=[FAT_Model[0,Vars_to_Set.index('PA')], 3.]
         Inclination = [FAT_Model[0,Vars_to_Set.index('INCL')], 3.]
@@ -61,18 +61,18 @@ def basicinfo(Configuration,initialize = False,first_fit = False, second_fit = F
             file.write(f'''#After the center converged. \n''')
         elif second_fit:
             file.write(f'''#After the radii converged. \n''')
-        RAhr,DEChr = convertRADEC(RA[0],DEC[0])
+        RAhr,DEChr = convertRADEC(Configuration,RA[0],DEC[0],debug=debug)
         RA_c = f'{RAhr}+/-{RA[1]*3600.:0.2f}'
         DEC_c = f'{DEChr}+/-{DEC[1]*3600.:0.2f}'
         VSYS_c = f'{VSYS[0]/1000.:.2f}+/-{VSYS[1]/1000.:.2f}'
         PA_c = f'{PA[0]:.2f}+/-{PA[1]:.2f}'
         INCL_c = f'{Inclination[0]:.2f}+/-{Inclination[1]:.2f}'
-        MVROT_c = f'{Max_Vrot[0]/1000.:.2f}+/-{Max_Vrot[1]/1000.:.2f}'
+        MVROT_c = f'{Max_Vrot[0]:.2f}+/-{Max_Vrot[1]:.2f}'
         Vmask_c = f'{V_mask[0]/1000.:.2f}+/-{V_mask[1]/1000.:.2f}'
         DHI_a = f'{DHI:.2f}'
         Dist = f'{Distance:.2f}'
         HIMass  = f'{Tot_Flux[0]*2.36E5*Distance**2:.2e}'
-        DHI_k = f'{convertskyangle(DHI,Distance):.2f}'
+        DHI_k = f'{convertskyangle(Configuration,DHI,Distance):.2f}'
         Flux_c = f'{Tot_Flux[0]:.2f}+/-{Tot_Flux[1]:.2f}'
         file.write(f'''  {RA_c:>25s} {DEC_c:>25s} {VSYS_c:>20s} {PA_c:>20s} {INCL_c:>20s} {MVROT_c:>20s} {Vmask_c:>20s} {Flux_c:>20s} {DHI_a:>20s} {Dist:>20s} {HIMass:>20s} {DHI_k:>20s}
 ''')
@@ -127,37 +127,37 @@ def initialize_def_file(Configuration, Fits_Files,Tirific_Template, cube_hdr,Ini
 
         if 'VSYS' in Initial_Parameters:
             Initial_Parameters['VSYS'] = [x/1000. for x in Initial_Parameters['VSYS']]
-        set_overall_parameters(Configuration, Fits_Files,Tirific_Template,loops=10,fit_stage=fit_stage,hdr=cube_hdr, flux = Initial_Parameters['FLUX'][0], debug=debug)
+        set_overall_parameters(Configuration, Fits_Files,Tirific_Template,loops=10,fit_stage=fit_stage, flux = Initial_Parameters['FLUX'][0], debug=debug)
         # Then set the values for the various parameters of the model
 
-        set_model_parameters(Configuration, Tirific_Template,Initial_Parameters, hdr=cube_hdr, debug=debug)
+        set_model_parameters(Configuration, Tirific_Template,Initial_Parameters, debug=debug)
 
         set_limit_modifier(Configuration,Initial_Parameters['INCL'][0], debug=debug )
 
-        set_fitting_parameters(Configuration, Tirific_Template, hdr = cube_hdr,stage = 'initial',
+        set_fitting_parameters(Configuration, Tirific_Template,stage = 'initial',
                                 initial_estimates = Initial_Parameters, debug=debug)
         if 'VSYS' in Initial_Parameters:
             Initial_Parameters['VSYS'] = [x*1000. for x in Initial_Parameters['VSYS']]
     elif fit_stage in ['Extent_Convergence','One_Step_Convergence']:
         if 'VSYS' in Initial_Parameters and fit_stage == 'One_Step_Convergence':
             Initial_Parameters['VSYS'] = [x/1000. for x in Initial_Parameters['VSYS']]
-        set_overall_parameters(Configuration, Fits_Files,Tirific_Template,loops = 10 ,fit_stage=fit_stage,hdr=cube_hdr, debug=debug,stage='initialize_ec')
+        set_overall_parameters(Configuration, Fits_Files,Tirific_Template,loops = 10 ,fit_stage=fit_stage, debug=debug,stage='initialize_ec')
         Vars_to_Set =  ['XPOS','YPOS','VSYS','VROT','INCL','PA','SDIS','SBR','SBR_2','Z0']
         if fit_stage == 'One_Step_Convergence':
-            set_model_parameters(Configuration, Tirific_Template,Initial_Parameters,stage='initialize_def_file', hdr=cube_hdr, debug=debug)
+            set_model_parameters(Configuration, Tirific_Template,Initial_Parameters,stage='initialize_def_file', debug=debug)
         FAT_Model = load_template(Tirific_Template,Variables= Vars_to_Set,unpack=False, debug=debug)
         # Finally we set how these parameters are fitted.
         set_limit_modifier(Configuration,FAT_Model[0,Vars_to_Set.index('INCL')], debug=debug)
         Configuration['INNER_FIX'] = get_inner_fix(Configuration,Tirific_Template, debug=debug)
-        Configuration['WARP_SLOPE'] = get_warp_slope(Configuration,Tirific_Template,cube_hdr, debug=debug)
+        Configuration['WARP_SLOPE'] = get_warp_slope(Configuration,Tirific_Template, debug=debug)
 
         parameters = {'VSYS': [FAT_Model[0,Vars_to_Set.index('VSYS')], Configuration['CHANNEL_WIDTH']], \
-                      'XPOS': [FAT_Model[0,Vars_to_Set.index('XPOS')],cube_hdr['BMAJ']] ,
-                      'YPOS': [FAT_Model[0,Vars_to_Set.index('YPOS')], cube_hdr['BMAJ']],
+                      'XPOS': [FAT_Model[0,Vars_to_Set.index('XPOS')], Configuration['BEAM'][0]/3600.] ,
+                      'YPOS': [FAT_Model[0,Vars_to_Set.index('YPOS')], Configuration['BEAM'][0]/3600.],
                       'INCL': [FAT_Model[0,Vars_to_Set.index('INCL')], 3.],
                       'PA':  [FAT_Model[0,Vars_to_Set.index('PA')], 3.],
                       'VROT':[np.mean(FAT_Model[:,Vars_to_Set.index('VROT')]),np.max(FAT_Model[:,Vars_to_Set.index('VROT')])-np.min(FAT_Model[1:,Vars_to_Set.index('VROT')]) ]  }
-        set_fitting_parameters(Configuration, Tirific_Template, hdr = cube_hdr,stage = 'initialize_os',
+        set_fitting_parameters(Configuration, Tirific_Template,stage = 'initialize_os',
                                initial_estimates=parameters, debug=debug)
 
     tirific(Configuration,Tirific_Template,name = f'{fit_stage}_In.def', debug=debug)
@@ -233,10 +233,7 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
                         'INCL_2_ERR','PA','PA_ERR','PA_2','PA_2_ERR','SDIS','SDIS_ERR','SDIS_2','SDIS_2_ERR','SBR',
                         'SBR_2','Z0','Z0_2','Z0_ERR','Z0_2_ERR']
         FAT_Model = load_tirific(f"{Configuration['FITTING_DIR']}Finalmodel/Finalmodel.def",Variables= Vars_to_plot,unpack=False,debug=debug)
-        if Configuration['TWO_STEP']:
-            Extra_Model_File = f"{Configuration['FITTING_DIR']}Centre_Convergence/Centre_Convergence.def"
-        else:
-            Extra_Model_File = f"{Configuration['FITTING_DIR']}One_Step_Convergence/One_Step_Convergence_final_output_before_after_os.def"
+        Extra_Model_File = f"{Configuration['FITTING_DIR']}One_Step_Convergence/One_Step_Convergence_final_output_before_after_os.def"
 
         if os.path.exists(Extra_Model_File):
             Extra_Model = load_tirific(Extra_Model_File,Variables= Vars_to_plot,unpack=False,debug=debug)
@@ -251,7 +248,7 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
             Input_Model = load_tirific(f"{Configuration['FITTING_DIR']}ModelInput.def",Variables= Vars_to_plot,unpack=False,debug=debug)
         else:
             Input_Model = []
-        sof_basic_ra,sof_basic_dec, sof_basic_vsys,sof_basic_maxrot,sof_basic_pa,sof_basic_inclination = load_basicinfo(
+        sof_basic_ra,sof_basic_dec, sof_basic_vsys,sof_basic_maxrot,sof_basic_pa,sof_basic_inclination = load_basicinfo(Configuration,
             f"{Configuration['FITTING_DIR']}{Configuration['BASE_NAME']}-Basic_Info.txt",Variables=['RA','DEC','VSYS','Max VRot','PA','Inclination'])
 
 
@@ -280,7 +277,7 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
         #Stupid python suddenly finds its own labels
         plt.xlabel('RA J2000')
 
-        median_noise_in_map = np.sqrt(np.nanmedian(channels_map[0].data[channels_map[0].data > 0.]))*cube[0].header['FATNOISE']*cube[0].header['CDELT3'] / 1000.
+        median_noise_in_map = np.sqrt(np.nanmedian(channels_map[0].data[channels_map[0].data > 0.]))*Configuration['NOISE']*Configuration['CHANNEL_WIDTH']
         mindism0 = median_noise_in_map
         mindism0 = median_noise_in_map
         #print("We find this {} as the minimum of the moment0 map".format(mindism0))
@@ -339,8 +336,8 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
         cbar.set_ticks([min_color, max_color])
         cbar.ax.set_title(f"{moment0[0].header['BUNIT']}", y= 0.2)
 
-        bm = [cube[0].header['BMAJ']*3600.,cube[0].header['BMIN']*3600.]
-        column_levels = columndensity(momlevel*1000.,beam = bm,systemic = FAT_Model[0,Vars_to_plot.index('VSYS')],channel_width=cube[0].header['CDELT3']/1000.)
+
+        column_levels = columndensity(Configuration,momlevel*1000.,systemic = FAT_Model[0,Vars_to_plot.index('VSYS')])
 
         if 1e21 < np.min(column_levels):
             fact= 1e21
@@ -675,12 +672,12 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
             ax_SDIS.text(1.01,0.5,'Forced Flat',rotation=-90, va='center',ha='left', color='black',transform = ax_SDIS.transAxes,
               bbox=dict(facecolor='white',edgecolor='white',pad=0.,alpha=0.),zorder=7,fontsize=12)
         ax_SDIS.text(1.1,1.0,f'''Ring size {Configuration['RING_SIZE']} x BMAJ
-BMAJ = {cube[0].header['BMAJ']*3600.:.1f} arcsec''',rotation=0, va='center',ha='left', color='black',transform = ax_SDIS.transAxes,
+BMAJ = {Configuration['BEAM'][0]:.1f} arcsec''',rotation=0, va='center',ha='left', color='black',transform = ax_SDIS.transAxes,
               bbox=dict(facecolor='white',edgecolor='white',pad=0.,alpha=0.),zorder=7,fontsize=12)
         plt.ylabel('Disp (km s$^{-1}$)',**labelfont)
 # ------------------------------Scale height------------------------------------
         ax_Z0 = plot_parameters(Vars_to_plot,FAT_Model,Input_Model,gs[21:24,9:15],Overview,'Z0',\
-                                Extra_Model = Extra_Model,initial = convertskyangle(0.2,Configuration['DISTANCE'],physical=True),debug=debug)
+                                Extra_Model = Extra_Model,initial = convertskyangle(Configuration,0.2,Configuration['DISTANCE'],physical=True),debug=debug)
 
         plt.tick_params(
             axis='x',          # changes apply to the x-axis
@@ -695,7 +692,7 @@ BMAJ = {cube[0].header['BMAJ']*3600.:.1f} arcsec''',rotation=0, va='center',ha='
         plt.ylabel('Z0 (arcsec)',**labelfont)
         arcmin,arcmax = ax_Z0.get_ylim()
         sec_ax = ax_Z0.twinx()
-        sec_ax.set_ylim(convertskyangle(arcmin,Configuration['DISTANCE']),convertskyangle(arcmax,Configuration['DISTANCE']))
+        sec_ax.set_ylim(convertskyangle(Configuration,arcmin,Configuration['DISTANCE']),convertskyangle(Configuration,arcmax,Configuration['DISTANCE']))
         sec_ax.figure.canvas.draw()
         sec_ax.set_ylabel('Z0 (kpc)',rotation=-90,va='bottom',**labelfont)
 
@@ -710,7 +707,7 @@ BMAJ = {cube[0].header['BMAJ']*3600.:.1f} arcsec''',rotation=0, va='center',ha='
 
         jymin,jymax = ax_SBR.get_ylim()
         sec_ax = ax_SBR.twinx()
-        sec_ax.set_ylim(columndensity(jymin*1000.,arcsquare = True)/1e20,columndensity(jymax*1000.,arcsquare = True)/1e20)
+        sec_ax.set_ylim(columndensity(Configuration,jymin*1000.,arcsquare = True)/1e20,columndensity(Configuration,jymax*1000.,arcsquare = True)/1e20)
         sec_ax.figure.canvas.draw()
         sec_ax.set_ylabel('Col. Dens. \n (x10$^{20}$ cm$^{-2}$)',rotation=-90,va='bottom',**labelfont)
 
@@ -750,12 +747,8 @@ BMAJ = {cube[0].header['BMAJ']*3600.:.1f} arcsec''',rotation=0, va='center',ha='
         ax_RAD = Overview.add_subplot(gs[6:10,16:20])
         plt.scatter(float(FAT_Model[0,Vars_to_plot.index('XPOS')]),float(FAT_Model[0,Vars_to_plot.index('YPOS')]),c='k',zorder=3,label = 'Final')
         if len(Extra_Model) > 0:
-            if Configuration['TWO_STEP']:
-                lab = 'CC'
-                alpha =1.
-            else:
-                lab = 'Unsmoothed'
-                alpha =0.5
+            lab = 'Unsmoothed'
+            alpha =0.5
             plt.scatter(float(Extra_Model[0,Vars_to_plot.index('XPOS')]),float(Extra_Model[0,Vars_to_plot.index('YPOS')]),c='r',zorder=1,alpha=alpha,label=lab)
         if len(Input_Model) > 0:
             plt.scatter(float(Input_Model[0,Vars_to_plot.index('XPOS')]),float(Input_Model[0,Vars_to_plot.index('YPOS')]),c='b',zorder =2,label='Input')
@@ -1045,7 +1038,7 @@ sofia.__doc__ = '''
 '''
 def tirific(Configuration,Tirific_Template, name = 'tirific.def', debug = False):
     #IF we're writing we bump up the restart_ID and adjust the AZ1P angles to the current warping
-    update_disk_angles(Tirific_Template, debug= debug)
+    update_disk_angles(Configuration,Tirific_Template, debug= debug)
     Tirific_Template['RESTARTID'] = str(int(Tirific_Template['RESTARTID'])+1)
     with open(Configuration['FITTING_DIR']+name, 'w') as file:
         for key in Tirific_Template:
