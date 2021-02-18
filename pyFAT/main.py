@@ -121,7 +121,7 @@ def main(argv):
                        'MAX_SIZE_IN_BEAMS': 30, # The galaxy is not allowed to extend beyond this number of beams in radius, set in check_source
                        'MIN_SIZE_IN_BEAMS': 0., # Minimum allowed radius in number of beams of the galaxy, set in check_source
                        'SIZE_IN_BEAMS': 0, # The radius of the galaxy in number of beams, adapted after running Sofia
-                       'NO_RINGS': 0., # The number of rings in the fit
+                       'NO_RINGS': 0., # The number of rings in the fit, 
                        'LAST_RELIABLE_RINGS': [0.,0.], # Location of the rings where the SBR drops below the cutoff limits, adapted after every run. Should only be modified in check_size
                        'LIMIT_MODIFIER': [1.], #Modifier for the cutoff limits based on the inclination , adapted after every run.
                        'OLD_RINGS': [], # List to keep track of the ring sizes that have been fitted.

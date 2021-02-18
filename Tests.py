@@ -224,6 +224,19 @@ def Test_Extract_PV():
 
     fits.writeto(f"/home/peter/Misc/Aditya_Stuff/PV_Scale/test.fits",PV[0].data,PV[0].header,overwrite = True)
 
+def Test_Set_Rings():
+    Configuration = {'RING_SIZE': 1 ,
+                     'MAX_SIZE_IN_BEAMS': 30, # The galaxy is not allowed to extend beyond this number of beams in radius, set in check_source
+                     'MIN_SIZE_IN_BEAMS': 0., # Minimum allowed radius in number of beams of the galaxy, set in check_source
+                     'SIZE_IN_BEAMS': 11.1975694623135514, # The radius of the galaxy in number of beams, adapted after running Sofia
+                     'NO_RINGS': 0., # The number of rings in the fit
+                     'OUTPUTLOG': None,
+                     'BEAM': [20.,20.,0.]
+                     }
+
+    rad= sf.set_rings(Configuration,debug=True)
+
+
 def basic():
     print(f" fstring use double or triple quotes")
     print(f" Dictionary entries use single quotes")
@@ -253,4 +266,4 @@ basic.__doc__ =f'''
 
 
 if __name__ == '__main__':
-    Test_Extract_PV()
+    Test_Set_Rings()

@@ -402,7 +402,9 @@ def check_source(Configuration, Fits_Files, debug = False):
 
 
     # The extent is fairly well determined and the maximum should be no more than +3 beams and a minimum no less than 4
-    Configuration['MAX_SIZE_IN_BEAMS'] = set_limits(Configuration['SIZE_IN_BEAMS']+2.,1.0,Configuration['MAX_SIZE_IN_BEAMS'])
+    # Swithcing here from doubled outer rings causes problems though
+
+    Configuration['MAX_SIZE_IN_BEAMS'] = set_limits(Configuration['SIZE_IN_BEAMS']+2.,1,Configuration['MAX_SIZE_IN_BEAMS'])    
     Configuration['MIN_SIZE_IN_BEAMS'] = set_limits(Configuration['SIZE_IN_BEAMS']-4.,Configuration['TOO_SMALL_GALAXY'],Configuration['SIZE_IN_BEAMS'])
     Configuration['NO_RINGS'] = calc_rings(Configuration,debug=debug)
     Configuration['LAST_RELIABLE_RINGS'] = [Configuration['NO_RINGS'],Configuration['NO_RINGS']]

@@ -70,9 +70,11 @@ def calc_rings(Configuration,size_in_beams = 0., ring_size  = 0.,debug=False):
 {'':8s} the maximum amount of rings = {Configuration['MAX_SIZE_IN_BEAMS']}
 ''',Configuration['OUTPUTLOG'],debug = True)
     est_rings = round((size_in_beams)/(ring_size)+2.)
-    if est_rings > 20 and Configuration['MAX_SIZE_IN_BEAMS'] > 25:
+    #if est_rings > 20 and Configuration['MAX_SIZE_IN_BEAMS'] > 25:
+    if est_rings > 20:
         Configuration['OUTER_RINGS_DOUBLED'] = True
-        no_rings = 2+10+round((est_rings-12)/2.)
+        # 0.5 should always be rounding up else we get problemsin the reverse
+        no_rings = 2+10+np.floor((est_rings-12)/2.+0.5)
     else:
         Configuration['OUTER_RINGS_DOUBLED'] = False
         no_rings = est_rings
@@ -631,13 +633,13 @@ gaussian_function.__doc__ =f'''
 def get_from_template(Configuration,Tirific_Template,Variables, debug = False):
     out = []
     if debug:
-        print_log(f'''{'':8s}GET_FROM_TEMPLATE: Trying to get the following profiles {Variables}
+        print_log(f'''GET_FROM_TEMPLATE: Trying to get the following profiles {Variables}
 ''',Configuration['OUTPUTLOG'] ,debug= True)
     for key in Variables:
         out.append([float(x) for x  in Tirific_Template[key].split()])
     #Because lists are stupid i.e. sbr[0][0] = SBR[0], sbr[1][0] = SBR_2[0] but  sbr[:][0] = SBR[:] not SBR[0],SBR_2[0] as logic would demand
     if debug:
-        print_log(f'''{'':8s}GET_FROM_TEMPLATE: We extracted the following profiles from the Template.
+        print_log(f'''GET_FROM_TEMPLATE: We extracted the following profiles from the Template.
 {'':8s}GET_FROM_TEMPLATE: {out}
 ''',Configuration['OUTPUTLOG'],debug = False )
     #Beware that lists are stupid i.e. sbr[0][0] = SBR[0], sbr[1][0] = SBR_2[0] but  sbr[:][0] = SBR[:] not SBR[0],SBR_2[0] as logic would demand
@@ -1747,19 +1749,27 @@ def set_rings(Configuration,ring_size = 0. , debug = False):
         radii = np.hstack((radii,(np.linspace(Configuration['BEAM'][0]*ring_size,Configuration['BEAM'][0]*10.*ring_size, \
                                         10)+1./5*Configuration['BEAM'][0])))
         radii = np.hstack((radii,(np.linspace(Configuration['BEAM'][0]*12.*ring_size, \
-                                              Configuration['BEAM'][0]*ring_size*(12.+2.*round((no_rings-6.)/2.)), \
-                                              int(np.ceil((no_rings-5)/2.)))) \
+                                              Configuration['BEAM'][0]*ring_size*(10+(no_rings-12.)*2.), \
+                                              no_rings-12)) \
                                               +1./5*Configuration['BEAM'][0]))
+
     else:
         radii = [0.,1./5.*Configuration['BEAM'][0]]
         radii = np.hstack((radii,(np.linspace(Configuration['BEAM'][0]*ring_size,Configuration['BEAM'][0]*ring_size*(no_rings-2.), \
                                         no_rings-2)+1./5.*Configuration['BEAM'][0])))
     if debug:
+        if Configuration['OUTER_RINGS_DOUBLED']:
+            req_outer_ring = 2.*Configuration['BEAM'][0]
+        else:
+            req_outer_ring = Configuration['BEAM'][0]
         print_log(f'''SET_RINGS: Got the following radii.
 {'':8s}{radii}
-{'':8s}We should have {Configuration['NO_RINGS']} rings and have {len(radii)} rings.
+{'':8s}We should have {Configuration['NO_RINGS']} or we incorrectly updated and should have {no_rings}
+{'':8s}We have {len(radii)} rings.
+{'':8s}The last ring should be around {Configuration['BEAM'][0]*Configuration['SIZE_IN_BEAMS']}
+{'':8s}The rings should be size {Configuration['BEAM'][0]} and outer rings {req_outer_ring}
+{'':8s}They are {radii[3]-radii[2]} and {radii[-1]-radii[-2]}
 ''', Configuration['OUTPUTLOG'],debug=False)
-
     return np.array(radii,dtype = float)
 
 set_rings.__doc__ =f'''

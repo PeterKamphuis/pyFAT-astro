@@ -492,7 +492,7 @@ def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
             diff_new = diff_new+abs(pos_profile_new[-1]-neg_profile_new[-1])*abs(np.mean([pos_profile_new[-1],neg_profile_new[-1]]))
         diff_new = diff_new/np.nanmin([neg_index.size,pos_index.size])
         if debug:
-                print_log(f'''GUESS_ORIENTATION: We have this old difference {diff} and this new difference {diff_new}
+            print_log(f'''GUESS_ORIENTATION: We have this old difference {diff} and this new difference {diff_new}
 ''',Configuration['OUTPUTLOG'], debug = False)
         if diff_new < diff:
             if debug:
@@ -532,8 +532,8 @@ def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
     maj_axis =  np.linspace(0,1000*maj_resolution,1000)- (abs((abs(center[0]))*np.sin(np.radians(pa[0])))+abs(abs(center[1])*np.cos(np.radians(pa[0]))))
     loc_max = np.mean(maj_axis[np.where(maj_profile == np.nanmax(maj_profile))[0]])
     if loc_max > 0.:
-            pa[0] = pa[0]+180
-            print_log(f'''GUESS_ORIENTATION: We have modified the pa by 180 deg as we found the maximum velocity west of the center.
+        pa[0] = pa[0]+180
+        print_log(f'''GUESS_ORIENTATION: We have modified the pa by 180 deg as we found the maximum velocity west of the center.
 ''' , Configuration['OUTPUTLOG'])
     if abs(pa[0]-vel_pa[0]) > 25. and ~np.isnan(vel_pa[0]):
         pa=vel_pa
@@ -556,7 +556,7 @@ def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
                 if RC_length < min_RC_length:
                     min_RC_length = RC_length
                 if debug:
-                    print_log(f'''GUESS_ORIENTATION: We found the lengths for the initial rotation curve:
+                    print_log(f'''GUESS_ORIENTATION: We found the lengths for the angled rotation curves:
 {'':8s}GUESS_ORIENTATION: RC length = {RC_length}, min_RC length = {min_RC_length}, Vrot ini = {len(VROT_initial)}, tmnp = {len(tmp)}
 {'':8s}GUESS_ORIENTATION: Vrot {VROT_initial}
 {'':8s}GUESS_ORIENTATION: tmp {tmp}

@@ -1987,9 +1987,9 @@ def set_overall_parameters(Configuration, Fits_Files,Tirific_Template,stage = 'i
             #    else:
             #        Tirific_Template['INIMODE'] = '3'
             #else:
-            if Configuration['NO_RINGS'] < 10:
+            if Configuration['NO_RINGS'] < 20:
                 Tirific_Template['INIMODE'] = '1'
-            elif Configuration['NO_RINGS'] < 25:
+            elif Configuration['NO_RINGS'] < 30:
                 Tirific_Template['INIMODE'] = '2'
             else:
                 Tirific_Template['INIMODE'] = '3'
