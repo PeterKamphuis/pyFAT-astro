@@ -113,6 +113,8 @@ calc_rings.__doc__ =f'''
 
  PROCEDURES CALLED:
     Unspecified
+
+ NOTE:
 '''
 
 
@@ -224,6 +226,8 @@ columndensity.__doc__ =f'''
 
  PROCEDURES CALLED:
     Unspecified
+
+ NOTE:
 '''
 
         # a Function to convert the RA and DEC into hour angle (invert = False) and vice versa (default)
@@ -319,6 +323,8 @@ convertRADEC.__doc__ =f'''
 
  PROCEDURES CALLED:
     Unspecified
+
+ NOTE:
 '''
 
 def convert_type(array, type = 'float'):
@@ -353,6 +359,8 @@ convert_type.__doc__ =f'''
 
  PROCEDURES CALLED:
     Unspecified
+
+ NOTE:
 '''
 
 # function for converting kpc to arcsec and vice versa
@@ -449,6 +457,8 @@ convertskyangle.__doc__ =f'''
 
  PROCEDURES CALLED:
     Unspecified
+
+ NOTE:
 '''
 
 def deproject(Configuration,map,angle, center = 0., invert = False,debug=False):
@@ -494,6 +504,8 @@ deproject.__doc__ =f'''
 
  PROCEDURES CALLED:
     Unspecified
+
+ NOTE:
 '''
 
 def finish_current_run(Configuration,current_run,debug=False):
@@ -536,6 +548,8 @@ finish_current_run.__doc__ =f'''
 
  PROCEDURES CALLED:
     Unspecified
+
+ NOTE:
 '''
 
 def fit_gaussian(Configuration,x,y, covariance = False,errors = None, debug = False):
@@ -595,6 +609,8 @@ fit_gaussian.__doc__ =f'''
 
  PROCEDURES CALLED:
     Unspecified
+
+ NOTE:
 '''
 
 def gaussian_function(axis,peak,center,sigma):
@@ -628,6 +644,8 @@ gaussian_function.__doc__ =f'''
     Unspecified
 
  EXAMPLE:
+
+ NOTE:
 '''
 
 def get_from_template(Configuration,Tirific_Template,Variables, debug = False):
@@ -651,7 +669,6 @@ get_from_template.__doc__ =f'''
     get_from_template
  PURPOSE:
     Return a specified list of prameters from the template. This puts the template values in a list !!!!!!!!
-    This is very similar to load_template in read_funtitons but this returns unchecked list whereas load_template return a np array with length NUR, thus can include zeros
 
  CATEGORY:
     support_functions
@@ -671,6 +688,11 @@ get_from_template.__doc__ =f'''
 
  PROCEDURES CALLED:
     Unspecified
+
+ NOTE:
+    This is very similar to load_template in read_functions but this returns an
+    unchecked list whereas load_template return a np array with length NUR,
+    the latter can thus can include zeros
 '''
 
 def get_inclination_pa(Configuration, Image, center, cutoff = 0., debug = False):
@@ -801,6 +823,8 @@ get_inclination_pa.__doc__ =f'''
 
  PROCEDURES CALLED:
     Unspecified
+
+ NOTE:
 '''
 
 
@@ -822,7 +846,6 @@ get_inner_fix.__doc__ =f'''
  PURPOSE:
     Obtain the number of rings that should be fixed to a single value in the inner parts
     All ring > 1e20 column density should be fixed upt to a maximum of 90% and a minimu of 4 rings.
-    !!!!!!!!!!!!!This appears to currently not be working well.
 
  CATEGORY:
     support_functions
@@ -841,6 +864,9 @@ get_inner_fix.__doc__ =f'''
 
  PROCEDURES CALLED:
     Unspecified
+
+ NOTE:
+    !!!!!!!!!!!!!This appears to currently not be working well.
 '''
 
 
@@ -883,13 +909,16 @@ get_ring_weights.__doc__=f'''
     debug = False
 
  OUTPUTS:
-    numpy array with the weight normalized to the the maximum, i.e weight 1 is most important, weight 0. least important
-    errors should be divided by these weights to reflect the importance
+    numpy array with the weight normalized to the the maximum.
 
  OPTIONAL OUTPUTS:
 
  PROCEDURES CALLED:
     Unspecified
+
+ NOTE:
+    Weight 1 is most important, weight 0. least important.
+    Errors should be divided by these weights to reflect the importance
 '''
 
 def get_usage_statistics(Configuration,process_id, debug = False):
@@ -944,6 +973,8 @@ get_usage_statistics.__doc__ =f'''
 
  PROCEDURES CALLED:
     Unspecified
+
+ NOTE:
 '''
 
 def get_vel_pa(Configuration,velocity_field,center= [0.,0.], debug =False):
@@ -1043,12 +1074,14 @@ get_vel_pa.__doc__ =f'''
     center = center of the galaxy
 
  OUTPUTS:
-    mean and standard deviation of the pa from minimum value to center, maxmum to center and minimum to maximum
+    mean and standard deviation of the pa from minimum value to center, maximum to center and minimum to maximum
 
  OPTIONAL OUTPUTS:
 
  PROCEDURES CALLED:
     Unspecified
+
+ NOTE:
 '''
 
 # A simple function to return the line numbers in the stack from where the functions are called
@@ -1088,13 +1121,17 @@ linenumber.__doc__ =f'''
     debug = False
 
  OUTPUTS:
-    the line nummber of the print statement
+    the line number of the print statement
 
  OPTIONAL OUTPUTS:
-    If debug = True the full stack of the line print will be given, in principle the first debug message in every function should set this to true and later messages not.
 
  PROCEDURES CALLED:
     Unspecified
+
+ NOTE:
+    If debug = True the full stack of the line print will be given, in principle
+    the first debug message in every function should set this to true and later messages not.
+    !!!!Not sure whether currently the linenumber is produced due to the restructuring.
 '''
 
 
@@ -1168,6 +1205,8 @@ obtain_border_pix.__doc__ =f'''
 
  PROCEDURES CALLED:
     np.tan,np.radians,.reverse()
+
+ NOTE:
 '''
 
 def obtain_ratios(Configuration, map, center, angles, noise = 0. ,debug = False):
@@ -1254,10 +1293,13 @@ obtain_ratios.__doc__ = '''
  OUTPUTS:
          ratios =  ratios corresponding to the input angles
          max_extent = the maximum extend of any profile analysed (in degree)
+
  OPTIONAL OUTPUTS:
 
  PROCEDURES CALLED:
       np.mean, ndimage.map_coordinates, np.linspace, np.vstack, np.cos, np.radians, np.sin
+
+ NOTE:
 '''
 
 def print_log(log_statement,log, screen = False,debug = False):
@@ -1293,6 +1335,10 @@ print_log.__doc__ =f'''
 
  PROCEDURES CALLED:
     linenumber, .write
+
+ NOTE:
+    If the log is None messages are printed to the screen.
+    This is useful for testing functions.
 '''
 
 def remove_inhomogeneities(Configuration,fits_map,inclination=30., pa = 90. , center = [0.,0.],WCS_center = True, iteration= 0. , debug=False):
@@ -1383,6 +1429,8 @@ remove_inhomogeneities
 
  PROCEDURES CALLED:
     Unspecified
+
+ NOTE:
 '''
 
 def rename_fit_products(Configuration,stage = 'initial', fit_stage='Undefined_Stage',debug = False):
@@ -1434,6 +1482,8 @@ rename_fit_products.__doc__ =f'''
 
  PROCEDURES CALLED:
     Unspecified
+
+ NOTE:
 '''
 
 #function to rotate a cube without losing info
@@ -1470,6 +1520,8 @@ rotateImage.__doc__ =f'''
 
  PROCEDURES CALLED:
     Unspecified
+
+ NOTE:
 '''
 
 def sbr_limits(Configuration, systemic= 100. , debug = False):
@@ -1536,6 +1588,8 @@ sbr_limits.__doc__ =f'''
 
  PROCEDURES CALLED:
     Unspecified
+
+ NOTE:
 '''
 
 def set_format(key):
@@ -1569,6 +1623,8 @@ set_format.__doc__ =f'''
 
  PROCEDURES CALLED:
     Unspecified
+
+ NOTE:
 '''
 
 #simple function keep track of how to modify the edge limits
@@ -1615,6 +1671,8 @@ set_limit_modifier.__doc__ =f'''
 
  PROCEDURES CALLED:
     Unspecified
+
+ NOTE:
 '''
 
 def set_limits(value,minv,maxv,debug = False):
@@ -1648,6 +1706,8 @@ set_limits.__doc__ =f'''
 
  PROCEDURES CALLED:
     Unspecified
+
+ NOTE:
 '''
 
 def set_ring_size(Configuration, debug = False, size_in_beams = 0., check_set_rings = False):
@@ -1729,6 +1789,8 @@ set_ring_size.__doc__ =f'''
 
  PROCEDURES CALLED:
     Unspecified
+
+ NOTE:
 '''
 
 def set_rings(Configuration,ring_size = 0. , debug = False):
@@ -1797,6 +1859,8 @@ set_rings.__doc__ =f'''
 
  PROCEDURES CALLED:
     Unspecified
+
+ NOTE:
 '''
 
 def sofia_output_exists(Configuration,Fits_Files, debug = False):
@@ -1839,4 +1903,6 @@ sofia_output_exists.__doc__ =f'''
 
  PROCEDURES CALLED:
     Unspecified
+
+ NOTE:
 '''

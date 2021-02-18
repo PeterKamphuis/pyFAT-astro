@@ -6,7 +6,7 @@ import os,signal,sys
 import numpy as np
 import traceback
 from datetime import datetime
-from pyFAT.Support.support_functions import print_log,finish_current_run
+from pyFAT.Support.support_functions import print_log,finish_current_run,set_format
 from pyFAT.Support.fits_functions import make_moments
 from pyFAT.Support.write_functions import make_overview_plot,plot_usage_stats,tirific
 from pyFAT.Support.read_functions import tirific_template,load_tirific,load_template
@@ -27,20 +27,43 @@ def check_legitimacy(Configuration,debug=False):
         if Configuration['FINISHAFTER'] > 0:
             outfile = f"{Configuration['FITTING_DIR']}/One_Step_Convergence/One_Step_Convergence.def"
     inclination = load_tirific(outfile,Variables=['INCL'],debug=debug)[0]
-    low_incl_limit = 20.
-    low_beam_limit = 8.
+    low_incl_limit = 10.
+    low_beam_limit = 0.
     if float(inclination[0]) < low_incl_limit or 2.*Configuration['SIZE_IN_BEAMS'] < low_beam_limit:
-        Configuration['EC_ACCEPTED'] = False
         Configuration['OS_ACCEPTED'] = False
         if float(inclination[0]) < low_incl_limit:
             Configuration['FINAL_COMMENT'] = f'The final inclination is below {low_incl_limit}. FAT is not neccesarily reliable in this range.'
         elif 2.*Configuration['SIZE_IN_BEAMS'] < low_beam_limit:
             Configuration['FINAL_COMMENT'] = f'The final size is below {low_beam_limit}. FAT is not neccesarily reliable in this range.'
     return
-check_legitimacy.__doc__ = '''
-see if the output fall in the range where FAT is reliable.
-'''
 
+check_legitimacy.__doc__ =f'''
+ NAME:
+    check_legitimacy
+
+ PURPOSE:
+    Check the final output to see if it falls in a reliable rangesee if the output fall in the range where FAT is reliable.
+
+ CATEGORY:
+    clean_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+
+ OPTIONAL INPUTS:
+    debug = False
+
+ OUTPUTS:
+    Updated final comment in the configuration
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+    !!!!!!! Until release these are set ridiculously low for testing purposes.
+'''
 
 def clean_before_sofia(Configuration, debug = False):
     if debug:
@@ -66,8 +89,31 @@ def clean_before_sofia(Configuration, debug = False):
     except FileNotFoundError:
         pass
 
-clean_before_sofia.__doc__ = '''
-Clean up the sofia out put files before running SoFiA
+clean_before_sofia.__doc__ =f'''
+ NAME:
+    clean_before_sofia
+
+ PURPOSE:
+    Clean up the sofia out put files before running SoFiA
+
+ CATEGORY:
+    clean_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+
+ OPTIONAL INPUTS:
+    debug = False
+
+ OUTPUTS:
+    Previous sofia output from fat is removed
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
 '''
 
 def clean_after_sofia(Configuration, debug = False):
@@ -83,11 +129,33 @@ def clean_after_sofia(Configuration, debug = False):
     except:
         pass
 
+clean_after_sofia.__doc__ =f'''
+ NAME:
+    clean_after_sofia
 
+ PURPOSE:
+    Clean up the sofia output files by putting them in a dedicated directory.
 
-clean_after_sofia.__doc__ = '''
-Clean up the sofia output files by putting them in a dedicated directory.
+ CATEGORY:
+    clean_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+
+ OPTIONAL INPUTS:
+    debug = False
+
+ OUTPUTS:
+    sofia output files are moved to a dedicated directory.
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
 '''
+
 # cleanup dirty files before starting fitting
 def cleanup(Configuration,Fits_Files, debug = False):
     #clean the log directory of all files except those named Prev_ and not the Log as it is already moved if existing
@@ -167,41 +235,32 @@ def cleanup(Configuration,Fits_Files, debug = False):
         #Change back to original dir
         os.chdir(Configuration['START_DIR'])
 
+cleanup.__doc__ =f'''
+ NAME:
+    cleanup
 
-cleanup.__doc__ = '''
-    ;+
-; NAME:
-;       cleanup
-;
-; PURPOSE:
-;       Clean up any existing files before fitting start, it will only remove specific
-;       files not directories or non-FAT files
-;
-; CATEGORY:
-;       Support
-;
-; CALLING SEQUENCE:
-;       cleanup(Configuration)
-;
-; INPUTS:
-;     Configuration = Structure that has the current fitting directory and expected steps
-;
-; OPTIONAL INPUTS:
-;
-;
-; KEYWORD PARAMETERS:
-;       -
-;
-; OUTPUTS:
-;
-; OPTIONAL OUTPUTS:
-;       -
-;
-; MODULES CALLED:
-;       os
-;
-; EXAMPLE:
-;
+ PURPOSE:
+    Clean up any existing files before fitting start, it will only remove specific
+    files not directories or non-FAT files
+
+ CATEGORY:
+    clean_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    Fits_Files = Standard FAT dictionary with filenames
+
+ OPTIONAL INPUTS:
+    debug = False
+
+ OUTPUTS:
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
 '''
 
 def cleanup_final(Configuration,Fits_Files, debug =False):
@@ -223,7 +282,8 @@ def cleanup_final(Configuration,Fits_Files, debug =False):
         except FileNotFoundError:
             pass
 
-    fit_directories = ['Centre_Convergence', 'Extent_Convergence']
+    #fit_directories = ['Centre_Convergence', 'Extent_Convergence']
+    fit_directories = ['One_Step_Convergence']
     delete_ext = ['.log']
     if Configuration['MAPS_OUTPUT'] == 4:
         delete_ext.append('.fits')
@@ -248,6 +308,34 @@ def cleanup_final(Configuration,Fits_Files, debug =False):
                     except FileNotFoundError:
                         pass
 
+cleanup_final.__doc__ =f'''
+ NAME:
+    cleanup_final
+
+ PURPOSE:
+    Clean up any files not requested by user after the fitting, it will only remove specific
+    files not directories or non-FAT files
+
+ CATEGORY:
+    clean_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    Fits_Files = Standard FAT dictionary with filenames
+
+ OPTIONAL INPUTS:
+    debug = False
+
+ OUTPUTS:
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
+
 
 def copy_homemade_sofia(Configuration,Fits_Files,debug=False):
     files =['_mask.fits','_mom0.fits','_mom1.fits','_chan.fits','_mom2.fits','_cat.txt']
@@ -257,6 +345,32 @@ def copy_homemade_sofia(Configuration,Fits_Files,debug=False):
         except:
             pass
 
+copy_homemade_sofia.__doc__ =f'''
+ NAME:
+    copy_homemade_sofia
+
+ PURPOSE:
+    Copy user provided Sofia files to the FAT specified directory such that the original are a) kept in place, b) Never modified.
+
+ CATEGORY:
+    clean_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    Fits_Files = Standard FAT dictionary with filenames
+
+ OPTIONAL INPUTS:
+    debug = False
+
+ OUTPUTS:
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
 
 def installation_check(Configuration, debug =False):
     if debug:
@@ -313,6 +427,33 @@ def installation_check(Configuration, debug =False):
 !!!! directory to your report.                   !!!!!
 !!!!---------------------------------------------!!!!!
 ''',Configuration['OUTPUTLOG'],screen =True,debug = True)
+
+installation_check.__doc__ =f'''
+ NAME:
+    installation_check
+
+ PURPOSE:
+    Check the installation check run against the template.
+
+ CATEGORY:
+    clean_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+
+ OPTIONAL INPUTS:
+    debug = False
+
+ OUTPUTS:
+    Message with succes or not to the screen and log
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
 
 def finish_galaxy(Configuration,maximum_directory_length,current_run = 'Not initialized', Fits_Files= None, debug = False):
     #make sure we are not leaving stuff
@@ -403,42 +544,36 @@ Finished preparations at {Configuration['PREP_END_TIME']} \n''')
         print_log(log_statement,Configuration['OUTPUTLOG'], screen = True)
 
     cleanup_final(Configuration,Fits_Files, debug=debug)
-finish_galaxy.__doc__ = '''
-    ;+
-; NAME:
-;       finish_galaxy
-;
-; PURPOSE:
-;       Write the final logs, Produce an Overview plot if required and make sure the directory is clean and organized.
-;
-; CATEGORY:
-;       Clean
-;
-; CALLING SEQUENCE:
-;       finish_galaxy(Configuration)
-;
-; INPUTS:
-;     Configuration = Dictionary that has the current fitting directory and expected steps
-;
-; OPTIONAL INPUTS:
-;
-;
-; KEYWORD PARAMETERS:
-;       -
-;
-; OUTPUTS:
-;
-; OPTIONAL OUTPUTS:
-;       -
-;
-; MODULES CALLED:
-;       datetime
-: NOTES:
-;  This function should always be followed by a continue statement
-;
-; EXAMPLE:
-;
+
+finish_galaxy.__doc__ =f'''
+ NAME:
+    finish_galaxy
+
+ PURPOSE:
+    Write the final logs, Produce an Overview plot if required and make sure the directory is clean and organized.
+
+ CATEGORY:
+    clean_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    maximum_directory_length = the maximum string length of the input directory names
+
+ OPTIONAL INPUTS:
+    debug = False
+    current_run = subproccess structure of the currently running tirific
+    Fits_Files = Standard FAT dictionary with filenames
+
+ OUTPUTS:
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE: This function should always be followed by a continue statement
 '''
+
 def transfer_errors(Configuration,fit_stage='Not Initialized',debug = False):
     # Load the final file
     Tirific_Template = tirific_template(filename = f"{Configuration['FITTING_DIR']}{fit_stage}/{fit_stage}.def",debug= debug)
@@ -448,10 +583,32 @@ def transfer_errors(Configuration,fit_stage='Not Initialized',debug = False):
     # add to the templatethere
     Tirific_Template.insert('GR_CONT','RESTARTID','0')
     for key in errors_to_transfer:
-        if key[:-4] in ['SBR','SBR_2']:
-            format = '.2e'
-        else:
-            format= '.2f'
+        format = set_format(key[:-4])
         Tirific_Template.insert(key[:-4],f"# {key}",f"{' '.join([f'{x:{format}}' for x in FAT_Model[:,errors_to_transfer.index(key)]])}")
     # write back to the File
     tirific(Configuration,Tirific_Template, name = f"{fit_stage}/{fit_stage}.def", debug = debug)
+
+transfer_errors.__doc__ =f'''
+ NAME:
+    transfer_errors
+
+ PURPOSE:
+    Transfer the errors from the input file to the output as tirific removes the commented lines.
+
+ CATEGORY:
+    clean_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+
+ OPTIONAL INPUTS:
+    debug = False
+    fit_stage = Type of fitting that is done
+
+ OUTPUTS:
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+'''
