@@ -26,10 +26,11 @@ import pyFAT.Support.write_functions as wf
 import pyFAT.Support.support_functions as sf
 import pyFAT.Support.fits_functions as ff
 
+homedir = '/home/peter/'
 
 def Test_Regularise():
     Variables = ['VROT','VROT_2','PA', 'PA_2','INCL','INCL_2','SDIS','SDIS_2','SBR','SBR_2','VSYS']
-    dir = '/home/peter/FAT_Main/FAT_Testers/Full_Database_pyFAT/'
+    dir = homedir+'/FAT_Main/FAT_Testers/Full_Database_pyFAT/'
     galaxy = 'Mass2.5e+12-i20d14.0-7.5pa35.0w0.0-0.0-No_Flare-ba12SNR8bm20.0-20.0ch4.0-Arms-No_Bar-rm0.0'
     profile = rf.load_tirific(dir+galaxy+'/Extent_Convergence/Extent_Convergence_Prev.def',Variables)
     radii = rf.load_tirific(dir+galaxy+'/Extent_Convergence/Extent_Convergence_Prev.def', ['RADI'])
@@ -96,7 +97,7 @@ def Test_Overview():
     Configuration['SIZE_IN_BEAMS'] = Configuration['NO_RINGS']*Configuration['RING_SIZE']-2
     Configuration['CUBENAME']= 'NGC_2903'
     Configuration['BASE_NAME']= 'NGC_2903_FAT'
-    Configuration['FITTING_DIR']= '/home/peter/FAT_Main/FAT_Source_Dev/Installation_Check/'#Make a dictionary for the fitsfiles we use
+    Configuration['FITTING_DIR']= homedir+'/FAT_Main/FAT_Source_Dev/Installation_Check/'#Make a dictionary for the fitsfiles we use
     Fits_Files = {'ORIGINAL_CUBE': "NGC_2903.fits"}
     Fits_Files['NOISEMAP'] = f"{Configuration['BASE_NAME']}_noisemap.fits"
     Fits_Files['FITTING_CUBE'] = f"{Configuration['CUBENAME']}_FAT.fits"
@@ -114,13 +115,13 @@ def Test_Overview():
     wf.make_overview_plot(Configuration,Fits_Files, debug = True)
 
 def Test_write_temp():
-    Tirific_Template = rf.tirific_template(f'/home/peter/FAT_Main/FAT_Source_Dev/Support/template.def')
+    Tirific_Template = rf.tirific_template(f'{homedir}/FAT_Main/FAT_Source_Dev/Support/template.def')
     key = 'VROT'
     Configuration = {'INNER_FIX': 4}
     Configuration['NO_RINGS'] = 10
     error = np.full([15,15],5.)
     print(error)
-    Configuration['FITTING_DIR']= '/home/peter/FAT_Main/FAT_Source_Dev/Installation_Check/'
+    Configuration['FITTING_DIR']= f'{homedir}/FAT_Main/FAT_Source_Dev/Installation_Check/'
     Tirific_Template.insert(key,f"# {key}_ERR",f"{' '.join([f'{x}' for x in error[0,:int(Configuration['NO_RINGS'])]])}")
     Tirific_Template.insert(f"{key}_2",f"# {key}_2_ERR",f"{' '.join([f'{x}' for x in error[1,:int(Configuration['NO_RINGS'])]])}")
     wf.tirific(Configuration,Tirific_Template, name = 'test.def', debug = False)
@@ -132,7 +133,7 @@ def Test_Ram():
 
 def Test_Orientation():
     #Then read the input Catalogue
-    Full_Catalogue = rf.catalogue('/home/peter/FAT_Main/FAT_Testers/Database-09-10-2020/Output_Summary.txt')
+    Full_Catalogue = rf.catalogue( f'{homedir}/FAT_Main/FAT_Testers/Database-09-10-2020/Output_Summary.txt')
     with open(f"Inclinations.txt",'w') as file:
         file.write("#Guessing inclinations. \n")
     for current_galaxy_index in range(0,len(Full_Catalogue['DIRECTORYNAME'])):
@@ -180,7 +181,7 @@ def Test_Orientation():
 
 def Test_Parameterized():
     Configuration = {'INNER_FIX': 4}
-    Configuration['FITTING_DIR']= '/home/peter/FAT_Main/FAT_Testers/Database-09-10-2020/NGC_3198_6.0Beams_1.0SNR/'
+    Configuration['FITTING_DIR']= f'{homedir}/FAT_Main/FAT_Testers/Database-09-10-2020/NGC_3198_6.0Beams_1.0SNR/'
     Configuration['OUTPUTLOG'] = None
     Configuration['RING_SIZE'] = 1.
     Configuration['NOISE'] = 0.003
@@ -217,12 +218,12 @@ def Test_Parameterized():
 def Test_Extract_PV():
     PA =53.53
     Center = [187.218,4.293,4221*1000.]
-    cube = fits.open(f"/home/peter/Misc/Aditya_Stuff/PV_Scale/1440_data_nostokes.fits")
+    cube = fits.open(f"{homedir}/Misc/Aditya_Stuff/PV_Scale/1440_data_nostokes.fits")
     PV = ff.extract_pv(cube,PA, \
                         center = Center, \
                         convert=1000.)
 
-    fits.writeto(f"/home/peter/Misc/Aditya_Stuff/PV_Scale/test.fits",PV[0].data,PV[0].header,overwrite = True)
+    fits.writeto(f"{homedir}/Misc/Aditya_Stuff/PV_Scale/test.fits",PV[0].data,PV[0].header,overwrite = True)
 
 def Test_Set_Rings():
     Configuration = {'RING_SIZE': 1 ,
@@ -237,6 +238,21 @@ def Test_Set_Rings():
     rad= sf.set_rings(Configuration,debug=True)
 
 
+def Test_gflux_dH():
+    Configuration = {'FITTING_DIR':f"{homedir}/FAT_Main/FAT_Testers/Database-09-10-2020/M_83_2.0Beams_1.0SNR/"}
+    cube_hdr = fits.getheader(f"{Configuration['FITTING_DIR']}Convolved_Cube_FAT.fits")
+    beamarea=(np.pi*abs(cube_hdr['BMAJ']*cube_hdr['BMIN']))/(4.*np.log(2.))
+    Configuration['CHANNEL_WIDTH'] = cube_hdr['CDELT3']/1000.
+    Configuration['BEAM_IN_PIXELS'] = [cube_hdr['BMAJ']/np.mean([abs(cube_hdr['CDELT1']),abs(cube_hdr['CDELT2'])]),\
+                                       cube_hdr['BMIN']/np.mean([abs(cube_hdr['CDELT1']),abs(cube_hdr['CDELT2'])]),\
+                                       beamarea/(abs(cube_hdr['CDELT1'])*abs(cube_hdr['CDELT2']))]
+    Configuration['NOISE'] = cube_hdr['FATNOISE']
+
+    Totflux = rf.get_totflux(Configuration,f"/Finalmodel/Finalmodel_mom0.fits", debug=True)
+    DHI = rf.get_DHI(Configuration,Model='One_Step_Convergence',debug=True)
+
+    print(DHI,Totflux)
+
 def basic():
     print(f" fstring use double or triple quotes")
     print(f" Dictionary entries use single quotes")
@@ -247,10 +263,12 @@ basic.__doc__ =f'''
  PURPOSE:
 
  CATEGORY:
-    clean_functions
+    write_functions
 
  INPUTS:
     Configuration = Standard FAT configuration
+    Fits_Files = Standard FAT dictionary with filenames
+    Tirific_Template = Standard FAT Tirific Template
 
  OPTIONAL INPUTS:
     debug = False
@@ -261,9 +279,11 @@ basic.__doc__ =f'''
 
  PROCEDURES CALLED:
     Unspecified
+
+ NOTE:
 '''
 
 
 
 if __name__ == '__main__':
-    Test_Set_Rings()
+    Test_gflux_dH()

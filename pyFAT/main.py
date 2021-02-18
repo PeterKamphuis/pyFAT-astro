@@ -26,8 +26,31 @@ import pyFAT.Support.write_functions as wf
 #from pyFAT.Support.constants import initialize
 from  pyFAT.Support.modify_template import write_new_to_template,flatten_the_curve
 
+class MissingProgramError(Exception):
+    pass
 def main(argv):
     try:
+        #First we check for sofia and TiRiFiC
+        if sf.is_available('sofia2'):
+            print(f'''We have found SoFiA-2 as sofia2
+''')
+            sofia_available = "sofia2"
+        elif sf.is_available('sofia'):
+            sofia_available = "sofia"
+            print(f'''We have found SoFiA-2 as sofia
+''')
+        else:
+            print(f'''We can not find sofia. Please install Sofia-2
+''')
+            raise MissingProgramError('We can not find sofia.')
+
+        if sf.is_available('tirific'):
+            print(f'''We have found TiRiFiC as tirific
+''')
+        else:
+            print(f'''We can not find tirific. Please install TiRiFiC
+''')
+            raise MissingProgramError('We can not find TiRiFiC.')
         #Get the directory we are running from, This is for the Installation Check
         start_dir = os.getcwd()
         #Then check the input options
@@ -121,7 +144,7 @@ def main(argv):
                        'MAX_SIZE_IN_BEAMS': 30, # The galaxy is not allowed to extend beyond this number of beams in radius, set in check_source
                        'MIN_SIZE_IN_BEAMS': 0., # Minimum allowed radius in number of beams of the galaxy, set in check_source
                        'SIZE_IN_BEAMS': 0, # The radius of the galaxy in number of beams, adapted after running Sofia
-                       'NO_RINGS': 0., # The number of rings in the fit, 
+                       'NO_RINGS': 0., # The number of rings in the fit,
                        'LAST_RELIABLE_RINGS': [0.,0.], # Location of the rings where the SBR drops below the cutoff limits, adapted after every run. Should only be modified in check_size
                        'LIMIT_MODIFIER': [1.], #Modifier for the cutoff limits based on the inclination , adapted after every run.
                        'OLD_RINGS': [], # List to keep track of the ring sizes that have been fitted.
@@ -157,7 +180,6 @@ def main(argv):
             Full_Catalogue['NUMBER'] = ['0']
             Full_Catalogue['DISTANCE'] = [-1]
             Full_Catalogue['DIRECTORYNAME'] = ['./']
-            print(os.path.splitext(input_parameters.single_cube.split('/')[-1])[0])
             Full_Catalogue['CUBENAME'] = [f"{os.path.splitext(input_parameters.single_cube.split('/')[-1])[0]}"]
         else:
             Full_Catalogue = rf.catalogue(Original_Configuration['CATALOGUE'])
@@ -189,7 +211,6 @@ def main(argv):
         else:
             Original_Configuration['STARTGALAXY'] = 0
         # If the end galaxy is -1 fit the whole catalogue
-        print(Original_Configuration['ENDGALAXY'])
         if Original_Configuration['ENDGALAXY'] == -1:
             Original_Configuration['ENDGALAXY'] = len(Full_Catalogue['NUMBER'])
             if Original_Configuration['ENDGALAXY'] == 0:
@@ -199,7 +220,6 @@ def main(argv):
         # start the main fitting loop
 
         if float(Original_Configuration['STARTGALAXY']) > float(Original_Configuration['ENDGALAXY']):
-            print()
             print(f''' Your starting galaxy (Line nr = {Original_Configuration['STARTGALAXY']}) is listed after your ending galaxy (Line nr = {Original_Configuration['ENDGALAXY']}), maybe you have double catalogue ids?''')
             exit()
 
@@ -358,7 +378,7 @@ def main(argv):
             else:
                 # Run sofia2
                 try:
-                    runf.sofia(Configuration, Fits_Files,debug=Configuration['DEBUG'])
+                    runf.sofia(Configuration, Fits_Files,sofia_to_use=sofia_available,debug=Configuration['DEBUG'])
                 except Exception as e:
                     Configuration['FINAL_COMMENT'] = e
                     if e.__class__.__name__ in stop_individual_errors:
@@ -388,7 +408,9 @@ def main(argv):
                 if not os.path.isdir(Configuration['FITTING_DIR']+'One_Step_Convergence'):
                     os.mkdir(Configuration['FITTING_DIR']+'One_Step_Convergence')
                 wf.initialize_def_file(Configuration, Fits_Files,Tirific_Template, \
-                                        cube_hdr,Initial_Parameters= Initial_Parameters,fit_stage='One_Step_Convergence',debug=Configuration['DEBUG'])
+                                       Initial_Parameters= Initial_Parameters, \
+                                       fit_type='One_Step_Convergence',\
+                                       debug=Configuration['DEBUG'])
                 sf.print_log(f'''The initial def file is written and we will now start fitting.
 ''' ,Configuration['OUTPUTLOG'], screen =True, debug = Configuration['DEBUG'])
                 Configuration['PREP_END_TIME'] = datetime.now()
@@ -406,9 +428,9 @@ def main(argv):
                 if Configuration['OS_ACCEPTED']:
                     sf.print_log(f'''The model has converged in center and extent and we make a smoothed version.
 ''',Configuration['OUTPUTLOG'],screen =True, debug = Configuration['DEBUG'])
-                    current_run = runf.fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run,cube_hdr,stage = 'after_os', fit_stage = 'One_Step_Convergence',debug = Configuration['DEBUG'])
+                    current_run = runf.fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run,cube_hdr,stage = 'after_os', fit_type = 'One_Step_Convergence',debug = Configuration['DEBUG'])
                     if Configuration['OPTIMIZED']:
-                        runf.make_full_resolution(Configuration,Tirific_Template,Fits_Files,current_run = current_run,fit_stage = 'One_Step_Convergence',debug=Configuration['DEBUG'])
+                        runf.make_full_resolution(Configuration,Tirific_Template,Fits_Files,current_run = current_run,fit_type = 'One_Step_Convergence',debug=Configuration['DEBUG'])
                 elif input_parameters.installation_check:
                     sf.print_log(f'''The Installation_check has run a fit suvccessfully.
 ''',Configuration['OUTPUTLOG'],screen =True, debug = Configuration['DEBUG'])
@@ -430,9 +452,13 @@ def main(argv):
                 cf.finish_galaxy(Configuration,maximum_directory_length, Fits_Files =Fits_Files,current_run =current_run,debug=Configuration['DEBUG'])
                 continue
 
-
-            wf.basicinfo(Configuration,second_fit = True, template=Tirific_Template,Fits_Files=Fits_Files)
+            DHI = rf.get_DHI(Configuration,Model='One_Step_Convergence',debug=Configuration['DEBUG'])
             cf.finish_galaxy(Configuration,maximum_directory_length,current_run =current_run, Fits_Files =Fits_Files,debug = Configuration['DEBUG'])
+            if Configuration['MAPS_OUTPUT'] < 4:
+                Totflux = rf.get_totflux(Configuration,f"/Finalmodel/Finalmodel_mom0.fits", debug=Configuration['DEBUG'])
+            else:
+                Totflux = [float('NaN'),float('NaN')]
+            wf.basicinfo(Configuration, template=Tirific_Template,Tot_Flux = Totflux, DHI = DHI,debug=Configuration['DEBUG'] )
             if input_parameters.installation_check:
                 cf.installation_check(Configuration,debug=Configuration['DEBUG'])
     except Exception as e:

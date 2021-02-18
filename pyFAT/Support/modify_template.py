@@ -166,7 +166,7 @@ fix_sbr.__doc__ =f'''
 
 
 
-def check_size(Configuration,Tirific_Template, fit_stage = 'Unitialized_Stage', stage = 'initial',
+def check_size(Configuration,Tirific_Template, fit_type = 'Undefined', stage = 'initial',
                 Fits_Files= 'No Files' ,debug = False,current_run='Not Initialized'):
     if debug:
         print_log(f'''CHECK_SIZE: Starting a new Check_size with the following parameters:
@@ -315,8 +315,9 @@ def check_size(Configuration,Tirific_Template, fit_stage = 'Unitialized_Stage', 
         raise InitializeError('CHECK_SIZE: Trying to adapt the model size but the fits files were not provided.')
     else:
         # Do not move this from here else other routines such as sbr_limits are messed up
-        set_new_size(Configuration,Tirific_Template,Fits_Files,fit_stage= fit_stage, stage = stage ,debug = debug,current_run = current_run)
+        set_new_size(Configuration,Tirific_Template,Fits_Files,fit_type= fit_type, stage = stage ,debug = debug,current_run = current_run)
     return False
+    
 check_size.__doc__  =f'''
  NAME:
     check_size
@@ -329,26 +330,32 @@ check_size.__doc__  =f'''
 
  INPUTS:
     Configuration = Standard FAT configuration
-    Tirific_Template = Standard Tirific Template
-    fit_stage = type of fitting
-    stage = Stage of the fitting process,
-                Fits_Files= 'No Files' ,debug = False,current_run='Not Initialized'):
+    Tirific_Template = Standard FAT Tirific Template
 
  OPTIONAL INPUTS:
     debug = False
-    fit_stage = type of fitting
-    stage = Stage of the fitting process,
-    Fits_Files= Names of the fits files
-    current_run= subproccess to be stopped for the tirific run when rings change
+
+    fit_type = 'Undefined'
+    type of fitting
+
+    stage = 'initial'
+    Stage of the fitting process
+
+    Fits_Files= 'No Files'
+    Standard FAT dictionary with filenames
+
+    current_run='Not Initialized'
+    subproccess to be stopped for the tirific run when rings change
 
  OUTPUTS:
-    Boolean True when rings are not updated False if they are
-    Configuration['RC_UNRELIABLE'] = modified and updated here.
+    Boolean which is True when rings are not updated, False if they are
 
  OPTIONAL OUTPUTS:
 
  PROCEDURES CALLED:
     Unspecified
+
+ NOTE: Configuration['RC_UNRELIABLE'] = modified and updated here.
 '''
 
 def get_number_of_rings(Configuration,sbr,sbr_ring_limits, debug=False):
@@ -1855,7 +1862,7 @@ set_model_parameters.__doc__ = '''
 '''
 
 #function to check that all parameters in template have the proper length.
-def set_new_size(Configuration,Tirific_Template, Fits_Files, fit_stage = 'Unitialized Stage', stage = 'initial',
+def set_new_size(Configuration,Tirific_Template, Fits_Files, fit_type = 'Undefined', stage = 'initial',
                     current_run='Not Initialized', debug = False, Variables =
                     ['VROT','Z0', 'SBR', 'INCL','PA','XPOS','YPOS','VSYS','SDIS','VROT_2',  'Z0_2','SBR_2',
                      'INCL_2','PA_2','XPOS_2','YPOS_2','VSYS_2','SDIS_2', 'AZ1P', 'AZ1W' ,'AZ1P_2','AZ1W_2', 'RADI']):
@@ -1969,11 +1976,11 @@ def set_new_size(Configuration,Tirific_Template, Fits_Files, fit_stage = 'Unitia
     Inclination = np.array([(float(x)+float(y))/2. for x,y in zip(Tirific_Template['INCL'].split(),Tirific_Template['INCL_2'].split())],dtype=float)
     set_limit_modifier(Configuration,Inclination,debug=debug)
     # Maybe increase the amount of loops in smaller galaxies
-    set_overall_parameters(Configuration, Fits_Files,Tirific_Template,loops = 10 ,fit_stage=fit_stage, debug=debug,stage=stage)
+    set_overall_parameters(Configuration, Fits_Files,Tirific_Template,loops = 10 ,fit_type=fit_type, debug=debug,stage=stage)
     # if we change the radii we need to restart tirific
     finish_current_run(Configuration,current_run,debug=debug)
 
-def set_overall_parameters(Configuration, Fits_Files,Tirific_Template,stage = 'initial',fit_stage='Undefined_Stage', loops = 0, flux = None,debug = False):
+def set_overall_parameters(Configuration, Fits_Files,Tirific_Template,stage = 'initial',fit_type='Undefined_Stage', loops = 0, flux = None,debug = False):
 
             if Configuration['OPTIMIZED']:
                 Tirific_Template['INSET'] = f"{Fits_Files['OPTIMIZED_CUBE']}"
@@ -2005,7 +2012,7 @@ def set_overall_parameters(Configuration, Fits_Files,Tirific_Template,stage = 'i
                 #Tirific_Template['INDINTY'] = 2
             Tirific_Template['NUR'] = f"{Configuration['NO_RINGS']}"
 
-            Tirific_Template['RESTARTNAME'] = f"Logs/restart_{fit_stage}.txt"
+            Tirific_Template['RESTARTNAME'] = f"Logs/restart_{fit_type}.txt"
             #this could be fancier
             '''
             if Configuration['NO_RINGS'] < 3:
@@ -2025,7 +2032,7 @@ def set_overall_parameters(Configuration, Fits_Files,Tirific_Template,stage = 'i
             out_keys = ['LOGNAME','OUTSET','TIRDEF']
             out_extensions = ['log','fits','def']
             for i,key in enumerate(out_keys):
-                Tirific_Template[key] = f"{fit_stage}/{fit_stage}.{out_extensions[i]}"
+                Tirific_Template[key] = f"{fit_type}/{fit_type}.{out_extensions[i]}"
             #some things we only set if a header is provided
 
             Tirific_Template['BMAJ'] = f"{Configuration['BEAM'][0]:.2f}"

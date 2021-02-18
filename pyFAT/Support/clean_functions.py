@@ -509,7 +509,7 @@ def finish_galaxy(Configuration,maximum_directory_length,current_run = 'Not init
                 os.mkdir(Configuration['FITTING_DIR']+'/Finalmodel')
 
 
-            transfer_errors(Configuration,fit_stage='One_Step_Convergence')
+            transfer_errors(Configuration,fit_type='One_Step_Convergence')
             linkname = f"{Configuration['FITTING_DIR']}/One_Step_Convergence/One_Step_Convergence"
             os.symlink(f"{linkname}.fits",f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel.fits")
             os.symlink(f"{linkname}.def",f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel.def")
@@ -574,19 +574,19 @@ finish_galaxy.__doc__ =f'''
  NOTE: This function should always be followed by a continue statement
 '''
 
-def transfer_errors(Configuration,fit_stage='Not Initialized',debug = False):
+def transfer_errors(Configuration,fit_type='Undefined',debug = False):
     # Load the final file
-    Tirific_Template = tirific_template(filename = f"{Configuration['FITTING_DIR']}{fit_stage}/{fit_stage}.def",debug= debug)
+    Tirific_Template = tirific_template(filename = f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def",debug= debug)
     # Get the errors from the input
     errors_to_transfer= ['VROT_ERR','VROT_2_ERR','INCL_ERR','INCL_2_ERR','PA_ERR','PA_2_ERR','SDIS_ERR','SDIS_2_ERR','Z0_ERR','Z0_2_ERR']
-    FAT_Model = load_tirific(f"{Configuration['FITTING_DIR']}{fit_stage}_In.def",Variables=errors_to_transfer,unpack=False,debug=debug)
+    FAT_Model = load_tirific(f"{Configuration['FITTING_DIR']}{fit_type}_In.def",Variables=errors_to_transfer,unpack=False,debug=debug)
     # add to the templatethere
     Tirific_Template.insert('GR_CONT','RESTARTID','0')
     for key in errors_to_transfer:
         format = set_format(key[:-4])
         Tirific_Template.insert(key[:-4],f"# {key}",f"{' '.join([f'{x:{format}}' for x in FAT_Model[:,errors_to_transfer.index(key)]])}")
     # write back to the File
-    tirific(Configuration,Tirific_Template, name = f"{fit_stage}/{fit_stage}.def", debug = debug)
+    tirific(Configuration,Tirific_Template, name = f"{fit_type}/{fit_type}.def", debug = debug)
 
 transfer_errors.__doc__ =f'''
  NAME:
@@ -603,7 +603,7 @@ transfer_errors.__doc__ =f'''
 
  OPTIONAL INPUTS:
     debug = False
-    fit_stage = Type of fitting that is done
+    fit_type = 'Undefined'
 
  OUTPUTS:
 

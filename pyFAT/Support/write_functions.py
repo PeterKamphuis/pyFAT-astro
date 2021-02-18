@@ -20,10 +20,12 @@ with warnings.catch_warnings():
 from astropy.io import fits
 from astropy.wcs import WCS
 # create or append to the basic ifo file
-def basicinfo(Configuration,initialize = False,first_fit = False, second_fit = False, debug = False,
-              RA=[0.,0.], DEC=[0.,0.], VSYS =[0.,0.],
-              PA=[0,0], Inclination = [0,0], Max_Vrot = [0,0], Tot_Flux = [0,0], V_mask = [0,0],
-              Distance = 0 , DHI = 0,Fits_Files = [], template = ['EMPTY']):
+def basicinfo(Configuration,initialize = False,stage='TiRiFiC', debug = False,
+              RA=[float('NaN'),float('NaN')], DEC=[float('NaN'),float('NaN')],
+              VSYS =[float('NaN'),float('NaN')], PA=[float('NaN'),float('NaN')],
+              Inclination = [float('NaN'),float('NaN')], Max_Vrot = [float('NaN'),float('NaN')],
+              Tot_Flux = [float('NaN'),float('NaN')], V_mask = [float('NaN'),float('NaN')],
+              Distance = float('NaN') , DHI = float('NaN'), template = ['EMPTY']):
 
     try:
         if template[0] == 'EMPTY':
@@ -44,23 +46,15 @@ def basicinfo(Configuration,initialize = False,first_fit = False, second_fit = F
         FAT_Model = load_template(template,Variables= Vars_to_Set,unpack=False, debug=debug)
         RA=[FAT_Model[0,Vars_to_Set.index('XPOS')],abs(Configuration['BEAM'][0]/(3600.*2.))]
         DEC=[FAT_Model[0,Vars_to_Set.index('YPOS')],abs(Configuration['BEAM'][0]/(3600.*2.))]
-        VSYS =[FAT_Model[0,Vars_to_Set.index('VSYS')],1.]
+        VSYS =np.array([FAT_Model[0,Vars_to_Set.index('VSYS')],Configuration['CHANNEL_WIDTH']])*1000.
         PA=[FAT_Model[0,Vars_to_Set.index('PA')], 3.]
         Inclination = [FAT_Model[0,Vars_to_Set.index('INCL')], 3.]
         Max_Vrot = [np.max(FAT_Model[:,Vars_to_Set.index('VROT')]),np.max(FAT_Model[:,Vars_to_Set.index('VROT')])-np.min(FAT_Model[1:,Vars_to_Set.index('VROT')]) ]
-        Tot_Flux = [1.,1.]
-        V_mask = [1000.,1000.]
         Distance = Configuration['DISTANCE']
-        DHI = 50.
-
 
     with open(f"{Configuration['FITTING_DIR']}{Configuration['BASE_NAME']}-Basic_Info.txt",'a') as file:
-
-
-        if first_fit:
-            file.write(f'''#After the center converged. \n''')
-        elif second_fit:
-            file.write(f'''#After the radii converged. \n''')
+        if not initialize:
+            file.write(f'''#These are the values from {stage}. \n''')
         RAhr,DEChr = convertRADEC(Configuration,RA[0],DEC[0],debug=debug)
         RA_c = f'{RAhr}+/-{RA[1]*3600.:0.2f}'
         DEC_c = f'{DEChr}+/-{DEC[1]*3600.:0.2f}'
@@ -76,46 +70,70 @@ def basicinfo(Configuration,initialize = False,first_fit = False, second_fit = F
         Flux_c = f'{Tot_Flux[0]:.2f}+/-{Tot_Flux[1]:.2f}'
         file.write(f'''  {RA_c:>25s} {DEC_c:>25s} {VSYS_c:>20s} {PA_c:>20s} {INCL_c:>20s} {MVROT_c:>20s} {Vmask_c:>20s} {Flux_c:>20s} {DHI_a:>20s} {Dist:>20s} {HIMass:>20s} {DHI_k:>20s}
 ''')
-basicinfo.__doc__ = '''
 
-; NAME:
-;       basicinfo(Configuration,initialize = True,
-              RA=[0.,0.], DEC=[0.,0.], VSYS =[0.,0.],
-              PA=[0,0], Inclination = [0,0], Max_Vrot = [0,0], Tot_Flux = [0,0], V_mask = [0,0],
-              Distance = [0] , DHI = [0])
-;
-; PURPOSE:
-;       write to the basic info file
-;
-; CATEGORY:
-;       write
-;
-;
-; INPUTS:
-;
-; OPTIONAL INPUTS:
-;
-;
-; KEYWORD PARAMETERS:
-;       -
-;
-; OUTPUTS:
-;
-;
-; OPTIONAL OUTPUTS:
-;       -
-;
-; PROCEDURES CALLED:
-;      split, strip, open
-;
-; EXAMPLE:
-;
-;
+basicinfo.__doc__ =f'''
+ NAME:
+    basicinfo
+
+ PURPOSE:
+    Create or update the file with the basic information of the fit
+
+ CATEGORY:
+    write_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+
+ OPTIONAL INPUTS:
+    debug = False
+
+    initialize = False
+    If true a new file with header but and first guess values will be created.
+    These parameters need to be provided through the keywords below.
+
+    stage = 'Tirific'
+
+    RA=[float('NaN'),float('NaN')], DEC=[float('NaN'),float('NaN')]
+    RA and DEC in degrees
+
+    VSYS =[float('NaN'),float('NaN')]
+    Systemic velocity in m/s
+
+    PA=[float('NaN'),float('NaN')], Inclination = [float('NaN'),float('NaN')]
+    Position angle and inclination in degrees
+
+    Max_Vrot = [float('NaN'),float('NaN')]
+    The maximum rotational velocity
+
+    Tot_Flux = [float('NaN'),float('NaN')]
+    The total flux in the source in Jy
+
+    V_mask = [float('NaN'),float('NaN')],
+    extend of the mask in the cube
+
+    Distance = float('NaN')
+    Distance to the source in Mpc
+
+    DHI = float('NaN')
+    Diameter of the 1 M_solar/pc^2 iso density surface ellipse. in arcsec
+
+    Standard FAT dictionary with filenames
+
+    template = ['EMPTY']
+    Tirific template to obtain values from
+
+ OUTPUTS:
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
 '''
 
-
 # Function to write the first def file for a galaxy
-def initialize_def_file(Configuration, Fits_Files,Tirific_Template, cube_hdr,Initial_Parameters = ['EMPTY'], fit_stage = 'Undefined_Stage',debug = False):
+def initialize_def_file(Configuration, Fits_Files,Tirific_Template,Initial_Parameters = ['EMPTY'], fit_type = 'Undefined',debug = False):
     try:
         if Initial_Parameters[0] == 'EMPTY':
             Initial_Parameters = {}
@@ -123,11 +141,11 @@ def initialize_def_file(Configuration, Fits_Files,Tirific_Template, cube_hdr,Ini
         pass
 
     #First we set some basic parameters that will hardly change
-    if fit_stage == 'Centre_Convergence':
+    if fit_type == 'Centre_Convergence':
 
         if 'VSYS' in Initial_Parameters:
             Initial_Parameters['VSYS'] = [x/1000. for x in Initial_Parameters['VSYS']]
-        set_overall_parameters(Configuration, Fits_Files,Tirific_Template,loops=10,fit_stage=fit_stage, flux = Initial_Parameters['FLUX'][0], debug=debug)
+        set_overall_parameters(Configuration, Fits_Files,Tirific_Template,loops=10,fit_type=fit_type, flux = Initial_Parameters['FLUX'][0], debug=debug)
         # Then set the values for the various parameters of the model
 
         set_model_parameters(Configuration, Tirific_Template,Initial_Parameters, debug=debug)
@@ -138,12 +156,12 @@ def initialize_def_file(Configuration, Fits_Files,Tirific_Template, cube_hdr,Ini
                                 initial_estimates = Initial_Parameters, debug=debug)
         if 'VSYS' in Initial_Parameters:
             Initial_Parameters['VSYS'] = [x*1000. for x in Initial_Parameters['VSYS']]
-    elif fit_stage in ['Extent_Convergence','One_Step_Convergence']:
-        if 'VSYS' in Initial_Parameters and fit_stage == 'One_Step_Convergence':
+    elif fit_type in ['Extent_Convergence','One_Step_Convergence']:
+        if 'VSYS' in Initial_Parameters and fit_type == 'One_Step_Convergence':
             Initial_Parameters['VSYS'] = [x/1000. for x in Initial_Parameters['VSYS']]
-        set_overall_parameters(Configuration, Fits_Files,Tirific_Template,loops = 10 ,fit_stage=fit_stage, debug=debug,stage='initialize_ec')
+        set_overall_parameters(Configuration, Fits_Files,Tirific_Template,loops = 10 ,fit_type=fit_type, debug=debug,stage='initialize_ec')
         Vars_to_Set =  ['XPOS','YPOS','VSYS','VROT','INCL','PA','SDIS','SBR','SBR_2','Z0']
-        if fit_stage == 'One_Step_Convergence':
+        if fit_type == 'One_Step_Convergence':
             set_model_parameters(Configuration, Tirific_Template,Initial_Parameters,stage='initialize_def_file', debug=debug)
         FAT_Model = load_template(Tirific_Template,Variables= Vars_to_Set,unpack=False, debug=debug)
         # Finally we set how these parameters are fitted.
@@ -160,42 +178,43 @@ def initialize_def_file(Configuration, Fits_Files,Tirific_Template, cube_hdr,Ini
         set_fitting_parameters(Configuration, Tirific_Template,stage = 'initialize_os',
                                initial_estimates=parameters, debug=debug)
 
-    tirific(Configuration,Tirific_Template,name = f'{fit_stage}_In.def', debug=debug)
+    tirific(Configuration,Tirific_Template,name = f'{fit_type}_In.def', debug=debug)
+
+initialize_def_file.__doc__ =f'''
+ NAME:
+    initialize_def_file
+
+ PURPOSE:
+    setup the first def file to be used in the fitting. As it is the first instance it has some special requirements.
+
+ CATEGORY:
+    write_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    Fits_Files = Standard FAT dictionary with filenames
+    Tirific_Template = Standard FAT Tirific Template
 
 
-initialize_def_file.__doc__ = '''
+ OPTIONAL INPUTS:
+    debug = False
 
-; NAME:
-;        initial_def_file(Configuration, Fits_Files,Tirific_Template, Catalogue, cube_hdr,SBR_initial,pa,inclination):
-;
-; PURPOSE:
-;       setup the first def file to be used in the fitting. As it is the first instance it has some special requirements.
-;
-; CATEGORY:
-;       write
-;
-;
-; INPUTS:
-;
-; OPTIONAL INPUTS:
-;
-;
-; KEYWORD PARAMETERS:
-;       -
-;
-; OUTPUTS:
-;
-;
-; OPTIONAL OUTPUTS:
-;       -
-;
-; PROCEDURES CALLED:
-;      split, strip, open
-;
-; EXAMPLE:
-;
-;
+    Initial_Parameters = ['EMPTY']
+    The initial parameters to be used to set up the def file.
+
+    fit_type = 'Undefined'
+    type of fitting being done
+
+ OUTPUTS:
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
 '''
+
 def make_overview_plot(Configuration,Fits_Files, debug = False):
         if os.path.exists(f"{Configuration['FITTING_DIR']}Overview.png"):
             if os.path.exists(f"{Configuration['FITTING_DIR']}Overview_Prev.png"):
@@ -597,7 +616,7 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
         labelfont= {'family':'Times New Roman',
                 'weight':'normal',
                 'size':10}
-        ax_RC = plot_parameters(Vars_to_plot,FAT_Model,Input_Model,gs[18:21,0:6],Overview,'VROT',initial = sof_basic_maxrot[0],Extra_Model = Extra_Model,debug=debug )
+        ax_RC = plot_parameters(Vars_to_plot,FAT_Model,gs[18:21,0:6],Overview,'VROT',Input_Model = Input_Model, initial = sof_basic_maxrot[0],Extra_Model = Extra_Model,debug=debug )
         ymin =np.min([FAT_Model[1:,Vars_to_plot.index('VROT')],FAT_Model[1:,Vars_to_plot.index('VROT_2')]])
         if len(Extra_Model) > 0:
             ymin2 =np.min([Extra_Model[1:,Vars_to_plot.index('VROT')],Extra_Model[1:,Vars_to_plot.index('VROT_2')]])
@@ -631,7 +650,7 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
             labelbottom=False)
         plt.ylabel('RC (km s$^{-1}$)',**labelfont)
 # ------------------------------Inclination------------------------------------
-        ax_INCL = plot_parameters(Vars_to_plot,FAT_Model,Input_Model,gs[21:24,0:6],Overview,'INCL', initial =sof_basic_inclination[0],Extra_Model = Extra_Model ,debug=debug)
+        ax_INCL = plot_parameters(Vars_to_plot,FAT_Model,gs[21:24,0:6],Overview,'INCL',Input_Model = Input_Model, initial =sof_basic_inclination[0],Extra_Model = Extra_Model ,debug=debug)
 
         plt.tick_params(
             axis='x',          # changes apply to the x-axis
@@ -645,7 +664,7 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
               bbox=dict(facecolor='white',edgecolor='white',pad=0.,alpha=0.),zorder=7,fontsize=12)
         plt.ylabel('Incl ($^{\circ}$)',**labelfont)
 # ------------------------------PA------------------------------------
-        ax_PA = plot_parameters(Vars_to_plot,FAT_Model,Input_Model,gs[24:27,0:6],Overview,'PA',initial = sof_basic_pa[0],Extra_Model = Extra_Model,debug=debug)
+        ax_PA = plot_parameters(Vars_to_plot,FAT_Model,gs[24:27,0:6],Overview,'PA',Input_Model = Input_Model,initial = sof_basic_pa[0],Extra_Model = Extra_Model,debug=debug)
 
         plt.tick_params(
             axis='x',          # changes apply to the x-axis
@@ -660,7 +679,7 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
         plt.xlabel('Radius (arcsec)',**labelfont)
         plt.ylabel('PA ($^{\circ}$)',**labelfont)
 # ------------------------------SDIS------------------------------------
-        ax_SDIS = plot_parameters(Vars_to_plot,FAT_Model,Input_Model,gs[18:21,9:15],Overview,'SDIS',Extra_Model = Extra_Model,initial = 8.)
+        ax_SDIS = plot_parameters(Vars_to_plot,FAT_Model,gs[18:21,9:15],Overview,'SDIS',Input_Model = Input_Model,Extra_Model = Extra_Model,initial = 8.)
         plt.tick_params(
             axis='x',          # changes apply to the x-axis
             which='both',      # both major and minor ticks are affected
@@ -676,7 +695,7 @@ BMAJ = {Configuration['BEAM'][0]:.1f} arcsec''',rotation=0, va='center',ha='left
               bbox=dict(facecolor='white',edgecolor='white',pad=0.,alpha=0.),zorder=7,fontsize=12)
         plt.ylabel('Disp (km s$^{-1}$)',**labelfont)
 # ------------------------------Scale height------------------------------------
-        ax_Z0 = plot_parameters(Vars_to_plot,FAT_Model,Input_Model,gs[21:24,9:15],Overview,'Z0',\
+        ax_Z0 = plot_parameters(Vars_to_plot,FAT_Model,gs[21:24,9:15],Overview,'Z0',Input_Model = Input_Model,\
                                 Extra_Model = Extra_Model,initial = convertskyangle(Configuration,0.2,Configuration['DISTANCE'],physical=True),debug=debug)
 
         plt.tick_params(
@@ -699,7 +718,7 @@ BMAJ = {Configuration['BEAM'][0]:.1f} arcsec''',rotation=0, va='center',ha='left
 
 
 # ------------------------------SDIS------------------------------------
-        ax_SBR = plot_parameters(Vars_to_plot,FAT_Model,Input_Model,gs[24:27,9:15],Overview,'SBR',Extra_Model = Extra_Model, legend = ['Appr.','Rec.','Input Appr.','Input Rec.'],debug=debug)
+        ax_SBR = plot_parameters(Vars_to_plot,FAT_Model,gs[24:27,9:15],Overview,'SBR',Input_Model = Input_Model,Extra_Model = Extra_Model, legend = ['Appr.','Rec.','Input Appr.','Input Rec.'],debug=debug)
 
 
         plt.ylabel('SBR \n (Jy km s$^{-1}$ arcsec$^{-2}$)',**labelfont)
@@ -791,8 +810,6 @@ make_overview_plot.__doc__ =f'''
  OPTIONAL INPUTS:
     debug = False
 
- KEYWORD PARAMETERS:
-
  OUTPUTS:
     The overview plot
 
@@ -801,12 +818,10 @@ make_overview_plot.__doc__ =f'''
  PROCEDURES CALLED:
     Unspecified
 
- EXAMPLE:
+ NOTE:
 '''
 
-
-
-def plot_parameters(Vars_to_plot,FAT_Model,Input_Model,location,Figure,parameter, legend = ['Empty','Empty','Empty','Empty'],initial = 'No Value', Extra_Model = [], debug = False):
+def plot_parameters(Vars_to_plot,FAT_Model,location,Figure,parameter, Input_Model = [],legend = ['Empty','Empty','Empty','Empty'],initial = 'No Value', Extra_Model = [], debug = False):
     if debug:
         print_log(f'''PLOT_PARAMETERS: We are starting to plot {parameter}
 ''', None,screen =True, debug =True)
@@ -865,6 +880,48 @@ def plot_parameters(Vars_to_plot,FAT_Model,Input_Model,location,Figure,parameter
     ax.set_xlim(xmin,xmax)
     return ax
 
+plot_parameters.__doc__ =f'''
+     NAME:
+        plot_parameters
+
+     PURPOSE:
+        Sub plot a specific parameter from the fit
+
+     CATEGORY:
+        write_functions
+
+     INPUTS:
+        Vars_to_plot =List with order of the variables in the FAT_Model
+        FAT_Model = Array with the values for all parameters
+        location = location in the figure where to put this subplot
+        Figure = the figure in which we are plotting
+        parameter = the parameter to plot
+
+     OPTIONAL INPUTS:
+        debug = False
+
+        Input_Model = []
+        A model to compare to, should be ordered the same as the FAT_Model
+
+        legend = ['Empty','Empty','Empty','Empty']
+        legend names for fat_model and Input model
+
+        initial = 'No Value'
+        Initial guess of the parameter
+
+        Extra_Model = []
+        A third model to plot weakly behing the main model
+
+     OUTPUTS:
+        ax object from matplot lib
+
+     OPTIONAL OUTPUTS:
+
+     PROCEDURES CALLED:
+        Unspecified
+
+     NOTE:
+'''
 
 def plot_usage_stats(Configuration,debug = False):
 
@@ -990,11 +1047,36 @@ def plot_usage_stats(Configuration,debug = False):
         fig.savefig(f"{Configuration['FITTING_DIR']}Logs/ram_cpu.pdf")
         plt.close()
 
+plot_usage_stats.__doc__ =f'''
+ NAME:
+    plot_usage_stats
+
+ PURPOSE:
+    Plot the RAM and CPU usage over time for the fit
+
+ CATEGORY:
+    write_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+
+ OPTIONAL INPUTS:
+    debug = False
+
+ OUTPUTS:
+    ram_cpu.pdf in the Logs directory
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
 
 
 
-
-def sofia(template,name, debug = False):
+def sofia(template,name):
     with open(name,'w') as file:
         for key in template:
             if key[0] == 'E' or key [0] == 'H':
@@ -1002,40 +1084,30 @@ def sofia(template,name, debug = False):
             else:
                 file.write(f"{key} = {template[key]}\n")
 
-sofia.__doc__ = '''
+sofia.__doc__ =f'''
+ NAME:
+    sofia
+ PURPOSE:
+    write a sofia2 dictionary into file
+ CATEGORY:
+    write_functions
 
-; NAME:
-;       sofia
-;
-; PURPOSE:
-;       write a sofia2 dictionary into file
-;
-; CATEGORY:
-;       write
-;
-;
-; INPUTS:
-;       name = Name of the sofia file
-;       template = a template dictionary that matches the sof read template
-; OPTIONAL INPUTS:
-;
-;
-; KEYWORD PARAMETERS:
-;       -
-;
-; OUTPUTS:
-;
-;
-; OPTIONAL OUTPUTS:
-;       -
-;
-; PROCEDURES CALLED:
-;      split, strip, open
-;
-; EXAMPLE:
-;
-;
+ INPUTS:
+    template = sofia template
+    name = name of the file to write to
+
+ OPTIONAL INPUTS:
+
+ OUTPUTS:
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
 '''
+
 def tirific(Configuration,Tirific_Template, name = 'tirific.def', debug = False):
     #IF we're writing we bump up the restart_ID and adjust the AZ1P angles to the current warping
     update_disk_angles(Configuration,Tirific_Template, debug= debug)
@@ -1047,41 +1119,36 @@ def tirific(Configuration,Tirific_Template, name = 'tirific.def', debug = False)
             else:
                 file.write((f"{key}= {Tirific_Template[key]} \n"))
 
-tirific.__doc__ = '''
+tirific.__doc__ =f'''
+ NAME:
+    tirific
 
-; NAME:
-;       sofia
-;
-; PURPOSE:
-;       write a tirific.def file
-;
-; CATEGORY:
-;       write
-;
-;
-; INPUTS:
-;       name = Name of the sofia file
-;       template = a template dictionary that matches the sof read template
-; OPTIONAL INPUTS:
-;
-;
-; KEYWORD PARAMETERS:
-;       -
-;
-; OUTPUTS:
-;
-;
-; OPTIONAL OUTPUTS:
-;       -
-;
-; PROCEDURES CALLED:
-;      split, strip, open
-;
-; EXAMPLE:
-;
-;
-'''
+ PURPOSE:
+    Write a tirific template to file
 
+ CATEGORY:
+    write_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    Tirific_Template = Standard FAT Tirific Template
+
+ OPTIONAL INPUTS:
+    debug = False
+
+    name = 'tirific.def'
+    name of the file to write to
+
+ OUTPUTS:
+    Tirific def file
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+ '''
 
 def write_config(file,Configuration,debug = False):
     if debug:
@@ -1091,3 +1158,31 @@ def write_config(file,Configuration,debug = False):
     with open(file,'w') as tmp:
         for key in Configuration:
             tmp.write(f'{key} = {Configuration[key]} \n')
+
+write_config.__doc__ =f'''
+ NAME:
+    write_config
+
+ PURPOSE:
+    Write a config file to the fitting directory.
+
+ CATEGORY:
+    write_functions
+
+ INPUTS:
+    file = name of the file to write to
+    Configuration = Standard FAT configuration
+
+ OPTIONAL INPUTS:
+    debug = False
+
+ OUTPUTS:
+    A FAT config file.
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''

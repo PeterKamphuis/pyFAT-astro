@@ -1084,6 +1084,39 @@ get_vel_pa.__doc__ =f'''
  NOTE:
 '''
 
+def is_available(name):
+    try:
+        run = subprocess.Popen([name], stdout = subprocess.PIPE, stderr = subprocess.PIPE)
+        return True
+    except:
+        return False
+
+is_available.__doc__ =f'''
+ NAME:
+    is_available
+
+ PURPOSE:
+    check whether a program is available for use.
+
+ CATEGORY:
+    write_functions
+
+ INPUTS:
+    name = name of the program to run
+
+ OPTIONAL INPUTS:
+
+ OUTPUTS:
+    Boolean which is False upon error and True with a succesful call
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
+
 # A simple function to return the line numbers in the stack from where the functions are called
 def linenumber(debug=False):
     line = []
@@ -1433,27 +1466,27 @@ remove_inhomogeneities
  NOTE:
 '''
 
-def rename_fit_products(Configuration,stage = 'initial', fit_stage='Undefined_Stage',debug = False):
+def rename_fit_products(Configuration,stage = 'initial', fit_type='Undefined',debug = False):
     extensions = ['def','log','ps','fits']
     for filetype in extensions:
         if filetype == 'log':
-            if os.path.exists(f"{Configuration['FITTING_DIR']}{fit_stage}/{fit_stage}.{filetype}"):
-                os.system(f"cp {Configuration['FITTING_DIR']}{fit_stage}/{fit_stage}.{filetype} {Configuration['FITTING_DIR']}{fit_stage}/{fit_stage}_Prev.{filetype} ")
+            if os.path.exists(f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.{filetype}"):
+                os.system(f"cp {Configuration['FITTING_DIR']}{fit_type}/{fit_type}.{filetype} {Configuration['FITTING_DIR']}{fit_type}/{fit_type}_Prev.{filetype} ")
         else:
             if filetype == 'def':
-                if fit_stage == 'Extent_Convergence' and stage == 'run_ec':
+                if fit_type == 'Extent_Convergence' and stage == 'run_ec':
                     Loopnr = f"EC_{Configuration['EC_LOOPS']-1}"
-                elif fit_stage == 'Centre_Convergence' and stage == 'run_cc' :
+                elif fit_type == 'Centre_Convergence' and stage == 'run_cc' :
                     Loopnr = f"CC_{Configuration['CC_LOOPS']-1}"
-                elif fit_stage == 'One_Step_Convergence' and stage == 'run_os' :
+                elif fit_type == 'One_Step_Convergence' and stage == 'run_os' :
                     Loopnr = f"OS_{Configuration['OS_LOOPS']-1}"
                 else:
                     Loopnr = 'final_output_before_'+stage
-                if os.path.exists(f"{Configuration['FITTING_DIR']}{fit_stage}/{fit_stage}.{filetype}"):
-                    os.system(f"mv {Configuration['FITTING_DIR']}{fit_stage}/{fit_stage}.{filetype} {Configuration['FITTING_DIR']}{fit_stage}/{fit_stage}_{Loopnr}.{filetype}")
+                if os.path.exists(f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.{filetype}"):
+                    os.system(f"mv {Configuration['FITTING_DIR']}{fit_type}/{fit_type}.{filetype} {Configuration['FITTING_DIR']}{fit_type}/{fit_type}_{Loopnr}.{filetype}")
 
-            elif os.path.exists(f"{Configuration['FITTING_DIR']}{fit_stage}/{fit_stage}.{filetype}"):
-                os.system(f"mv {Configuration['FITTING_DIR']}{fit_stage}/{fit_stage}.{filetype} {Configuration['FITTING_DIR']}{fit_stage}/{fit_stage}_Prev.{filetype}")
+            elif os.path.exists(f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.{filetype}"):
+                os.system(f"mv {Configuration['FITTING_DIR']}{fit_type}/{fit_type}.{filetype} {Configuration['FITTING_DIR']}{fit_type}/{fit_type}_Prev.{filetype}")
 
 rename_fit_products.__doc__ =f'''
  NAME:
@@ -1473,7 +1506,7 @@ rename_fit_products.__doc__ =f'''
     stage = 'initial'
     stage of the type of fitting
 
-    fit_stage='Undefined_Stage'
+    fit_type='Undefined'
     Type of fitting
 
  OUTPUTS:

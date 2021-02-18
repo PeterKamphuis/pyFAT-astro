@@ -2,7 +2,7 @@
 # This module contains a set of functions and classes that are used in FAT to read input files
 
 from pyFAT.Support.support_functions import Proper_Dictionary,print_log,convertRADEC,set_limits, remove_inhomogeneities, \
-                                obtain_border_pix, get_inclination_pa,get_vel_pa
+                                obtain_border_pix, get_inclination_pa,get_vel_pa,columndensity
 from pyFAT.Support.fits_functions import check_mask
 from astropy.io import fits
 from scipy import ndimage
@@ -399,6 +399,93 @@ extract_vrot.__doc__ =f'''
 ; EXAMPLE:
 ;
 ;
+'''
+
+def get_DHI(Configuration,Model='Finalmodel' ,debug=False):
+    #Get the sbrs
+    radi,sbr,sbr_2,systemic = load_tirific(f"{Configuration['FITTING_DIR']}{Model}/{Model}.def",Variables = ['RADI','SBR','SBR_2','VSYS'],debug=debug)
+    #convert to solar_mass/pc^2
+    sbr_msolar = columndensity(Configuration,sbr*1000.,systemic=systemic[0],arcsquare=True,solar_mass_output=True)
+    sbr_2_msolar = columndensity(Configuration,sbr_2*1000.,systemic=systemic[0],arcsquare=True,solar_mass_output=True)
+    # interpolate these to ~1" steps
+    new_radii = np.linspace(0,radi[-1],int(radi[-1]))
+    print(new_radii)
+    new_sbr_msolar = np.interp(new_radii,radi,sbr_msolar)
+    new_sbr_2_msolar = np.interp(new_radii,radi,sbr_2_msolar)
+
+    index_1 = np.where(new_sbr_msolar > 1.)[0]
+    index_2 = np.where(new_sbr_2_msolar > 1.)[0]
+    if index_1.size > 0 and index_2.size > 0:
+        DHI = float(new_radii[index_1[-1]]+new_radii[index_2[-1]])
+    elif index_1.size > 0:
+        DHI = float(new_radii[index_1[-1]])
+    elif index_2.size > 0:
+        DHI = float(new_radii[index_2[-1]])
+    else:
+        DHI = float('NaN')
+    return DHI
+
+get_DHI.__doc__ =f'''
+ NAME:
+    get_DHI
+
+ PURPOSE:
+    get the DHI as determined by the SBR profiles in the fit from the Tirific Template
+
+ CATEGORY:
+    read_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+
+ OPTIONAL INPUTS:
+    debug = False
+
+    Model = 'Finalmodel'
+    location of the def file to get DHI from. it should be in the fitting dir in the {{Model}}/{{Model}}.def
+
+ OUTPUTS:
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
+
+def get_totflux(Configuration,map_name,debug=False):
+    image = fits.open(f"{Configuration['FITTING_DIR']}{map_name}")
+    flux = np.nansum(image[0].data)
+    error = np.sqrt((np.where(image[0].data> 0.)[0].size)/Configuration['BEAM_IN_PIXELS'][2])*Configuration['NOISE']
+    return [float(flux/Configuration['BEAM_IN_PIXELS'][2]),error]
+
+get_totflux.__doc__ =f'''
+ NAME:
+    get_totflux
+
+ PURPOSE:
+    Get the total flux from a intensity map
+
+ CATEGORY:
+    read_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    map_name = name of the intensity fits file
+
+ OPTIONAL INPUTS:
+    debug = False
+
+ OUTPUTS:
+    total flux in the map in Jy*km/s
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
 '''
 
 # Function to get the PA and inclination from the moment 0 for initial estimates
