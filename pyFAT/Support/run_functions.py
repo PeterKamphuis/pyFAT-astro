@@ -16,7 +16,7 @@ from pyFAT.Support.clean_functions import clean_before_sofia,clean_after_sofia
 from pyFAT.Support.fits_functions import cut_cubes,extract_pv,make_moments
 from pyFAT.Support.modify_template import write_new_to_template,smooth_profile,set_cflux,fix_sbr, \
                                           regularise_profile,set_fitting_parameters,check_size, \
-                                          no_declining_vrot, set_new_size,set_errors
+                                          no_declining_vrot, set_new_size,set_errors,get_warp_slope
 from pyFAT.Support.constants import H_0
 from astropy.wcs import WCS
 from astropy.io import fits
@@ -34,7 +34,7 @@ import warnings
 import re
 from datetime import datetime
 
-def fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run,hdr, stage = 'initial',fit_type='Undefined', debug = False):
+def fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run, stage = 'initial',fit_type='Undefined', debug = False):
     if debug:
         print_log(f'''FIT_SMOOTHED_CHECK: Starting stage {stage} and fit_type {fit_type}.
 ''',Configuration['OUTPUTLOG'],debug = debug)
@@ -42,9 +42,9 @@ def fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run,hd
     #smoothed_sbr = smooth_profile(Configuration,Tirific_Template,'SBR',hdr, min_error= np.max([float(Tirific_Template['CFLUX']),float(Tirific_Template['CFLUX_2'])]),debug = debug)
     fix_sbr(Configuration,Tirific_Template,smooth = True, debug = debug)
     if stage == 'after_cc':
-        smoothed_vrot = smooth_profile(Configuration,Tirific_Template,'VROT',min_error = float(hdr['CDELT3']/1000.),debug = debug)
+        smoothed_vrot = smooth_profile(Configuration,Tirific_Template,'VROT',min_error = Configuration['CHANNEL_WIDTH'],debug = debug)
     else:
-        smoothed_vrot = regularise_profile(Configuration,Tirific_Template,'VROT',min_error = float(hdr['CDELT3']/1000.),debug = debug)
+        smoothed_vrot = regularise_profile(Configuration,Tirific_Template,'VROT',min_error = Configuration['CHANNEL_WIDTH'],debug = debug)
     no_declining_vrot(Configuration, Tirific_Template, debug = debug)
     if stage in ['after_ec', 'after_os']:
         min_error = []
@@ -72,10 +72,10 @@ def fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run,hd
 
         if not Configuration['FIX_SDIS'][0]:
             pars_to_smooth.append('SDIS')
-            min_error.append(hdr['CDELT3']/2000.*Configuration['LIMIT_MODIFIER'])
+            min_error.append(Configuration['CHANNEL_WIDTH']/2.*Configuration['LIMIT_MODIFIER'])
         else:
             not_to_smooth.append('SDIS')
-            fixed_errors.append(hdr['CDELT3']/2000.*Configuration['LIMIT_MODIFIER'])
+            fixed_errors.append(Configuration['CHANNEL_WIDTH']/2.*Configuration['LIMIT_MODIFIER'])
 
         for key,min_err in zip(pars_to_smooth,min_error):
             smoothed = regularise_profile(Configuration,Tirific_Template,key,min_error = min_err,debug = debug)
@@ -96,8 +96,8 @@ def fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run,hd
         Tirific_Template['LOOPS'] = 10.
         xpos,ypos,vsys,pa,incl = rf.load_tirific(f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def",Variables = ['XPOS','YPOS','VSYS','PA','INCL'])
         parameters = {'VSYS': [vsys[0], Configuration['CHANNEL_WIDTH']], \
-                      'XPOS': [xpos[0],abs(hdr['CDELT1'])],
-                      'YPOS': [ypos[0],abs(hdr['CDELT2'])],
+                      'XPOS': [xpos[0], Configuration['PIXEL_SIZE']],
+                      'YPOS': [ypos[0], Configuration['PIXEL_SIZE']],
                       'INCL':[incl[0],10.],
                       'PA':  [pa[0],5.],
                       'VROT': [np.max(smoothed_vrot),np.max(smoothed_vrot)*0.1],  }
@@ -202,7 +202,7 @@ def check_inclination(Configuration,Tirific_Template,Fits_Files, fit_type = 'Uns
         wf.tirific(Configuration,Tirific_Template,name = f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def",debug=debug)
 
 
-def check_central_convergence(Configuration,Tirific_Template,hdr,accepted, fit_type = 'Undefined_Stage', debug = False):
+def check_central_convergence(Configuration,Tirific_Template,accepted, fit_type = 'Undefined_Stage', debug = False):
     if debug:
         print_log(f'''CHECK_CENTRAL_CONVERGE: Starting stage {fit_type}.
 ''',Configuration['OUTPUTLOG'],debug = debug)
@@ -212,8 +212,8 @@ def check_central_convergence(Configuration,Tirific_Template,hdr,accepted, fit_t
         shift_beam_frac =Configuration['SIZE_IN_BEAMS']*0.05
     else:
         shift_beam_frac =0.15
-    ra_lim = set_limits(shift_beam_frac*Configuration['BEAM'][0]/3600.,np.max([abs(hdr['CDELT1']),1./3600.]),Configuration['BEAM'][0]/3600.,debug = debug )
-    dec_lim =set_limits(shift_beam_frac*Configuration['BEAM'][0]/3600.,np.max([abs(hdr['CDELT2']),1./3600.]),Configuration['BEAM'][0]/3600.,debug = debug )
+    ra_lim = set_limits(shift_beam_frac*Configuration['BEAM'][0]/3600.,np.max([Configuration['PIXEL_SIZE'],1./3600.]),Configuration['BEAM'][0]/3600.,debug = debug )
+    dec_lim =set_limits(shift_beam_frac*Configuration['BEAM'][0]/3600.,np.max([Configuration['PIXEL_SIZE'],1./3600.]),Configuration['BEAM'][0]/3600.,debug = debug )
     sys_lim = set_limits(0.5*Configuration['CHANNEL_WIDTH'],2.5, 2.*Configuration['CHANNEL_WIDTH'],debug = debug )
     if abs(new_xpos[0] - old_xpos[0]) > ra_lim or \
        abs(new_ypos[0] - old_ypos[0]) > dec_lim or \
@@ -494,6 +494,70 @@ check_source.__doc__='''
  EXAMPLE:
 '''
 
+def fitting_osc(Configuration,Fits_Files,Tirific_Template,Initial_Parameters):
+    current_run = 'Not Initialized'
+    allowed_loops = 15
+    if Configuration['INSTALLATION_CHECK']:
+        allowed_loops = 1
+    Configuration['OS_LOOPS'] = 0
+    if not os.path.isdir(Configuration['FITTING_DIR']+'One_Step_Convergence'):
+        os.mkdir(Configuration['FITTING_DIR']+'One_Step_Convergence')
+    wf.initialize_def_file(Configuration, Fits_Files,Tirific_Template, \
+                           Initial_Parameters= Initial_Parameters, \
+                           fit_type='One_Step_Convergence',\
+                           debug=Configuration['DEBUG'])
+    print_log(f'''FITTING_OSC: The initial def file is written and we will now start fitting.
+''' ,Configuration['OUTPUTLOG'], screen =True, debug = Configuration['DEBUG'])
+    Configuration['PREP_END_TIME'] = datetime.now()
+        # If we have no directory to put the output we create it
+
+    while not Configuration['ACCEPTED'] and Configuration['OS_LOOPS'] < allowed_loops:
+        Configuration['OS_LOOPS'] = Configuration['OS_LOOPS']+1
+        print_log(f'''FITTING_OSC: We are starting loop {Configuration['OS_LOOPS']} of trying to converge the center and extent.
+''',Configuration['OUTPUTLOG'],screen =True, debug = Configuration['DEBUG'])
+        # Run the step
+        current_run = one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run,debug = Configuration['DEBUG'],allowed_loops = allowed_loops)
+
+
+    if Configuration['ACCEPTED']:
+        print_log(f'''FITTING_OSC: The model has converged in center and extent and we make a smoothed version.
+''',Configuration['OUTPUTLOG'],screen =True, debug = Configuration['DEBUG'])
+        current_run = fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run,stage = 'after_os', fit_type = 'One_Step_Convergence',debug = Configuration['DEBUG'])
+        if Configuration['OPTIMIZED']:
+            make_full_resolution(Configuration,Tirific_Template,Fits_Files,current_run = current_run,fit_type = 'One_Step_Convergence',debug=Configuration['DEBUG'])
+    elif input_parameters.installation_check:
+        print_log(f'''FITTING_OSC: The Installation_check has run a fit suvccessfully.
+''',Configuration['OUTPUTLOG'],screen =True, debug = Configuration['DEBUG'])
+    else:
+        Configuration['FINAL_COMMENT'] = 'We could not converge on the extent or centre of the galaxy'
+        Configuration['MAPS_OUTPUT'] = 5
+    return current_run
+fitting_osc.__doc__ =f'''
+ NAME:
+
+ PURPOSE:
+
+ CATEGORY:
+    modify_template
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    Fits_Files = Standard FAT dictionary with filenames
+    Tirific_Template = Standard FAT Tirific Template
+    Initial_Parameters = The initial guesses obtained from sofia
+
+ OPTIONAL INPUTS:
+
+ OUTPUTS:
+    the tirific subprocess structure
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE: This is the main fitting routine if you want to make your own start by looking here
+'''
+
 def make_full_resolution(Configuration,Tirific_Template,Fits_Files,fit_type = 'Undefined', current_run = 'Not zed', debug = False):
     if debug:
         print_log(f'''MAKE_FULL_RESOLUTION: creating full resolution for stage {fit_type}.
@@ -507,7 +571,7 @@ def make_full_resolution(Configuration,Tirific_Template,Fits_Files,fit_type = 'U
     accepted,current_run = run_tirific(Configuration,'Not zed', stage = 'full_res', fit_type=fit_type,debug = debug)
     finish_current_run(Configuration,current_run,debug= debug)
 
-def one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run,hdr, debug = False,allowed_loops = 10.):
+def one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run, debug = False,allowed_loops = 10.):
     if debug:
         print_log(f'''ONE_STEP_CONVERGENCE: Starting with loop {Configuration['OS_LOOPS']} out of maximum {allowed_loops}.
 ''',Configuration['OUTPUTLOG'],debug = True)
@@ -518,13 +582,13 @@ def one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run,hdr
     #Then we load the produced output into our template
     write_new_to_template(Configuration,f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def" , Tirific_Template, debug = debug)
     #Check that the centre does not deviate too much
-    accepted_central = check_central_convergence(Configuration,Tirific_Template,hdr,accepted, fit_type = fit_type,debug=debug)
+    accepted_central = check_central_convergence(Configuration,Tirific_Template,accepted, fit_type = fit_type,debug=debug)
     # Check whether we have the correct sizes,
     accepted_size = check_size(Configuration,Tirific_Template, fit_type = fit_type, stage = stage, current_run = current_run, debug=debug,Fits_Files=Fits_Files)
     if accepted and accepted_size and accepted_central:
-        Configuration['OS_ACCEPTED'] = True
+        Configuration['ACCEPTED'] = True
     else:
-        Configuration['OS_ACCEPTED'] = False
+        Configuration['ACCEPTED'] = False
         if Configuration['OS_LOOPS'] > allowed_loops:
                 print_log(f'''ONE_STEP_CONVERGENCE: We have ran the convergence more than {allowed_loops} times aborting the fit.
     ''',Configuration['OUTPUTLOG'])
@@ -541,12 +605,13 @@ def one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run,hdr
                     # First we fix the SBR we are left with also to set the reliable ring to configuration.
         fix_sbr(Configuration,Tirific_Template,debug = debug)    # Then we determine the inner rings that should remain fixed
 
-        Configuration['INNER_FIX'] = get_inner_fix(Configuration, Tirific_Template,debug=debug)
+        get_inner_fix(Configuration, Tirific_Template,debug=debug)
+        get_warp_slope(Configuration,Tirific_Template, debug=debug)
         set_cflux(Configuration,Tirific_Template,debug = debug)
         keys_to_smooth =['INCL','PA','SDIS','Z0','VROT']
-        min_errors = [3.*np.mean(Configuration['LIMIT_MODIFIER']),2.,hdr['CDELT3']/(2000.*Configuration['LIMIT_MODIFIER']), \
+        min_errors = [3.*np.mean(Configuration['LIMIT_MODIFIER']),2.,Configuration['CHANNEL_WIDTH']/(2.*Configuration['LIMIT_MODIFIER']), \
                         convertskyangle(Configuration,0.1,Configuration['DISTANCE'],physical= True)/Configuration['LIMIT_MODIFIER'],\
-                        hdr['CDELT3']/(1000.*Configuration['LIMIT_MODIFIER'])]
+                        Configuration['CHANNEL_WIDTH']/(Configuration['LIMIT_MODIFIER'])]
         for j,key in enumerate(keys_to_smooth):
             #Smoothing the profile also fixes it
             smoothed = smooth_profile(Configuration,Tirific_Template,key,debug=debug,min_error=min_errors[j])

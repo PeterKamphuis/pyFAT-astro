@@ -81,7 +81,7 @@ def calc_rings(Configuration,size_in_beams = 0., ring_size  = 0.,debug=False):
     if debug:
         print_log(f'''CALC_RINGS: The model will have {no_rings} Rings.
 {'':8s} We estimated {est_rings} and double outer rings is {Configuration['OUTER_RINGS_DOUBLED']}
-''',Configuration['OUTPUTLOG'],debug = False)
+''',Configuration['OUTPUTLOG'])
     return int(no_rings)
 
 calc_rings.__doc__ =f'''
@@ -146,7 +146,7 @@ def columndensity(Configuration,levels,systemic = 100.,beam=[-1.,-1.],channel_wi
     if debug:
         print_log(f'''COLUMNDENSITY: We have the following input for calculating the columns.
 {'':8s}COLUMNDENSITY: level = {levels}, channel_width = {channel_width}, beam = {beam}, systemic = {systemic})
-''',Configuration['OUTPUTLOG'],debug=False)
+''',Configuration['OUTPUTLOG'])
     if systemic > 10000:
         systemic = systemic/1000.
     f = f0 * (1 - (systemic / c)) #Systemic frequency
@@ -509,15 +509,16 @@ deproject.__doc__ =f'''
 '''
 
 def finish_current_run(Configuration,current_run,debug=False):
-    print_log(f"FINISH_CURRENT_RUN: Is Tirific Running? {Configuration['TIRIFIC_RUNNING']}. \n",Configuration['OUTPUTLOG'],debug=debug,screen=True)
+    print_log(f"FINISH_CURRENT_RUN: Is Tirific Running? {Configuration['TIRIFIC_RUNNING']}. \n",Configuration['OUTPUTLOG'],debug=debug)
     if Configuration['TIRIFIC_RUNNING']:
         try:
             os.kill(Configuration['TIRIFIC_PID'], signal.SIGKILL)
-            print_log(f"FINISH_CURRENT_RUN: We killed PID = {Configuration['TIRIFIC_PID']}. \n",Configuration['OUTPUTLOG'],debug=False,screen=True)
+            print_log(f"FINISH_CURRENT_RUN: We killed PID = {Configuration['TIRIFIC_PID']}. \n",Configuration['OUTPUTLOG'])
         except:
             try:
                 current_run.kill()
-                print_log(f"FINISH_CURRENT_RUN: We killed the current run although we failed on the PID = {Configuration['TIRIFIC_PID']}. \n",Configuration['OUTPUTLOG'],screen=True)
+                print_log(f"FINISH_CURRENT_RUN: We killed the current run although we failed on the PID = {Configuration['TIRIFIC_PID']}. \n",\
+                          Configuration['OUTPUTLOG'])
             except AttributeError:
                 print_log(f"FINISH_CURRENT_RUN: We failed to kill the current run even though we have tirific running",Configuration['OUTPUTLOG'],screen=True)
                 raise TirificKillError('FINISH_CURRENT_RUN: Despite having an initialized tirific we could not kill it. This should not happen.')
@@ -659,7 +660,7 @@ def get_from_template(Configuration,Tirific_Template,Variables, debug = False):
     if debug:
         print_log(f'''GET_FROM_TEMPLATE: We extracted the following profiles from the Template.
 {'':8s}GET_FROM_TEMPLATE: {out}
-''',Configuration['OUTPUTLOG'],debug = False )
+''',Configuration['OUTPUTLOG'])
     #Beware that lists are stupid i.e. sbr[0][0] = SBR[0], sbr[1][0] = SBR_2[0] but  sbr[:][0] = SBR[:] not SBR[0],SBR_2[0] as logic would demand
     # However if you make a np. array from it make sure that you specify float  or have lists of the same length else you get an array of lists which behave just as dumb
     return out
@@ -708,13 +709,13 @@ def get_inclination_pa(Configuration, Image, center, cutoff = 0., debug = False)
 ''',Configuration['OUTPUTLOG'], debug = True)
                 print_log(f'''GET_INCLINATION_PA: We initially find the ratios:
 {'':8s} ratios = {ratios}
-''',Configuration['OUTPUTLOG'], debug = False)
+''',Configuration['OUTPUTLOG'])
             else:
                 print_log(f'''GET_INCLINATION_PA: From the cleaned map we find radius of {maj_extent/Configuration['BEAM'][0]/3600.} beams.
-''',Configuration['OUTPUTLOG'], debug = False)
+''',Configuration['OUTPUTLOG'])
                 print_log(f'''GET_INCLINATION_PA: We  find these ratios from the cleaned map:
 {'':8s} ratios = {ratios}
-''',Configuration['OUTPUTLOG'], debug = False)
+''',Configuration['OUTPUTLOG'])
         max_index = np.where(ratios == np.nanmax(ratios))[0]
         if max_index.size > 1:
             max_index =max_index[0]
@@ -724,10 +725,10 @@ def get_inclination_pa(Configuration, Image, center, cutoff = 0., debug = False)
         if debug:
             if i == 0:
                 print_log(f'''GET_INCLINATION_PA: We initially find these indeces min {min_index } {angles[min_index]} max {max_index} {angles[max_index]}.
-''',Configuration['OUTPUTLOG'], debug = False)
+''',Configuration['OUTPUTLOG'])
             else:
                 print_log(f'''GET_INCLINATION_PA: From the cleaned map we find these indeces min {min_index }  {angles[min_index]} max {max_index} {angles[max_index]}.
-''',Configuration['OUTPUTLOG'], debug = False)
+''',Configuration['OUTPUTLOG'])
         #get a 10% bracket
 
         tenp_max_index = np.where(ratios > np.nanmax(ratios)*0.9)[0]
@@ -749,10 +750,10 @@ def get_inclination_pa(Configuration, Image, center, cutoff = 0., debug = False)
         if debug:
             if i == 0:
                 print_log(f'''GET_INCLINATION_PA: We initially find a pa of {pa}.
-''',Configuration['OUTPUTLOG'], debug = False)
+''',Configuration['OUTPUTLOG'])
             else:
                 print_log(f'''GET_INCLINATION_PA: From the cleaned map we find pa = {pa}.
-''',Configuration['OUTPUTLOG'], debug = False)
+''',Configuration['OUTPUTLOG'])
         pa_error = set_limits(np.mean([abs(angles[tenp_min_index[0]]-angles[min_index]),\
                             abs(angles[tenp_min_index[-1]]-angles[min_index]),\
                             abs(angles[tenp_max_index[0]]-angles[max_index]), \
@@ -765,10 +766,10 @@ def get_inclination_pa(Configuration, Image, center, cutoff = 0., debug = False)
         if debug:
             if i == 0:
                 print_log(f'''GET_INCLINATION_PA: We initially find an inclinatio of {inclination}.
-''',Configuration['OUTPUTLOG'], debug = False)
+''',Configuration['OUTPUTLOG'])
             else:
                 print_log(f'''GET_INCLINATION_PA: From the cleaned map we find inclinatio = {inclination}.
-''',Configuration['OUTPUTLOG'], debug = False)
+''',Configuration['OUTPUTLOG'])
 
         if i == 0:
             inclination_error = set_limits(np.nanmean([abs(np.degrees(np.arccos(np.sqrt((ratios[min_index]**2-0.2**2)/0.96))) - np.degrees(np.arccos(np.sqrt((ratios[tenp_min_index[0]]**2-0.2**2)/0.96)))),\
@@ -837,7 +838,7 @@ def get_inner_fix(Configuration,Tirific_Template, debug =False):
     column_levels = columndensity(Configuration,sbr_av, arcsquare = True, debug = debug)
     column_levels[0]= 1e21
     tmp = np.where(column_levels > 1e20)[0]
-    return set_limits(int(np.floor(tmp[-1]/1.5-1)), 4, int(Configuration['NO_RINGS']*0.9))
+    Configuration['INNER_FIX'] = set_limits(int(np.floor(tmp[-1]/1.5-1)), 4, int(Configuration['NO_RINGS']*0.9))
 
 get_inner_fix.__doc__ =f'''
  NAME:
@@ -858,7 +859,7 @@ get_inner_fix.__doc__ =f'''
     debug = False
 
  OUTPUTS:
-    The number of inner rings to be fixed
+    Update INNER_FIX in the configuration    
 
  OPTIONAL OUTPUTS:
 
@@ -888,7 +889,7 @@ def get_ring_weights(Configuration,Tirific_Template,debug = False):
     if debug:
         print_log(f'''GET_RING_WEIGTHS: Obtained the following weights.
 {'':8s}{weights}
-''',Configuration['OUTPUTLOG'], debug = False)
+''',Configuration['OUTPUTLOG'])
     return np.array(weights,dtype = float)
 
 get_ring_weights.__doc__=f'''
@@ -934,7 +935,7 @@ def get_usage_statistics(Configuration,process_id, debug = False):
     column_var = [x for x in lines[7].strip().split()]
     if debug:
         print_log(f'''{'':8s}GET_usage_statistics: We extracted the following variables {column_var}
-''',Configuration['OUTPUTLOG'],debug = False)
+''',Configuration['OUTPUTLOG'])
     try:
         if int(column_var[column_names.index('PID')]) == int(process_id):
             CPU = float(column_var[column_names.index('%CPU')])
@@ -999,7 +1000,7 @@ def get_vel_pa(Configuration,velocity_field,center= [0.,0.], debug =False):
 
     if debug:
         print_log(f'''GET_VEL_PA: This is the location of the maximum {max_pos} and minimum {min_pos}
-''',Configuration['OUTPUTLOG'],debug = False)
+''',Configuration['OUTPUTLOG'])
     try:
         pa_from_max = np.arctan((center[1]-max_pos[1])/(center[0]-max_pos[0]))
     except ZeroDivisionError:
@@ -1591,7 +1592,7 @@ def sbr_limits(Configuration, systemic= 100. , debug = False):
         print_log(f'''SBR_LIMITS: Retrieved these radii and limits:
 {'':8s}{radii}
 {'':8s}{sbr_ring_limits}
-''',Configuration['OUTPUTLOG'], debug=False)
+''',Configuration['OUTPUTLOG'])
     return radii,sbr_ring_limits
 
 sbr_limits.__doc__ =f'''
@@ -1678,7 +1679,7 @@ def set_limit_modifier(Configuration,Inclination, debug= False):
             modifier_list[10:]= np.sqrt(modifier_list[10:])
     Configuration['LIMIT_MODIFIER'] = np.array(modifier_list,dtype=float)
     print_log(f'''SET_LIMIT_MODIFIER: We updated the LIMIT_MODIFIER to {Configuration['LIMIT_MODIFIER']}.
-''', Configuration['OUTPUTLOG'], debug=False)
+''', Configuration['OUTPUTLOG'])
 
 set_limit_modifier.__doc__ =f'''
  NAME:
@@ -1759,13 +1760,13 @@ def set_ring_size(Configuration, debug = False, size_in_beams = 0., check_set_ri
         ring_size = set_limits(ring_size/1.5,0.5,float('NaN'),debug=debug)
         no_rings = calc_rings(Configuration,ring_size=ring_size,size_in_beams=size_in_beams,debug=debug)
         print_log(f'''SET_RING_SIZE: Because we had less than four rings we have reduced the ring size from {previous_ringsize} to {ring_size}
-''',Configuration['OUTPUTLOG'],debug = False)
+''',Configuration['OUTPUTLOG'])
 
     while no_rings < Configuration['MINIMUM_RINGS'] and not size_in_beams >=  Configuration['MAX_SIZE_IN_BEAMS']:
         size_in_beams = set_limits(size_in_beams+1.*ring_size,1, Configuration['MAX_SIZE_IN_BEAMS'])
         no_rings = calc_rings(Configuration,ring_size=ring_size,size_in_beams=size_in_beams,debug=debug)
         print_log(f'''SET_RING_SIZE: The initial estimate is too small to fit adding a ring to it.
-''',Configuration['OUTPUTLOG'],debug = False)
+''',Configuration['OUTPUTLOG'])
 
     if check_set_rings:
         if debug:
@@ -1773,7 +1774,7 @@ def set_ring_size(Configuration, debug = False, size_in_beams = 0., check_set_ri
 {'':8s}SIZE_IN_BEAMS = {size_in_beams}
 {'':8s}RING_SIZE = {ring_size}
 {'':8s}NO_RINGS = {no_rings}
-''', Configuration['OUTPUTLOG'],debug=False)
+''', Configuration['OUTPUTLOG'])
         return size_in_beams,ring_size,int(no_rings)
     else:
         if debug:
@@ -1781,14 +1782,14 @@ def set_ring_size(Configuration, debug = False, size_in_beams = 0., check_set_ri
 {'':8s}SIZE_IN_BEAMS = {size_in_beams}
 {'':8s}RING_SIZE = {ring_size}
 {'':8s}NO_RINGS = {no_rings}
-''', Configuration['OUTPUTLOG'],debug=False)
+''', Configuration['OUTPUTLOG'])
         Configuration['NO_RINGS'] = int(no_rings)
         Configuration['SIZE_IN_BEAMS'] = size_in_beams
         Configuration['RING_SIZE'] = ring_size
         if Configuration['NO_RINGS'] < Configuration['MINIMUM_RINGS']:
             print_log(f'''SET_RING_SIZE: With a ring size of {Configuration['RING_SIZE']} we still only find {Configuration['NO_RINGS']}.
     {"":8s}SET_RING_SIZE: This is not enough for a fit.
-    ''',Configuration['OUTPUTLOG'],debug = False,screen=True)
+    ''',Configuration['OUTPUTLOG'],screen=True)
             raise SmallSourceError('This source is too small to reliably fit.')
 
 set_ring_size.__doc__ =f'''
@@ -1836,10 +1837,10 @@ def set_rings(Configuration,ring_size = 0. , debug = False):
     no_rings = calc_rings(Configuration,debug=debug)
     if debug:
         print_log(f'''SET_RINGS: We find {no_rings} rings.
-''', Configuration['OUTPUTLOG'],debug=False)
+''', Configuration['OUTPUTLOG'])
     if Configuration['OUTER_RINGS_DOUBLED']:
         print_log(f'''SET_RINGS: This is a large galaxy. Therefore we use twice the ring size in the outer parts.
-''',Configuration['OUTPUTLOG'],debug = False,screen =True)
+''',Configuration['OUTPUTLOG'],screen =True)
         radii = [0.,1./5.*Configuration['BEAM'][0]]
         radii = np.hstack((radii,(np.linspace(Configuration['BEAM'][0]*ring_size,Configuration['BEAM'][0]*10.*ring_size, \
                                         10)+1./5*Configuration['BEAM'][0])))
@@ -1864,7 +1865,7 @@ def set_rings(Configuration,ring_size = 0. , debug = False):
 {'':8s}The last ring should be around {Configuration['BEAM'][0]*Configuration['SIZE_IN_BEAMS']}
 {'':8s}The rings should be size {Configuration['BEAM'][0]} and outer rings {req_outer_ring}
 {'':8s}They are {radii[3]-radii[2]} and {radii[-1]-radii[-2]}
-''', Configuration['OUTPUTLOG'],debug=False)
+''', Configuration['OUTPUTLOG'])
     return np.array(radii,dtype = float)
 
 set_rings.__doc__ =f'''
@@ -1906,12 +1907,12 @@ def sofia_output_exists(Configuration,Fits_Files, debug = False):
             continue
         else:
             log_statement = f"SOFIA_OUTPUT_EXISTS: The file {Configuration['FITTING_DIR']+'Sofia_Output/'+Fits_Files[file]} is not found."
-            print_log(log_statement, Configuration['OUTPUTLOG'],debug = False,screen =True)
+            print_log(log_statement, Configuration['OUTPUTLOG'],screen =True)
             raise FileNotFoundError(log_statement)
 
     if not os.path.exists(Configuration['FITTING_DIR']+'Sofia_Output/'+Configuration['BASE_NAME']+'_cat.txt'):
         log_statement = f"SOFIA_OUTPUT_EXISTS: The file {Configuration['FITTING_DIR']+'Sofia_Output/'+Configuration['BASE_NAME']+'_cat.txt'} is not found."
-        print_log(log_statement, Configuration['OUTPUTLOG'],debug = False,screen =True)
+        print_log(log_statement, Configuration['OUTPUTLOG'],screen =True)
         raise FileNotFoundError(log_statement)
 
 sofia_output_exists.__doc__ =f'''

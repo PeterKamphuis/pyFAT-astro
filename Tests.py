@@ -263,7 +263,7 @@ basic.__doc__ =f'''
  PURPOSE:
 
  CATEGORY:
-    write_functions
+    modify_template
 
  INPUTS:
     Configuration = Standard FAT configuration
@@ -272,6 +272,7 @@ basic.__doc__ =f'''
 
  OPTIONAL INPUTS:
     debug = False
+    fit_type = 'Undefined'
 
  OUTPUTS:
 

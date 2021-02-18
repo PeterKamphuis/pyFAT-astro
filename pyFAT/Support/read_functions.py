@@ -122,7 +122,7 @@ def config_file(input_parameters, start_dir, debug = False):
     Configuration = Proper_Dictionary({})
     boolean_keys = ['NEW_OUTPUT', 'HANNING','FIX_INCLINATION','FIX_PA','FIX_SDIS','FIX_Z0','FIX_SBR','FIX_VROT','WARP_OUTPUT']
     string_keys = ['OUTPUTLOG', 'OUTPUTCATALOGUE','MAINDIR','CATALOGUE']
-    integer_keys = ['STARTGALAXY','ENDGALAXY','MAPS_OUTPUT','OPT_PIXELBEAM','FINISHAFTER']
+    integer_keys = ['STARTGALAXY','ENDGALAXY','MAPS_OUTPUT','OPT_PIXELBEAM','FINISHAFTER','FITTING_TYPE']
     # Separate the keyword names
     for tmp in tmpfile:
         if tmp[0] != '#':
@@ -215,7 +215,7 @@ def config_file(input_parameters, start_dir, debug = False):
                                    'STARTGALAXY', 'ENDGALAXY', 'TESTING', 'START_POINT',\
                                    'RING_SIZE', 'FINISHAFTER', 'CATALOGUE', 'MAINDIR',\
                                     'OUTPUTCATALOGUE', 'OUTPUTLOG', 'NEW_OUTPUT', 'OPT_PIXELBEAM',\
-                                     'MAPS_OUTPUT','WARP_OUTPUT']
+                                     'MAPS_OUTPUT','WARP_OUTPUT','FITTING_TYPE']
 
     for key in required_configuration_keys:
         if key not in Configuration:
@@ -235,6 +235,8 @@ def config_file(input_parameters, start_dir, debug = False):
                 Configuration[key] = False
             elif key == 'RING_SIZE': #Previosuly called RINGSPACING in
                 Configuration[key] = 1.1
+            elif key == 'FITTING_TYPE':
+                Configuration[key] = 'One_Step_Convergence'
             elif key == 'FIX_INCLINATION': #Previosuly called fix_incl
                 Configuration[key] = False
             elif key == 'FIX_PA':

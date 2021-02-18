@@ -24,7 +24,7 @@ import pyFAT.Support.fits_functions as ff
 #functions that write files
 import pyFAT.Support.write_functions as wf
 #from pyFAT.Support.constants import initialize
-from  pyFAT.Support.modify_template import write_new_to_template,flatten_the_curve
+from  pyFAT.Support.modify_template import write_new_to_template
 
 class MissingProgramError(Exception):
     pass
@@ -120,7 +120,8 @@ def main(argv):
                         'OUTER_RINGS_DOUBLED', #Do the outer rings have twice the size of the inner rings
                         'NEW_RING_SIZE',  #Have we update the size of the ring while not yet updating the template
                         'VEL_SMOOTH_EXTENDED', # Is the velocity smoothing extended ????
-                        'EXCLUDE_CENTRAL' # Do we exclude the central part of the fitting due to blanks/an absorption source
+                        'EXCLUDE_CENTRAL', # Do we exclude the central part of the fitting due to blanks/an absorption source
+                        'INSTALLATION_CHECK' # Are we running an installation check
                         ]
         #
         for key in boolean_keys:
@@ -140,6 +141,7 @@ def main(argv):
 
                        'CURRENT_STAGE': 'initial', #Current stage of the fitting process, set at switiching stages
                        'TIRIFIC_PID': 'Not Initialized', #Process ID of tirific that is running
+                       'ACCEPTED': False, #Whether a fit is accepted or not
 
                        'MAX_SIZE_IN_BEAMS': 30, # The galaxy is not allowed to extend beyond this number of beams in radius, set in check_source
                        'MIN_SIZE_IN_BEAMS': 0., # Minimum allowed radius in number of beams of the galaxy, set in check_source
@@ -151,8 +153,8 @@ def main(argv):
 
                        'NO_POINTSOURCES': 0. , # Number of point sources, set in run_tirific
 
-                       'INNER_FIX': 3, #Number of rings that are fixed in the inner part for the INCL and PA, , adapted after every run.
-                       'WARP_SLOPE': [0.,0.], #Ring numbers from which outwards the warping should be fitted as a slope,  , adapted after every run.
+                       'INNER_FIX': 3, #Number of rings that are fixed in the inner part for the INCL and PA, , adapted after every run in get_inner_fix in support_functions
+                       'WARP_SLOPE': [0.,0.], #Ring numbers from which outwards the warping should be fitted as a slope, set in get_warp_slope in modify_template
                        'OUTER_SLOPE_START': 1, # Ring number from where the RC is fitted as a slope
                        'RC_UNRELIABLE': 1, # Ring number from where the RC values are set flat. Should only be set in check_size
 
@@ -229,6 +231,8 @@ def main(argv):
             Configuration = copy.deepcopy(Original_Configuration)
             Configuration['START_TIME'] = datetime.now()
             # First check the starttime
+            if input_parameters.installation_check:
+                Configuration['INSTALLATION_CHECK'] = True
             Configuration['ID_NR'] = Full_Catalogue['NUMBER'][current_galaxy_index]
             Configuration['DISTANCE'] = Full_Catalogue['DISTANCE'][current_galaxy_index]
             Configuration['SUB_DIR'] = Full_Catalogue['DIRECTORYNAME'][current_galaxy_index]
@@ -366,8 +370,8 @@ def main(argv):
                                           'INCL': 15.,\
                                           'SDIS': Configuration['CHANNEL_WIDTH']*2.5,\
                                           'Z0' : Configuration['BEAM'][0],\
-                                          'XPOS': cube_hdr['BMAJ']/2.5,\
-                                          'YPOS': cube_hdr['BMAJ']/2.5,\
+                                          'XPOS': cube_hdr['BMAJ'],\
+                                          'YPOS': cube_hdr['BMAJ'],\
             }
 
             #If we have Sofia Preprocessed Output request make sure it all exists
@@ -404,43 +408,12 @@ def main(argv):
                     Configuration['FINAL_COMMENT'] = 'You have chosen to end the fitting after preprocessing and sofia.'
                     cf.finish_galaxy(Configuration,maximum_directory_length,debug=Configuration['DEBUG'])
                     continue
-
-                if not os.path.isdir(Configuration['FITTING_DIR']+'One_Step_Convergence'):
-                    os.mkdir(Configuration['FITTING_DIR']+'One_Step_Convergence')
-                wf.initialize_def_file(Configuration, Fits_Files,Tirific_Template, \
-                                       Initial_Parameters= Initial_Parameters, \
-                                       fit_type='One_Step_Convergence',\
-                                       debug=Configuration['DEBUG'])
-                sf.print_log(f'''The initial def file is written and we will now start fitting.
-''' ,Configuration['OUTPUTLOG'], screen =True, debug = Configuration['DEBUG'])
-                Configuration['PREP_END_TIME'] = datetime.now()
-                current_run = 'Not Initialized'
-                    # If we have no directory to put the output we create it
-
-                while not Configuration['OS_ACCEPTED'] and Configuration['OS_LOOPS'] < allowed_loops:
-                    Configuration['OS_LOOPS'] = Configuration['OS_LOOPS']+1
-                    sf.print_log(f'''We are starting loop {Configuration['OS_LOOPS']} of trying to converge the center and extent.
-''',Configuration['OUTPUTLOG'],screen =True, debug = Configuration['DEBUG'])
-                    # Run the step
-                    current_run = runf.one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run,cube_hdr,debug = Configuration['DEBUG'],allowed_loops = allowed_loops)
-
-
-                if Configuration['OS_ACCEPTED']:
-                    sf.print_log(f'''The model has converged in center and extent and we make a smoothed version.
-''',Configuration['OUTPUTLOG'],screen =True, debug = Configuration['DEBUG'])
-                    current_run = runf.fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run,cube_hdr,stage = 'after_os', fit_type = 'One_Step_Convergence',debug = Configuration['DEBUG'])
-                    if Configuration['OPTIMIZED']:
-                        runf.make_full_resolution(Configuration,Tirific_Template,Fits_Files,current_run = current_run,fit_type = 'One_Step_Convergence',debug=Configuration['DEBUG'])
-                elif input_parameters.installation_check:
-                    sf.print_log(f'''The Installation_check has run a fit suvccessfully.
-''',Configuration['OUTPUTLOG'],screen =True, debug = Configuration['DEBUG'])
-                else:
-                    Configuration['FINAL_COMMENT'] = 'We could not converge on the extent or centre of the galaxy'
-                    Configuration['MAPS_OUTPUT'] = 5
-                    cf.finish_galaxy(Configuration,maximum_directory_length, Fits_Files =Fits_Files,current_run =current_run,debug=Configuration['DEBUG'])
-                    continue
-                Configuration['OS_END_TIME'] = datetime.now()
-
+                #Add your personal fitting types here
+                if Configuration['FITTING_TYPE'].lower() == 'one_step_convergence' or Configuration['INSTALLATION_CHECK']:
+                    current_run = runf.fitting_osc(Configuration,Fits_Files,Tirific_Template,Initial_Parameters)
+                Configuration['END_TIME'] = datetime.now()
+                cf.finish_galaxy(Configuration,maximum_directory_length, Fits_Files =Fits_Files,current_run =current_run,debug=Configuration['DEBUG'])
+                continue
 
 
             except Exception as e:

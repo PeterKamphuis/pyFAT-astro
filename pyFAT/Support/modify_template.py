@@ -2,12 +2,7 @@
 # This module contains a set of functions and classes that are used to Modify the Tirific_Template
 
 
-class InitializeError(Exception):
-    pass
-class CfluxError(Exception):
-    pass
-class FunctionCallError(Exception):
-    pass
+
 import copy
 from pyFAT.Support.support_functions import set_rings,convertskyangle,sbr_limits,set_limits,print_log,set_limit_modifier,\
                               set_ring_size,calc_rings,finish_current_run,set_format,get_from_template,gaussian_function,fit_gaussian,\
@@ -18,932 +13,52 @@ from scipy.optimize import curve_fit
 from scipy.signal import savgol_filter
 from scipy.interpolate import CubicSpline,Akima1DInterpolator
 
-def fix_sbr(Configuration,Tirific_Template, smooth = False, debug=False):
-    if debug:
-        print_log(f'''FIX_SBR: Starting a SBR check.
-''',Configuration['OUTPUTLOG'],debug=True)
-
-    # get the cutoff limits
-    vsys = float(Tirific_Template['VSYS'].split()[0])
-    radii,cutoff_limits = sbr_limits(Configuration, systemic=vsys)
-    cutoff_limits = np.array([cutoff_limits,cutoff_limits],dtype=float)
-    # Then get the profile from the template
-    sbr = np.array(get_from_template(Configuration,Tirific_Template,['SBR','SBR_2']),dtype=float)
-    if debug:
-        print_log(f'''FIX_SBR: Before modify.
-{'':8s}sbr from template = {sbr}
-''',Configuration['OUTPUTLOG'],debug=False,screen=True)
-    # First make a correction on the inner 2 values
-    sbr = inner_sbr_fix(Configuration,sbr,cutoff_limits,debug=debug)
-    # Let's use a smoothed profile for the fittings
-    sm_sbr = smooth_profile(Configuration,Tirific_Template,'SBR',
-                            min_error= cutoff_limits,no_apply = True,
-                            fix_sbr_call = True,profile_in = sbr ,debug=debug)
-
-    if debug:
-        print_log(f'''FIX_SBR: Before modify.
-{'':8s}sbr  = {sbr}
-{'':8s}sm_sbr  = {sm_sbr}
-''',Configuration['OUTPUTLOG'],debug=False,screen=True)
-
-    # We interpolate negative values as well as values below the limits inner part with a cubi
-    errors = get_error(Configuration,sbr,sm_sbr,'SBR',min_error=cutoff_limits,debug=debug)
-    if debug:
-        print_log(f'''FIX_SBR: retrieved errors.
-{'':8s}errors  = {errors}
-''',Configuration['OUTPUTLOG'],debug=False,screen=True)
-    error_weights = cutoff_limits/sm_sbr*1./np.nanmin(cutoff_limits[:,2:]/sm_sbr[:,2:])
-    error_weights[:,0] = 3.
-    errors =errors*error_weights
-    if debug:
-        print_log(f'''FIX_SBR: weighed errors errors.
-{'':8s}sm_sbr = {sm_sbr}
-{'':8s}cutoff_limits  = {cutoff_limits}
-{'':8s}errors  = {errors}
-{'':8s}weights  = {error_weights}
-''',Configuration['OUTPUTLOG'],debug=False,screen=True)
+#Define some errors
+class InitializeError(Exception):
+    pass
+class CfluxError(Exception):
+    pass
+class FunctionCallError(Exception):
+    pass
 
 
-    store_gaussian = []
-    for i in [0,1]:
-        corr_val = np.where(sbr[i,2:] > cutoff_limits[i,2:])[0]+2
-        # If we have enough safe values in the profile we attempt to fit it
-        if corr_val.size > 3.:
-            fit_sbr = sm_sbr[i,corr_val]
-            if debug:
-                print_log(f'''FIX_SBR: The values used for fitting are {fit_sbr}.
-''',Configuration['OUTPUTLOG'],debug=False)
-            try:
-                if Configuration['FIX_SBR']:
-                    vals = fit_gaussian(Configuration,radii[corr_val],fit_sbr,errors=errors[i,corr_val],debug=debug)
-                    gaussian = gaussian_function(radii,*vals)
-                else:
-                    gaussian = fit_polynomial(Configuration,radii,sbr[i,:],sm_sbr[i,:],errors[i,:],'SBR', Tirific_Template,min_error=cutoff_limits[i,:],debug= debug)
-                # if the peak of this gaussian is in the inner two points replace it with the smoothed profile
-                if np.any(np.where(np.max(gaussian) == gaussian)[0] < 2):
-                    if debug:
-                        print_log(f'''FIX_SBR: We are trying to replace the inner gaussian.
-{'':8s} gaussian = {gaussian[[0,1]]}
-{'':8s} sm_sbr = {sm_sbr[i,[0,1]]}
-''',Configuration['OUTPUTLOG'],debug=False)
-                    gaussian[[0,1]] = sm_sbr[i,[0,1]]
-            except RuntimeError:
-                # If we fail we try a CubicSpline interpolation
-                try:
-                    tmp = CubicSpline(radii[corr_val],fit_sbr,extrapolate = True,bc_type ='natural')
-                    gaussian = tmp(radii)
-                except:
-                    # and if that fails we just let the values be what they are in the smoothed profile
-                    gaussian= sm_sbr[i,:]
-            store_gaussian.append(gaussian)
-        else:
-            #if there are not enough points we simply use the smoothed profile
-            store_gaussian.append(sm_sbr[i,:])
-
-    store_gaussian = np.array(store_gaussian,dtype=float)
-    if smooth:
-        #If we smooth we take the fit in total
-        sbr = store_gaussian
-    else:
-        sbr[np.where(sbr<cutoff_limits)] = store_gaussian[np.where(sbr<cutoff_limits)]
-        sbr[:,[0,1,-1]] = store_gaussian[:,[0,1,-1]]
-
-    # Need to make sure there are no nans
-    sbr[np.isnan(sbr)] = 2.*cutoff_limits[np.isnan(sbr)]
-    # and where we are lower than the cutoff we replace with the 1.2 *cutoff unless we smoothed
-    if not smooth:
-        sbr[np.where(sbr<cutoff_limits)] = 1.2*cutoff_limits[np.where(sbr<cutoff_limits)]
-    else:
-        sbr[np.where(sbr<cutoff_limits/2.)] = 1e-16
-        #no rising outer end profiles
-        for i in [0,1]:
-            if sbr[i,-2] < sbr[i,-1]:
-                last = sbr[i,-1]
-                second = sbr[i,-2]
-                sbr[i,-2] = last
-                sbr[i,-1] = second
 
 
-    if debug:
-        print_log(f'''FIX_SBR: After modify.
-{'':8s}{sbr}
-''',Configuration['OUTPUTLOG'],debug=False,screen=True)
-    Tirific_Template['SBR'] = f"{' '.join([f'{x:.2e}' for x in sbr[0]])}"
-    Tirific_Template['SBR_2'] = f"{' '.join([f'{x:.2e}' for x in sbr[1]])}"
-    print_log(f'''FIX_SBR: We checked the surface brightness profiles.
-''',Configuration['OUTPUTLOG'])
-
-fix_sbr.__doc__ =f'''
+def arc_tan_function(axis,center,length,amplitude,mean):
+    # to prevent instant turnover
+    c = axis[-1]*0.1
+    #and the turnover has to be beyon 20*of the inner part
+    c2 = set_limits(axis[-1]*0.2,axis[2],axis[int(len(axis)/2.)])
+    return -1*np.arctan((axis+(c2+abs(center)))/(c+abs(length)))/np.pi*amplitude + mean
+arc_tan_function.__doc__ =f'''
  NAME:
-    fix_sbr
+    arc_tan_function
+
  PURPOSE:
-    Correct the surface brightness profile against outliers.
+    arc tangent function
 
  CATEGORY:
     modify_template
 
  INPUTS:
-    Configuration = Standard FAT configuration
-    Tirific_Template = standard tirific template
+    axis = xaxis
+    center = 0 point of the acrtan
+    length = turnover length
+    amplitude = height of the arctan
+    mean = amplitude zero point
 
  OPTIONAL INPUTS:
-    debug = False
-    smooth= False
-    Normally only bad points (Not bright enough) and problematic inner points are corrected.
-    When smooth is set the profile is either fitted  with a Gaussian function, Interpolated with a cubic spline or smoothed with a savgol kernel
 
  OUTPUTS:
-    The template is corrected
-
- OPTIONAL OUTPUTS:
-
- PROCEDURES CALLED:
-    Unspecified
-'''
-
-
-
-
-
-
-def check_size(Configuration,Tirific_Template, fit_type = 'Undefined', stage = 'initial',
-                Fits_Files= 'No Files' ,debug = False,current_run='Not Initialized'):
-    if debug:
-        print_log(f'''CHECK_SIZE: Starting a new Check_size with the following parameters:
-{'':8s}CHECK_SIZE: Rings = {Configuration['NO_RINGS']}
-{'':8s}CHECK_SIZE: Size in Beams = {Configuration['SIZE_IN_BEAMS']}
-''',Configuration['OUTPUTLOG'],debug=True,screen=True)
-
-
-    radii, sbr_ring_limits = sbr_limits(Configuration,systemic = float(Tirific_Template['VSYS'].split()[0]),debug=debug)
-    #get the sbr profiles
-
-    sbr = np.array(get_from_template(Configuration,Tirific_Template, ['SBR','SBR_2'],debug=debug),dtype = float)
-    if debug:
-        print_log(f'''CHECK_SIZE: This is the sizes
-{'':8s}CHECK_SIZE: SBR = {len(sbr[0])}
-{'':8s}CHECK_SIZE: limits = {len(sbr_ring_limits)}
-{'':8s}CHECK_SIZE: No. Rings  = {Configuration['NO_RINGS']}
-''',Configuration['OUTPUTLOG'],debug=False,screen=True)
-    if len(sbr[0]) != len(sbr_ring_limits):
-        #Check what the appropriate size should be
-        if debug:
-            print_log(f'''CHECK_SIZE: Equalizing the sizes
-''',Configuration['OUTPUTLOG'],debug=False,screen=True)
-        if len(sbr[0]) != Configuration['NO_RINGS']:
-            if debug:
-                print_log(f'''CHECK_SIZE: Interpolating SBR
-''',Configuration['OUTPUTLOG'],debug=False,screen=True)
-            old_radii = np.array(get_from_template(Configuration,Tirific_Template, ['RADI'],debug=debug),dtype = float)
-            for i in [0,1]:
-                sbr[i] = np.interp(np.array(radii,dtype=float),np.array(old_radii[0],dtype=float),np.array(sbr[i],dtype=float))
-
-    if debug:
-        print_log(f'''CHECK_SIZE: This after correcting.
-{'':8s}CHECK_SIZE: SBR = {len(sbr[0])}
-{'':8s}CHECK_SIZE: limits = {len(sbr_ring_limits)}
-{'':8s}CHECK_SIZE: No. Rings  = {Configuration['NO_RINGS']}
-''',Configuration['OUTPUTLOG'],debug=False,screen=True)
-    #sbr_ring_limits = 1.25*np.array([sbr_ring_limits,sbr_ring_limits])
-    sbr_ring_limits = np.array([sbr_ring_limits,sbr_ring_limits])
-    new_rings = get_number_of_rings(Configuration,sbr,sbr_ring_limits, debug=debug)
-    # if all of the last points are  below the limit we start checking how far to cut
-    Configuration['RC_UNRELIABLE'] = get_number_of_rings(Configuration,sbr,2.5*sbr_ring_limits, debug=debug)-1
-    if Configuration['RC_UNRELIABLE'] == Configuration['NO_RINGS']:
-        Configuration['RC_UNRELIABLE'] -= 1
-    for i in [0,1]:
-        corr_val = np.where(sbr[i,2:] > sbr_ring_limits[i,2:])[0]+2
-        if corr_val.size > 0:
-            Configuration['LAST_RELIABLE_RINGS'][i] = corr_val[-1]+1
-        else:
-            Configuration['LAST_RELIABLE_RINGS'][i] = Configuration['NO_RINGS']
-    if debug:
-        print_log(f'''CHECK_SIZE: We set these as the last reliable rings {Configuration['LAST_RELIABLE_RINGS']}
-''',Configuration['OUTPUTLOG'],debug=False)
-    #if we haven't subtracted we check if we should add
-    if new_rings == Configuration['NO_RINGS']:
-        if (np.any(sbr[:,-2] > sbr_ring_limits[:,-2]*7.) and np.any(sbr[:,-1] > sbr_ring_limits[:,-1]*3.)) or \
-            np.any(sbr[:,-1] > sbr_ring_limits[:,-1]*5.):
-            if debug:
-                print_log(f'''CHECK_SIZE: The last rings were found to be:
-{'':8s}{sbr[:,-2:]}
-{'':8s}and the limits:
-{'':8s}{sbr_ring_limits[:,-2:]}
-{'':8s}Thus we add a ring.
-''', Configuration['OUTPUTLOG'],debug=False)
-            new_rings += 1
-        else:
-            if debug:
-                print_log(f'''CHECK_SIZE: The last rings were found to be:
-{'':8s}{sbr[:,-2:]}
-{'':8s}and the limits:
-{'':8s}{sbr_ring_limits[:,-2:]}
-{'':8s}Thus we keep the ring size.
-''', Configuration['OUTPUTLOG'],debug=False)
-    else:
-        if debug:
-            print_log(f'''CHECK_SIZE: The last rings were found to be:
-{'':8s}{sbr[:,-2:]}
-{'':8s}and the limits:
-{'':8s}{sbr_ring_limits[:,-2:]}
-{'':8s}Thus we have subtracted a set of rings.
-''', Configuration['OUTPUTLOG'],debug=False)
-
-    if new_rings <= Configuration['NO_RINGS']:
-        size_in_beams = (radii[new_rings-1]-1./5.*Configuration['BEAM'][0])/Configuration['BEAM'][0]
-    else:
-        size_in_beams = (radii[-1]-1./5.*Configuration['BEAM'][0])/Configuration['BEAM'][0]+Configuration['RING_SIZE']
-    size_in_beams = set_limits(size_in_beams, Configuration['MIN_SIZE_IN_BEAMS'], Configuration['MAX_SIZE_IN_BEAMS'])
-    # limit between 3 and the maximum allowed from the sofia estimate
-    size_in_beams,ring_size,number_of_rings = set_ring_size(Configuration, size_in_beams=size_in_beams,check_set_rings = True, debug=debug)
-
-    print_log(f'''CHECK_SIZE: We find the following size in beams {size_in_beams} with size {ring_size}.
-{'':8s}CHECK_SIZE: The previous iteration had {Configuration['SIZE_IN_BEAMS']} rings with size  {Configuration['RING_SIZE']} .
-{'':8s}CHECK_SIZE: This results in {new_rings} rings in the model compared to {Configuration['NO_RINGS']} previously.
-''', Configuration['OUTPUTLOG'],debug=False)
-    if float(ring_size) != float(Configuration['RING_SIZE']):
-        Configuration['NEW_RING_SIZE'] = True
-    else:
-        Configuration['NEW_RING_SIZE'] = False
-    if debug:
-        print_log(f'''CHECK_SIZE: The previous rings were {Configuration['OLD_RINGS']}
-''',Configuration['OUTPUTLOG'],debug=False,screen=True)
-
-    if f"{size_in_beams:.1f}" == Configuration['OLD_RINGS'][-1]:
-        return True
-    elif f"{size_in_beams:.1f}" in Configuration['OLD_RINGS']:
-        print_log(f'''CHECK_SIZE: We have processed this size before.
-''', Configuration['OUTPUTLOG'],debug=False)
-        ind = Configuration['OLD_RINGS'].index(f"{size_in_beams:.1f}")
-        if Configuration['OLD_RINGS'][ind+1] > Configuration['OLD_RINGS'][ind]:
-            print_log(f'''CHECK_SIZE: After which we increased the size.
-''', Configuration['OUTPUTLOG'],debug=False)
-            if Configuration['OLD_RINGS'][ind+1] == Configuration['OLD_RINGS'][-1]:
-                print_log(f'''CHECK_SIZE: Which is the current fit so that's ok.
-''', Configuration['OUTPUTLOG'],debug=False)
-                return True
-            else:
-                print_log(f'''CHECK_SIZE: Which is not the current fit so we refit this size.
-''', Configuration['OUTPUTLOG'])
-            Configuration['OLD_RINGS'].append(f"{size_in_beams:.1f}")
-        else:
-            print_log(f'''CHECK_SIZE: After which we decreased so we allow this addition. But no more.
-''', Configuration['OUTPUTLOG'])
-            Configuration['OLD_RINGS'].append(f"{size_in_beams:.1f}")
-    else:
-        if debug:
-            print_log(f'''CHECK_SIZE: Adding the new ring size to OLD_RINGS.
-''', Configuration['OUTPUTLOG'])
-        Configuration['OLD_RINGS'].append(f"{size_in_beams:.1f}")
-
-    Configuration['RING_SIZE'] = ring_size
-    Configuration['SIZE_IN_BEAMS'] = size_in_beams
-    Configuration['NO_RINGS'] = calc_rings(Configuration,debug=debug)
-    print_log(f'''CHECK_SIZE: We Need to modify the number of rings in the model.
-''', Configuration['OUTPUTLOG'])
-
-    if Configuration['RC_UNRELIABLE'] > Configuration['NO_RINGS']:
-        Configuration['RC_UNRELIABLE'] = Configuration['NO_RINGS']
-    for i in [0,1]:
-        if Configuration['LAST_RELIABLE_RINGS'][i] > Configuration['NO_RINGS']:
-            Configuration['LAST_RELIABLE_RINGS'][i] = Configuration['NO_RINGS']
-    if debug:
-        print_log(f'''CHECK_SIZE: We trust the RC upto ring {Configuration['RC_UNRELIABLE']}
-{'':8s} and the rings in general upto {Configuration['LAST_RELIABLE_RINGS']}
-''',Configuration['OUTPUTLOG'],debug=False)
-    if Fits_Files == 'No Files':
-        raise InitializeError('CHECK_SIZE: Trying to adapt the model size but the fits files were not provided.')
-    else:
-        # Do not move this from here else other routines such as sbr_limits are messed up
-        set_new_size(Configuration,Tirific_Template,Fits_Files,fit_type= fit_type, stage = stage ,debug = debug,current_run = current_run)
-    return False
-    
-check_size.__doc__  =f'''
- NAME:
-    check_size
-
- PURPOSE:
-    Check and update the size of the model. Update RC_UNRELIABLE and LAST_RELIABLE_RINGS
-
- CATEGORY:
-    modify_template
-
- INPUTS:
-    Configuration = Standard FAT configuration
-    Tirific_Template = Standard FAT Tirific Template
-
- OPTIONAL INPUTS:
-    debug = False
-
-    fit_type = 'Undefined'
-    type of fitting
-
-    stage = 'initial'
-    Stage of the fitting process
-
-    Fits_Files= 'No Files'
-    Standard FAT dictionary with filenames
-
-    current_run='Not Initialized'
-    subproccess to be stopped for the tirific run when rings change
-
- OUTPUTS:
-    Boolean which is True when rings are not updated, False if they are
+    arctan function
 
  OPTIONAL OUTPUTS:
 
  PROCEDURES CALLED:
     Unspecified
 
- NOTE: Configuration['RC_UNRELIABLE'] = modified and updated here.
+ NOTE:
 '''
-
-def get_number_of_rings(Configuration,sbr,sbr_ring_limits, debug=False):
-    new_rings = Configuration['NO_RINGS']
-    difference_with_limit = np.array(sbr-sbr_ring_limits)
-    if np.all(difference_with_limit[:,-1] < 0.):
-        if debug:
-            print_log(f'''GET_NUMBER_OF_RINGS: both last rings are below the limit
-''',Configuration['OUTPUTLOG'],debug=True)
-        for i in range(len(difference_with_limit[0,:])-1,int(new_rings/2.),-1):
-            if debug:
-                print_log(f'''GET_NUMBER_OF_RINGS: Checking ring {i}
-''',Configuration['OUTPUTLOG'],debug=False)
-            if np.all(difference_with_limit[:,i] < 0.):
-                #check that 1 any of the lesser rings are bright enough
-                if np.any(sbr[:,i-1] > 1.5 *sbr_ring_limits[:,i-1]):
-                    new_rings = i+1
-                    if debug:
-                        print_log(f'''GET_NUMBER_OF_RINGS: we find that the previous rings are bright enough, rings = {new_rings}
-''',Configuration['OUTPUTLOG'],debug=False,screen=True)
-                    break
-                else:
-                    if debug:
-                        print_log(f'''GET_NUMBER_OF_RINGS: the previous rings are not bright enough so we reduce 1, old_rings = {new_rings}, new_rings = {i}
-''',Configuration['OUTPUTLOG'],debug=False,screen=True)
-                    new_rings = i
-            else:
-                #if not both values are below than this is the extend we want
-                new_rings = i+1
-                if debug:
-                        print_log(f'''GET_NUMBER_OF_RINGS: Not both rings warrant cutting, rings = {new_rings}
-''',Configuration['OUTPUTLOG'],debug=False,screen=True)
-                break
-    else:
-        if debug:
-            print_log(f'''GET_NUMBER_OF_RINGS: Not both last rings are below the limit
-''',Configuration['OUTPUTLOG'],debug=False,screen=True)
-        # if they are not we first check wether both second to last rings are
-        if ((difference_with_limit[0,-2] < 0.) and (sbr[0,-1] < 2*sbr_ring_limits[0,-1]) and (difference_with_limit[1,-1] < 0.)) or \
-            ((difference_with_limit[1,-2] < 0.) and (sbr[1,-1] < 2*sbr_ring_limits[1,-1]) and (difference_with_limit[0,-1] < 0.)) or\
-            ((difference_with_limit[0,-2] < 0.) and (difference_with_limit[1,-2] < 0.) and (sbr[0,-1] < 3*sbr_ring_limits[0,-1]) and (sbr[1,-1] < 3*sbr_ring_limits[1,-1])):
-            new_rings -= 1
-            if debug:
-                print_log(f'''GET_NUMBER_OF_RINGS: A second ring is too faint, rings = {new_rings}
-''',Configuration['OUTPUTLOG'],debug=False,screen=True)
-        elif np.all(difference_with_limit[:,-2] < 0.) and np.all(sbr[:,-1] < 5*sbr_ring_limits[:,-1]):
-            new_rings -= 1
-            if debug:
-                print_log(f'''GET_NUMBER_OF_RINGS: Both second rings are too faint, rings = {new_rings}
-''',Configuration['OUTPUTLOG'],debug=False,screen=True)
-        else:
-            if debug:
-                print_log(f'''GET_NUMBER_OF_RINGS: The second rings are too bright and do not allow for cutting.
-''',Configuration['OUTPUTLOG'],debug=False,screen=True)
-    return new_rings
-
-get_number_of_rings.__doc__ =f'''
- NAME:
-    get_number_of_rings
-
- PURPOSE:
-    Determine whether the amount of rings is good for the limits or not should change or not
-
- CATEGORY:
-    modify_template
-
- INPUTS:
-    Configuration = Standard FAT configuration
-    sbr = sbr profiles
-    sbr_ring_limits = the limits to evaluate
-
- OPTIONAL INPUTS:
-    debug = False
-
- OUTPUTS:
-    new_rings = the required number of rings
-
- OPTIONAL OUTPUTS:
-
- PROCEDURES CALLED:
-    Unspecified
-'''
-
-
-def fix_profile(Configuration, key, profile, Tirific_Template, debug= False, singular = False,only_inner = False ):
-    if debug:
-        print_log(f'''FIX_PROFILE: Starting to fix {key} with the input values:
-{'':8s}{profile}
-''', Configuration['OUTPUTLOG'],debug=True)
-
-    if key == 'SBR':
-        print_log(f'''FIX_PROFILE: To fix sbr profiles use check SBR.
-''', Configuration['OUTPUTLOG'],screen=True, debug=True)
-        exit()
-    if singular:
-        indexes = [0]
-        profile = [profile,profile]
-    else:
-        indexes = [0,1]
-    profile = np.array(profile)
-
-
-
-    if key in ['SDIS']:
-        inner_mean = np.nanmean(profile[indexes,:3])
-        profile[indexes,:3] = inner_mean
-    elif key in ['VROT']:
-        indexes = [0]
-        inner_mean = 0.
-    else:
-        inner_mean = np.nanmean(profile[indexes,:Configuration['INNER_FIX']])
-        profile[indexes,:Configuration['INNER_FIX']] = inner_mean
-        if debug:
-            print_log(f'''FIX_PROFILE: the  {Configuration['INNER_FIX']} inner rings are fixed for the profile:
-''', Configuration['OUTPUTLOG'])
-
-
-    for i in indexes:
-        if Configuration['LAST_RELIABLE_RINGS'][i] < len(profile[i,:]) and not only_inner:
-            if debug:
-                print_log(f'''FIX_PROFILE: From ring {Configuration['LAST_RELIABLE_RINGS'][i]} on we do not trust these rings.
-''', Configuration['OUTPUTLOG'])
-            #profile[i,Configuration['LAST_RELIABLE_RINGS'][i]:] = profile[i,Configuration['LAST_RELIABLE_RINGS'][i]:]*0.25+profile[i,Configuration['LAST_RELIABLE_RINGS'][i]-1]*0.75
-            profile[i,Configuration['LAST_RELIABLE_RINGS'][i]:] = profile[i,Configuration['LAST_RELIABLE_RINGS'][i]-1]
-
-        if key == 'VROT':
-            profile[i] =fix_outer_rotation(Configuration,profile[i],debug= debug)
-        if key in ['PA','INCL','Z0']:
-            xrange = set_limits((int(round(len(profile[0])-5.)/4.)),1,4)
-        # need to make sure this connects smoothly
-            for x in range(1,xrange):
-                if Configuration['INNER_FIX']+x < len(profile[i,:]):
-                    profile[i,Configuration['INNER_FIX']+x] = 1/(x+0.5)*inner_mean+ (1-1/(x+0.5))*profile[i,Configuration['INNER_FIX']+x]
-
-        #profile[:,:Configuration['INNER_FIX']] = np.nanmean(profile[:,:Configuration['INNER_FIX']])
-        if key in ['SDIS']:
-            profile[i] =np.hstack([[profile[i,0]],[y if y <= x else x*0.95 for x,y in zip(profile[i,:],profile[i,1:])]])
-    if key == 'VROT':
-        tmp  = no_declining_vrot(Configuration,Tirific_Template,profile = profile[0],debug=debug)
-        profile[0] = tmp
-        profile[1] = tmp
-    if singular:
-        profile = profile[0]
-
-
-    if debug:
-        print_log(f'''FIX_PROFILE: The final profile for {key} is:
-{'':8s}{profile}
-''', Configuration['OUTPUTLOG'])
-    return profile
-
-fix_profile.__doc__ =f'''
- NAME:
-    fix_profile
-
- PURPOSE:
-    Modify a fitted profile to be stable against outliers
-
- CATEGORY:
-    modify_template
-
- INPUTS:
-    Configuration = Standard FAT configuration
-    key = Parameter to be fixed
-    profile = profile to be fixed # Maybe we can read this from the template?
-    Tirific_Template = Standard Tirific template
-
- OPTIONAL INPUTS:
-    debug = False
-    singular = False
-    Profile is a single side
-
-    only_inner = False
-    Only fix the inner part not the outer parts
-
- OUTPUTS:
-    profile
-    the modified profile
-
- OPTIONAL OUTPUTS:
-
- PROCEDURES CALLED:
-    Unspecified
-'''
-
-
-
-
-def get_warp_slope(Configuration,Tirific_Template, debug = False):
-    if debug:
-        print_log(f'''GET_WARP_SLOPE: We have {Tirific_Template['NUR']} rings in the template. and this should be {Configuration['NO_RINGS']}
-''', Configuration['OUTPUTLOG'],debug = debug, screen =True)
-    radii, sbr_ring_limits = sbr_limits(Configuration,systemic = float(Tirific_Template['VSYS'].split()[0]),debug=debug)
-    #get the sbr profiles
-    sbr = np.array(get_from_template(Configuration,Tirific_Template, ['SBR','SBR_2'],debug=debug),dtype = float)
-    if debug:
-        print_log(f'''GET_WARP_SLOPE: We have {len(sbr_ring_limits)} rings in our limits.
-{'':8s}GET_WARP_SLOPE: And we have {len(sbr[0])} rings in our profiles.
-''', Configuration['OUTPUTLOG'], debug = False, screen =True)
-    warp_slope = [Tirific_Template['NUR'],Tirific_Template['NUR']]
-    sbr_ring_limits = 1.5*np.array([sbr_ring_limits,sbr_ring_limits])
-    difference_with_limit = np.array(sbr-sbr_ring_limits)
-    for i in [0,1]:
-        slope = difference_with_limit[i]
-        final = slope[slope < 0.]
-        if len(final) > 0.:
-            not_found = True
-            counter = len(slope)-1
-            while not_found:
-                if not slope[counter] < 0.:
-                    not_found = False
-                    final = counter+1
-                else:
-                    counter -= 1
-        else:
-            final = len(slope)
-        if final > Configuration['LAST_RELIABLE_RINGS'][i]:
-            final = Configuration['LAST_RELIABLE_RINGS'][i]
-        warp_slope[i] = final
-    if debug:
-        print_log(f'''GET_WARP_SLOPE: We find a slope of {warp_slope}.
-''', Configuration['OUTPUTLOG'], debug = False, screen =True)
-    return warp_slope
-get_warp_slope.__doc__ = '''
-;+
-; NAME:
-;       get_warp_slope(Configuration,Tirific_Template, debug = False):
-;
-; PURPOSE:
-;       This routine compares the SBR profiles and decides at what stage they are too low and the warp should be fitted with a slope
-;
-; CATEGORY:
-;       Support
-;
-; CALLING SEQUENCE:
-;
-;
-;
-; INPUTS:
-;       SBR1in = The sbr profile of the approaching side
-;       SBR2in = The sbr profile of the receding side
-;       cutoffin = Array with the cutoff values
-;
-; OPTIONAL INPUTS:
-;       -
-;
-; KEYWORD PARAMETERS:
-;       /INDIVIDUAL - Set this keyword to get an independent ring for
-;                     each sides.
-;       /DEBUG      - Set this keyword to get printed output during
-;                     the running
-;
-; OUTPUTS:
-;       newrings = the new amount of rings. a 2D array when
-;       /INDIVIDUAL is set
-;
-; OPTIONAL OUTPUTS:
-;       -
-;
-; PROCEDURES CALLED:
-;       MAX(), FLOOR()
-'''
-
-def inner_sbr_fix(Configuration,sbr,cutoff_limits,debug=False):
-    if debug:
-        print_log(f'''INNER_SBR_FIX: Checking the SBR inner points for runaway values
-{'':8s} sbr in  = {sbr}
-''',Configuration['OUTPUTLOG'], debug = True, screen = True)
-
-    if np.all(sbr[:,0] > 2*sbr[:,2]) or np.all(sbr[:,1] > 2*sbr[:,2]):
-        if debug:
-            print_log(f'''INNER_SBR_FIX: We need to correct
-{'':8s} sbr 0  = {sbr[:,0]} sbr 1  = {sbr[:,1]} sbr 2  = {sbr[:,2]}
-''',Configuration['OUTPUTLOG'], debug = True, screen = True)
-        if np.mean(sbr[:,2]) > cutoff_limits[0,2]:
-            sbr[:,[0,1]] = np.mean(sbr[:,2])
-            if debug:
-                print_log(f'''INNER_SBR_FIX: We need to correct with mean
-{'':8s} mean = {np.mean(sbr[:,2])}
-''',Configuration['OUTPUTLOG'], debug = True, screen = True)
-        else:
-            if debug:
-                print_log(f'''INNER_SBR_FIX: We need to correct with cut_off_limits
-{'':8s} limit = {1.5*cutoff_limits[0,2]}
-''',Configuration['OUTPUTLOG'], debug = True, screen = True)
-            sbr[:,[0,1,2]] = 1.5*cutoff_limits[0,2]
-    if np.any(sbr[:,0] > sbr[:,1]):
-        if debug:
-                print_log(f'''INNER_SBR_FIX: We correct 0 point
-{'':8s} mean 1 = {np.mean(sbr[:,1])}
-''',Configuration['OUTPUTLOG'], debug = True, screen = True)
-        sbr[:,0] = np.mean(sbr[:,1])
-
-    for i in [0,1]:
-        if np.any(sbr[:,i] < cutoff_limits[:,2]):
-            if debug:
-                print_log(f'''INNER_SBR_FIX: correcting ring {i}
-''',Configuration['OUTPUTLOG'], debug = True, screen = True)
-            sbr[:,i] = 1.5*cutoff_limits[0,2]
-
-    if debug:
-                print_log(f'''INNER_SBR_FIX: the fixed sbr {sbr}
-''',Configuration['OUTPUTLOG'], debug = True, screen = True)
-
-    return sbr
-inner_sbr_fix.__doc__ =f'''
- NAME:
-    inner_sbr_fix
-
- PURPOSE:
-    Make sure the inner two points of the SBR are not run away
-
- CATEGORY:
-    modify_template
-
- INPUTS:
-    Configuration = Standard FAT configuration
-    sbr = SBR profile for bothe sides
-    cutoff_limits = The reliability limits of the fit
-
- OPTIONAL INPUTS:
-    debug = False
-
- OUTPUTS:
-    sbr = profile with the modified inner points if required
-
- OPTIONAL OUTPUTS:
-
- PROCEDURES CALLED:
-    Unspecified
-'''
-
-
-def regularise_profile(Configuration,Tirific_Template, key,min_error= [0.],debug = False, no_apply =False):
-    # We start by getting an estimate for the errors
-    min_error=np.array(min_error)
-    profile = np.array(get_from_template(Configuration,Tirific_Template, [key,f"{key}_2"]),dtype=float)
-    weights = get_ring_weights(Configuration,Tirific_Template,debug=debug)
-
-
-    #First if we have an RC we flatten the curve
-    if debug:
-        print_log(f'''REGULARISE_PROFILE: profile of {key} before regularistion
-{'':8s}{profile[0]}
-{'':8s}{profile[1]}
-{'':8s}The minmal error is
-{'':8s}{min_error}
-''',Configuration['OUTPUTLOG'],screen=True,debug = True)
-    # get a smoothed profiles
-    sm_profile = smooth_profile(Configuration,Tirific_Template, key ,min_error=min_error,debug=debug,no_apply=True)
-
-    error = get_error(Configuration,profile,sm_profile,key,min_error=min_error,weights = weights,debug=debug)
-
-    #Check that we have two profiles
-    diff = np.sum(profile[0]-profile[1])
-    if key in ['SDIS','VROT']:
-        diff = False
-    if diff:
-        if debug:
-            print_log(f'''REGULARISE_PROFILE: Treating both sides independently.
-''',Configuration['OUTPUTLOG'],debug = False)
-        sides = [0,1]
-    else:
-        if debug:
-            print_log(f'''REGULARISE_PROFILE: Found symmetric profiles.
-''',Configuration['OUTPUTLOG'],debug = False)
-        sides = [0]
-    radii =set_rings(Configuration,debug=debug)
-    for i in sides:
-
-        if key == 'SDIS':
-            try:
-                fit_profile = fit_arc(Configuration,radii,profile[i],sm_profile[i],error[i],min_error=min_error,debug= debug)
-            except:
-                fit_profile = np.full(len(sm_profile[i]), np.mean(sm_profile[i]))
-
-        else:
-            fit_profile = fit_polynomial(Configuration,radii,profile[i],sm_profile[i],error[i],key, Tirific_Template,min_error=min_error,debug= debug)
-        profile[i] = fit_profile
-
-    if not diff:
-        profile[1] = profile[0]
-
-    original = np.array(get_from_template(Configuration,Tirific_Template, [key,f"{key}_2"]),dtype=float)
-    error = get_error(Configuration,original,profile,key,weights=weights,apply_max_error = True,min_error=min_error,debug=debug)
-    if debug:
-            print_log(f'''REGULARISE_PROFILE: This the fitted profile without corrections:
-{'':8s}{profile}
-''',Configuration['OUTPUTLOG'],debug = False)
-#then we want to fit the profiles with a polynomial
-    if key not in ['SBR','VROT']:
-        #We should not fix the profile again as the fitted profile is fixed should be good
-
-        profile,error = modify_flat(Configuration, profile, original, error,key,debug=debug)
-
-
-    format = set_format(key)
-
-    if not no_apply:
-        Tirific_Template[key]= f"{' '.join([f'{x:{format}}' for x in profile[0,:int(Configuration['NO_RINGS'])]])}"
-        Tirific_Template[f"{key}_2"]= f"{' '.join([f'{x:{format}}' for x in profile[1,:int(Configuration['NO_RINGS'])]])}"
-        Tirific_Template.insert(key,f"# {key}_ERR",f"{' '.join([f'{x:{format}}' for x in error[0,:int(Configuration['NO_RINGS'])]])}")
-        Tirific_Template.insert(f"{key}_2",f"# {key}_2_ERR",f"{' '.join([f'{x:{format}}' for x in error[1,:int(Configuration['NO_RINGS'])]])}")
-
-        if debug:
-            print_log(f'''REGULARISE_PROFILE: And this has gone to the template.
-{'':8s}{key} = {Tirific_Template[key]}
-{'':8s}{key}_2 ={Tirific_Template[f"{key}_2"]}
-{'':8s}# {key}_ERR ={Tirific_Template[f"# {key}_ERR"]}
-{'':8s}# {key}_2_ERR ={Tirific_Template[f"# {key}_2_ERR"]}
-''',Configuration['OUTPUTLOG'],screen=True,debug = True)
-    return profile
-
-
-def get_error(Configuration,profile,sm_profile,key,min_error = [0.],singular = False,weights= [1.],\
-                apply_max_error = False,debug=False):
-
-    try:
-        size= len(min_error)
-        min_error = np.array(min_error)
-    except TypeError:
-        min_error = np.array([min_error])
-
-    if debug:
-        print_log(f'''GET_ERROR: starting;
-{'':8s}original profile = {profile}
-{'':8s}new profile = {sm_profile}
-{'':8s}weights = {weights}
-{'':8s}singular = {singular}
-{'':8s}min_error = {min_error}
-{'':8s}max_error = {apply_max_error}
-''',Configuration['OUTPUTLOG'],screen=True,debug = True)
-
-
-
-    if singular:
-        if len(weights) == 1:
-            weights = np.full((len(profile)),weights[0])
-        profile = [profile]
-        sm_profile = [sm_profile]
-        error =[[]]
-        sides = [0]
-
-    else:
-        error = [[],[]]
-        if len(weights) == 1:
-            weights = np.full((len(profile[0]),len(profile[1])),1.)
-        sides =[0,1]
-    if debug:
-        print_log(f'''GET_ERROR: using these weights =
-{'':8s}{weights}
-''',Configuration['OUTPUTLOG'],screen=True,debug = False)
-    for i in sides:
-        error[i] = abs(profile[i]-sm_profile[i])/2.
-        error[i]= error[i]/weights[i]
-        if len(min_error.shape) == 2:
-            error[i] = [np.max([y,x]) for x,y in zip(error[i],min_error[i])]
-        elif len(min_error) == len(error[i]):
-            error[i] = [np.max([y,x]) for x,y in zip(error[i],min_error)]
-        else:
-            error[i] = [np.max([x,min_error[0]]) for x in error[i]]
-        if apply_max_error:
-                error[i] = [np.nanmin([x,Configuration['MAX_ERROR'][key]]) for x in error[i]]
-        if key in ['PA','INCL','Z0']:
-            error[i][:Configuration['INNER_FIX']] = [np.min(min_error) for x in error[i][:Configuration['INNER_FIX']]]
-    if singular:
-        error = np.array(error[0],dtype=float)
-    else:
-        error = np.array(error,dtype=float)
-    error[error == 0.] = np.min(error[error > 0.])
-
-
-    if debug:
-        print_log(f'''GET_ERROR: error =
-{'':8s}{error}
-''',Configuration['OUTPUTLOG'],screen=True,debug = False)
-    return error
-
-def fix_outer_rotation(Configuration,profile, debug = False):
-    if debug:
-        print_log(f'''FIX_OUTER_ROTATION: adjust last rings of VROT profile:
-{'':8s}{profile}
-''',Configuration['OUTPUTLOG'],screen=True,debug = True)
-    profile = np.array(profile,dtype=float)
-    inner_slope = Configuration['RC_UNRELIABLE']
-    if debug:
-        print_log(f'''FIX_OUTER_ROTATION: this is the inner slope {inner_slope}
-''',Configuration['OUTPUTLOG'],debug = False)
-    NUR = Configuration['NO_RINGS']
-    #inner_slope = int(round(set_limits(NUR*(4.-Configuration['LIMIT_MODIFIER'][0])/4.,round(NUR/2.),NUR-2)))
-    if inner_slope != NUR-1 and np.mean(profile[1:3]) > 180.:
-        profile[inner_slope:] = profile[inner_slope-1]
-
-    for i in range(int(Configuration['NO_RINGS']*3./4),Configuration['NO_RINGS']-1):
-        if profile[i+1] > profile[i]*1.3:
-            profile[i+1] = profile[i]*1.3
-
-    if debug:
-        print_log(f'''FIX_OUTER_ROTATION: this is corrected profile:
-{profile}
-''',Configuration['OUTPUTLOG'],debug = False)
-
-    return profile
-
-
-def no_declining_vrot(Configuration, Tirific_Template, profile = None, debug = False):
-    if debug:
-        print_log(f'''NO_DECLINING_VROT: make RC flat from highest point on.
-{'':8s}NO_DECLINING_VROT: But only for low value RCs
-''',Configuration['OUTPUTLOG'],screen=True,debug = True)
-    no_input = False
-    if profile is None:
-        no_input = True
-        profile = np.array(get_from_template(Configuration,Tirific_Template,['VROT'], debug = debug)[0],dtype = float)
-
-    RCval = np.mean(profile[2:])
-    RCmax = np.where(profile == np.max(profile))[0]
-    if len(RCmax) > 1:
-        RCmax = RCmax[0]
-    if debug:
-            print_log(f'''NO_DECLINING_VROT: We find the maximum at ring {RCmax}
-{'':8s}NO_DECLINING_VROT: And a mean value of {RCval}.
-''',Configuration['OUTPUTLOG'],debug = False)
-    Configuration['OUTER_SLOPE_START'] = Configuration['NO_RINGS']-1
-    if RCmax < len(profile)/2. or RCval > 180.:
-        if debug:
-            print_log(f'''NO_DECLINING_VROT: We shan't adapt the RC
-''',Configuration['OUTPUTLOG'],debug = False)
-    else:
-        for i in range(int(len(profile)/2.),len(profile)-1):
-            if profile[i+1] < profile[i]:
-                profile[i:] =profile[i]
-                if debug:
-                    print_log(f'''NO_DECLINING_VROT: Flattening from ring {i} on.)
-    ''',Configuration['OUTPUTLOG'],debug = False)
-                Configuration['OUTER_SLOPE_START'] = i+2
-                break
-
-    #and we check that the last parts are not declining too much in anycase
-    # For galaxies with more than 10 rings let's make sure the last quarter is not declinining steeply
-    if Configuration['NO_RINGS'] > 10:
-        for i in range(int(Configuration['NO_RINGS']*3./4),Configuration['NO_RINGS']-1):
-            if profile[i+1] < profile[i]*0.85:
-                profile[i+1] = profile[i]*0.85
-    else:
-        if profile[-1] < profile[-2]*0.8:
-            profile[-1] = profile[-2]*0.8
-
-
-    if Configuration['OUTER_SLOPE_START'] > Configuration['NO_RINGS']:
-        Configuration['OUTER_SLOPE_START'] = Configuration['NO_RINGS']
-    format = set_format('VROT')
-    if no_input:
-        Tirific_Template['VROT'] = f"{' '.join([f'{x:{format}}' for x in profile])}"
-        Tirific_Template['VROT_2'] = f"{' '.join([f'{x:{format}}' for x in profile])}"
-    else:
-        return profile
-
-no_declining_vrot.__doc__ =f'''
- NAME:
-    no_declining_vrot
-
- PURPOSE:
-    Ensure that the RC is not declining in an unphysical manner, i.e. if the maximum lies in the outer rings it should be the last ring.
-
- CATEGORY:
-    modify_template
-
- INPUTS:
-    Configuration = Standard FAT configuration
-    Tirific_Template = Standard tirific template
-
- OPTIONAL INPUTS:
-    debug = False
-    profile = None
-    Normally the RC is read from the Template however if profile is set it is taken from there.
-    This allows for the profile to be modified before it is checked.
-
- OUTPUTS:
-    If profile was set the modified profile is returned else the new profile is written to the template which return modified.
-
- OPTIONAL OUTPUTS:
-
- PROCEDURES CALLED:
-    Unspecified
-'''
-
-
 
 def check_flat(Configuration,profile,error, last_reliable_ring = -1, debug = False):
     if last_reliable_ring == -1:
@@ -1006,59 +121,237 @@ check_flat.__doc__ = '''
 
  PROCEDURES CALLED:
       zip(),np.std,np.mean,abs,print_log
+
+ NOTE:
 '''
 
-def arc_tan_function(axis,center,length,amplitude,mean):
-    # to prevent instant turnover
-    c = axis[-1]*0.1
-    #and the turnover has to be beyon 20*of the inner part
-    c2 = set_limits(axis[-1]*0.2,axis[2],axis[int(len(axis)/2.)])
-    return -1*np.arctan((axis+(c2+abs(center)))/(c+abs(length)))/np.pi*amplitude + mean
+def check_size(Configuration,Tirific_Template, fit_type = 'Undefined', stage = 'initial', Fits_Files= 'No Files' ,debug = False,current_run='Not Initialized'):
+    if debug:
+        print_log(f'''CHECK_SIZE: Starting a new Check_size with the following parameters:
+{'':8s}CHECK_SIZE: Rings = {Configuration['NO_RINGS']}
+{'':8s}CHECK_SIZE: Size in Beams = {Configuration['SIZE_IN_BEAMS']}
+''',Configuration['OUTPUTLOG'],debug=True)
 
 
-def fit_arc(Configuration,radii,profile,sm_profile,error,min_error = 0. ,fixed = 0, debug = False ):
+    radii, sbr_ring_limits = sbr_limits(Configuration,systemic = float(Tirific_Template['VSYS'].split()[0]),debug=debug)
+    #get the sbr profiles
+
+    sbr = np.array(get_from_template(Configuration,Tirific_Template, ['SBR','SBR_2'],debug=debug),dtype = float)
+    if debug:
+        print_log(f'''CHECK_SIZE: This is the sizes
+{'':8s}CHECK_SIZE: SBR = {len(sbr[0])}
+{'':8s}CHECK_SIZE: limits = {len(sbr_ring_limits)}
+{'':8s}CHECK_SIZE: No. Rings  = {Configuration['NO_RINGS']}
+''',Configuration['OUTPUTLOG'])
+    if len(sbr[0]) != len(sbr_ring_limits):
+        #Check what the appropriate size should be
+        if debug:
+            print_log(f'''CHECK_SIZE: Equalizing the sizes
+''',Configuration['OUTPUTLOG'])
+        if len(sbr[0]) != Configuration['NO_RINGS']:
+            if debug:
+                print_log(f'''CHECK_SIZE: Interpolating SBR
+''',Configuration['OUTPUTLOG'])
+            old_radii = np.array(get_from_template(Configuration,Tirific_Template, ['RADI'],debug=debug),dtype = float)
+            for i in [0,1]:
+                sbr[i] = np.interp(np.array(radii,dtype=float),np.array(old_radii[0],dtype=float),np.array(sbr[i],dtype=float))
+
+    if debug:
+        print_log(f'''CHECK_SIZE: This after correcting.
+{'':8s}CHECK_SIZE: SBR = {len(sbr[0])}
+{'':8s}CHECK_SIZE: limits = {len(sbr_ring_limits)}
+{'':8s}CHECK_SIZE: No. Rings  = {Configuration['NO_RINGS']}
+''',Configuration['OUTPUTLOG'])
+    #sbr_ring_limits = 1.25*np.array([sbr_ring_limits,sbr_ring_limits])
+    sbr_ring_limits = np.array([sbr_ring_limits,sbr_ring_limits])
+    new_rings = get_number_of_rings(Configuration,sbr,sbr_ring_limits, debug=debug)
+    # if all of the last points are  below the limit we start checking how far to cut
+    Configuration['RC_UNRELIABLE'] = get_number_of_rings(Configuration,sbr,2.5*sbr_ring_limits, debug=debug)-1
+    if Configuration['RC_UNRELIABLE'] == Configuration['NO_RINGS']:
+        Configuration['RC_UNRELIABLE'] -= 1
+    for i in [0,1]:
+        corr_val = np.where(sbr[i,2:] > sbr_ring_limits[i,2:])[0]+2
+        if corr_val.size > 0:
+            Configuration['LAST_RELIABLE_RINGS'][i] = corr_val[-1]+1
+        else:
+            Configuration['LAST_RELIABLE_RINGS'][i] = Configuration['NO_RINGS']
+    if debug:
+        print_log(f'''CHECK_SIZE: We set these as the last reliable rings {Configuration['LAST_RELIABLE_RINGS']}
+''',Configuration['OUTPUTLOG'])
+    #if we haven't subtracted we check if we should add
+    if new_rings == Configuration['NO_RINGS']:
+        if (np.any(sbr[:,-2] > sbr_ring_limits[:,-2]*7.) and np.any(sbr[:,-1] > sbr_ring_limits[:,-1]*3.)) or \
+            np.any(sbr[:,-1] > sbr_ring_limits[:,-1]*5.):
+            if debug:
+                print_log(f'''CHECK_SIZE: The last rings were found to be:
+{'':8s}{sbr[:,-2:]}
+{'':8s}and the limits:
+{'':8s}{sbr_ring_limits[:,-2:]}
+{'':8s}Thus we add a ring.
+''', Configuration['OUTPUTLOG'])
+            new_rings += 1
+        else:
+            if debug:
+                print_log(f'''CHECK_SIZE: The last rings were found to be:
+{'':8s}{sbr[:,-2:]}
+{'':8s}and the limits:
+{'':8s}{sbr_ring_limits[:,-2:]}
+{'':8s}Thus we keep the ring size.
+''', Configuration['OUTPUTLOG'])
+    else:
+        if debug:
+            print_log(f'''CHECK_SIZE: The last rings were found to be:
+{'':8s}{sbr[:,-2:]}
+{'':8s}and the limits:
+{'':8s}{sbr_ring_limits[:,-2:]}
+{'':8s}Thus we have subtracted a set of rings.
+''', Configuration['OUTPUTLOG'])
+
+    if new_rings <= Configuration['NO_RINGS']:
+        size_in_beams = (radii[new_rings-1]-1./5.*Configuration['BEAM'][0])/Configuration['BEAM'][0]
+    else:
+        size_in_beams = (radii[-1]-1./5.*Configuration['BEAM'][0])/Configuration['BEAM'][0]+Configuration['RING_SIZE']
+    size_in_beams = set_limits(size_in_beams, Configuration['MIN_SIZE_IN_BEAMS'], Configuration['MAX_SIZE_IN_BEAMS'])
+    # limit between 3 and the maximum allowed from the sofia estimate
+    size_in_beams,ring_size,number_of_rings = set_ring_size(Configuration, size_in_beams=size_in_beams,check_set_rings = True, debug=debug)
+
+    print_log(f'''CHECK_SIZE: We find the following size in beams {size_in_beams} with size {ring_size}.
+{'':8s}CHECK_SIZE: The previous iteration had {Configuration['SIZE_IN_BEAMS']} rings with size  {Configuration['RING_SIZE']} .
+{'':8s}CHECK_SIZE: This results in {new_rings} rings in the model compared to {Configuration['NO_RINGS']} previously.
+''', Configuration['OUTPUTLOG'])
+    if float(ring_size) != float(Configuration['RING_SIZE']):
+        Configuration['NEW_RING_SIZE'] = True
+    else:
+        Configuration['NEW_RING_SIZE'] = False
+    if debug:
+        print_log(f'''CHECK_SIZE: The previous rings were {Configuration['OLD_RINGS']}
+''',Configuration['OUTPUTLOG'])
+
+    if f"{size_in_beams:.1f}" == Configuration['OLD_RINGS'][-1]:
+        return True
+    elif f"{size_in_beams:.1f}" in Configuration['OLD_RINGS']:
+        print_log(f'''CHECK_SIZE: We have processed this size before.
+''', Configuration['OUTPUTLOG'])
+        ind = Configuration['OLD_RINGS'].index(f"{size_in_beams:.1f}")
+        if Configuration['OLD_RINGS'][ind+1] > Configuration['OLD_RINGS'][ind]:
+            print_log(f'''CHECK_SIZE: After which we increased the size.
+''', Configuration['OUTPUTLOG'])
+            if Configuration['OLD_RINGS'][ind+1] == Configuration['OLD_RINGS'][-1]:
+                print_log(f'''CHECK_SIZE: Which is the current fit so that's ok.
+''', Configuration['OUTPUTLOG'])
+                return True
+            else:
+                print_log(f'''CHECK_SIZE: Which is not the current fit so we refit this size.
+''', Configuration['OUTPUTLOG'])
+            Configuration['OLD_RINGS'].append(f"{size_in_beams:.1f}")
+        else:
+            print_log(f'''CHECK_SIZE: After which we decreased so we allow this addition. But no more.
+''', Configuration['OUTPUTLOG'])
+            Configuration['OLD_RINGS'].append(f"{size_in_beams:.1f}")
+    else:
+        if debug:
+            print_log(f'''CHECK_SIZE: Adding the new ring size to OLD_RINGS.
+''', Configuration['OUTPUTLOG'])
+        Configuration['OLD_RINGS'].append(f"{size_in_beams:.1f}")
+
+    Configuration['RING_SIZE'] = ring_size
+    Configuration['SIZE_IN_BEAMS'] = size_in_beams
+    Configuration['NO_RINGS'] = calc_rings(Configuration,debug=debug)
+    print_log(f'''CHECK_SIZE: We need to modify the number of rings in the model.
+''', Configuration['OUTPUTLOG'],screen=True)
+
+    if Configuration['RC_UNRELIABLE'] > Configuration['NO_RINGS']:
+        Configuration['RC_UNRELIABLE'] = Configuration['NO_RINGS']
+    for i in [0,1]:
+        if Configuration['LAST_RELIABLE_RINGS'][i] > Configuration['NO_RINGS']:
+            Configuration['LAST_RELIABLE_RINGS'][i] = Configuration['NO_RINGS']
+    if debug:
+        print_log(f'''CHECK_SIZE: We trust the RC upto ring {Configuration['RC_UNRELIABLE']}
+{'':8s} and the rings in general upto {Configuration['LAST_RELIABLE_RINGS']}
+''',Configuration['OUTPUTLOG'])
+    if Fits_Files == 'No Files':
+        raise InitializeError('CHECK_SIZE: Trying to adapt the model size but the fits files were not provided.')
+    else:
+        # Do not move this from here else other routines such as sbr_limits are messed up
+        set_new_size(Configuration,Tirific_Template,Fits_Files,fit_type= fit_type, stage = stage ,debug = debug,current_run = current_run)
+    return False
+check_size.__doc__  =f'''
+ NAME:
+    check_size
+
+ PURPOSE:
+    Check and update the size of the model. Update RC_UNRELIABLE and LAST_RELIABLE_RINGS
+
+ CATEGORY:
+    modify_template
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    Tirific_Template = Standard FAT Tirific Template
+
+ OPTIONAL INPUTS:
+    debug = False
+
+    fit_type = 'Undefined'
+    type of fitting
+
+    stage = 'initial'
+    Stage of the fitting process
+
+    Fits_Files= 'No Files'
+    Standard FAT dictionary with filenames
+
+    current_run='Not Initialized'
+    subproccess to be stopped for the tirific run when rings change
+
+ OUTPUTS:
+    Boolean which is True when rings are not updated, False if they are
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE: Configuration['RC_UNRELIABLE'] = modified and updated here.
+'''
+
+
+def fit_arc(Configuration,radii,sm_profile,error, debug = False ):
     est_center = radii[-1]/2.
     est_length = radii[-1]*0.2
     est_amp = abs(np.max(sm_profile)-np.min(sm_profile))
     est_mean = np.mean(sm_profile)
-    arc_par,arc_cov  =  curve_fit(arc_tan_function, radii, sm_profile,p0=[est_center,est_length,est_amp,est_mean])
+    arc_par,arc_cov  =  curve_fit(arc_tan_function, radii, sm_profile,p0=[est_center,est_length,est_amp,est_mean],sigma=error)
     new_profile = arc_tan_function(radii,*arc_par)
     new_profile[:3] = np.mean(new_profile[:3])
 
     return new_profile#,new_error
-fit_arc.__doc__ = '''
-;+
-; NAME:
-;       fit_arc(Configuration,radii,profile,sm_profile,error, fixed = 0 ):
-;
-; PURPOSE:
-;       Fit an arc tangent function between 3 and 8 order and determine the one with the optimal red chi square
-;
-; CATEGORY:
-;       modify_template
-;
-; CALLING SEQUENCE:
-;
-; INPUTS:
-;       profile = the unsmoothed profile to examine
-;
-;       error = The accompanying error
-; OPTIONAL INPUTS:
-;       -
-;
-; KEYWORD PARAMETERS:
-;       /DEBUG      - Set this keyword to get printed output during
-;                     the running
-;
-; OUTPUTS:
-;       True if no variation is found false if variation is found
-;
-; OPTIONAL OUTPUTS:
-;       -
-;
-; PROCEDURES CALLED:
-;      zip()
+fit_arc.__doc__ =f'''
+ NAME:
+    fit_arc
+ PURPOSE:
+    Fit an arc tangent function
+ CATEGORY:
+    modify_template
 
+ INPUTS:
+    Configuration = Standard FAT configuration
+    radii = the horizontal axis
+    sm_profile = the  profile to examine
+    error = The accompanying error
+
+ OPTIONAL INPUTS:
+    debug = False
+
+ OUTPUTS:
+    the fitted profile
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
 '''
 
 def fit_polynomial(Configuration,radii,profile,sm_profile,error, key, Tirific_Template,min_error =0., debug = False ):
@@ -1184,12 +477,318 @@ fit_polynomial.__doc__ =f'''
     the error should always be large than this value
 
  OUTPUTS:
-    plynomial fitted profile
+    polynomial fitted profile
 
  OPTIONAL OUTPUTS:
 
  PROCEDURES CALLED:
     Unspecified
+
+ NOTE:
+'''
+
+def fix_outer_rotation(Configuration,profile, debug = False):
+    if debug:
+        print_log(f'''FIX_OUTER_ROTATION: adjust last rings of VROT profile:
+{'':8s}{profile}
+''',Configuration['OUTPUTLOG'],screen=True,debug = True)
+    profile = np.array(profile,dtype=float)
+    inner_slope = Configuration['RC_UNRELIABLE']
+    if debug:
+        print_log(f'''FIX_OUTER_ROTATION: this is the inner slope {inner_slope}
+''',Configuration['OUTPUTLOG'],debug = False)
+    NUR = Configuration['NO_RINGS']
+    #inner_slope = int(round(set_limits(NUR*(4.-Configuration['LIMIT_MODIFIER'][0])/4.,round(NUR/2.),NUR-2)))
+    if inner_slope != NUR-1 and np.mean(profile[1:3]) > 180.:
+        profile[inner_slope:] = profile[inner_slope-1]
+
+    for i in range(int(Configuration['NO_RINGS']*3./4),Configuration['NO_RINGS']-1):
+        if profile[i+1] > profile[i]*1.3:
+            profile[i+1] = profile[i]*1.3
+
+    if debug:
+        print_log(f'''FIX_OUTER_ROTATION: this is corrected profile:
+{profile}
+''',Configuration['OUTPUTLOG'],debug = False)
+
+    return profile
+fix_outer_rotation.__doc__ =f'''
+ NAME:
+    fix_outer_rotation
+
+ PURPOSE:
+    Fix the outer parts of the rotation curve against upward outliers
+
+ CATEGORY:
+    modify_template
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    profile = the RC
+
+ OPTIONAL INPUTS:
+    debug = False
+
+ OUTPUTS:
+    profile = the corrected profile
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE: Declining rotation curves are dealt with in no_declining_vrot
+'''
+
+def fix_profile(Configuration, key, profile, Tirific_Template, debug= False, singular = False,only_inner = False ):
+    if debug:
+        print_log(f'''FIX_PROFILE: Starting to fix {key} with the input values:
+{'':8s}{profile}
+''', Configuration['OUTPUTLOG'],debug=True)
+
+    if key == 'SBR':
+        print_log(f'''FIX_PROFILE: To fix sbr profiles use FIX_SBR.
+''', Configuration['OUTPUTLOG'],screen=True)
+        raise FunctionCallError("FIX_PROFILE: To fix sbr profiles use check SBR.")
+    if singular:
+        indexes = [0]
+        profile = [profile,profile]
+    else:
+        indexes = [0,1]
+    profile = np.array(profile)
+
+
+
+    if key in ['SDIS']:
+        inner_mean = np.nanmean(profile[indexes,:3])
+        profile[indexes,:3] = inner_mean
+    elif key in ['VROT']:
+        indexes = [0]
+        inner_mean = 0.
+    else:
+        inner_mean = np.nanmean(profile[indexes,:Configuration['INNER_FIX']])
+        profile[indexes,:Configuration['INNER_FIX']] = inner_mean
+        if debug:
+            print_log(f'''FIX_PROFILE: the  {Configuration['INNER_FIX']} inner rings are fixed for the profile:
+''', Configuration['OUTPUTLOG'])
+
+
+    for i in indexes:
+        if Configuration['LAST_RELIABLE_RINGS'][i] < len(profile[i,:]) and not only_inner:
+            if debug:
+                print_log(f'''FIX_PROFILE: From ring {Configuration['LAST_RELIABLE_RINGS'][i]} on we do not trust these rings.
+''', Configuration['OUTPUTLOG'])
+            #profile[i,Configuration['LAST_RELIABLE_RINGS'][i]:] = profile[i,Configuration['LAST_RELIABLE_RINGS'][i]:]*0.25+profile[i,Configuration['LAST_RELIABLE_RINGS'][i]-1]*0.75
+            profile[i,Configuration['LAST_RELIABLE_RINGS'][i]:] = profile[i,Configuration['LAST_RELIABLE_RINGS'][i]-1]
+
+        if key == 'VROT':
+            profile[i] =fix_outer_rotation(Configuration,profile[i],debug= debug)
+        if key in ['PA','INCL','Z0']:
+            xrange = set_limits((int(round(len(profile[0])-5.)/4.)),1,4)
+        # need to make sure this connects smoothly
+            for x in range(1,xrange):
+                if Configuration['INNER_FIX']+x < len(profile[i,:]):
+                    profile[i,Configuration['INNER_FIX']+x] = 1/(x+0.5)*inner_mean+ (1-1/(x+0.5))*profile[i,Configuration['INNER_FIX']+x]
+
+        #profile[:,:Configuration['INNER_FIX']] = np.nanmean(profile[:,:Configuration['INNER_FIX']])
+        if key in ['SDIS']:
+            profile[i] =np.hstack([[profile[i,0]],[y if y <= x else x*0.95 for x,y in zip(profile[i,:],profile[i,1:])]])
+    if key == 'VROT':
+        tmp  = no_declining_vrot(Configuration,Tirific_Template,profile = profile[0],debug=debug)
+        profile[0] = tmp
+        profile[1] = tmp
+    if singular:
+        profile = profile[0]
+
+
+    if debug:
+        print_log(f'''FIX_PROFILE: The final profile for {key} is:
+{'':8s}{profile}
+''', Configuration['OUTPUTLOG'])
+    return profile
+fix_profile.__doc__ =f'''
+ NAME:
+    fix_profile
+
+ PURPOSE:
+    Modify a fitted profile to be stable against outliers
+
+ CATEGORY:
+    modify_template
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    key = Parameter to be fixed
+    profile = profile to be fixed # Maybe we can read this from the template?
+    Tirific_Template = Standard Tirific template
+
+ OPTIONAL INPUTS:
+    debug = False
+
+    singular = False
+    Profile is a single side
+
+    only_inner = False
+    Only fix the inner part not the outer parts
+
+ OUTPUTS:
+    profile
+    the modified profile
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
+
+def fix_sbr(Configuration,Tirific_Template, smooth = False, debug=False):
+    if debug:
+        print_log(f'''FIX_SBR: Starting a SBR check.
+''',Configuration['OUTPUTLOG'],debug=True)
+
+    # get the cutoff limits
+    vsys = float(Tirific_Template['VSYS'].split()[0])
+    radii,cutoff_limits = sbr_limits(Configuration, systemic=vsys)
+    cutoff_limits = np.array([cutoff_limits,cutoff_limits],dtype=float)
+    # Then get the profile from the template
+    sbr = np.array(get_from_template(Configuration,Tirific_Template,['SBR','SBR_2']),dtype=float)
+    if debug:
+        print_log(f'''FIX_SBR: Before modify.
+{'':8s}sbr from template = {sbr}
+''',Configuration['OUTPUTLOG'])
+    # First make a correction on the inner 2 values
+    sbr = inner_sbr_fix(Configuration,sbr,cutoff_limits,debug=debug)
+    # Let's use a smoothed profile for the fittings
+    sm_sbr = smooth_profile(Configuration,Tirific_Template,'SBR',
+                            min_error= cutoff_limits,no_apply = True,
+                            fix_sbr_call = True,profile_in = sbr ,debug=debug)
+
+    if debug:
+        print_log(f'''FIX_SBR: Before modify.
+{'':8s}sbr  = {sbr}
+{'':8s}sm_sbr  = {sm_sbr}
+''',Configuration['OUTPUTLOG'])
+
+    # We interpolate negative values as well as values below the limits inner part with a cubi
+    errors = get_error(Configuration,sbr,sm_sbr,'SBR',min_error=cutoff_limits,debug=debug)
+    if debug:
+        print_log(f'''FIX_SBR: retrieved errors.
+{'':8s}errors  = {errors}
+''',Configuration['OUTPUTLOG'])
+    error_weights = cutoff_limits/sm_sbr*1./np.nanmin(cutoff_limits[:,2:]/sm_sbr[:,2:])
+    error_weights[:,0] = 3.
+    errors =errors*error_weights
+    if debug:
+        print_log(f'''FIX_SBR: weighed errors errors.
+{'':8s}sm_sbr = {sm_sbr}
+{'':8s}cutoff_limits  = {cutoff_limits}
+{'':8s}errors  = {errors}
+{'':8s}weights  = {error_weights}
+''',Configuration['OUTPUTLOG'])
+
+
+    store_gaussian = []
+    for i in [0,1]:
+        corr_val = np.where(sbr[i,2:] > cutoff_limits[i,2:])[0]+2
+        # If we have enough safe values in the profile we attempt to fit it
+        if corr_val.size > 3.:
+            fit_sbr = sm_sbr[i,corr_val]
+            if debug:
+                print_log(f'''FIX_SBR: The values used for fitting are {fit_sbr}.
+''',Configuration['OUTPUTLOG'])
+            try:
+                if Configuration['FIX_SBR']:
+                    vals = fit_gaussian(Configuration,radii[corr_val],fit_sbr,errors=errors[i,corr_val],debug=debug)
+                    gaussian = gaussian_function(radii,*vals)
+                else:
+                    gaussian = fit_polynomial(Configuration,radii,sbr[i,:],sm_sbr[i,:],errors[i,:],'SBR', Tirific_Template,min_error=cutoff_limits[i,:],debug= debug)
+                # if the peak of this gaussian is in the inner two points replace it with the smoothed profile
+                if np.any(np.where(np.max(gaussian) == gaussian)[0] < 2):
+                    if debug:
+                        print_log(f'''FIX_SBR: We are trying to replace the inner gaussian.
+{'':8s} gaussian = {gaussian[[0,1]]}
+{'':8s} sm_sbr = {sm_sbr[i,[0,1]]}
+''',Configuration['OUTPUTLOG'])
+                    gaussian[[0,1]] = sm_sbr[i,[0,1]]
+            except RuntimeError:
+                # If we fail we try a CubicSpline interpolation
+                try:
+                    tmp = CubicSpline(radii[corr_val],fit_sbr,extrapolate = True,bc_type ='natural')
+                    gaussian = tmp(radii)
+                except:
+                    # and if that fails we just let the values be what they are in the smoothed profile
+                    gaussian= sm_sbr[i,:]
+            store_gaussian.append(gaussian)
+        else:
+            #if there are not enough points we simply use the smoothed profile
+            store_gaussian.append(sm_sbr[i,:])
+
+    store_gaussian = np.array(store_gaussian,dtype=float)
+    if smooth:
+        #If we smooth we take the fit in total
+        sbr = store_gaussian
+    else:
+        sbr[np.where(sbr<cutoff_limits)] = store_gaussian[np.where(sbr<cutoff_limits)]
+        sbr[:,[0,1,-1]] = store_gaussian[:,[0,1,-1]]
+
+    # Need to make sure there are no nans
+    sbr[np.isnan(sbr)] = 2.*cutoff_limits[np.isnan(sbr)]
+    # and where we are lower than the cutoff we replace with the 1.2 *cutoff unless we smoothed
+    if not smooth:
+        sbr[np.where(sbr<cutoff_limits)] = 1.2*cutoff_limits[np.where(sbr<cutoff_limits)]
+    else:
+        sbr[np.where(sbr<cutoff_limits/2.)] = 1e-16
+        #no rising outer end profiles
+        for i in [0,1]:
+            if sbr[i,-2] < sbr[i,-1]:
+                last = sbr[i,-1]
+                second = sbr[i,-2]
+                sbr[i,-2] = last
+                sbr[i,-1] = second
+
+
+    if debug:
+        print_log(f'''FIX_SBR: After modify.
+{'':8s}{sbr}
+''',Configuration['OUTPUTLOG'])
+    Tirific_Template['SBR'] = f"{' '.join([f'{x:.2e}' for x in sbr[0]])}"
+    Tirific_Template['SBR_2'] = f"{' '.join([f'{x:.2e}' for x in sbr[1]])}"
+    print_log(f'''FIX_SBR: We checked the surface brightness profiles.
+''',Configuration['OUTPUTLOG'])
+fix_sbr.__doc__ =f'''
+ NAME:
+    fix_sbr
+
+ PURPOSE:
+    Correct the surface brightness profile against outliers.
+
+ CATEGORY:
+    modify_template
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    Tirific_Template = standard tirific template
+
+ OPTIONAL INPUTS:
+    debug = False
+
+    smooth= False
+    Normally only bad points (Not bright enough) and problematic inner points are corrected.
+    When smooth is set the profile is either fitted  with a Gaussian function When FIX_SBR = True
+    or fitted with a polynomial of n degree. When these fail the profile is
+    interpolated with a cubic spline or smoothed with a savgol kernel.
+
+ OUTPUTS:
+    The template is corrected
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
 '''
 
 def flatten_the_curve(Configuration,Tirific_Template,debug = False):
@@ -1199,6 +798,701 @@ def flatten_the_curve(Configuration,Tirific_Template,debug = False):
         new_profile = [np.mean(profile) for x in profile[0]]
         Tirific_Template[key] =f" {' '.join([f'{x:.2f}' for x in new_profile])}"
         Tirific_Template[f'{key}_2'] =f" {' '.join([f'{x:.2f}' for x in new_profile])}"
+flatten_the_curve.__doc__ =f'''
+ NAME:
+    flatten_the_curve
+
+ PURPOSE:
+    Return radially varying profiles back to a mean value when the model becomes to small.
+
+ CATEGORY:
+    modify_template
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    Tirific_Template = Standard FAT Tirific Template
+
+ OPTIONAL INPUTS:
+    debug = False
+    fit_type = 'Undefined'
+
+ OUTPUTS:
+    the flattened profiles for PA, INLC, SDIS and Z0 are written to the template
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
+
+def get_error(Configuration,profile,sm_profile,key,min_error = [0.],singular = False,weights= [1.],apply_max_error = False,debug=False):
+
+    try:
+        size= len(min_error)
+        min_error = np.array(min_error)
+    except TypeError:
+        min_error = np.array([min_error])
+
+    if debug:
+        print_log(f'''GET_ERROR: starting;
+{'':8s}original profile = {profile}
+{'':8s}new profile = {sm_profile}
+{'':8s}weights = {weights}
+{'':8s}singular = {singular}
+{'':8s}min_error = {min_error}
+{'':8s}max_error = {apply_max_error}
+''',Configuration['OUTPUTLOG'],debug = True)
+
+    if singular:
+        if len(weights) == 1:
+            weights = np.full((len(profile)),weights[0])
+        profile = [profile]
+        sm_profile = [sm_profile]
+        error =[[]]
+        sides = [0]
+
+    else:
+        error = [[],[]]
+        if len(weights) == 1:
+            weights = np.full((len(profile[0]),len(profile[1])),1.)
+        sides =[0,1]
+    if debug:
+        print_log(f'''GET_ERROR: using these weights =
+{'':8s}{weights}
+''',Configuration['OUTPUTLOG'],screen=True,debug = False)
+    for i in sides:
+        error[i] = abs(profile[i]-sm_profile[i])/2.
+        error[i]= error[i]/weights[i]
+        if len(min_error.shape) == 2:
+            error[i] = [np.max([y,x]) for x,y in zip(error[i],min_error[i])]
+        elif len(min_error) == len(error[i]):
+            error[i] = [np.max([y,x]) for x,y in zip(error[i],min_error)]
+        else:
+            error[i] = [np.max([x,min_error[0]]) for x in error[i]]
+        if apply_max_error:
+                error[i] = [np.nanmin([x,Configuration['MAX_ERROR'][key]]) for x in error[i]]
+        if key in ['PA','INCL','Z0']:
+            error[i][:Configuration['INNER_FIX']] = [np.min(min_error) for x in error[i][:Configuration['INNER_FIX']]]
+    if singular:
+        error = np.array(error[0],dtype=float)
+    else:
+        error = np.array(error,dtype=float)
+    error[error == 0.] = np.min(error[error > 0.])
+
+    if debug:
+        print_log(f'''GET_ERROR: error =
+{'':8s}{error}
+''',Configuration['OUTPUTLOG'],screen=True,debug = False)
+    return error
+get_error.__doc__ =f'''
+ NAME:
+    get_error
+
+ PURPOSE:
+    get the errors associated with a profile
+
+ CATEGORY:
+    modify_template
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    profile = the profile to consider
+    sm_profile = the smoothed version of the profile
+    key = the parameter to consider
+
+ OPTIONAL INPUTS:
+    debug = False
+
+    min_error = [0.]
+    Errors should always be bigger than this value
+
+    singular = False
+    If true a single parameter is expected not both sides
+
+    weights= [1.]
+    Weights to apply to the error withe most imporatant heighest, i.e. the error is divided by the weights
+
+    apply_max_error = False
+    aplly the maximum error values
+
+ OUTPUTS:
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE: the maximum errors are defined in main.py
+'''
+
+def get_number_of_rings(Configuration,sbr,sbr_ring_limits, debug=False):
+    new_rings = Configuration['NO_RINGS']
+    difference_with_limit = np.array(sbr-sbr_ring_limits)
+    if np.all(difference_with_limit[:,-1] < 0.):
+        if debug:
+            print_log(f'''GET_NUMBER_OF_RINGS: both last rings are below the limit
+''',Configuration['OUTPUTLOG'],debug=True)
+        for i in range(len(difference_with_limit[0,:])-1,int(new_rings/2.),-1):
+            if debug:
+                print_log(f'''GET_NUMBER_OF_RINGS: Checking ring {i}
+''',Configuration['OUTPUTLOG'])
+            if np.all(difference_with_limit[:,i] < 0.):
+                #check that 1 any of the lesser rings are bright enough
+                if np.any(sbr[:,i-1] > 1.5 *sbr_ring_limits[:,i-1]):
+                    new_rings = i+1
+                    if debug:
+                        print_log(f'''GET_NUMBER_OF_RINGS: we find that the previous rings are bright enough, rings = {new_rings}
+''',Configuration['OUTPUTLOG'])
+                    break
+                else:
+                    if debug:
+                        print_log(f'''GET_NUMBER_OF_RINGS: the previous rings are not bright enough so we reduce 1, old_rings = {new_rings}, new_rings = {i}
+''',Configuration['OUTPUTLOG'])
+                    new_rings = i
+            else:
+                #if not both values are below than this is the extend we want
+                new_rings = i+1
+                if debug:
+                    print_log(f'''GET_NUMBER_OF_RINGS: Not both rings warrant cutting, rings = {new_rings}
+''',Configuration['OUTPUTLOG'])
+                break
+    else:
+        if debug:
+            print_log(f'''GET_NUMBER_OF_RINGS: Not both last rings are below the limit
+''',Configuration['OUTPUTLOG'])
+        # if they are not we first check wether both second to last rings are
+        if ((difference_with_limit[0,-2] < 0.) and (sbr[0,-1] < 2*sbr_ring_limits[0,-1]) and (difference_with_limit[1,-1] < 0.)) or \
+            ((difference_with_limit[1,-2] < 0.) and (sbr[1,-1] < 2*sbr_ring_limits[1,-1]) and (difference_with_limit[0,-1] < 0.)) or\
+            ((difference_with_limit[0,-2] < 0.) and (difference_with_limit[1,-2] < 0.) and (sbr[0,-1] < 3*sbr_ring_limits[0,-1]) and (sbr[1,-1] < 3*sbr_ring_limits[1,-1])):
+            new_rings -= 1
+            if debug:
+                print_log(f'''GET_NUMBER_OF_RINGS: A second ring is too faint, rings = {new_rings}
+''',Configuration['OUTPUTLOG'])
+        elif np.all(difference_with_limit[:,-2] < 0.) and np.all(sbr[:,-1] < 5*sbr_ring_limits[:,-1]):
+            new_rings -= 1
+            if debug:
+                print_log(f'''GET_NUMBER_OF_RINGS: Both second rings are too faint, rings = {new_rings}
+''',Configuration['OUTPUTLOG'])
+        else:
+            if debug:
+                print_log(f'''GET_NUMBER_OF_RINGS: The second rings are too bright and do not allow for cutting.
+''',Configuration['OUTPUTLOG'])
+    return new_rings
+get_number_of_rings.__doc__ =f'''
+ NAME:
+    get_number_of_rings
+
+ PURPOSE:
+    Determine whether the amount of rings is good for the limits or not should change or not
+
+ CATEGORY:
+    modify_template
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    sbr = sbr profiles
+    sbr_ring_limits = the limits to evaluate
+
+ OPTIONAL INPUTS:
+    debug = False
+
+ OUTPUTS:
+    new_rings = the required number of rings
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
+
+def get_warp_slope(Configuration,Tirific_Template, debug = False):
+    if debug:
+        print_log(f'''GET_WARP_SLOPE: We have {Tirific_Template['NUR']} rings in the template. and this should be {Configuration['NO_RINGS']}
+''', Configuration['OUTPUTLOG'],debug = True)
+    radii, sbr_ring_limits = sbr_limits(Configuration,systemic = float(Tirific_Template['VSYS'].split()[0]),debug=debug)
+    #get the sbr profiles
+    sbr = np.array(get_from_template(Configuration,Tirific_Template, ['SBR','SBR_2'],debug=debug),dtype = float)
+    if debug:
+        print_log(f'''GET_WARP_SLOPE: We have {len(sbr_ring_limits)} rings in our limits.
+{'':8s}GET_WARP_SLOPE: And we have {len(sbr[0])} rings in our profiles.
+''', Configuration['OUTPUTLOG'])
+    warp_slope = [Tirific_Template['NUR'],Tirific_Template['NUR']]
+    sbr_ring_limits = 2.*np.array([sbr_ring_limits,sbr_ring_limits])
+    difference_with_limit = np.array(sbr-sbr_ring_limits)
+    for i in [0,1]:
+        slope = difference_with_limit[i]
+        final = slope[slope < 0.]
+        if len(final) > 0.:
+            not_found = True
+            counter = len(slope)-1
+            while not_found:
+                if not slope[counter] < 0.:
+                    not_found = False
+                    final = counter+1
+                else:
+                    counter -= 1
+        else:
+            final = len(slope)
+        if final > Configuration['LAST_RELIABLE_RINGS'][i]:
+            final = Configuration['LAST_RELIABLE_RINGS'][i]
+        warp_slope[i] = final
+    if debug:
+        print_log(f'''GET_WARP_SLOPE: We find a slope of {warp_slope}.
+''', Configuration['OUTPUTLOG'])
+    Configuration['WARP_SLOPE'] = warp_slope
+get_warp_slope.__doc__ =f'''
+ NAME:
+    get_warp_slope
+
+ PURPOSE:
+    Get the rings where the warp should be sloped
+
+ CATEGORY:
+    modify_template
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    Tirific_Template = Standard FAT Tirific Template
+
+ OPTIONAL INPUTS:
+    debug = False
+
+ OUTPUTS:
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
+
+def inner_sbr_fix(Configuration,sbr,cutoff_limits,debug=False):
+    if debug:
+        print_log(f'''INNER_SBR_FIX: Checking the SBR inner points for runaway values
+{'':8s} sbr in  = {sbr}
+''',Configuration['OUTPUTLOG'], debug = True, screen = True)
+
+    if np.all(sbr[:,0] > 2*sbr[:,2]) or np.all(sbr[:,1] > 2*sbr[:,2]):
+        if debug:
+            print_log(f'''INNER_SBR_FIX: We need to correct
+{'':8s} sbr 0  = {sbr[:,0]} sbr 1  = {sbr[:,1]} sbr 2  = {sbr[:,2]}
+''',Configuration['OUTPUTLOG'], debug = True, screen = True)
+        if np.mean(sbr[:,2]) > cutoff_limits[0,2]:
+            sbr[:,[0,1]] = np.mean(sbr[:,2])
+            if debug:
+                print_log(f'''INNER_SBR_FIX: We need to correct with mean
+{'':8s} mean = {np.mean(sbr[:,2])}
+''',Configuration['OUTPUTLOG'], debug = True, screen = True)
+        else:
+            if debug:
+                print_log(f'''INNER_SBR_FIX: We need to correct with cut_off_limits
+{'':8s} limit = {1.5*cutoff_limits[0,2]}
+''',Configuration['OUTPUTLOG'], debug = True, screen = True)
+            sbr[:,[0,1,2]] = 1.5*cutoff_limits[0,2]
+    if np.any(sbr[:,0] > sbr[:,1]):
+        if debug:
+                print_log(f'''INNER_SBR_FIX: We correct 0 point
+{'':8s} mean 1 = {np.mean(sbr[:,1])}
+''',Configuration['OUTPUTLOG'], debug = True, screen = True)
+        sbr[:,0] = np.mean(sbr[:,1])
+
+    for i in [0,1]:
+        if np.any(sbr[:,i] < cutoff_limits[:,2]):
+            if debug:
+                print_log(f'''INNER_SBR_FIX: correcting ring {i}
+''',Configuration['OUTPUTLOG'], debug = True, screen = True)
+            sbr[:,i] = 1.5*cutoff_limits[0,2]
+
+    if debug:
+                print_log(f'''INNER_SBR_FIX: the fixed sbr {sbr}
+''',Configuration['OUTPUTLOG'], debug = True, screen = True)
+
+    return sbr
+inner_sbr_fix.__doc__ =f'''
+ NAME:
+    inner_sbr_fix
+
+ PURPOSE:
+    Make sure the inner two points of the SBR are not run away
+
+ CATEGORY:
+    modify_template
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    sbr = SBR profile for bothe sides
+    cutoff_limits = The reliability limits of the fit
+
+ OPTIONAL INPUTS:
+    debug = False
+
+ OUTPUTS:
+    sbr = profile with the modified inner points if required
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
+
+def modify_flat(Configuration,profile,original_profile,errors,key, debug=False):
+
+    if debug:
+         print_log(f'''MODIFY_FLAT: These {key} profiles are checked to be flat.
+{'':8s} profile = {profile}
+{'':8s} original_profile = {original_profile}
+{'':8s} errors = {errors}
+''',Configuration['OUTPUTLOG'],debug = True)
+
+    flatness = []
+    for side in [0,1]:
+         flatness.append(check_flat(Configuration,profile[side],errors[side],last_reliable_ring= Configuration['LAST_RELIABLE_RINGS'][side],debug=debug))
+    if debug:
+         print_log(f'''MODIFY_FLAT: Side 0 is flat = {flatness[0]}
+{'':8s} Side 1 is flat = {flatness[1]}
+''',Configuration['OUTPUTLOG'])
+
+    if all(flatness):
+        if key in ['PA']:
+            profile[:] = profile[0,0]
+        else:
+            profile[:] = np.nanmedian(original_profile[:,:round(len(original_profile)/2.)])
+        errors = get_error(Configuration,original_profile,profile,key,apply_max_error = True,min_error =np.nanmin(errors) , debug=debug)
+    else:
+        if any(flatness):
+            for side in [0,1]:
+                if flatness[side]:
+                    if key in ['PA']:
+                        profile[side,:] = profile[side,0]
+                    else:
+                        profile[side,:]  = np.median(original_profile[side,:round(len(original_profile)/2.)])
+                    flat_val = profile[side,0]
+                    errors[side] = get_error(Configuration,original_profile[side],profile[side],key,apply_max_error = True,min_error =np.nanmin(errors[side]),singular = True ,debug=debug)
+            profile[:,0:3] = flat_val
+            profile[:,4] = (flat_val+profile[:,4])/2.
+    if debug:
+        print_log(f'''MODIFY_FLAT: Returning:
+{'':8s} profile = {profile}
+{'':8s} errors = {errors}
+''',Configuration['OUTPUTLOG'])
+    return profile,errors
+modify_flat.__doc__ =f'''
+ NAME:
+    modify_flat
+
+ PURPOSE:
+    Check if a profile should be flat within its errors and if so make it flat
+
+ CATEGORY:
+    modify_template
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    profile = the profile to check
+    original_profile = the original unmodified profile
+    errors = the errors on the profile
+    key = the parameter to be checked
+
+ OPTIONAL INPUTS:
+    debug = False
+    fit_type = 'Undefined'
+
+ OUTPUTS:
+    the final profile and errors
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
+
+def no_declining_vrot(Configuration, Tirific_Template, profile = None, debug = False):
+    if debug:
+        print_log(f'''NO_DECLINING_VROT: make RC flat from highest point on.
+{'':8s}NO_DECLINING_VROT: But only for low value RCs
+''',Configuration['OUTPUTLOG'],debug = True)
+    no_input = False
+    if profile is None:
+        no_input = True
+        profile = np.array(get_from_template(Configuration,Tirific_Template,['VROT'], debug = debug)[0],dtype = float)
+
+    RCval = np.mean(profile[2:])
+    RCmax = np.where(profile == np.max(profile))[0]
+    if len(RCmax) > 1:
+        RCmax = RCmax[0]
+    if debug:
+            print_log(f'''NO_DECLINING_VROT: We find the maximum at ring {RCmax}
+{'':8s}NO_DECLINING_VROT: And a mean value of {RCval}.
+''',Configuration['OUTPUTLOG'])
+    Configuration['OUTER_SLOPE_START'] = Configuration['NO_RINGS']-1
+    if RCmax < len(profile)/2. or RCval > 180.:
+        if debug:
+            print_log(f'''NO_DECLINING_VROT: We shan't adapt the RC
+''',Configuration['OUTPUTLOG'])
+    else:
+        for i in range(int(len(profile)/2.),len(profile)-1):
+            if profile[i+1] < profile[i]:
+                profile[i:] =profile[i]
+                if debug:
+                    print_log(f'''NO_DECLINING_VROT: Flattening from ring {i} on.)
+    ''',Configuration['OUTPUTLOG'])
+                Configuration['OUTER_SLOPE_START'] = i+2
+                break
+
+    #and we check that the last parts are not declining too much in anycase
+    # For galaxies with more than 10 rings let's make sure the last quarter is not declinining steeply
+    if Configuration['NO_RINGS'] > 10:
+        for i in range(int(Configuration['NO_RINGS']*3./4),Configuration['NO_RINGS']-1):
+            if profile[i+1] < profile[i]*0.85:
+                profile[i+1] = profile[i]*0.85
+    else:
+        if profile[-1] < profile[-2]*0.8:
+            profile[-1] = profile[-2]*0.8
+
+
+    if Configuration['OUTER_SLOPE_START'] > Configuration['NO_RINGS']:
+        Configuration['OUTER_SLOPE_START'] = Configuration['NO_RINGS']
+    format = set_format('VROT')
+    if no_input:
+        Tirific_Template['VROT'] = f"{' '.join([f'{x:{format}}' for x in profile])}"
+        Tirific_Template['VROT_2'] = f"{' '.join([f'{x:{format}}' for x in profile])}"
+    else:
+        return profile
+no_declining_vrot.__doc__ =f'''
+ NAME:
+    no_declining_vrot
+
+ PURPOSE:
+    Ensure that the RC is not declining in an unphysical manner, i.e. if the maximum lies in the outer rings it should be the last ring.
+
+ CATEGORY:
+    modify_template
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    Tirific_Template = Standard tirific template
+
+ OPTIONAL INPUTS:
+    debug = False
+
+    profile = None
+    Normally the RC is read from the Template however if profile is set it is taken from there.
+    This allows for the profile to be modified before it is checked.
+
+ OUTPUTS:
+    If profile was set the modified profile is returned else the new profile is written to the template which return modified.
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
+
+def regularise_profile(Configuration,Tirific_Template, key,min_error= [0.],debug = False, no_apply =False):
+    # We start by getting an estimate for the errors
+    min_error=np.array(min_error)
+    profile = np.array(get_from_template(Configuration,Tirific_Template, [key,f"{key}_2"]),dtype=float)
+    weights = get_ring_weights(Configuration,Tirific_Template,debug=debug)
+
+
+    #First if we have an RC we flatten the curve
+    if debug:
+        print_log(f'''REGULARISE_PROFILE: profile of {key} before regularistion
+{'':8s}{profile[0]}
+{'':8s}{profile[1]}
+{'':8s}The minmal error is
+{'':8s}{min_error}
+''',Configuration['OUTPUTLOG'],debug = True)
+    # get a smoothed profiles
+    sm_profile = smooth_profile(Configuration,Tirific_Template, key ,min_error=min_error,debug=debug,no_apply=True)
+
+    error = get_error(Configuration,profile,sm_profile,key,min_error=min_error,weights = weights,debug=debug)
+
+    #Check that we have two profiles
+    diff = np.sum(profile[0]-profile[1])
+    if key in ['SDIS','VROT']:
+        diff = False
+    if diff:
+        if debug:
+            print_log(f'''REGULARISE_PROFILE: Treating both sides independently.
+''',Configuration['OUTPUTLOG'])
+        sides = [0,1]
+    else:
+        if debug:
+            print_log(f'''REGULARISE_PROFILE: Found symmetric profiles.
+''',Configuration['OUTPUTLOG'])
+        sides = [0]
+    radii =set_rings(Configuration,debug=debug)
+    for i in sides:
+
+        if key == 'SDIS':
+            try:
+                fit_profile = fit_arc(Configuration,radii,sm_profile[i],error[i],debug= debug)
+            except:
+                fit_profile = np.full(len(sm_profile[i]), np.mean(sm_profile[i]))
+
+        else:
+            fit_profile = fit_polynomial(Configuration,radii,profile[i],sm_profile[i],error[i],key, Tirific_Template,min_error=min_error,debug= debug)
+        profile[i] = fit_profile
+
+    if not diff:
+        profile[1] = profile[0]
+
+    original = np.array(get_from_template(Configuration,Tirific_Template, [key,f"{key}_2"]),dtype=float)
+    error = get_error(Configuration,original,profile,key,weights=weights,apply_max_error = True,min_error=min_error,debug=debug)
+    if debug:
+            print_log(f'''REGULARISE_PROFILE: This the fitted profile without corrections:
+{'':8s}{profile}
+''',Configuration['OUTPUTLOG'])
+#then we want to fit the profiles with a polynomial
+    if key not in ['SBR','VROT']:
+        #We should not fix the profile again as the fitted profile is fixed should be good
+
+        profile,error = modify_flat(Configuration, profile, original, error,key,debug=debug)
+
+
+    format = set_format(key)
+
+    if not no_apply:
+        Tirific_Template[key]= f"{' '.join([f'{x:{format}}' for x in profile[0,:int(Configuration['NO_RINGS'])]])}"
+        Tirific_Template[f"{key}_2"]= f"{' '.join([f'{x:{format}}' for x in profile[1,:int(Configuration['NO_RINGS'])]])}"
+        Tirific_Template.insert(key,f"# {key}_ERR",f"{' '.join([f'{x:{format}}' for x in error[0,:int(Configuration['NO_RINGS'])]])}")
+        Tirific_Template.insert(f"{key}_2",f"# {key}_2_ERR",f"{' '.join([f'{x:{format}}' for x in error[1,:int(Configuration['NO_RINGS'])]])}")
+
+        if debug:
+            print_log(f'''REGULARISE_PROFILE: And this has gone to the template.
+{'':8s}{key} = {Tirific_Template[key]}
+{'':8s}{key}_2 ={Tirific_Template[f"{key}_2"]}
+{'':8s}# {key}_ERR ={Tirific_Template[f"# {key}_ERR"]}
+{'':8s}# {key}_2_ERR ={Tirific_Template[f"# {key}_2_ERR"]}
+''',Configuration['OUTPUTLOG'])
+    return profile
+regularise_profile.__doc__ =f'''
+ NAME:
+    regularise_profile
+
+ PURPOSE:
+    Regularise a parameter profile with a polynomial or a arctan when it is the SDIS
+
+ CATEGORY:
+    modify_template
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    Fits_Files = Standard FAT dictionary with filenames
+    key = parameter to fix
+
+ OPTIONAL INPUTS:
+    debug = False
+
+    no_apply = false
+    if true do not apply the regularised profile to the template
+
+    min_error = [0.]
+    error should alway be larger than this
+
+ OUTPUTS:
+    the regularised profile
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE: Errors are not returned but they are written to the template
+'''
+
+
+def set_boundary_limits(Configuration,Tirific_Template,key, tolerance = 0.01, values = [10,1],upper_bracket = [10.,100.], lower_bracket=[0., 50.], fixed = False,increase=10., debug = False):
+    profile = np.array(get_from_template(Configuration,Tirific_Template, [key,f"{key}_2"]),dtype = float)
+
+    current_boundaries = Configuration[f"{key}_CURRENT_BOUNDARY"]
+    if debug:
+        print_log(f'''SET_BOUNDARY_LIMITS: We have found the following limits,
+{'':8s} current Boundaries = {current_boundaries}
+''',Configuration['OUTPUTLOG'],debug = True)
+
+    if np.sum(current_boundaries) == 0.:
+        current_boundaries =[[set_limits(values[0]-values[1]*5.,*lower_bracket),\
+                    set_limits(values[0]+values[1]*5.,*upper_bracket)] for x in range(3)]
+        if debug:
+            print_log(f'''SET_BOUNDARY_LIMITS: We have set the boundaries to as all were 0.
+{'':8s} current Boundaries = {current_boundaries}
+''',Configuration['OUTPUTLOG'],debug = False)
+
+    if fixed:
+        range_to_check = [0]
+    else:
+        range_to_check = [0,1,2]
+    for i in range_to_check:
+        buffer = float(current_boundaries[i][1]-current_boundaries[i][0]) * tolerance
+        if i == 0:
+            profile_part = profile[0,:Configuration['INNER_FIX']]
+        else:
+            profile_part = profile[i-1,Configuration['INNER_FIX']:]
+        #check the upper bounderies
+        on_boundary = np.where(profile_part > float(current_boundaries[i][1])-buffer)[0]
+        if len(on_boundary) > 0:
+            if on_boundary[0] != len(profile[0])-1:
+                current_boundaries[i][1] = set_limits(current_boundaries[i][1] + buffer*increase,*upper_bracket)
+        #check the lower boundaries.
+        on_boundary = np.where(profile_part < float(current_boundaries[i][0])+buffer)[0]
+        if len(on_boundary) > 0:
+            if on_boundary[0] != len(profile[0])-1:
+                current_boundaries[i][0] = set_limits(current_boundaries[i][1] - buffer*increase,*lower_bracket)
+    Configuration[f"{key}_CURRENT_BOUNDARY"] = current_boundaries
+    return current_boundaries
+set_boundary_limits.__doc__ =f'''
+ NAME:
+    set_boundary_limits
+
+ PURPOSE:
+    Update the boundary limits of parameters when too many rings are on the boundary.
+
+ CATEGORY:
+    modify_template
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    Tirific_Template = Standard FAT Tirific Template
+    key = parameter to check
+
+ OPTIONAL INPUTS:
+    debug = False
+
+    tolerance = 0.01,
+    The minimum difference with the boundary
+
+    values = [10,1],upper_bracket = [10.,100.], lower_bracket=[0., 50.]
+    Initial definition of the boundary limits
+
+    fixed = False
+    If true it is assumed there is only one boundary value to check else three
+
+    increase=10.
+    how much to widen the boundary by
+
+ OUTPUTS:
+    The new Boundaries, they are also updated in Configuration
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
 
 def set_cflux(Configuration,Tirific_Template,debug = False):
 
@@ -1227,40 +1521,34 @@ def set_cflux(Configuration,Tirific_Template,debug = False):
     if not triggered:
         print_log(f'''SET_CFLUX: CFLUXES are within the required limits.
 ''',Configuration['OUTPUTLOG'])
-set_cflux.__doc__ = '''
-;+
-; NAME:
-;       set_cflux(Configuration,Tirific_Template,debug = False)
-;
-; PURPOSE:
-;       Check CFLUX values and make sure they are in the right order for the amount of point sources
-;
-; CATEGORY:
-;       modify_template
-;
-; CALLING SEQUENCE:
-;
-; INPUTS:
-;      Configuration =
-;      Tirific_Template =
-;
-; OPTIONAL INPUTS:
-;       -
-;
-; KEYWORD PARAMETERS:
-;       /DEBUG      - Set this keyword to get printed output during
-;                     the running
-;
-; OUTPUTS:
-;       No outputs if CLUX has to be changes it is changes in the Template
-;
-; OPTIONAL OUTPUTS:
-;       -
-;
-; PROCEDURES CALLED:
-;
+set_cflux.__doc__ =f'''
+ NAME:
+    set_cflux
 
+ PURPOSE:
+    Check CFLUX values and make sure they are in the right order for the amount of point sources
+
+ CATEGORY:
+    modify_template
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    Tirific_Template = Standard FAT Tirific Template
+
+ OPTIONAL INPUTS:
+    debug = False
+
+ OUTPUTS:
+    Updated CFLUX values in template
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
 '''
+
 def set_errors(Configuration,Tirific_Template,key,min_error = 0.,debug = False):
     error = np.full((2,int(Configuration['NO_RINGS'])),min_error)
     format=set_format(key)
@@ -1299,13 +1587,11 @@ set_errors.__doc__ =f'''
 
  PROCEDURES CALLED:
     Unspecified
+
+ NOTE:
 '''
 
-
-
-def set_fitting_parameters(Configuration, Tirific_Template, \
-                           parameters_to_adjust  = ['NO_ADJUSTMENT'], modifiers = ['EMPTY'], \
-                           stage = 'initial', initial_estimates = ['EMPTY'],debug = False):
+def set_fitting_parameters(Configuration, Tirific_Template, parameters_to_adjust  = ['NO_ADJUSTMENT'], modifiers = ['EMPTY'], stage = 'initial', initial_estimates = ['EMPTY'],debug = False):
     if debug:
         print_log(f'''SET_FITTING_PARAMETERS: We are starting with these modifiers.
 {'':8s} {modifiers}
@@ -1520,29 +1806,19 @@ set_fitting_parameters.__doc__ = '''
 
  OPTIONAL INPUTS:
     debug = False
+
     parameters_to_adjust  = ['NO_ADJUSTMENT']
     a list of parameters that have to be set
+
+    modifiers = ['EMPTY']
+    modifies for startdelt,enddelts,mindelt
 
     stage = 'initial'
     fitting stage
 
-    systemic = [100.,2]
-    initial estimate and error for VSYS
-
-    inclination = [60.,2.]
-    initial estimate and error for INCL
-
-    pa = [90,1]
-    initial estimate and error for PA
-
-    rotation = [100.,5.]
-    initial estimate and error for VROT
-
-    ra = [180,1e-4]
-    initial estimate and error for XPOS
-
-    dec= [0,1e-4])
-    initial estimate and error for YPOS
+    initial_estimates = ['EMPTY']
+    initial_estimates for the various values,
+    if not provided they are guessed from the Template and cube specifics
 
  OUTPUTS:
     Nothing is returned but the Tirific Template is updated
@@ -1551,50 +1827,9 @@ set_fitting_parameters.__doc__ = '''
 
  PROCEDURES CALLED:
     Unspecified
+
+ NOTE:
 '''
-
-
-
-def set_boundary_limits(Configuration,Tirific_Template,key, tolerance = 0.01, values = [10,1],\
-                        upper_bracket = [10.,100.], lower_bracket=[0., 50.], fixed = False,increase=10., debug = False):
-    profile = np.array(get_from_template(Configuration,Tirific_Template, [key,f"{key}_2"]),dtype = float)
-
-    current_boundaries = Configuration[f"{key}_CURRENT_BOUNDARY"]
-    if debug:
-        print_log(f'''SET_BOUNDARY_LIMITS: We have found the following limits,
-{'':8s} current Boundaries = {current_boundaries}
-''',Configuration['OUTPUTLOG'],debug = True)
-
-    if np.sum(current_boundaries) == 0.:
-        current_boundaries =[[set_limits(values[0]-values[1]*5.,*lower_bracket),\
-                    set_limits(values[0]+values[1]*5.,*upper_bracket)] for x in range(3)]
-        if debug:
-            print_log(f'''SET_BOUNDARY_LIMITS: We have set the boundaries to as all were 0.
-{'':8s} current Boundaries = {current_boundaries}
-''',Configuration['OUTPUTLOG'],debug = False)
-
-    if fixed:
-        range_to_check = [0]
-    else:
-        range_to_check = [0,1,2]
-    for i in range_to_check:
-        buffer = float(current_boundaries[i][1]-current_boundaries[i][0]) * tolerance
-        if i == 0:
-            profile_part = profile[0,:Configuration['INNER_FIX']]
-        else:
-            profile_part = profile[i-1,Configuration['INNER_FIX']:]
-        #check the upper bounderies
-        on_boundary = np.where(profile_part > float(current_boundaries[i][1])-buffer)[0]
-        if len(on_boundary) > 0:
-            if on_boundary[0] != len(profile[0])-1:
-                current_boundaries[i][1] = set_limits(current_boundaries[i][1] + buffer*increase,*upper_bracket)
-        #check the lower boundaries.
-        on_boundary = np.where(profile_part < float(current_boundaries[i][0])+buffer)[0]
-        if len(on_boundary) > 0:
-            if on_boundary[0] != len(profile[0])-1:
-                current_boundaries[i][0] = set_limits(current_boundaries[i][1] - buffer*increase,*lower_bracket)
-    Configuration[f"{key}_CURRENT_BOUNDARY"] = current_boundaries
-    return current_boundaries
 
 def set_generic_fitting(Configuration, key , stage = 'initial', values = [60,5.], \
                         limits = [[0.,0.],[0.,0.],[0.,0.]],debug = False, slope = [0, 0], flat_slope = False , symmetric = False,\
@@ -1609,7 +1844,7 @@ def set_generic_fitting(Configuration, key , stage = 'initial', values = [60,5.]
     if all(x == 0. for x in np.array(limits).reshape(6)):
         if debug:
             print_log(f'''SET_GENERIC_FITTING: Implementing limits
-''', Configuration['OUTPUTLOG'] ,debug = False)
+''', Configuration['OUTPUTLOG'])
 
         limits = [[set_limits(values[0]-values[1]*5.,*lower_bracket),\
                     set_limits(values[0]+values[1]*5.,*upper_bracket)] for x in limits]
@@ -1619,11 +1854,11 @@ def set_generic_fitting(Configuration, key , stage = 'initial', values = [60,5.]
     input= {}
     if debug:
             print_log(f'''SET_GENERIC_FITTING: flat is {fixed}
-''', Configuration['OUTPUTLOG'], screen = True ,debug = False)
+''', Configuration['OUTPUTLOG'])
     if (stage in ['after_os','after_cc','after_ec','parameterized']) or fixed:
         if debug:
             print_log(f'''SET_GENERIC_FITTING: Fitting all as 1.
-''', Configuration['OUTPUTLOG'], screen = True ,debug = False)
+''', Configuration['OUTPUTLOG'])
         input['VARY'] =  np.array([f"{key} 1:{NUR} {key}_2 1:{NUR}"])
         input['PARMAX'] = np.array([limits[0][1]])
         input['PARMIN'] = np.array([limits[0][0]])
@@ -1638,7 +1873,7 @@ def set_generic_fitting(Configuration, key , stage = 'initial', values = [60,5.]
 {'':8s} step_modifier = {step_modifier}
 {'':8s} values = {values}
 {'':8s} limits = {limits}
-''', Configuration['OUTPUTLOG'], screen = True ,debug = False)
+''', Configuration['OUTPUTLOG'])
             if flat_inner+1 >= NUR:
                 input['VARY'] =  np.concatenate((np.array([f"!{key} {NUR}"]),np.array([f"!{key}_2 {NUR}"]),np.array([f"{key} 1:{NUR-1} {key}_2 1:{NUR-1}"])))
 
@@ -1656,7 +1891,7 @@ def set_generic_fitting(Configuration, key , stage = 'initial', values = [60,5.]
 {'':8s} step_modifier = {step_modifier}
 {'':8s} values = {values}
 {'':8s} limits = {limits}
-''', Configuration['OUTPUTLOG'], debug = False)
+''', Configuration['OUTPUTLOG'])
             if flat_inner+1 >= NUR:
                 input['VARY'] =  np.concatenate((np.array([f"!{key} {NUR} {key}_2 {NUR}"]),np.array([f"{key} 1:{NUR-1} {key}_2 1:{NUR-1}"])))
             else:
@@ -1688,43 +1923,67 @@ def set_generic_fitting(Configuration, key , stage = 'initial', values = [60,5.]
 
 
     return input
-set_generic_fitting.__doc__ = '''
+set_generic_fitting.__doc__ =f'''
+ NAME:
+    set_generic_fitting
 
-    ; NAME:
-    ;      set_generic_fitting(Configuration, key ,systemic = 100., stage = 'initial', values = [60,5.], \
-                            limits = [[0.,0.],[0.,0.],[0.,0.]],debug = False, slope = [0, 0], flat_slope = False , symmetric = False,\
-                            upper_bracket = [10.,100.], lower_bracket=[0., 50.], Fixed = True, moderate = 5, step_modifier = [1.,1.,1.],\
-                            flat_inner = 3):
-    ;
-    ; PURPOSE:
-    ;      Generic routine for setting fitting parameters, SBR, VROT are separate
-    ;
-    ; CATEGORY:
-    ;       modify_template
-    ;
-    ;
-    ; INPUTS:
-    ;
-    ; OPTIONAL INPUTS:
-    ;           step_modifier = array that modifies the fitting steps corresponding to [STARTDELTA, ENDDELTA, MINDELTA]
-                                for flat disks the standard values are [error,0.1*error,0.05 error]
-                                for varying disk [1.,0.1,1.] for the varying part and [error/2., 0.05*error, 0.1*error]  for the flat part
-    ;
-    ; KEYWORD PARAMETERS:
-    ;       -
-    ;
-    ; OUTPUTS:
-    ;
-    ;
-    ; OPTIONAL OUTPUTS:
-    ;       -
-    ;
-    ; PROCEDURES CALLED:
-    ;      split, strip, open
-    ;
-    ; EXAMPLE:
-    ;
-    ;
+ PURPOSE:
+    Generic routine for setting fitting parameters, SBR, VROT are separate
+
+ CATEGORY:
+    modify_template
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    key = parameter to set the fitting for
+
+ OPTIONAL INPUTS:
+    debug = False
+
+    stage = 'initial'
+    STAGE OF THE FITTING WE ARE IN
+
+    values = [60,5.]
+    mean values of the parameter
+
+    limits = [[0.,0.],[0.,0.],[0.,0.]]
+    fitting limits
+
+    slope = [0, 0]
+    outer rings to be fitted as slope
+
+    flat_slope = False
+    if true slope should include the last ring
+
+    symmetric = False
+    Both sides are fitted as one
+
+    upper_bracket = [10.,100.], lower_bracket=[0., 50.]
+    limiting values
+
+    fixed = True
+    no radial variations
+
+    moderate = 3
+    moderate parameter
+
+    step_modifier = [1.,1.,1.]
+    array that modifies the fitting steps corresponding to [STARTDELTA, ENDDELTA, MINDELTA]
+    for flat disks the standard values are [error,0.1*error,0.05 error]
+    for varying disk [1.,0.1,1.] for the varying part and [error/2., 0.05*error, 0.1*error]  for the flat part
+
+    flat_inner = 3
+    amount of inner rings to fix
+
+ OUTPUTS:
+    A directory with the specified fitting values
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
 '''
 
 #Function
@@ -1826,41 +2085,36 @@ def set_model_parameters(Configuration, Tirific_Template,Model_Values, stage = '
         Tirific_Template['VROT']=f" 0. {' '.join([f'{x}' for x in vrot[:int(Configuration['NO_RINGS']-1)]])}"
         Tirific_Template['VROT_2']=f" 0. {' '.join([f'{x}' for x in vrot[:int(Configuration['NO_RINGS']-1)]])}"
     no_declining_vrot(Configuration, Tirific_Template, debug = debug)
+set_model_parameters.__doc__ =f'''
+ NAME:
+    set_model_parameters
 
-set_model_parameters.__doc__ = '''
+ PURPOSE:
+    Set the model values parameters in the tirific file that are singular values that apply to all of the fitting such as names and other issues
 
-    ; NAME:
-    ;      set_model_parameters(Configuration, Tirific_Template,Model_Values):
-    ;
-    ; PURPOSE:
-    ;      Set the model values parameters in the tirific file that are singular values that apply to all of the fitting such as names and other issues
-    ;
-    ; CATEGORY:
-    ;       modify_template
-    ;
-    ;
-    ; INPUTS:
-    ;
-    ; OPTIONAL INPUTS:
-    ;
-    ;
-    ; KEYWORD PARAMETERS:
-    ;       -
-    ;
-    ; OUTPUTS:
-    ;
-    ;
-    ; OPTIONAL OUTPUTS:
-    ;       -
-    ;
-    ; PROCEDURES CALLED:
-    ;      split, strip, open
-    ;
-    ; EXAMPLE:
-    ;
-    ;
+ CATEGORY:
+    modify_template
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    Tirific_Template = Standard FAT Tirific Template
+    Model_Values = the values for setting
+
+ OPTIONAL INPUTS:
+    debug = False
+
+    stage = 'initial'
+    stage of the fitting process
+
+ OUTPUTS:
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
 '''
-
 #function to check that all parameters in template have the proper length.
 def set_new_size(Configuration,Tirific_Template, Fits_Files, fit_type = 'Undefined', stage = 'initial',
                     current_run='Not Initialized', debug = False, Variables =
@@ -1877,11 +2131,11 @@ def set_new_size(Configuration,Tirific_Template, Fits_Files, fit_type = 'Undefin
     radii = set_rings(Configuration,debug=debug)
     if not Configuration['NEW_RING_SIZE']:
         print_log(f'''SET_NEW_SIZE: The rings size is stable and we are not interpolating
-''',Configuration['OUTPUTLOG'],screen = True)
+''',Configuration['OUTPUTLOG'])
         interpolate = False
     else:
         print_log(f'''SET_NEW_SIZE: The rings size is updated and we are interpolating the old values.
-''',Configuration['OUTPUTLOG'],screen = True)
+''',Configuration['OUTPUTLOG'])
         old_radii = parameters[Variables.index('RADI')]
         Configuration['NEW_RING_SIZE'] = False
         interpolate = True
@@ -1898,27 +2152,26 @@ def set_new_size(Configuration,Tirific_Template, Fits_Files, fit_type = 'Undefin
 
         if debug:
             print_log(f'''SET_NEW_SIZE: We are processing {key}
-''',Configuration['OUTPUTLOG'], debug=False)
-            print_log(f'''SET_NEW_SIZE: We have a parameter of length {len(parameters[i])}.
+{'':8s}SET_NEW_SIZE: We have a parameter of length {len(parameters[i])}.
 {'':8s}SET_NEW_SIZE: Our current number of rings in the model is {Configuration['NO_RINGS']}.
 {'':8s}SET_NEW_SIZE: {parameters[i]}
-''',Configuration['OUTPUTLOG'], debug=False)
+''',Configuration['OUTPUTLOG'])
         if key == 'RADI':
             Tirific_Template[key] = f" {' '.join([f'{x:.2f}' for x in radii])}"
         else:
             if interpolate:
                 if debug:
                     print_log(f'''SET_NEW_SIZE: We are interpolating par = {parameters[i]} old radii={old_radii} new radii={radii}
-    ''',Configuration['OUTPUTLOG'], debug=False)
+    ''',Configuration['OUTPUTLOG'])
                 if len(parameters[i]) > len(old_radii):
                     if debug:
                         print_log(f'''SET_NEW_SIZE: The parameters have more values than the radii. Cutting the end.
-    ''',Configuration['OUTPUTLOG'], debug=False)
+    ''',Configuration['OUTPUTLOG'])
                         parameters[i] = parameters[i][:len(old_radii)-1]
                 elif len(parameters[i]) < len(old_radii):
                     if debug:
                         print_log(f'''SET_NEW_SIZE: The parameters have less values than the radii. Adding the last value until match.
-    ''',Configuration['OUTPUTLOG'], debug=False)
+    ''',Configuration['OUTPUTLOG'])
                         while len(parameters[i]) < len(old_radii):
                             parameters[i].append(parameters[i][-1])
 
@@ -1940,7 +2193,7 @@ def set_new_size(Configuration,Tirific_Template, Fits_Files, fit_type = 'Undefin
 
         if debug:
             print_log(f'''SET_NEW_SIZE: We wrote the following line {Tirific_Template[key]}
-''',Configuration['OUTPUTLOG'],screen = True)
+''',Configuration['OUTPUTLOG'])
 
     #Replace the old ring numbers in VARY and VARINDX
     old_rings = calc_rings(Configuration,size_in_beams = int(round(float(Configuration['OLD_RINGS'][-2]))), ring_size  = 0.,debug=debug)
@@ -1970,7 +2223,7 @@ def set_new_size(Configuration,Tirific_Template, Fits_Files, fit_type = 'Undefin
 {'':8s} PA: Fixed = {Configuration['FIX_PA'][0]}
 {'':8s} SDIS: Fixed = {Configuration['FIX_SDIS'][0]}
 {'':8s} Z0: Fixed = {Configuration['FIX_Z0'][0]}
-''',Configuration['OUTPUTLOG'],screen =False)
+''',Configuration['OUTPUTLOG'])
 
     #update the limit_modifier
     Inclination = np.array([(float(x)+float(y))/2. for x,y in zip(Tirific_Template['INCL'].split(),Tirific_Template['INCL_2'].split())],dtype=float)
@@ -1979,8 +2232,49 @@ def set_new_size(Configuration,Tirific_Template, Fits_Files, fit_type = 'Undefin
     set_overall_parameters(Configuration, Fits_Files,Tirific_Template,loops = 10 ,fit_type=fit_type, debug=debug,stage=stage)
     # if we change the radii we need to restart tirific
     finish_current_run(Configuration,current_run,debug=debug)
+set_new_size.__doc__ =f'''
+ NAME:
+    set_new_size
 
-def set_overall_parameters(Configuration, Fits_Files,Tirific_Template,stage = 'initial',fit_type='Undefined_Stage', loops = 0, flux = None,debug = False):
+ PURPOSE:
+    Set the parameters in the template when the rings need to be adjusted.
+
+ CATEGORY:
+    modify_template
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    Fits_Files = Standard FAT dictionary with filenames
+    Tirific_Template = Standard FAT Tirific Template
+
+ OPTIONAL INPUTS:
+    debug = False
+
+    fit_type = 'Undefined'
+    type of fitting
+
+    stage = 'initial'
+    stage of the fitting
+
+    current_run='Not Initialized'
+    subprocess structure running tirific
+
+    Variables =['VROT','Z0', 'SBR', 'INCL','PA','XPOS','YPOS','VSYS','SDIS','VROT_2',  'Z0_2','SBR_2',
+                     'INCL_2','PA_2','XPOS_2','YPOS_2','VSYS_2','SDIS_2', 'AZ1P', 'AZ1W' ,'AZ1P_2','AZ1W_2', 'RADI']
+    Variables to be updated
+
+ OUTPUTS:
+    No output but the tirific process is stopped and the template updated
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
+
+def set_overall_parameters(Configuration, Fits_Files,Tirific_Template,stage = 'initial',fit_type='Undefined', loops = 0, flux = None,debug = False):
 
             if Configuration['OPTIMIZED']:
                 Tirific_Template['INSET'] = f"{Fits_Files['OPTIMIZED_CUBE']}"
@@ -2048,45 +2342,51 @@ def set_overall_parameters(Configuration, Fits_Files,Tirific_Template,stage = 'i
             if flux:
                 Tirific_Template['CFLUX'] = f"{set_limits(flux/1.5e7,1e-6,1e-3):.2e}"
                 Tirific_Template['CFLUX_2'] = f"{set_limits(flux/1.5e7,1e-6,1e-3):.2e}"
-set_overall_parameters.__doc__ = '''
+set_overall_parameters.__doc__ =f'''
+ NAME:
+    set_overall_parameters
 
-    ; NAME:
-    ;      set_overall_parameters(Configuration, Fits_Files,Tirific_Template, loops = 0, outname = 'random_fit')
-    ;
-    ; PURPOSE:
-    ;      Set the parameters in the tirific file that are singular values that apply to all of the fitting such as names and other issues
-    ;
-    ; CATEGORY:
-    ;       modify_template
-    ;
-    ;
-    ; INPUTS:
-    ;
-    ; OPTIONAL INPUTS:
-    ;
-    ;
-    ; KEYWORD PARAMETERS:
-    ;       -
-    ;
-    ; OUTPUTS:
-    ;
-    ;
-    ; OPTIONAL OUTPUTS:
-    ;       -
-    ;
-    ; PROCEDURES CALLED:
-    ;      split, strip, open
-    ;
-    ; EXAMPLE:
-    ;
-    ;
-'''
+ PURPOSE:
+    Set the parameters in the tirific file that are singular values that apply to all of the fitting such as names and other issues
+
+ CATEGORY:
+    modify_template
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    Fits_Files = Standard FAT dictionary with filenames
+    Tirific_Template = Standard FAT Tirific Template
+
+ OPTIONAL INPUTS:
+    debug = False
+
+    stage = 'initial'
+    stage of fitting
+
+    fit_type='Undefined_Stage'
+    type of fitting
+
+    loops = 0
+    max number of loops allowed in tirific run
+
+    flux = None,
+    Total flux in the model
+
+ OUTPUTS:
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+ '''
 
 def set_sbr_fitting(Configuration,systemic = 100., stage = 'no_stage',debug = False):
     if debug:
         print_log(f'''SET_SBR_FITTING: We are setting the SBR limits.
 {'':8s} No_Rings = {Configuration['NO_RINGS']}
-''',Configuration['OUTPUTLOG'],debug = debug)
+''',Configuration['OUTPUTLOG'],debug = True)
     sbr_input = {}
     inner_ring = 2
     if stage in ['initial','run_cc','initialize_ec','run_ec','initialize_os','run_os']:
@@ -2097,7 +2397,7 @@ def set_sbr_fitting(Configuration,systemic = 100., stage = 'no_stage',debug = Fa
             print_log(f'''SET_SBR_FITTING: Using these SBR limits.
 {'':8s} limits = {sbr_ring_limits}
 {'':8s} no of limits = {len(sbr_ring_limits)}
-''',Configuration['OUTPUTLOG'],debug = False)
+''',Configuration['OUTPUTLOG'])
         if stage in ['initial','run_cc']:
             max_size = 4
         elif stage in ['initialize_ec','run_ec','initialize_os','run_os']:
@@ -2144,38 +2444,38 @@ def set_sbr_fitting(Configuration,systemic = 100., stage = 'no_stage',debug = Fa
         sbr_input['MINDELTA'] = np.concatenate(([2e-6],[2e-6]))
 
     return sbr_input
-set_sbr_fitting.__doc__ = '''
+set_sbr_fitting.__doc__ =f'''
+ NAME:
+    set_sbr_fitting
 
-    ; NAME:
-    ;      set_sbr_fitting(Configuration,systemic = 100., stage = 'initial'):
-    ;
-    ; PURPOSE:
-    ;      the fitting parameter for the sbr if required
-    ;
-    ; CATEGORY:
-    ;       modify_template
-    ;
-    ;
-    ; INPUTS:
-    ;
-    ; OPTIONAL INPUTS:
-    ;
-    ;
-    ; KEYWORD PARAMETERS:
-    ;       -
-    ;
-    ; OUTPUTS:
-    ;
-    ;
-    ; OPTIONAL OUTPUTS:
-    ;       -
-    ;
-    ; PROCEDURES CALLED:
-    ;      split, strip, open
-    ;
-    ; EXAMPLE:
-    ;
-    ;
+ PURPOSE:
+    set the sbr fitting parameters
+
+ CATEGORY:
+    modify_template
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+
+
+ OPTIONAL INPUTS:
+    debug = False
+
+    systemic = 100.
+    systemic velocity of the source
+
+    stage = 'no_stage'
+    stage of the fitting
+
+ OUTPUTS:
+    a fitting dictionary
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
 '''
 
 def set_vrot_fitting(Configuration, stage = 'initial', rotation = [100,5.], debug = False):
@@ -2187,7 +2487,7 @@ def set_vrot_fitting(Configuration, stage = 'initial', rotation = [100,5.], debu
         print_log(f'''SET_VROT_FITTING: We are setting the VROT limits.
 {'':8s} No_Rings = {Configuration['NO_RINGS']}
 {'':8s} Limits = {vrot_limits}
-''',Configuration['OUTPUTLOG'],debug = debug)
+''',Configuration['OUTPUTLOG'],debug = True)
     if stage in  ['initial','run_cc','after_cc','initialize_ec','run_ec','initialize_os','run_os']:
         if stage in ['initial', 'run_cc','initialize_ec','run_ec','initialize_os','run_os']:
             vrot_input['VARY'] =  np.array([f"!VROT {NUR}:2 VROT_2 {NUR}:2"])
@@ -2230,38 +2530,37 @@ def set_vrot_fitting(Configuration, stage = 'initial', rotation = [100,5.], debu
 
 
     return vrot_input
-set_vrot_fitting.__doc__ = '''
+set_vrot_fitting.__doc__ =f'''
+ NAME:
+    set_vrot_fitting
 
-    ; NAME:
-    ;      set_vrot_fitting(Configuration,systemic = 100., stage = 'initial', rotation = [100,5.]):
-    ;
-    ; PURPOSE:
-    ;      the fitting parameter for the incl if required
-    ;
-    ; CATEGORY:
-    ;       modify_template
-    ;
-    ;
-    ; INPUTS:
-    ;
-    ; OPTIONAL INPUTS:
-    ;
-    ;
-    ; KEYWORD PARAMETERS:
-    ;       -
-    ;
-    ; OUTPUTS:
-    ;
-    ;
-    ; OPTIONAL OUTPUTS:
-    ;       -
-    ;
-    ; PROCEDURES CALLED:
-    ;      split, strip, open
-    ;
-    ; EXAMPLE:
-    ;
-    ;
+ PURPOSE:
+    Set the fitting parameters for VROT
+
+ CATEGORY:
+    modify_template
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+
+ OPTIONAL INPUTS:
+    debug = False
+
+    stage = 'initial'
+    stage of the fitting
+
+    rotation = [100,5.]
+    estimate of mean rotation curve and error
+
+ OUTPUTS:
+    a fitting dictionary
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
 '''
 
 def smooth_profile(Configuration,Tirific_Template,key,min_error = 0.,debug=False ,profile_in = None, no_apply =False,fix_sbr_call = False):
@@ -2298,7 +2597,7 @@ def smooth_profile(Configuration,Tirific_Template,key,min_error = 0.,debug=False
     if debug:
         print_log(f'''SMOOTH_PROFILE: retrieved profile.
 {'':8s}{profile}
-''',Configuration['OUTPUTLOG'],debug = False)
+''',Configuration['OUTPUTLOG'])
     # savgol filters do not work for small array
     for i in [0,1]:
         if len(profile[i]) < 8:
@@ -2338,7 +2637,7 @@ def smooth_profile(Configuration,Tirific_Template,key,min_error = 0.,debug=False
     if debug:
         print_log(f'''SMOOTH_PROFILE: profile after smoothing.
 {'':8s}{profile}
-''',Configuration['OUTPUTLOG'],debug = False)
+''',Configuration['OUTPUTLOG'])
     if not no_apply:
         weights = get_ring_weights(Configuration,Tirific_Template,debug=debug)
         errors = get_error(Configuration,original_profile,profile,key,weights = weights, min_error=min_error,debug=debug)
@@ -2357,7 +2656,7 @@ def smooth_profile(Configuration,Tirific_Template,key,min_error = 0.,debug=False
 {'':8s}{key}_2 ={Tirific_Template[f"{key}_2"]}
 {'':8s}# {key}_ERR ={Tirific_Template[f"# {key}_ERR"]}
 {'':8s}# {key}_2_ERR ={Tirific_Template[f"# {key}_2_ERR"]}
-''',Configuration['OUTPUTLOG'],screen=True,debug = False)
+''',Configuration['OUTPUTLOG'])
 
     return profile
 smooth_profile.__doc__ =f'''
@@ -2377,11 +2676,12 @@ smooth_profile.__doc__ =f'''
 
  OPTIONAL INPUTS:
     debug = False
+
     min_error = 0.
     The minimum eror that should be used
 
-    profile = None
-    if provided this will be smoothed instead of the key being extrcated from the Template
+    profile_in = None
+    if provided this will be smoothed instead of the key being extracted from the Template
 
     no_apply =False
     If true the smoothed profile will only be returned but not applied to the template
@@ -2402,52 +2702,6 @@ smooth_profile.__doc__ =f'''
  EXAMPLE:
 '''
 
-
-
-
-
-def modify_flat(Configuration,profile,original_profile,errors,key, debug=False):
-
-    if debug:
-         print_log(f'''MODIFY_FLAT: These {key} profiles are checked to be flat.
-{'':8s} profile = {profile}
-{'':8s} original_profile = {original_profile}
-{'':8s} errors = {errors}
-''',Configuration['OUTPUTLOG'],debug = True)
-
-    flatness = []
-    for side in [0,1]:
-         flatness.append(check_flat(Configuration,profile[side],errors[side],last_reliable_ring= Configuration['LAST_RELIABLE_RINGS'][side],debug=debug))
-    if debug:
-         print_log(f'''MODIFY_FLAT: Side 0 is flat = {flatness[0]}
-{'':8s} Side 1 is flat = {flatness[1]}
-''',Configuration['OUTPUTLOG'],debug = False)
-
-    if all(flatness):
-        if key in ['PA']:
-            profile[:] = profile[0,0]
-        else:
-            profile[:] = np.nanmedian(original_profile[:,:round(len(original_profile)/2.)])
-        errors = get_error(Configuration,original_profile,profile,key,apply_max_error = True,min_error =np.nanmin(errors) , debug=debug)
-    else:
-        if any(flatness):
-            for side in [0,1]:
-                if flatness[side]:
-                    if key in ['PA']:
-                        profile[side,:] = profile[side,0]
-                    else:
-                        profile[side,:]  = np.median(original_profile[side,:round(len(original_profile)/2.)])
-                    flat_val = profile[side,0]
-                    errors[side] = get_error(Configuration,original_profile[side],profile[side],key,apply_max_error = True,min_error =np.nanmin(errors[side]),singular = True ,debug=debug)
-            profile[:,0:3] = flat_val
-            profile[:,4] = (flat_val+profile[:,4])/2.
-    if debug:
-        print_log(f'''MODIFY_FLAT: Returning:
-{'':8s} profile = {profile}
-{'':8s} errors = {errors}
-''',Configuration['OUTPUTLOG'],debug = False)
-    return profile,errors
-
 def update_disk_angles(Configuration,Tirific_Template,debug = False):
     extension = ['','_2']
     for ext in extension:
@@ -2459,8 +2713,35 @@ def update_disk_angles(Configuration,Tirific_Template,debug = False):
         if debug:
             print_log(f'''UPDATE_DISK_ANGLES: adusting AZ1P{ext} with these angles
 {'':8s}{angle_adjust}
-''', None,screen = True)
+''', Configuration['OUTPUTLOG'])
         Tirific_Template.insert(f'AZ1W{ext}',f'AZ1P{ext}',f"{' '.join([f'{x:.2f}' for x in angle_adjust])}")
+update_disk_angles.__doc__ =f'''
+ NAME:
+    update_disk_angles
+
+ PURPOSE:
+    Update the AZ1W and AZ1P parameters to match the warp
+
+ CATEGORY:
+    modify_template
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    Tirific_Template = Standard FAT Tirific Template
+
+ OPTIONAL INPUTS:
+    debug = False
+
+ OUTPUTS:
+    Updated template
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
 
 def write_new_to_template(Configuration, filename,Tirific_Template, Variables = ['VROT',
                  'Z0', 'SBR', 'INCL','PA','XPOS','YPOS','VSYS','SDIS','VROT_2',  'Z0_2','SBR_2',
@@ -2475,3 +2756,35 @@ def write_new_to_template(Configuration, filename,Tirific_Template, Variables = 
     if 'INCL' in Variables or 'INCL_2' in Variables:
         Inclination = np.array([(float(x)+float(y))/2. for x,y in zip(Tirific_Template['INCL'].split(),Tirific_Template['INCL_2'].split())],dtype=float)
         set_limit_modifier(Configuration,Inclination,debug= debug)
+write_new_to_template.__doc__ =f'''
+ NAME:
+    write_new_to_template
+
+ PURPOSE:
+    Write a def file into the template
+
+ CATEGORY:
+    modify_template
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    filename = the name of the def file
+    Tirific_Template = Standard FAT Tirific Template
+
+ OPTIONAL INPUTS:
+    debug = False
+
+    Variables = ['VROT', 'Z0', 'SBR', 'INCL','PA','XPOS','YPOS','VSYS','SDIS','VROT_2',  'Z0_2','SBR_2',
+                 'INCL_2','PA_2','XPOS_2','YPOS_2','VSYS_2','SDIS_2']
+    the parameters to be updated from the file
+
+ OUTPUTS:
+    The template is updated
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''

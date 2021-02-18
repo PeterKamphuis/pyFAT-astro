@@ -17,11 +17,11 @@ def check_legitimacy(Configuration,debug=False):
 ''',Configuration['OUTPUTLOG'],debug =True)
     if Configuration['MAPS_OUTPUT'] == 'error':
         print_log(f'''CHECK_LEGITIMACY: An unspecified error is registered. The final message should reflect this.
-''',Configuration['OUTPUTLOG'],debug =False)
+''',Configuration['OUTPUTLOG'])
         return
     elif Configuration['MAPS_OUTPUT'] == 5:
         print_log(f'''CHECK_LEGITIMACY: A FAT specific error is registered. The final message should reflect this.
-''',Configuration['OUTPUTLOG'],debug =False)
+''',Configuration['OUTPUTLOG'])
         return
     else:
         if Configuration['FINISHAFTER'] > 0:
@@ -30,7 +30,7 @@ def check_legitimacy(Configuration,debug=False):
     low_incl_limit = 10.
     low_beam_limit = 0.
     if float(inclination[0]) < low_incl_limit or 2.*Configuration['SIZE_IN_BEAMS'] < low_beam_limit:
-        Configuration['OS_ACCEPTED'] = False
+        Configuration['ACCEPTED'] = False
         if float(inclination[0]) < low_incl_limit:
             Configuration['FINAL_COMMENT'] = f'The final inclination is below {low_incl_limit}. FAT is not neccesarily reliable in this range.'
         elif 2.*Configuration['SIZE_IN_BEAMS'] < low_beam_limit:
@@ -68,7 +68,7 @@ check_legitimacy.__doc__ =f'''
 def clean_before_sofia(Configuration, debug = False):
     if debug:
         print_log(f'''CLEAN_BEFORE_SOFIA: Starting.
-''',Configuration['OUTPUTLOG'],debug = debug)
+''',Configuration['OUTPUTLOG'],debug = True)
     files =['_mask.fits','_mom0.fits','_mom1.fits','_chan.fits','_mom2.fits','_cat.txt']
 
     for file in files:
@@ -188,7 +188,7 @@ def cleanup(Configuration,Fits_Files, debug = False):
 {"":8s}CLEANUP: {','.join(directories)}
 {"":8s}CLEANUP: and the following files:
 {"":8s}CLEANUP: {','.join(files)}
-''',Configuration['OUTPUTLOG'], screen =True)
+''',Configuration['OUTPUTLOG'], screen =True,debug=debug)
 
 
         ext=['.fits','.log','.ps','.def']
@@ -266,7 +266,7 @@ cleanup.__doc__ =f'''
 def cleanup_final(Configuration,Fits_Files, debug =False):
     if debug:
          print_log(f'''Starting the final cleanup of the directory.
-''',Configuration['OUTPUTLOG'],screen =True,debug = True)
+''',Configuration['OUTPUTLOG'],debug = True)
     clean_files = [Fits_Files['OPTIMIZED_CUBE'],'Centre_Convergence_In.def', 'Extent_Convergence_In.def',\
                     'clean_map_0.fits','dep_map_0.fits','minimum_map_0.fits','rot_map_0.fits',\
                     'clean_map_1.fits','dep_map_1.fits','minimum_map_1.fits','rot_map_1.fits',\
@@ -375,7 +375,7 @@ copy_homemade_sofia.__doc__ =f'''
 def installation_check(Configuration, debug =False):
     if debug:
          print_log(f'''INSTALLATION_CHECK: Starting to compare the output to what is expected.
-''',Configuration['OUTPUTLOG'],screen =True,debug = True)
+''',Configuration['OUTPUTLOG'],debug = True)
 
     Model = tirific_template(filename = 'Installation_Check', debug= debug)
     Variables_to_Compare = ['VROT','INCL','PA','SBR','SDIS','Z0','XPOS','YPOS','VSYS']
@@ -389,13 +389,13 @@ def installation_check(Configuration, debug =False):
         if debug:
             print_log(f'''INSTALLATION_CHECK: the found differences
 {'':8s}{diff}
-''',Configuration['OUTPUTLOG'],screen =True,debug = False)
+''',Configuration['OUTPUTLOG'])
         too_much = np.array(np.where(diff > 1e-3),dtype=float)
         if debug:
             print_log(f'''INSTALLATION_CHECK: at the locations
 {'':8s}{too_much}
 {'':8s}{too_much.size}
-''',Configuration['OUTPUTLOG'],screen =True,debug = False)
+''',Configuration['OUTPUTLOG'])
 
         if too_much.size == 0.:
             succes = True
@@ -408,7 +408,7 @@ def installation_check(Configuration, debug =False):
 !!!!!!!!!!!!!!!!!!! All parameters are fitted within the expected variance. !!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!        We think pyFAT is installed succesfully          !!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-''',Configuration['OUTPUTLOG'],screen =True,debug = True)
+''',Configuration['OUTPUTLOG'],screen =True)
     else:
         print_log(f'''
 !!!!---------------------------------------------!!!!!
@@ -426,7 +426,7 @@ def installation_check(Configuration, debug =False):
 !!!! in the Installation_Check/Finalmodel/       !!!!!
 !!!! directory to your report.                   !!!!!
 !!!!---------------------------------------------!!!!!
-''',Configuration['OUTPUTLOG'],screen =True,debug = True)
+''',Configuration['OUTPUTLOG'],screen =True)
 
 installation_check.__doc__ =f'''
  NAME:
@@ -464,7 +464,7 @@ def finish_galaxy(Configuration,maximum_directory_length,current_run = 'Not init
     # Need to write to results catalog
     if Configuration['OUTPUTCATALOGUE']:
         with open(Configuration['OUTPUTCATALOGUE'],'a') as output_catalogue:
-            output_catalogue.write(f"{Configuration['FITTING_DIR'].split('/')[-2]:{maximum_directory_length}s} {str(Configuration['OS_ACCEPTED']):>6s} {Configuration['FINAL_COMMENT']} \n")
+            output_catalogue.write(f"{Configuration['FITTING_DIR'].split('/')[-2]:{maximum_directory_length}s} {str(Configuration['ACCEPTED']):>6s} {Configuration['FINAL_COMMENT']} \n")
 
     if Configuration['MAPS_OUTPUT'] == 'error':
         error_message = '''
@@ -497,7 +497,7 @@ def finish_galaxy(Configuration,maximum_directory_length,current_run = 'Not init
         with open(Configuration['OUTPUTLOG'],'a') as log_file:
                     traceback.print_exc(file=log_file)
         traceback.print_exc()
-        print_log(log_statement,Configuration['OUTPUTLOG'], screen = False)
+        print_log(log_statement,Configuration['OUTPUTLOG'])
     elif Configuration['MAPS_OUTPUT'] < 4:
         log_statement = f'''Producing final output in {Configuration['FITTING_DIR']}.
 '''
@@ -535,7 +535,7 @@ def finish_galaxy(Configuration,maximum_directory_length,current_run = 'Not init
         timing_result = open(Configuration['MAINDIR']+'/Timing_Result.txt','a')
         timing_result.write(f'''The galaxy in directory {Configuration['FITTING_DIR']} started at {Configuration['START_TIME']}.
 Finished preparations at {Configuration['PREP_END_TIME']} \n''')
-        timing_result.write(f'''Converged to a galaxy size at {Configuration['OS_END_TIME']}. \n''')
+        timing_result.write(f'''Converged to a galaxy size at {Configuration['END_TIME']}. \n''')
         timing_result.write(f'''It finished the whole process at {datetime.now()}
 ''')
         timing_result.close()
