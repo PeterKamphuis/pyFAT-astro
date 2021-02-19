@@ -77,21 +77,21 @@ def check_flat(Configuration,profile,error, last_reliable_ring = -1, debug = Fal
     if debug:
             print_log(f'''CHECK_FLAT: If  {abs(outer-inner)} less than {mean_error} or
 {'':8s} The outer variation {outer_std} less than the median error {mean_error} we break and set flat.
-''',Configuration['OUTPUTLOG'],debug = False)
+''',Configuration['OUTPUTLOG'])
     if abs(outer-inner) < mean_error or outer_std  < mean_error:
         return True
     for e,x,y in zip(error[1:last_reliable_ring],profile[1:last_reliable_ring],profile[0:last_reliable_ring]):
         if debug:
             print_log(f'''CHECK_FLAT: x = {x}, y = {y}, e = {e}
-''',Configuration['OUTPUTLOG'],debug = False)
+''',Configuration['OUTPUTLOG'])
         if not x-e/2. < y < x+e/2.:
             if debug:
                 print_log(f'''CHECK_FLAT: This taco is bend
-''',Configuration['OUTPUTLOG'],debug = False)
+''',Configuration['OUTPUTLOG'])
             return False
     if debug:
             print_log(f'''CHECK_FLAT: All values were within the error of eachother
-''',Configuration['OUTPUTLOG'],debug = False)
+''',Configuration['OUTPUTLOG'])
     return True
 check_flat.__doc__ = '''
  NAME:
@@ -218,7 +218,7 @@ def check_size(Configuration,Tirific_Template, fit_type = 'Undefined', stage = '
     print_log(f'''CHECK_SIZE: We find the following size in beams {size_in_beams} with size {ring_size}.
 {'':8s}CHECK_SIZE: The previous iteration had {Configuration['SIZE_IN_BEAMS']} rings with size  {Configuration['RING_SIZE']} .
 {'':8s}CHECK_SIZE: This results in {new_rings} rings in the model compared to {Configuration['NO_RINGS']} previously.
-''', Configuration['OUTPUTLOG'])
+''', Configuration['OUTPUTLOG'],screen=True)
     if float(ring_size) != float(Configuration['RING_SIZE']):
         Configuration['NEW_RING_SIZE'] = True
     else:
@@ -362,7 +362,7 @@ def fit_polynomial(Configuration,radii,profile,sm_profile,error, key, Tirific_Te
 {'':8s} profile = {profile}
 {'':8s} sm_profile = {sm_profile}
 {'':8s} error = {error}
-''',Configuration['OUTPUTLOG'],screen =True, debug=debug)
+''',Configuration['OUTPUTLOG'], debug=debug)
     only_inner = False
     if key in ['PA','INCL','Z0']:
         fixed = Configuration['INNER_FIX']
@@ -402,7 +402,7 @@ def fit_polynomial(Configuration,radii,profile,sm_profile,error, key, Tirific_Te
     if debug:
         print_log(f'''FIT_POLYNOMIAL: For {key} we start at {start_order} because we have {len(radii)} rings of which {fixed} are fixed
 {'':8s} this gves us a maximum order of {max_order}
-''',Configuration['OUTPUTLOG'], debug=False)
+''',Configuration['OUTPUTLOG'])
 
     reduced_chi = []
     order = range(start_order,max_order)
@@ -412,7 +412,7 @@ def fit_polynomial(Configuration,radii,profile,sm_profile,error, key, Tirific_Te
 {'':8s} and the following profile:
 {'':8s}{sm_profile[st_fit:]}
 {'':8s} weights = {1./error[st_fit:]}
-''',Configuration['OUTPUTLOG'], debug=False)
+''',Configuration['OUTPUTLOG'])
 
     #make sure there are no 0. in the errors
     zero_locations = np.where(error[st_fit:] == 0.)[0]
@@ -434,12 +434,12 @@ def fit_polynomial(Configuration,radii,profile,sm_profile,error, key, Tirific_Te
         print_log(f'''FIT_POLYNOMIAL: We have fitted these:
 {'':8s} order = {order}
 {'':8s} reducuced chi = {reduced_chi}
-''',Configuration['OUTPUTLOG'], debug=False)
+''',Configuration['OUTPUTLOG'])
     reduced_chi = np.array(reduced_chi,dtype = float)
     final_order = order[np.where(np.min(reduced_chi ) == reduced_chi )[0][0]]
 
     print_log(f'''FIT_POLYNOMIAL: We have regularised {key} with a polynomial of order {final_order}.
-''',Configuration['OUTPUTLOG'], debug=False)
+''',Configuration['OUTPUTLOG'])
     fit_profile = np.poly1d(np.polyfit(radii[st_fit:],profile[st_fit:],final_order,w=1./error[st_fit:]))
     if st_fit > 0.:
         new_profile = np.concatenate(([sm_profile[0]],[e for e in fit_profile(radii[st_fit:])]))
@@ -491,12 +491,12 @@ def fix_outer_rotation(Configuration,profile, debug = False):
     if debug:
         print_log(f'''FIX_OUTER_ROTATION: adjust last rings of VROT profile:
 {'':8s}{profile}
-''',Configuration['OUTPUTLOG'],screen=True,debug = True)
+''',Configuration['OUTPUTLOG'],debug = True)
     profile = np.array(profile,dtype=float)
     inner_slope = Configuration['RC_UNRELIABLE']
     if debug:
         print_log(f'''FIX_OUTER_ROTATION: this is the inner slope {inner_slope}
-''',Configuration['OUTPUTLOG'],debug = False)
+''',Configuration['OUTPUTLOG'])
     NUR = Configuration['NO_RINGS']
     #inner_slope = int(round(set_limits(NUR*(4.-Configuration['LIMIT_MODIFIER'][0])/4.,round(NUR/2.),NUR-2)))
     if inner_slope != NUR-1 and np.mean(profile[1:3]) > 180.:
@@ -509,7 +509,7 @@ def fix_outer_rotation(Configuration,profile, debug = False):
     if debug:
         print_log(f'''FIX_OUTER_ROTATION: this is corrected profile:
 {profile}
-''',Configuration['OUTPUTLOG'],debug = False)
+''',Configuration['OUTPUTLOG'])
 
     return profile
 fix_outer_rotation.__doc__ =f'''
@@ -861,7 +861,7 @@ def get_error(Configuration,profile,sm_profile,key,min_error = [0.],singular = F
     if debug:
         print_log(f'''GET_ERROR: using these weights =
 {'':8s}{weights}
-''',Configuration['OUTPUTLOG'],screen=True,debug = False)
+''',Configuration['OUTPUTLOG'])
     for i in sides:
         error[i] = abs(profile[i]-sm_profile[i])/2.
         error[i]= error[i]/weights[i]
@@ -884,7 +884,7 @@ def get_error(Configuration,profile,sm_profile,key,min_error = [0.],singular = F
     if debug:
         print_log(f'''GET_ERROR: error =
 {'':8s}{error}
-''',Configuration['OUTPUTLOG'],screen=True,debug = False)
+''',Configuration['OUTPUTLOG'])
     return error
 get_error.__doc__ =f'''
  NAME:
@@ -1075,42 +1075,42 @@ def inner_sbr_fix(Configuration,sbr,cutoff_limits,debug=False):
     if debug:
         print_log(f'''INNER_SBR_FIX: Checking the SBR inner points for runaway values
 {'':8s} sbr in  = {sbr}
-''',Configuration['OUTPUTLOG'], debug = True, screen = True)
+''',Configuration['OUTPUTLOG'], debug = True)
 
     if np.all(sbr[:,0] > 2*sbr[:,2]) or np.all(sbr[:,1] > 2*sbr[:,2]):
         if debug:
             print_log(f'''INNER_SBR_FIX: We need to correct
 {'':8s} sbr 0  = {sbr[:,0]} sbr 1  = {sbr[:,1]} sbr 2  = {sbr[:,2]}
-''',Configuration['OUTPUTLOG'], debug = True, screen = True)
+''',Configuration['OUTPUTLOG'])
         if np.mean(sbr[:,2]) > cutoff_limits[0,2]:
             sbr[:,[0,1]] = np.mean(sbr[:,2])
             if debug:
                 print_log(f'''INNER_SBR_FIX: We need to correct with mean
 {'':8s} mean = {np.mean(sbr[:,2])}
-''',Configuration['OUTPUTLOG'], debug = True, screen = True)
+''',Configuration['OUTPUTLOG'])
         else:
             if debug:
                 print_log(f'''INNER_SBR_FIX: We need to correct with cut_off_limits
 {'':8s} limit = {1.5*cutoff_limits[0,2]}
-''',Configuration['OUTPUTLOG'], debug = True, screen = True)
+''',Configuration['OUTPUTLOG'])
             sbr[:,[0,1,2]] = 1.5*cutoff_limits[0,2]
     if np.any(sbr[:,0] > sbr[:,1]):
         if debug:
                 print_log(f'''INNER_SBR_FIX: We correct 0 point
 {'':8s} mean 1 = {np.mean(sbr[:,1])}
-''',Configuration['OUTPUTLOG'], debug = True, screen = True)
+''',Configuration['OUTPUTLOG'])
         sbr[:,0] = np.mean(sbr[:,1])
 
     for i in [0,1]:
         if np.any(sbr[:,i] < cutoff_limits[:,2]):
             if debug:
                 print_log(f'''INNER_SBR_FIX: correcting ring {i}
-''',Configuration['OUTPUTLOG'], debug = True, screen = True)
+''',Configuration['OUTPUTLOG'])
             sbr[:,i] = 1.5*cutoff_limits[0,2]
 
     if debug:
                 print_log(f'''INNER_SBR_FIX: the fixed sbr {sbr}
-''',Configuration['OUTPUTLOG'], debug = True, screen = True)
+''',Configuration['OUTPUTLOG'])
 
     return sbr
 inner_sbr_fix.__doc__ =f'''
@@ -1429,7 +1429,7 @@ def set_boundary_limits(Configuration,Tirific_Template,key, tolerance = 0.01, va
         if debug:
             print_log(f'''SET_BOUNDARY_LIMITS: We have set the boundaries to as all were 0.
 {'':8s} current Boundaries = {current_boundaries}
-''',Configuration['OUTPUTLOG'],debug = False)
+''',Configuration['OUTPUTLOG'])
 
     if fixed:
         range_to_check = [0]
@@ -1499,7 +1499,7 @@ def set_cflux(Configuration,Tirific_Template,debug = False):
     if any(np.isnan(Configuration['NO_POINTSOURCES'])):
         print_log(f'''SET_CFLUX: We detected an infinite number of model point sources.
 {"":8s}SET_CFLUX: This must be an error. Exiting the fitting.
-''',Configuration['OUTPUTLOG'])
+''',Configuration['OUTPUTLOG'],screen = True)
         raise CfluxError('The model had infinite point sources')
     if Configuration['SIZE_IN_BEAMS'] < 15:
         factor = 1.
@@ -1595,7 +1595,7 @@ def set_fitting_parameters(Configuration, Tirific_Template, parameters_to_adjust
     if debug:
         print_log(f'''SET_FITTING_PARAMETERS: We are starting with these modifiers.
 {'':8s} {modifiers}
-''',Configuration['OUTPUTLOG'],debug=True,screen = True)
+''',Configuration['OUTPUTLOG'],debug=True)
     try:
         if modifiers[0] == 'EMPTY':
             modifiers = {}
@@ -1631,7 +1631,7 @@ def set_fitting_parameters(Configuration, Tirific_Template, parameters_to_adjust
         else:
             if debug:
                 print_log(f'''SET_FITTING_PARAMETERS: No default adjustment for unknown stage.
-''',Configuration['OUTPUTLOG'],debug=False,screen = True)
+''',Configuration['OUTPUTLOG'])
             raise InitializeError('No default adjustment for unknown stage. ')
 
     for key in parameters_to_adjust:
@@ -1655,7 +1655,7 @@ def set_fitting_parameters(Configuration, Tirific_Template, parameters_to_adjust
         if key not in modifiers:
             if debug:
                 print_log(f'''SET_FITTING_PARAMETERS: Adding {key} to the modifiers
-''',Configuration['OUTPUTLOG'],screen =True)
+''',Configuration['OUTPUTLOG'])
             if key == 'Z0': modifiers['Z0'] = [0.5,0.5,2.]
             elif key in ['XPOS','YPOS']: modifiers[key] = [1.,1.,1.]
             elif key == 'VSYS': modifiers[key] = [3.,1.,1.]
@@ -1670,7 +1670,7 @@ def set_fitting_parameters(Configuration, Tirific_Template, parameters_to_adjust
     if debug:
         for key in modifiers:
             print_log(f'''SET_FITTING_PARAMETERS: This {key} is in modifiers
-''',Configuration['OUTPUTLOG'],screen=True)
+''',Configuration['OUTPUTLOG'])
     if debug:
         print_log(f'''SET_FITTING_PARAMETERS: These are the inclination modifiers
 {'':8s} {modifiers['INCL']}
@@ -1836,8 +1836,8 @@ def set_generic_fitting(Configuration, key , stage = 'initial', values = [60,5.]
                         upper_bracket = [10.,100.], lower_bracket=[0., 50.], fixed = True, moderate = 3, step_modifier = [1.,1.,1.],\
                         flat_inner = 3):
     if debug:
-            print_log(f'''SET_GENERIC_FITTING: We are processing {key}.
-''', Configuration['OUTPUTLOG'] ,debug = debug)
+        print_log(f'''SET_GENERIC_FITTING: We are processing {key}.
+''', Configuration['OUTPUTLOG'] ,debug = True)
     NUR = Configuration['NO_RINGS']
     if all(x == 0. for x in np.array(slope)):
         slope = [NUR,NUR]

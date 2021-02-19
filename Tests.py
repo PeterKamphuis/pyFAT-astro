@@ -263,7 +263,7 @@ basic.__doc__ =f'''
  PURPOSE:
 
  CATEGORY:
-    modify_template
+    run_functions
 
  INPUTS:
     Configuration = Standard FAT configuration
