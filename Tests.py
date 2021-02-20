@@ -16,7 +16,8 @@ with warnings.catch_warnings():
     from mpl_toolkits.axes_grid1 import make_axes_locatable
     from matplotlib.patches import Ellipse
     import matplotlib.axes as maxes
-
+from astropy.io import fits
+from astropy.wcs import WCS
 import pyFAT
 
 import pyFAT.Support.modify_template as mt
@@ -25,8 +26,57 @@ import pyFAT.Support.run_functions as runf
 import pyFAT.Support.write_functions as wf
 import pyFAT.Support.support_functions as sf
 import pyFAT.Support.fits_functions as ff
+import pyFAT.Support.development_functions as df
 
 homedir = '/home/peter/'
+
+Configuration = {'INNER_FIX': 4}
+#Configuration['FITTING_DIR']= f"{homedir}/FAT_Main/FAT_Testers/Database-09-10-2020/M_83_2.0Beams_1.0SNR/"
+Configuration['FITTING_DIR']= f"{homedir}/FAT_Main/FAT_Testers/Database-09-10-2020/Mass2.5e+12-i30d14.0-7.5pa35.0w0.0-0.0-No_Flare-ba12SNR8bm20.0-20.0ch4.0-Arms-No_Bar-rm0.0/"
+Fits_Files = {'ORIGINAL_CUBE': "Convolved_Cube.fits"}
+Configuration['SUB_DIR']= 'NGC_3198_6.0Beams_1.0SNR'
+Configuration['CUBENAME']= 'Convolved_Cube'
+Configuration['BASE_NAME']= 'Convolved_Cube_FAT'
+Fits_Files['NOISEMAP'] = f"{Configuration['BASE_NAME']}_noisemap.fits"
+Fits_Files['FITTING_CUBE'] = f"{Configuration['CUBENAME']}_FAT.fits"
+Fits_Files['OPTIMIZED_CUBE'] = f"{Configuration['CUBENAME']}_FAT_opt.fits"
+Fits_Files['MOMENT0'] = f"{Configuration['BASE_NAME']}_mom0.fits"
+Fits_Files['MOMENT1'] = f"{Configuration['BASE_NAME']}_mom1.fits"
+Fits_Files['MOMENT2'] = f"{Configuration['BASE_NAME']}_mom2.fits"
+Fits_Files['MASK'] = f"{Configuration['BASE_NAME']}_mask.fits"
+Fits_Files['CHANNEL_MAP'] = f"{Configuration['BASE_NAME']}_chan.fits"
+Configuration['OUTPUTLOG'] = None
+Configuration['RING_SIZE'] = 1.
+Configuration['MINIMUM_RINGS'] = 3
+Configuration['SIZE_IN_BEAMS'] = 3.5
+Configuration['FIX_INCLINATION'] = False
+Configuration['FIX_SDIS'] = False
+Configuration['FIX_PA'] = False
+Configuration['FIX_Z0'] = True
+Configuration['FIX_SBR'] = True
+Configuration['OUTER_RINGS_DOUBLED'] = False
+Configuration['DISTANCE'] = 5.
+Configuration['TIRIFIC_RUNNING'] = False
+Configuration['TIMING'] = False
+cube_hdr = fits.getheader(f"{Configuration['FITTING_DIR']}{Fits_Files['FITTING_CUBE']}")
+
+beamarea=(np.pi*abs(cube_hdr['BMAJ']*cube_hdr['BMIN']))/(4.*np.log(2.))
+Configuration['CHANNEL_WIDTH'] = cube_hdr['CDELT3']/1000.
+Configuration['BEAM_IN_PIXELS'] = [cube_hdr['BMAJ']/np.mean([abs(cube_hdr['CDELT1']),abs(cube_hdr['CDELT2'])]),\
+                                   cube_hdr['BMIN']/np.mean([abs(cube_hdr['CDELT1']),abs(cube_hdr['CDELT2'])]),\
+                                   beamarea/(abs(cube_hdr['CDELT1'])*abs(cube_hdr['CDELT2']))]
+Configuration['BEAM'] = [float(cube_hdr['BMAJ']*3600.), float(cube_hdr['BMIN']*3600.),float(cube_hdr['BPA'])]
+
+Configuration['NOISE'] = cube_hdr['FATNOISE']
+Configuration['PIXEL_SIZE'] = np.mean([abs(cube_hdr['CDELT1']),abs(cube_hdr['CDELT2'])])
+Configuration['NAXES'] = [cube_hdr['NAXIS1'],cube_hdr['NAXIS2'], cube_hdr['NAXIS3']]
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore")
+    coordinate_frame = WCS(cube_hdr)
+    xlow,ylow,zlow = coordinate_frame.wcs_pix2world(1,1,1., 1.)
+    xhigh,yhigh,zhigh = coordinate_frame.wcs_pix2world(*Configuration['NAXES'], 1.)
+    Configuration['NAXES_LIMITS'] = [np.sort([xlow,xhigh]),np.sort([ylow,yhigh]),np.sort([zlow,zhigh])/1000.]
+
 
 def Test_Regularise():
     Variables = ['VROT','VROT_2','PA', 'PA_2','INCL','INCL_2','SDIS','SDIS_2','SBR','SBR_2','VSYS']
@@ -88,30 +138,6 @@ def Test_Regularise():
         plt.close()
 
 def Test_Overview():
-    Configuration = {'INNER_FIX': 4}
-    Configuration['NO_RINGS'] = 10
-    Configuration['OUTPUTLOG'] = None
-    Configuration['RING_SIZE'] = 1.
-    Configuration['NOISE'] = 0.003
-    Configuration['MINIMUM_RINGS'] = 3
-    Configuration['SIZE_IN_BEAMS'] = Configuration['NO_RINGS']*Configuration['RING_SIZE']-2
-    Configuration['CUBENAME']= 'NGC_2903'
-    Configuration['BASE_NAME']= 'NGC_2903_FAT'
-    Configuration['FITTING_DIR']= homedir+'/FAT_Main/FAT_Source_Dev/Installation_Check/'#Make a dictionary for the fitsfiles we use
-    Fits_Files = {'ORIGINAL_CUBE': "NGC_2903.fits"}
-    Fits_Files['NOISEMAP'] = f"{Configuration['BASE_NAME']}_noisemap.fits"
-    Fits_Files['FITTING_CUBE'] = f"{Configuration['CUBENAME']}_FAT.fits"
-    Fits_Files['OPTIMIZED_CUBE'] = f"{Configuration['CUBENAME']}_FAT_opt.fits"
-    Fits_Files['MOMENT0'] = f"{Configuration['BASE_NAME']}_mom0.fits"
-    Fits_Files['MOMENT1'] = f"{Configuration['BASE_NAME']}_mom1.fits"
-    Fits_Files['MOMENT2'] = f"{Configuration['BASE_NAME']}_mom2.fits"
-    Fits_Files['MASK'] = f"{Configuration['BASE_NAME']}_mask.fits"
-    Fits_Files['CHANNEL_MAP'] = f"{Configuration['BASE_NAME']}_chan.fits"
-    Configuration['FIX_INCLINATION'] = True
-    Configuration['FIX_SDIS'] = False
-    Configuration['FIX_PA'] = False
-    Configuration['FIX_Z0'] = True
-    Configuration['DISTANCE'] = 5.
     wf.make_overview_plot(Configuration,Fits_Files, debug = True)
 
 def Test_write_temp():
@@ -253,6 +279,12 @@ def Test_gflux_dH():
 
     print(DHI,Totflux)
 
+def Test_Check_Inclination():
+    Tirific_Template = rf.tirific_template(filename = f"{Configuration['FITTING_DIR']}Finalmodel/Finalmodel.def", debug = True)
+    print("These are the final original inclinations")
+    print(Tirific_Template['INCL'],Tirific_Template['INCL_2'])
+    print(Configuration['FITTING_DIR'])
+    df.check_inclination(Configuration,Tirific_Template,Fits_Files, fit_type = 'One_Step_Convergence', debug =True)
 def basic():
     print(f" fstring use double or triple quotes")
     print(f" Dictionary entries use single quotes")
@@ -263,7 +295,7 @@ basic.__doc__ =f'''
  PURPOSE:
 
  CATEGORY:
-    run_functions
+    read_functions
 
  INPUTS:
     Configuration = Standard FAT configuration
@@ -287,4 +319,4 @@ basic.__doc__ =f'''
 
 
 if __name__ == '__main__':
-    Test_gflux_dH()
+    Test_Check_Inclination()

@@ -31,6 +31,7 @@ import subprocess
 import numpy as np
 import traceback
 import warnings
+
 import re
 from datetime import datetime
 
@@ -39,8 +40,8 @@ def check_central_convergence(Configuration,Tirific_Template, fit_type = 'Undefi
     if debug:
         print_log(f'''CHECK_CENTRAL_CONVERGE: Starting stage {fit_type}.
 ''',Configuration['OUTPUTLOG'],debug = True)
-    new_xpos,new_ypos,new_vsys = rf.load_tirific(f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def",Variables = ['XPOS','YPOS','VSYS'],debug = debug)
-    old_xpos,old_ypos,old_vsys = rf.load_tirific(f"{Configuration['FITTING_DIR']}{fit_type}_In.def",Variables = ['XPOS','YPOS','VSYS'],debug = debug)
+    new_xpos,new_ypos,new_vsys = rf.load_tirific(Configuration,f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def",Variables = ['XPOS','YPOS','VSYS'],debug = debug)
+    old_xpos,old_ypos,old_vsys = rf.load_tirific(Configuration,f"{Configuration['FITTING_DIR']}{fit_type}_In.def",Variables = ['XPOS','YPOS','VSYS'],debug = debug)
     if Configuration['OUTER_RINGS_DOUBLED']:
         shift_beam_frac =Configuration['SIZE_IN_BEAMS']*0.05
     else:
@@ -65,7 +66,7 @@ def check_central_convergence(Configuration,Tirific_Template, fit_type = 'Undefi
            return False
         else:
             try:
-                old_xpos,old_ypos,old_vsys = rf.load_tirific(f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}_Prev2.def",Variables = ['XPOS','YPOS','VSYS'],debug=debug)
+                old_xpos,old_ypos,old_vsys = rf.load_tirific(Configuration,f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}_Prev2.def",Variables = ['XPOS','YPOS','VSYS'],debug=debug)
                 if abs(new_xpos[0] - old_xpos[0]) < ra_lim and \
                    abs(new_ypos[0] - old_ypos[0]) < dec_lim and \
                    abs(new_vsys[0] - old_vsys[0]) < sys_lim:
@@ -119,6 +120,148 @@ check_central_convergence.__doc__ =f'''
     Unspecified
 
  NOTE:
+'''
+
+def check_inclination(Configuration,Tirific_Template,Fits_Files, fit_type = 'Undefined', debug =False):
+    if debug:
+        print_log(f'''CHECK_INCLINATION: estimating whether our inclination estimate is decent.
+''',Configuration['OUTPUTLOG'],debug = True)
+
+    current = rf.load_tirific(Configuration,f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def",
+                Variables= ['VROT','INCL','PA','XPOS','YPOS','INCL_ERR'])
+
+
+    inclination = float(current[1][0])
+    if debug:
+        print_log(f'''CHECK_INCLINATION: This is the initial inclination {inclination}
+''',Configuration['OUTPUTLOG'],debug = True)
+
+    if Configuration['SIZE_IN_BEAMS'] < 5:
+        incl_to_check = np.linspace(inclination-15.,inclination+15.,20)
+    else:
+        incl_to_check = np.linspace(10,50,20)
+    # Let's make a directory to put things in
+    tmp_stage = 'tmp_incl_check'
+    try:
+        os.mkdir(f"{Configuration['FITTING_DIR']}/{tmp_stage}")
+    except:
+        pass
+    other_run = Configuration['TIRIFIC_RUNNING']
+    Configuration['TIRIFIC_RUNNING'] = False
+    #and a copy of the tirific template
+    Check_Template = copy.deepcopy(Tirific_Template)
+    write_new_to_template(Configuration, f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def", Check_Template,debug = debug)
+    Check_Template['LOOPS'] = '0'
+    Check_Template['INIMODE'] = '0'
+    Check_Template['INSET'] = f"{Fits_Files['FITTING_CUBE']}"
+    Check_Template['RESTARTNAME'] = f"Logs/restart_{tmp_stage}.txt"
+    out_keys = ['LOGNAME','OUTSET','TIRDEF']
+    out_extensions = ['log','fits','def']
+    incl_run= 'Not Initialized'
+    for i,key in enumerate(out_keys):
+        Check_Template[key] = f"{tmp_stage}/{tmp_stage}.{out_extensions[i]}"
+
+
+    vobs = [x*np.sin(np.radians(y)) for x,y in zip(current[0][:],current[1][:])]
+    if debug:
+        print_log(f'''CHECK_INCLINATION: These are the values we get as input
+{'':8s}Inclination = {current[1][:]}
+{'':8s}Vrot = {current[0][:]}
+{'':8s}Vobs = {vobs}
+''',Configuration['OUTPUTLOG'])
+    mom_chi = []
+    model_mom0 = fits.open(f"{Configuration['FITTING_DIR']}/Sofia_Output/{Fits_Files['MOMENT0']}")
+    #model_mom0 = remove_inhomogeneities(Configuration,model_mom0,inclination=float(current[1][0]), pa = float(current[2][0]), center = [current[3][0],current[4][0]],debug=debug)
+    chan_map = fits.open(f"{Configuration['FITTING_DIR']}/Sofia_Output/{Fits_Files['CHANNEL_MAP']}")
+    noisemap = np.sqrt(chan_map[0].data)*Configuration['NOISE']/np.nanmax(model_mom0[0].data)
+    max_in_moment = np.nanmax(model_mom0[0].data)
+    model_mom0[0].data = model_mom0[0].data
+    #/max_in_moment
+    for incl in incl_to_check:
+        #print(f'We are doing this inclination {incl}')
+        vrot = [x/np.sin(np.radians(incl)) for x in vobs]
+        for key in ['INCL','INCL_2']:
+            Check_Template[key]= f"{incl:.2f}"
+        for key in ['VROT','VROT_2']:
+            Check_Template[key]= f"{' '.join([f'{x:.2f}' for x in vrot])}"
+        wf.tirific(Configuration,Check_Template,name = f'{tmp_stage}_In.def',debug=False)
+        accepted,incl_run = run_tirific(Configuration,incl_run, stage = 'incl_check', fit_type=tmp_stage,debug=False)
+        make_moments(Configuration,Fits_Files,fit_type=tmp_stage,\
+                     moments = [0], \
+                     overwrite = True, vel_unit = 'm/s',debug=False)
+        #make_moments(filename = f"{Configuration['FITTING_DIR']}{tmp_stage}/{tmp_stage}.fits", basename = 'tmp_incl', directory = f"{Configuration['FITTING_DIR']}{tmp_stage}/",\
+        #             moments = [0],level = 3.*Configuration['NOISE'], \
+        #             overwrite = True, log= Configuration['OUTPUTLOG'], vel_unit = 'm/s',debug=debug)
+        incl_mom0 = fits.open(f"{Configuration['FITTING_DIR']}{tmp_stage}/{tmp_stage}_mom0.fits")
+        if debug:
+            try:
+                os.remove(f"{Configuration['FITTING_DIR']}{tmp_stage}/tmp_{incl:.1f}_mom0.fits")
+            except:
+                pass
+            os.rename(f"{Configuration['FITTING_DIR']}{tmp_stage}/{tmp_stage}_mom0.fits",f"{Configuration['FITTING_DIR']}{tmp_stage}/tmp_{incl:.1f}_mom0.fits")
+        chi = np.nansum((model_mom0[0].data[noisemap > 0.]-incl_mom0[0].data[noisemap > 0.])**2/noisemap[noisemap > 0.]**2)
+        mom_chi.append(abs(chi))
+        incl_mom0.close()
+    Check_Template = []
+    chan_map.close()
+    model_mom0.close()
+    finish_current_run(Configuration, incl_run)
+    Configuration['TIRIFIC_RUNNING'] = other_run
+    low= np.where(mom_chi == np.nanmin(mom_chi))[0]
+    new_incl = float(incl_to_check[low])
+    if debug:
+        print_log(f'''CHECK_INCLINATION: This is the new inclination {new_incl} it was {current[1][0]}.
+{'':8s}mom_chi = {mom_chi}
+{'':8s}low = {low}
+''',Configuration['OUTPUTLOG'])
+
+
+    #exit()
+    incl_err = np.mean(current[5])
+    if incl_err < 5.:
+        incl_err = 5.
+    if not current[1][0]-incl_err < new_incl < current[1][0]+incl_err:
+        if debug:
+            print_log(f'''CHECK_INCLINATION: The inclination has changed, writing to file.
+''',Configuration['OUTPUTLOG'])
+        for key in ['INCL','INCL_2']:
+                Tirific_Template[key]= f"{new_incl:.2f}"
+        vrot = [x/np.sin(np.radians(new_incl)) for x in vobs]
+        for key in ['VROT','VROT_2']:
+                Tirific_Template[key]= f"{' '.join([f'{x:.2f}' for x in vrot])}"
+        #Tirific_Template = copy.deepcopy(Check_Template)
+        wf.tirific(Configuration,Tirific_Template,name = f"{fit_type}/{fit_type}.def",debug=debug)
+    #return Tirific_Template
+check_inclination.__doc__ =f'''
+ NAME:
+    check_inclination
+
+ PURPOSE:
+    For low inclinations do a better check on the inclinations. Comparing the Chi^2 of the models over different inclinations
+
+ CATEGORY:
+    run_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    Fits_Files = Standard FAT dictionary with filenames
+    Tirific_Template = Standard FAT Tirific Template
+
+ OPTIONAL INPUTS:
+    debug = False
+
+    fit_type = 'Undefined'
+    type of fitting
+
+ OUTPUTS:
+    A new file with modified inclination if it has decreased.
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE: This should efinitely be further explored.
 '''
 
 def check_source(Configuration, Fits_Files, debug = False):
@@ -377,6 +520,8 @@ def fitting_osc(Configuration,Fits_Files,Tirific_Template,Initial_Parameters):
         # Run the step
         current_run = one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run,debug = Configuration['DEBUG'],allowed_loops = allowed_loops)
 
+        if (Configuration['OS_LOOPS'] == 1 or Configuration['ACCEPTED']) and Configuration['SIZE_IN_BEAMS'] < 4:
+            check_inclination(Configuration,Tirific_Template,Fits_Files, fit_type = 'One_Step_Convergence', debug = Configuration['DEBUG'])
 
     if Configuration['ACCEPTED']:
         print_log(f'''FITTING_OSC: The model has converged in center and extent and we make a smoothed version.
@@ -480,7 +625,7 @@ def fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run, s
             finish_current_run(Configuration,current_run,debug= debug)
     else:
         Tirific_Template['LOOPS'] = 10.
-        xpos,ypos,vsys,pa,incl = rf.load_tirific(f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def",Variables = ['XPOS','YPOS','VSYS','PA','INCL'])
+        xpos,ypos,vsys,pa,incl = rf.load_tirific(Configuration,f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def",Variables = ['XPOS','YPOS','VSYS','PA','INCL'])
         parameters = {'VSYS': [vsys[0], Configuration['CHANNEL_WIDTH']], \
                       'XPOS': [xpos[0], Configuration['PIXEL_SIZE']],
                       'YPOS': [ypos[0], Configuration['PIXEL_SIZE']],
@@ -691,7 +836,7 @@ def run_tirific(Configuration, current_run, stage = 'initial',fit_type = 'Undefi
             file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Mb \n")
     else:
         time.sleep(0.1)
-    print(f"\r RUN_TIRIFIC: 0 % Completed", end =" ",flush = True)
+    print(f"\r{'':8s}RUN_TIRIFIC: 0 % Completed", end =" ",flush = True)
     triggered = False
     for tir_out_line in current_run.stdout:
         tmp = re.split(r"[/: ]+",tir_out_line.strip())
@@ -707,7 +852,7 @@ def run_tirific(Configuration, current_run, stage = 'initial',fit_type = 'Undefi
                     file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Mb \n")
         if tmp[0] == 'L':
             if int(tmp[1]) != currentloop:
-                print(f"\r RUN_TIRIFIC: {float(tmp[1])/float(max_loop)*100.:.1f} % Completed", end =" ",flush = True)
+                print(f"\r{'':8s}RUN_TIRIFIC: {float(tmp[1])/float(max_loop)*100.:.1f} % Completed", end =" ",flush = True)
             currentloop  = int(tmp[1])
             if max_loop == 0:
                 max_loop = int(tmp[2])
@@ -726,7 +871,7 @@ def run_tirific(Configuration, current_run, stage = 'initial',fit_type = 'Undefi
             file.write("# Finished this run \n")
             CPU,mem = get_usage_statistics(Configuration,current_run.pid)
             file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Gb\n")
-    print(f"RUN_TIRIFIC: Finished the current tirific run.")
+    print(f"{'':8s}RUN_TIRIFIC: Finished the current tirific run.")
     #The break off goes faster sometimes than the writing of the file so let's make sure it is present
     time.sleep(1.0)
     wait_counter = 0

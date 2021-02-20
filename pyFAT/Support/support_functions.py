@@ -47,7 +47,7 @@ class Proper_Dictionary(OrderedDict):
                 new_orderded_dict[new_key] = key_value
                 done = True
                 print(
-                    "----!!!!!!!! YOUR new key was appended at the end as you provided a non-existing key to add it after!!!!!!---------")
+                    f"----!!!!!!!! YOUR {new_key} was appended at the end as you provided the non-existing {existing_key} to add it after!!!!!!---------")
             self.clear()
             self.update(new_orderded_dict)
 
@@ -512,6 +512,11 @@ def finish_current_run(Configuration,current_run,debug=False):
     print_log(f"FINISH_CURRENT_RUN: Is Tirific Running? {Configuration['TIRIFIC_RUNNING']}. \n",Configuration['OUTPUTLOG'],debug=debug)
     if Configuration['TIRIFIC_RUNNING']:
         try:
+            current_run.stdout.close()
+            current_run.stderr.close()
+        except:
+            pass
+        try:
             os.kill(Configuration['TIRIFIC_PID'], signal.SIGKILL)
             print_log(f"FINISH_CURRENT_RUN: We killed PID = {Configuration['TIRIFIC_PID']}. \n",Configuration['OUTPUTLOG'])
         except:
@@ -718,10 +723,10 @@ def get_inclination_pa(Configuration, Image, center, cutoff = 0., debug = False)
 ''',Configuration['OUTPUTLOG'])
         max_index = np.where(ratios == np.nanmax(ratios))[0]
         if max_index.size > 1:
-            max_index =max_index[0]
+            max_index =int(max_index[0])
         min_index = np.where(ratios == np.nanmin(ratios))[0]
         if min_index.size > 1:
-            min_index =min_index[0]
+            min_index =int(min_index[0])
         if debug:
             if i == 0:
                 print_log(f'''GET_INCLINATION_PA: We initially find these indeces min {min_index } {angles[min_index]} max {max_index} {angles[max_index]}.
@@ -744,6 +749,7 @@ def get_inclination_pa(Configuration, Image, center, cutoff = 0., debug = False)
                 pa = float(np.mean([angles[min_index]-90,angles[max_index]]))
         else:
             if angles[max_index] < 15:
+                print(min_index,max_index)
                 pa = float(np.mean([angles[min_index]-90,angles[max_index]]))
             else:
                 pa = float(np.mean([angles[min_index]+90,angles[max_index]]))
@@ -754,10 +760,10 @@ def get_inclination_pa(Configuration, Image, center, cutoff = 0., debug = False)
             else:
                 print_log(f'''GET_INCLINATION_PA: From the cleaned map we find pa = {pa}.
 ''',Configuration['OUTPUTLOG'])
-        pa_error = set_limits(np.mean([abs(angles[tenp_min_index[0]]-angles[min_index]),\
-                            abs(angles[tenp_min_index[-1]]-angles[min_index]),\
-                            abs(angles[tenp_max_index[0]]-angles[max_index]), \
-                            abs(angles[tenp_min_index[-1]]-angles[max_index])]), \
+        pa_error = set_limits(np.mean([abs(angles[int(tenp_min_index[0])]-angles[min_index]),\
+                            abs(angles[int(tenp_min_index[-1])]-angles[min_index]),\
+                            abs(angles[int(tenp_max_index[0])]-angles[max_index]), \
+                            abs(angles[int(tenp_min_index[-1])]-angles[max_index])]), \
                             0.5,15.)
         ratios[ratios < 0.204] = 0.204
         ratios[1./ratios < 0.204] = 1./0.204
@@ -859,7 +865,7 @@ get_inner_fix.__doc__ =f'''
     debug = False
 
  OUTPUTS:
-    Update INNER_FIX in the configuration    
+    Update INNER_FIX in the configuration
 
  OPTIONAL OUTPUTS:
 
@@ -1088,6 +1094,9 @@ get_vel_pa.__doc__ =f'''
 def is_available(name):
     try:
         run = subprocess.Popen([name], stdout = subprocess.PIPE, stderr = subprocess.PIPE)
+        run.stdout.close()
+        run.stderr.close()
+        os.kill(run.pid, signal.SIGKILL)
         return True
     except:
         return False
@@ -1375,7 +1384,7 @@ print_log.__doc__ =f'''
     This is useful for testing functions.
 '''
 
-def remove_inhomogeneities(Configuration,fits_map,inclination=30., pa = 90. , center = [0.,0.],WCS_center = True, iteration= 0. , debug=False):
+def remove_inhomogeneities(Configuration,fits_map,inclination=30., pa = 90. , center = [0.,0.],WCS_center = True, iteration= 0 , debug=False):
     if debug:
         print_log(f'''REMOVE_INHOMOGENEITIES: These are the values we get as input
 {'':8s}Inclination = {inclination}
@@ -1399,8 +1408,8 @@ def remove_inhomogeneities(Configuration,fits_map,inclination=30., pa = 90. , ce
     dep_map = deproject(Configuration,copy.deepcopy(rot_map),inclination,center = y, debug=debug)
 
     if debug:
-        fits.writeto(f"{Configuration['FITTING_DIR']}rot_map_{iteration}.fits",rot_map,fits_map[0].header,overwrite = True)
-        fits.writeto(f"{Configuration['FITTING_DIR']}dep_map_{iteration}.fits",dep_map,fits_map[0].header,overwrite = True)
+        fits.writeto(f"{Configuration['FITTING_DIR']}rot_map_{int(iteration)}.fits",rot_map,fits_map[0].header,overwrite = True)
+        fits.writeto(f"{Configuration['FITTING_DIR']}dep_map_{int(iteration)}.fits",dep_map,fits_map[0].header,overwrite = True)
 
     angles = np.linspace(5.,360.,71)
     minimum_map = copy.deepcopy(dep_map)
@@ -1412,8 +1421,8 @@ def remove_inhomogeneities(Configuration,fits_map,inclination=30., pa = 90. , ce
     clean_map = rotateImage(Configuration,deproject(Configuration,copy.deepcopy(minimum_map),inclination,center = y,invert= True,debug=debug),-1*(pa-90),[x,y],debug=debug)
 
     if debug:
-        fits.writeto(f"{Configuration['FITTING_DIR']}minimum_map_{iteration}.fits",minimum_map,fits_map[0].header,overwrite = True)
-        fits.writeto(f"{Configuration['FITTING_DIR']}clean_map_{iteration}.fits",clean_map,fits_map[0].header,overwrite = True)
+        fits.writeto(f"{Configuration['FITTING_DIR']}minimum_map_{int(iteration)}.fits",minimum_map,fits_map[0].header,overwrite = True)
+        fits.writeto(f"{Configuration['FITTING_DIR']}clean_map_{int(iteration)}.fits",clean_map,fits_map[0].header,overwrite = True)
     fits_map[0].data = clean_map
     return fits_map
 
@@ -1577,7 +1586,7 @@ def sbr_limits(Configuration, systemic= 100. , debug = False):
         warnings.simplefilter("ignore")
         sbr_ring_limits=9e-4*(ringarea/beamsolid)**(-0.82)*ratio
     if ringarea[0] == 0.:
-         sbr_ring_limits[0]=0.
+         sbr_ring_limits[0]=np.nanmin(sbr_ring_limits)
          sbr_ring_limits[1]=sbr_ring_limits[2]/2.
     if len(Configuration['LIMIT_MODIFIER']) == 1:
 

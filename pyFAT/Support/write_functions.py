@@ -43,7 +43,7 @@ def basicinfo(Configuration,initialize = False,stage='TiRiFiC', debug = False,
 ''')
     else:
         Vars_to_Set =  ['XPOS','YPOS','VSYS','VROT','INCL','PA','SDIS','SBR','SBR_2','Z0']
-        FAT_Model = load_template(template,Variables= Vars_to_Set,unpack=False, debug=debug)
+        FAT_Model = load_template(Configuration,template,Variables= Vars_to_Set,unpack=False, debug=debug)
         RA=[FAT_Model[0,Vars_to_Set.index('XPOS')],abs(Configuration['BEAM'][0]/(3600.*2.))]
         DEC=[FAT_Model[0,Vars_to_Set.index('YPOS')],abs(Configuration['BEAM'][0]/(3600.*2.))]
         VSYS =np.array([FAT_Model[0,Vars_to_Set.index('VSYS')],Configuration['CHANNEL_WIDTH']])*1000.
@@ -163,7 +163,7 @@ def initialize_def_file(Configuration, Fits_Files,Tirific_Template,Initial_Param
         Vars_to_Set =  ['XPOS','YPOS','VSYS','VROT','INCL','PA','SDIS','SBR','SBR_2','Z0']
         if fit_type == 'One_Step_Convergence':
             set_model_parameters(Configuration, Tirific_Template,Initial_Parameters,stage='initialize_def_file', debug=debug)
-        FAT_Model = load_template(Tirific_Template,Variables= Vars_to_Set,unpack=False, debug=debug)
+        FAT_Model = load_template(Configuration,Tirific_Template,Variables= Vars_to_Set,unpack=False, debug=debug)
 
         # Finally we set how these parameters are fitted.
         set_limit_modifier(Configuration,FAT_Model[0,Vars_to_Set.index('INCL')], debug=debug)
@@ -252,11 +252,11 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
     Vars_to_plot= ['RADI','XPOS','YPOS','VSYS','VROT','VROT_ERR','VROT_2','VROT_2_ERR','INCL','INCL_ERR','INCL_2',
                     'INCL_2_ERR','PA','PA_ERR','PA_2','PA_2_ERR','SDIS','SDIS_ERR','SDIS_2','SDIS_2_ERR','SBR',
                     'SBR_2','Z0','Z0_2','Z0_ERR','Z0_2_ERR']
-    FAT_Model = load_tirific(f"{Configuration['FITTING_DIR']}Finalmodel/Finalmodel.def",Variables= Vars_to_plot,unpack=False,debug=debug)
+    FAT_Model = load_tirific(Configuration,f"{Configuration['FITTING_DIR']}Finalmodel/Finalmodel.def",Variables= Vars_to_plot,unpack=False,debug=debug)
     Extra_Model_File = f"{Configuration['FITTING_DIR']}One_Step_Convergence/One_Step_Convergence_final_output_before_after_os.def"
 
     if os.path.exists(Extra_Model_File):
-        Extra_Model = load_tirific(Extra_Model_File,Variables= Vars_to_plot,unpack=False,debug=debug)
+        Extra_Model = load_tirific(Configuration,Extra_Model_File,Variables= Vars_to_plot,unpack=False,debug=debug)
     else:
         Extra_Model = []
     if debug:
@@ -265,7 +265,7 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
 ''',Configuration['OUTPUTLOG'])
 
     if os.path.exists(f"{Configuration['FITTING_DIR']}ModelInput.def"):
-        Input_Model = load_tirific(f"{Configuration['FITTING_DIR']}ModelInput.def",Variables= Vars_to_plot,unpack=False,debug=debug)
+        Input_Model = load_tirific(Configuration,f"{Configuration['FITTING_DIR']}ModelInput.def",Variables= Vars_to_plot,unpack=False,debug=debug)
     else:
         Input_Model = []
     sof_basic_ra,sof_basic_dec, sof_basic_vsys,sof_basic_maxrot,sof_basic_pa,sof_basic_inclination = load_basicinfo(Configuration,
@@ -275,8 +275,9 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
     #Let's start plotting
 
     Overview = plt.figure(2, figsize=(8.2, 11.6), dpi=300, facecolor='w', edgecolor='k')
+
     size_ratio = 11.6/8.2
-    #stupid pythonic layout for grid spec
+    #stupid pythonic layout for grid spec, which means it is yx instead of xy like for normal human beings
     gs = Overview.add_gridspec(int(20*size_ratio),20)
     labelfont = {'family': 'Times New Roman',
              'weight': 'normal',
@@ -284,8 +285,33 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
     plt.rc('font', **labelfont)
     plt.rcParams['xtick.direction'] = 'in'
     plt.rcParams['ytick.direction'] = 'in'
+# First some textual information
+
+    if Configuration['SUB_DIR'] == './':
+        name = Configuration['BASE_NAME']
+    else:
+        name = Configuration['SUB_DIR']
+    #plt.title(f"Overview for {name}")
+    ax_text = Overview.add_subplot(gs[0:1,0:21],frameon = False)
+    plt.tick_params(
+        axis='both',          # changes apply to the x-axis
+        which='both',      # both major and minor ticks are affected
+        direction = 'in',
+        bottom=False,      # ticks along the bottom edge are off
+        top=False,         # ticks along the top edge are off
+        labelbottom=False,
+        right = False,
+        left= False,
+        labelleft = False)
+    ax_text.text(0.5,1.0,f'''Overview for {name}''',rotation=0, va='top',ha='center', color='black',transform = ax_text.transAxes,
+      bbox=dict(facecolor='white',edgecolor='white',pad=0.,alpha=0.),zorder=7,fontsize=14)
+    ax_text.text(0.5,0.25,f'''The ring size used in the model is {Configuration['RING_SIZE']} x BMAJ, with BMAJ = {Configuration['BEAM'][0]:.1f} arcsec. We assumed a distance  of {Configuration['DISTANCE']} Mpc.'''
+      ,rotation=0, va='top',ha='center', color='black',transform = ax_text.transAxes,
+      bbox=dict(facecolor='white',edgecolor='white',pad=0.,alpha=0.),zorder=7,fontsize=10)
+
+
 #-----------------------------------------------------------------Moment 0 ------------------------------------------------------
-    ax_moment0 = Overview.add_subplot(gs[0:6,0:6], projection=im_wcs)
+    ax_moment0 = Overview.add_subplot(gs[2:8,0:6], projection=im_wcs)
     ax_moment0.set_label('Intensity Map')
     #Comp_ax1.set_facecolor('black')
     # we need contour levels and
@@ -390,7 +416,7 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
     moment0.close()
     moment0_mod.close()
 #-----------------------------------------------------------------Velocity Field------------------------------------------------------
-    ax_moment1 = Overview.add_subplot(gs[9:15, 0:6], projection=im_wcs)
+    ax_moment1 = Overview.add_subplot(gs[10:16, 0:6], projection=im_wcs)
     ax_moment1.set_label('Velocity Field')
     #Comp_ax1.set_facecolor('black')
     # we need contour levels and
@@ -448,6 +474,9 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
     cbar.ax.set_title(f"{moment1[0].header['BUNIT']}", y= 0.2)
 
     column_levels = ', '.join(["{:.1f}".format(x) for x in momlevel])
+    info_string= f'''The contours start at {float(momlevel[0]):.1f} km/s
+and increase with {float(momlevel[1])-float(momlevel[0]):.1f} km/s'''
+    '''
     if len(column_levels) < 4:
         info_string = f"The contours are at {column_levels} km/s."
     else:
@@ -457,13 +486,14 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
             info_string = info_string+f"\n {', '.join(['{:.1f}'.format(x) for x in momlevel[counter:counter+7]])}"
             counter += 7
         info_string = info_string+" km/s."
+    '''
     ax_moment1.text(-0.1,-0.2,info_string, va='top',ha='left', color='black',transform = ax_moment1.transAxes,
           bbox=dict(facecolor='white',edgecolor='white',pad=0.,alpha=0.),zorder=7)
     # No further need for the moment maps
     moment1.close()
     moment1_mod.close()
 #-----------------------------------------------------------------Moment 2------------------------------------------------------
-    ax_moment2 = Overview.add_subplot(gs[9:15:, 8:14], projection=im_wcs)
+    ax_moment2 = Overview.add_subplot(gs[10:16:, 8:14], projection=im_wcs)
     ax_moment2.set_label('Moment2')
     #Comp_ax1.set_facecolor('black')
     # we need contour levels and
@@ -559,7 +589,7 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
         warnings.simplefilter("ignore")
         xv_proj = WCS(PV[0].header)
         xv_model_proj = WCS(PV_model[0].header)
-    ax_PV = Overview.add_subplot(gs[0:6,8:14], projection=xv_proj)
+    ax_PV = Overview.add_subplot(gs[2:8,8:14], projection=xv_proj)
     #Comp_ax2.set_title('PV-Diagram')
 
     maxint= np.nanmax(PV[0].data)*0.85
@@ -603,7 +633,7 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
         while counter < len(momlevel):
             info_string = info_string+f"\n {', '.join(['{:.1f}'.format(x*1000.) for x in momlevel[counter:counter+7]])}"
             counter += 7
-            info_string = info_string+" mJy/beam."
+        info_string = info_string+" mJy/beam."
     ax_PV.text(-0.1,-0.2,info_string, va='top',ha='left', color='black',transform = ax_PV.transAxes,
           bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7)
 
@@ -613,11 +643,42 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
     PV.close()
     PV_model.close()
 
+# ADD a legend for the plots
+
+    ax_legend = Overview.add_subplot(gs[18:27,0:2],frameon = False)
+    plt.tick_params(
+            axis='both',          # changes apply to the x-axis
+            which='both',      # both major and minor ticks are affected
+            direction = 'in',
+            bottom=False,      # ticks along the bottom edge are off
+            top=False,         # ticks along the top edge are off
+            labelbottom=False,
+            right = False,
+            left= False,
+            labelleft = False)
+    legend = ['Appr.','Rec.','Correct Appr.','Correct Rec.','Unsm. Appr.','Unsm. Rec.']
+    plt.plot([0,1],[0,1],'k',marker='o',label=legend[0])
+    plt.plot([0,1],[0,1],'r',marker='o',label=legend[1])
+    if len(Input_Model) > 0:
+        plt.plot([0,1],[0,1],'b',marker='o',label=legend[2])
+        plt.plot([0,1],[0,1],'yellow',marker='o',label=legend[3])
+    if len(Extra_Model) > 0:
+        plt.plot([0,1],[0,1],'k',marker='o',label=legend[4],alpha=0.2)
+        plt.plot([0,1],[0,1],'r',marker='o',label=legend[5],alpha=0.2)
+    plt.plot([0,1],[0,1],'white',marker='o',linewidth=5)
+    plt.ylim(0.4,0.6)
+    plt.xlim(0.4,0.6)
+
+    chartBox = ax_legend.get_position()
+    ax_legend.set_position([chartBox.x0, chartBox.y0, chartBox.width*1.0, chartBox.height])
+    ax_legend.legend(loc='upper left', bbox_to_anchor = (-1.0,1.03),shadow=True, ncol=1)
+
+
 # ------------------------------Rotation curves------------------------------------
     labelfont= {'family':'Times New Roman',
             'weight':'normal',
             'size':10}
-    ax_RC = plot_parameters(Configuration,Vars_to_plot,FAT_Model,gs[18:21,0:6],Overview,'VROT',Input_Model = Input_Model, initial = sof_basic_maxrot[0],Extra_Model = Extra_Model,debug=debug )
+    ax_RC = plot_parameters(Configuration,Vars_to_plot,FAT_Model,gs[18:21,3:9],Overview,'VROT',Input_Model = Input_Model, initial = sof_basic_maxrot[0],Extra_Model = Extra_Model,debug=debug)
     ymin =np.min([FAT_Model[1:,Vars_to_plot.index('VROT')],FAT_Model[1:,Vars_to_plot.index('VROT_2')]])
     if len(Extra_Model) > 0:
         ymin2 =np.min([Extra_Model[1:,Vars_to_plot.index('VROT')],Extra_Model[1:,Vars_to_plot.index('VROT_2')]])
@@ -650,8 +711,9 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
         top=True,         # ticks along the top edge are off
         labelbottom=False)
     plt.ylabel('RC (km s$^{-1}$)',**labelfont)
+
 # ------------------------------Inclination------------------------------------
-    ax_INCL = plot_parameters(Configuration,Vars_to_plot,FAT_Model,gs[21:24,0:6],Overview,'INCL',Input_Model = Input_Model, initial =sof_basic_inclination[0],Extra_Model = Extra_Model ,debug=debug)
+    ax_INCL = plot_parameters(Configuration,Vars_to_plot,FAT_Model,gs[21:24,3:9],Overview,'INCL',Input_Model = Input_Model, initial =sof_basic_inclination[0],Extra_Model = Extra_Model ,debug=debug)
 
     plt.tick_params(
         axis='x',          # changes apply to the x-axis
@@ -660,12 +722,12 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
         bottom=True,      # ticks along the bottom edge are off
         top=True,         # ticks along the top edge are off
         labelbottom=False)
-    if Configuration['FIX_INCLINATION'][0]:
+    if Configuration['FIX_INCLINATION']:
         ax_INCL.text(1.01,0.5,'Forced Flat', rotation =-90,va='center',ha='left', color='black',transform = ax_INCL.transAxes,
-          bbox=dict(facecolor='white',edgecolor='white',pad=0.,alpha=0.),zorder=7,fontsize=12)
+          bbox=dict(facecolor='white',edgecolor='white',pad=0.,alpha=0.),zorder=7,fontsize=10)
     plt.ylabel('Incl ($^{\circ}$)',**labelfont)
 # ------------------------------PA------------------------------------
-    ax_PA = plot_parameters(Configuration,Vars_to_plot,FAT_Model,gs[24:27,0:6],Overview,'PA',Input_Model = Input_Model,initial = sof_basic_pa[0],Extra_Model = Extra_Model,debug=debug)
+    ax_PA = plot_parameters(Configuration,Vars_to_plot,FAT_Model,gs[24:27,3:9],Overview,'PA',Input_Model = Input_Model,initial = sof_basic_pa[0],Extra_Model = Extra_Model,debug=debug)
 
     plt.tick_params(
         axis='x',          # changes apply to the x-axis
@@ -674,13 +736,13 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
         bottom=True,      # ticks along the bottom edge are off
         top=True,         # ticks along the top edge are off
         labelbottom=True)
-    if Configuration['FIX_PA'][0]:
+    if Configuration['FIX_PA']:
         ax_PA.text(1.01,0.5,'Forced Flat', va='center',ha='left', color='black',rotation = -90, transform = ax_PA.transAxes,
-          bbox=dict(facecolor='white',edgecolor='white',pad=0.,alpha=0.),zorder=7,fontsize=12)
+          bbox=dict(facecolor='white',edgecolor='white',pad=0.,alpha=0.),zorder=7,fontsize=10)
     plt.xlabel('Radius (arcsec)',**labelfont)
     plt.ylabel('PA ($^{\circ}$)',**labelfont)
 # ------------------------------SDIS------------------------------------
-    ax_SDIS = plot_parameters(Configuration,Vars_to_plot,FAT_Model,gs[18:21,9:15],Overview,'SDIS',Input_Model = Input_Model,Extra_Model = Extra_Model,initial = 8.)
+    ax_SDIS = plot_parameters(Configuration,Vars_to_plot,FAT_Model,gs[18:21,12:18],Overview,'SDIS',Input_Model = Input_Model,Extra_Model = Extra_Model,initial = 8.)
     plt.tick_params(
         axis='x',          # changes apply to the x-axis
         which='both',      # both major and minor ticks are affected
@@ -688,15 +750,13 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
         bottom=True,      # ticks along the bottom edge are off
         top=True,         # ticks along the top edge are off
         labelbottom=False)
-    if Configuration['FIX_SDIS'][0]:
+    if Configuration['FIX_SDIS']:
         ax_SDIS.text(1.01,0.5,'Forced Flat',rotation=-90, va='center',ha='left', color='black',transform = ax_SDIS.transAxes,
-          bbox=dict(facecolor='white',edgecolor='white',pad=0.,alpha=0.),zorder=7,fontsize=12)
-    ax_SDIS.text(1.1,1.0,f'''Ring size {Configuration['RING_SIZE']} x BMAJ
-BMAJ = {Configuration['BEAM'][0]:.1f} arcsec''',rotation=0, va='center',ha='left', color='black',transform = ax_SDIS.transAxes,
-          bbox=dict(facecolor='white',edgecolor='white',pad=0.,alpha=0.),zorder=7,fontsize=12)
+          bbox=dict(facecolor='white',edgecolor='white',pad=0.,alpha=0.),zorder=7,fontsize=10)
+
     plt.ylabel('Disp (km s$^{-1}$)',**labelfont)
 # ------------------------------Scale height------------------------------------
-    ax_Z0 = plot_parameters(Configuration,Vars_to_plot,FAT_Model,gs[21:24,9:15],Overview,'Z0',Input_Model = Input_Model,\
+    ax_Z0 = plot_parameters(Configuration,Vars_to_plot,FAT_Model,gs[21:24,12:18],Overview,'Z0',Input_Model = Input_Model,\
                             Extra_Model = Extra_Model,initial = convertskyangle(Configuration,0.2,Configuration['DISTANCE'],physical=True),debug=debug)
 
     plt.tick_params(
@@ -706,9 +766,9 @@ BMAJ = {Configuration['BEAM'][0]:.1f} arcsec''',rotation=0, va='center',ha='left
         bottom=True,      # ticks along the bottom edge are off
         top=True,         # ticks along the top edge are off
         labelbottom=False)
-    if Configuration['FIX_Z0'][0]:
-        ax_Z0.text(1.2,0.5,'Forced Flat',rotation=-90, va='center',ha='left', color='black',transform = ax_Z0.transAxes,
-          bbox=dict(facecolor='white',edgecolor='white',pad=0.,alpha=0.),zorder=7,fontsize=12)
+    if Configuration['FIX_Z0']:
+        ax_Z0.text(1.25,0.5,'Forced Flat',rotation=-90, va='center',ha='left', color='black',transform = ax_Z0.transAxes,
+          bbox=dict(facecolor='white',edgecolor='white',pad=0.,alpha=0.),zorder=7,fontsize=10)
     plt.ylabel('Z0 (arcsec)',**labelfont)
     arcmin,arcmax = ax_Z0.get_ylim()
     sec_ax = ax_Z0.twinx()
@@ -719,7 +779,9 @@ BMAJ = {Configuration['BEAM'][0]:.1f} arcsec''',rotation=0, va='center',ha='left
 
 
 # ------------------------------SDIS------------------------------------
-    ax_SBR = plot_parameters(Configuration,Vars_to_plot,FAT_Model,gs[24:27,9:15],Overview,'SBR',Input_Model = Input_Model,Extra_Model = Extra_Model, legend = ['Appr.','Rec.','Input Appr.','Input Rec.'],debug=debug)
+    ax_SBR = plot_parameters(Configuration,Vars_to_plot,FAT_Model,gs[24:27,12:18],Overview,'SBR',Input_Model = Input_Model,Extra_Model = Extra_Model,debug=debug)
+
+
 
 
     plt.ylabel('SBR \n (Jy km s$^{-1}$ arcsec$^{-2}$)',**labelfont)
@@ -731,14 +793,15 @@ BMAJ = {Configuration['BEAM'][0]:.1f} arcsec''',rotation=0, va='center',ha='left
     sec_ax.figure.canvas.draw()
     sec_ax.set_ylabel('Col. Dens. \n (x10$^{20}$ cm$^{-2}$)',rotation=-90,va='bottom',**labelfont)
 
+    if Configuration['FIX_SBR']:
+        ax_SBR.text(1.25,0.5,'Forced Gaussian',rotation=-90, va='center',ha='left', color='black',transform = ax_SBR.transAxes,
+          bbox=dict(facecolor='white',edgecolor='white',pad=0.,alpha=0.),zorder=7,fontsize=10)
 
 
-    chartBox = ax_SBR.get_position()
-    ax_SBR.set_position([chartBox.x0, chartBox.y0, chartBox.width*1.0, chartBox.height])
-    ax_SBR.legend(loc='upper left', bbox_to_anchor=(1.25, 1.0), shadow=True, ncol=1)
+
 
 #----------------------------------------------Distance vs VSYS -----------------------------------------
-    ax_VSYS = Overview.add_subplot(gs[0:4,16:20])
+    ax_VSYS = Overview.add_subplot(gs[2:6,16:20])
     plt.xlabel('Sys. Vel. (km s$^{-1}$)',**labelfont)
     plt.ylabel('Distance (Mpc)',**labelfont)
     plt.scatter(float(FAT_Model[0,Vars_to_plot.index('VSYS')]),float(Configuration['DISTANCE']),c='k',zorder= 3)
@@ -764,7 +827,7 @@ BMAJ = {Configuration['BEAM'][0]:.1f} arcsec''',rotation=0, va='center',ha='left
     ax_VSYS.add_patch(why)
     ax_VSYS.set_ylim(ymin, ymax)
 #----------------------------------------------RA vs DEC -----------------------------------------
-    ax_RAD = Overview.add_subplot(gs[6:10,16:20])
+    ax_RAD = Overview.add_subplot(gs[8:12,16:20])
     plt.scatter(float(FAT_Model[0,Vars_to_plot.index('XPOS')]),float(FAT_Model[0,Vars_to_plot.index('YPOS')]),c='k',zorder=3,label = 'Final')
     if len(Extra_Model) > 0:
         lab = 'Unsmoothed'

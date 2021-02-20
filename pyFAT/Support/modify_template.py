@@ -72,8 +72,12 @@ def check_flat(Configuration,profile,error, last_reliable_ring = -1, debug = Fal
 
     inner = np.mean(profile[:Configuration['INNER_FIX']])
     mean_error = np.mean(error[:last_reliable_ring])
-    outer = np.mean(profile[Configuration['INNER_FIX']+1:last_reliable_ring])
-    outer_std = np.std(profile[Configuration['INNER_FIX']+1:last_reliable_ring])
+    if Configuration['INNER_FIX']+1 < last_reliable_ring:
+        outer = np.mean(profile[Configuration['INNER_FIX']+1:last_reliable_ring])
+        outer_std = np.std(profile[Configuration['INNER_FIX']+1:last_reliable_ring])
+    else:
+        outer = inner
+        outer_std = np.mean(error)
     if debug:
             print_log(f'''CHECK_FLAT: If  {abs(outer-inner)} less than {mean_error} or
 {'':8s} The outer variation {outer_std} less than the median error {mean_error} we break and set flat.
@@ -2488,45 +2492,46 @@ def set_vrot_fitting(Configuration, stage = 'initial', rotation = [100,5.], debu
 {'':8s} No_Rings = {Configuration['NO_RINGS']}
 {'':8s} Limits = {vrot_limits}
 ''',Configuration['OUTPUTLOG'],debug = True)
-    if stage in  ['initial','run_cc','after_cc','initialize_ec','run_ec','initialize_os','run_os']:
-        if stage in ['initial', 'run_cc','initialize_ec','run_ec','initialize_os','run_os']:
-            vrot_input['VARY'] =  np.array([f"!VROT {NUR}:2 VROT_2 {NUR}:2"])
-        elif stage in ['after_cc', 'after_ec','after_os']:
-            vrot_input['VARY'] =  np.array([f"VROT {NUR}:2 VROT_2 {NUR}:2"])
-        vrot_input['PARMAX'] = np.array([vrot_limits[1]])
-        vrot_input['PARMIN'] = np.array([vrot_limits[0]])
-        vrot_input['MODERATE'] = np.array([5]) #How many steps from del start to del end
-        vrot_input['DELSTART'] = np.array([2.*Configuration['CHANNEL_WIDTH']*Configuration['LIMIT_MODIFIER'][0]]) # Starting step
-        #These were lower in the original fat
-        vrot_input['DELEND'] = np.array([0.1*Configuration['CHANNEL_WIDTH']*Configuration['LIMIT_MODIFIER'][0]]) #Ending step
-        vrot_input['MINDELTA'] = np.array([0.1*Configuration['CHANNEL_WIDTH']*Configuration['LIMIT_MODIFIER'][0]]) #saturation criterum when /SIZE SIZE should be 10 troughout the code
-        #if there is not values in the center we connect the inner ring to the next ring
-        forvarindex = ''
-        if Configuration['EXCLUDE_CENTRAL'] or rotation[0] > 150.:
-            forvarindex = 'VROT 2 VROT_2 2 '
-        if Configuration['OUTER_SLOPE_START'] == NUR:
-            if Configuration['NO_RINGS'] > 5:
-                inner_slope =  int(round(set_limits(Configuration['RC_UNRELIABLE'],round(NUR/2.),NUR-1)))
-            else:
-                inner_slope = NUR
-            if Configuration['NO_RINGS'] > 15 and inner_slope > int(Configuration['NO_RINGS']*4./5.) :
-                inner_slope = int(Configuration['NO_RINGS']*4./5.)
-            Configuration['OUTER_SLOPE_START'] = inner_slope
+
+
+    if stage in ['after_cc', 'after_ec','after_os']:
+        vrot_input['VARY'] =  np.array([f"VROT {NUR}:2 VROT_2 {NUR}:2"])
+    else:
+        vrot_input['VARY'] =  np.array([f"!VROT {NUR}:2 VROT_2 {NUR}:2"])
+    vrot_input['PARMAX'] = np.array([vrot_limits[1]])
+    vrot_input['PARMIN'] = np.array([vrot_limits[0]])
+    vrot_input['MODERATE'] = np.array([5]) #How many steps from del start to del end
+    vrot_input['DELSTART'] = np.array([2.*Configuration['CHANNEL_WIDTH']*Configuration['LIMIT_MODIFIER'][0]]) # Starting step
+    #These were lower in the original fat
+    vrot_input['DELEND'] = np.array([0.1*Configuration['CHANNEL_WIDTH']*Configuration['LIMIT_MODIFIER'][0]]) #Ending step
+    vrot_input['MINDELTA'] = np.array([0.1*Configuration['CHANNEL_WIDTH']*Configuration['LIMIT_MODIFIER'][0]]) #saturation criterum when /SIZE SIZE should be 10 troughout the code
+    #if there is not values in the center we connect the inner ring to the next ring
+    forvarindex = ''
+    if Configuration['EXCLUDE_CENTRAL'] or rotation[0] > 150.:
+        forvarindex = 'VROT 2 VROT_2 2 '
+    if Configuration['OUTER_SLOPE_START'] == NUR:
+        if Configuration['NO_RINGS'] > 5:
+            inner_slope =  int(round(set_limits(Configuration['RC_UNRELIABLE'],round(NUR/2.),NUR-1)))
         else:
-            inner_slope = Configuration['OUTER_SLOPE_START']
-        if stage in ['initial','run_cc']:
-                #inner_slope = int(round(set_limits(NUR*(4.-Configuration['LIMIT_MODIFIER'][0])/4.,round(NUR/2.),NUR-2)))
-            if inner_slope >= NUR-1:
-                forvarindex = forvarindex+f"VROT {NUR}:{NUR-1} VROT_2 {NUR}:{NUR-1} "
-            else:
-                forvarindex = forvarindex+f"VROT {NUR}:{inner_slope} VROT_2 {NUR}:{inner_slope} "
-            vrot_input['VARINDX'] = np.array([forvarindex])
-        elif stage in ['initialize_ec','run_ec','run_os']:
-            if inner_slope >= NUR-1:
-                forvarindex = forvarindex+f"VROT {NUR-1} VROT_2 {NUR-1} "
-            else:
-                forvarindex = forvarindex+f"VROT {NUR-1}:{inner_slope} VROT_2 {NUR-1}:{inner_slope} "
-            vrot_input['VARINDX'] = np.array([forvarindex])
+            inner_slope = NUR
+        if Configuration['NO_RINGS'] > 15 and inner_slope > int(Configuration['NO_RINGS']*4./5.) :
+            inner_slope = int(Configuration['NO_RINGS']*4./5.)
+        Configuration['OUTER_SLOPE_START'] = inner_slope
+    else:
+        inner_slope = Configuration['OUTER_SLOPE_START']
+    if stage in ['initial','run_cc']:
+            #inner_slope = int(round(set_limits(NUR*(4.-Configuration['LIMIT_MODIFIER'][0])/4.,round(NUR/2.),NUR-2)))
+        if inner_slope >= NUR-1:
+            forvarindex = forvarindex+f"VROT {NUR}:{NUR-1} VROT_2 {NUR}:{NUR-1} "
+        else:
+            forvarindex = forvarindex+f"VROT {NUR}:{inner_slope} VROT_2 {NUR}:{inner_slope} "
+        vrot_input['VARINDX'] = np.array([forvarindex])
+    elif stage in ['initialize_ec','run_ec','run_os']:
+        if inner_slope >= NUR-1:
+            forvarindex = forvarindex+f"VROT {NUR-1} VROT_2 {NUR-1} "
+        else:
+            forvarindex = forvarindex+f"VROT {NUR-1}:{inner_slope} VROT_2 {NUR-1}:{inner_slope} "
+        vrot_input['VARINDX'] = np.array([forvarindex])
 
 
     return vrot_input

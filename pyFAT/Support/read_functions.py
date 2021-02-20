@@ -39,63 +39,104 @@ class NoConfigFile(Exception):
     pass
 def catalogue(filename, debug = False):
     Catalogue = Proper_Dictionary({})
+    with open(filename,'r') as tmpfile:
+        #Define the exsiting catalogue input()
+        input_columns = [x.strip().upper() for x in tmpfile.readline().split('|')]
+        Catalogue['ENTRIES'] = ['ENTRIES']
+        Catalogue['ENTRIES'].extend(input_columns)
+        for key in input_columns:
+            Catalogue[key] = []
 
-    tmpfile = open(filename,'r')
-    #Define the exsiting catalogue input()
-    input_columns = [x.strip().upper() for x in tmpfile.readline().split('|')]
-    Catalogue['ENTRIES'] = ['ENTRIES']
-    Catalogue['ENTRIES'].extend(input_columns)
-    for key in input_columns:
-        Catalogue[key] = []
-
-    for line in tmpfile.readlines():
-        input = [x.strip() for x  in line.split('|')]
-        for i,key in enumerate(input_columns):
-            if key == 'DISTANCE':
-                Catalogue[key].append(float(input[i]))
-            else:
-                Catalogue[key].append(input[i])
+        for line in tmpfile.readlines():
+            input = [x.strip() for x  in line.split('|')]
+            for i,key in enumerate(input_columns):
+                if key == 'DISTANCE':
+                    Catalogue[key].append(float(input[i]))
+                else:
+                    Catalogue[key].append(input[i])
     if 'NUMBER' in Catalogue['ENTRIES']:
         Catalogue['NUMBER'] = np.array(Catalogue['NUMBER'],dtype=int)
 
     return Catalogue
 catalogue.__doc__ =f'''
-;+
-; NAME:
-;       catalogue
-;
-; PURPOSE:
-;       Read the FAT input catalogue and write into the a dictionary
-;
-; CATEGORY:
-;       read_functions
-;
-;
-; INPUTS:
-;       filename = name of the catalogue to read
-;
-; OPTIONAL INPUTS:
-;       debug = False
-;
-; KEYWORD PARAMETERS:
-;       -
-;
-; OUTPUTS:
-;       Catalogue = dictionary with the read file
-;
-; OPTIONAL OUTPUTS:
-;       -
-;
-; PROCEDURES CALLED:
-;      split, strip, open, readlines, np.array, append, upper, Proper_Dictionary
-;
-; EXAMPLE:
-;
-;
+ NAME:
+    catalogue
+
+ PURPOSE:
+    Read the FAT input catalogue and write into the a dictionary
+
+ CATEGORY:
+    read_functions
+
+ INPUTS:
+    filename = name of the catalogue to read
+
+ OPTIONAL INPUTS:
+    debug = False
+
+ OUTPUTS:
+    Catalogue = dictionary with the read file
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
 '''
 
+def check_edge_limits(xmin,xmax,ymin,ymax,zmin,zmax,Configuration,debug=False ,beam_edge = 0.5, vel_edge = 0.5 ):
+    diff = np.array([xmin,abs(xmax - Configuration['NAXES'][0]),
+                     ymin,abs(ymax - Configuration['NAXES'][1])],dtype = float)
+    if debug:
+        print_log(f'''CHECK_EDGE_LIMIT: We find these differences and this edge size {beam_edge*Configuration['BEAM_IN_PIXELS'][0]}
+{'':8s} diff  = {diff}
+''',Configuration['OUTPUTLOG'],debug= True)
+    if np.where(diff < beam_edge*Configuration['BEAM_IN_PIXELS'][0])[0].size:
+        return True
+    diff = np.array([zmin,abs(zmax-Configuration['NAXES'][2])],dtype=float)
+    if debug:
+        print_log(f'''CHECK_EDGE_LIMIT: And for velocity edge =  {vel_edge}
+{'':8s} diff  = {diff}
+''',Configuration['OUTPUTLOG'])
+    if np.where(diff < vel_edge)[0].size:
+        return True
+    else:
+        return False
+check_edge_limits.__doc__ =f'''
+ NAME:
+    check_edge_limits
 
+ PURPOSE:
+    Check whether a Sofia source is properly separated from the edge of the cube.
+    In order to read
 
+ CATEGORY:
+    read_functions
+
+ INPUTS:
+    xmin,xmax,ymin,ymax,zmin,zmax,header,Configuration
+    these are the parameters that describe the mask + header + Configuration
+
+ OPTIONAL INPUTS:
+    debug=False
+
+    beam_edge = 0.5
+    minimum tolerance for spatial edges
+
+    vel_edge = 0.5
+    minimum tolerance for velocity
+
+ OUTPUTS:
+    Boolean which is True when the source is closer to the edge than beam_edge and vel_edge False other wise
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    abs, np.where, np.array, print_log,
+
+ NOTE:
+'''
 
 #Function to read FAT configuration file into a dictionary
 def config_file(input_parameters, start_dir, debug = False):
@@ -104,10 +145,12 @@ def config_file(input_parameters, start_dir, debug = False):
         try:
             if input_parameters.configfile == 'ChecK.ConfiG':
                 from pyFAT import Installation_Check as IC
-                tmpfile = import_res.open_text(IC,'FAT_INPUT.config')
+                with import_res.open_text(IC,'FAT_INPUT.config') as tmp:
+                    tmpfile = tmp.readlines()
             elif input_parameters.configfile == 'No Default' and input_parameters.single_cube != 'CataloguE' :
                 import pyFAT
-                tmpfile = import_res.open_text(pyFAT,'FAT_INPUT.config')
+                with import_res.open_text(pyFAT,'FAT_INPUT.config') as tmp:
+                    tmpfile = tmp.readlines()
             else:
                 with open(input_parameters.configfile, 'r') as tmp:
                     tmpfile = tmp.readlines()
@@ -269,53 +312,45 @@ def config_file(input_parameters, start_dir, debug = False):
         Configuration[key] = [Configuration[key],Configuration[key]]
     return Configuration
 config_file.__doc__ =f'''
-;+
-; NAME:
-;       config_file
-;
-; PURPOSE:
-;       Read the FAT config file and write into the a dictionary
-;
-; CATEGORY:
-;       read_functions
-;
-; INPUTS:
-;       input_parameters = input parameters for run
-;       start_dir = the directory where FAT is started from
-;
-; OPTIONAL INPUTS:
-;       debug = False
-;
-; KEYWORD PARAMETERS:
-;       -
-;
-; OUTPUTS:
-;         Configuration = dictionary with the config file input
-;
-; OPTIONAL OUTPUTS:
-;       -
-;
-; PROCEDURES CALLED:
-;      A bunch
-;
-; EXAMPLE:
-;
-;
+ NAME:
+    config_file
+ PURPOSE:
+    Read the FAT config file and write into the a dictionary
+ CATEGORY:
+    read_functions
+
+ INPUTS:
+    input_parameters = input parameters for run
+    start_dir = the directory where FAT is started from
+
+ OPTIONAL INPUTS:
+    debug = False
+    fit_type = 'Undefined'
+
+ OUTPUTS:
+    Configuration = dictionary with the config file input
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
 '''
 
-def extract_vrot(Configuration, hdr,map ,angle,center, debug= False):
+def extract_vrot(Configuration,map ,angle,center, debug= False):
     if debug:
         print_log(f'''EXTRACT_VROT: starting extraction of initial VROT.
 {'':8s} PA= {angle}
 {'':8s} center= {center}
-''',Configuration['OUTPUTLOG'], debug = True,screen = True)
+''',Configuration['OUTPUTLOG'], debug = True)
     x1,x2,y1,y2 = obtain_border_pix(Configuration,angle,center,debug=debug)
     linex,liney = np.linspace(x1,x2,1000), np.linspace(y1,y2,1000)
     maj_resolution = np.sqrt(((x2-x1)/1000.)**2+((y2-y1)/1000.)**2)
     if debug:
         print_log(f'''EXTRACT_VROT: The boundary pixels are
 {'':8s} x1 = {x1}, x2 = {x2}, y1 = {y1}, y2 = {y2}
-''',Configuration['OUTPUTLOG'], debug = False)
+''',Configuration['OUTPUTLOG'])
     #maj_resolution = abs((abs(x2-x1)/1000.)*np.sin(np.radians(angle)))+abs(abs(y2-y1)/1000.*np.cos(np.radians(angle)))
     maj_profile = ndimage.map_coordinates(map, np.vstack((liney,linex)),order=1)
     maj_axis =  np.linspace(0,1000*maj_resolution,1000)- (abs((abs(center[0]))*np.sin(np.radians(angle)))+abs(abs(center[1])*np.cos(np.radians(angle))))
@@ -326,7 +361,7 @@ def extract_vrot(Configuration, hdr,map ,angle,center, debug= False):
     if debug:
         print_log(f'''EXTRACT_VROT: The resolution on the extracted axis
 {'':8s} resolution = {maj_resolution}
-''',Configuration['OUTPUTLOG'], debug = False)
+''',Configuration['OUTPUTLOG'])
     avg_profile = []
     neg_profile = []
     pos_profile = []
@@ -344,68 +379,60 @@ def extract_vrot(Configuration, hdr,map ,angle,center, debug= False):
             pos_profile[beam_back] = pos_profile[beam_back]+0.5*pos_profile[int(beam_back/2.)]+0.1*pos_profile[-1]
     if debug:
         print_log(f'''EXTRACT_VROT: starting extraction of initial VROT.
-''',Configuration['OUTPUTLOG'], debug = False)
+''',Configuration['OUTPUTLOG'])
 
     ring_size_req = Configuration['BEAM_IN_PIXELS'][0]/maj_resolution
     if debug:
         print_log(f'''EXTRACT_VROT: We need a rings size of
 {'':8s} ringsize= {ring_size_req}
 {'':8s} because bmaj  ={Configuration['BEAM'][0]} cdelt = {Configuration['BEAM'][0]/(3600.*Configuration['BEAM_IN_PIXELS'][0])} and the resolution = {maj_resolution}
-''',Configuration['OUTPUTLOG'], debug = False)
+''',Configuration['OUTPUTLOG'])
     profile = np.array(avg_profile[0::int(ring_size_req)],dtype=float)
     if debug:
         print_log(f'''EXTRACT_VROT: Constructing the final RC
 {'':8s} initial RC= {profile}
 {'':8s} at step width= {ring_size_req}
-''',Configuration['OUTPUTLOG'], debug = False)
+''',Configuration['OUTPUTLOG'])
     try:
         profile[np.isnan(profile)] = profile[~np.isnan(profile)][-1]
     except IndexError:
         profile = []
 
     return profile
-
 extract_vrot.__doc__ =f'''
-;+
-; NAME:
-;       extract_vrot
-;
-; PURPOSE:
-;       Extract a profile from the velocity field and average it over both sides from the center.
-;
-; CATEGORY:
-;       read
-;
-;
-; INPUTS:
-;       Configuration = General FAT Configuration settings
-;       hdr = header of the velocity field
-;       map = the velocity field
-        angle = PA of major axis
-        center = cnter of the galaxy
-; OPTIONAL INPUTS:
-;       debug = False
-;
-; KEYWORD PARAMETERS:
-;       -
-;
-; OUTPUTS:
-;       profile = The RC at given ring locations averaged over the approaching and receding side
-;
-; OPTIONAL OUTPUTS:
-;       -
-;
-; PROCEDURES CALLED:
-;      Not Available
-;
-; EXAMPLE:
-;
-;
+ NAME:
+    extract_vrot
+
+ PURPOSE:
+    Extract a profile from the velocity field and average it over both sides from the center.
+
+ CATEGORY:
+    read_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    map = the velocity field
+    angle = PA of major axis
+    center = center of the galaxy in pixel coordinates
+
+ OPTIONAL INPUTS:
+    debug = False
+    fit_type = 'Undefined'
+
+ OUTPUTS:
+    profile = The RC at given ring locations averaged over the approaching and receding side
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
 '''
 
 def get_DHI(Configuration,Model='Finalmodel' ,debug=False):
     #Get the sbrs
-    radi,sbr,sbr_2,systemic = load_tirific(f"{Configuration['FITTING_DIR']}{Model}/{Model}.def",Variables = ['RADI','SBR','SBR_2','VSYS'],debug=debug)
+    radi,sbr,sbr_2,systemic = load_tirific(Configuration,f"{Configuration['FITTING_DIR']}{Model}/{Model}.def",Variables = ['RADI','SBR','SBR_2','VSYS'],debug=debug)
     #convert to solar_mass/pc^2
     sbr_msolar = columndensity(Configuration,sbr*1000.,systemic=systemic[0],arcsquare=True,solar_mass_output=True)
     sbr_2_msolar = columndensity(Configuration,sbr_2*1000.,systemic=systemic[0],arcsquare=True,solar_mass_output=True)
@@ -426,7 +453,6 @@ def get_DHI(Configuration,Model='Finalmodel' ,debug=False):
     else:
         DHI = float('NaN')
     return DHI
-
 get_DHI.__doc__ =f'''
  NAME:
     get_DHI
@@ -460,8 +486,8 @@ def get_totflux(Configuration,map_name,debug=False):
     image = fits.open(f"{Configuration['FITTING_DIR']}{map_name}")
     flux = np.nansum(image[0].data)
     error = np.sqrt((np.where(image[0].data> 0.)[0].size)/Configuration['BEAM_IN_PIXELS'][2])*Configuration['NOISE']
+    image.close()
     return [float(flux/Configuration['BEAM_IN_PIXELS'][2]),error]
-
 get_totflux.__doc__ =f'''
  NAME:
     get_totflux
@@ -491,7 +517,6 @@ get_totflux.__doc__ =f'''
 '''
 
 # Function to get the PA and inclination from the moment 0 for initial estimates
-
 def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
     #open the moment 0
     if debug:
@@ -510,7 +535,7 @@ def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
     noise_map = np.sqrt(Image[0].data)*Configuration['NOISE']*Configuration['CHANNEL_WIDTH']
     SNR = np.nanmean(map[noise_map > 0.]/noise_map[noise_map > 0.])
     noise_hdr = Image[0].header
-
+    Image.close()
     median_noise_in_map = np.nanmedian(noise_map[noise_map > 0.])
     minimum_noise_in_map = np.nanmin(noise_map[noise_map > 0.])
     map[0.5*minimum_noise_in_map > noise_map] = 0.
@@ -519,7 +544,7 @@ def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
     if debug:
         print_log(f'''GUESS_ORIENTATION: We find SNR = {SNR} and a scale factor {scale_factor} and the noise median {median_noise_in_map}
 {'':8s} minimum {minimum_noise_in_map}
-''',Configuration['OUTPUTLOG'], debug = False)
+''',Configuration['OUTPUTLOG'])
     inclination, pa, maj_extent = get_inclination_pa(Configuration, mom0, center, cutoff = scale_factor* median_noise_in_map, debug = debug)
 
     # For very small galaxies we do not want to correct the extend
@@ -531,7 +556,7 @@ def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
 {'':8s} inclination = {inclination}
 {'':8s} pa = {pa}
 {'':8s} size in beams = {maj_extent/Configuration['BEAM'][0]/3600.}
-''',Configuration['OUTPUTLOG'], debug = False)
+''',Configuration['OUTPUTLOG'])
             #map[3*minimum_noise_in_map > noise_map] = 0.
     # From these estimates we also get an initial SBR
     x1,x2,y1,y2 = obtain_border_pix(Configuration,pa[0],center,debug=debug)
@@ -558,15 +583,15 @@ def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
         diff = diff+abs(pos_profile[-1]-neg_profile[-1])*abs(np.mean([pos_profile[-1],neg_profile[-1]]))
     diff = diff/np.nanmin([neg_index.size,pos_index.size])
     if debug:
-        print_log(f'''GUESS_ORIENTATION:'BMAJ in pixels, center of profile, center, differnece between pos and neg
+        print_log(f'''GUESS_ORIENTATION:'BMAJ in pixels, center of profile, center, difference between pos and neg
 {'':8s}{Configuration['BEAM_IN_PIXELS'][0]*0.5} {center_of_profile} {center} {diff}
-''',Configuration['OUTPUTLOG'], debug = False)
+''',Configuration['OUTPUTLOG'])
     # if the center of the profile is more than half a beam off from the Sofia center let's see which on provides a more symmetric profile
     if abs(center_of_profile) > Configuration['BEAM_IN_PIXELS'][0]*0.5 and SNR > 3.:
         if debug:
                 print_log(f'''GUESS_ORIENTATION: The SoFiA center and that of the SBR profile are separated by more than half a beam.
 {'':8s}GUESS_ORIENTATION: Determining the more symmetric profile.
-''',Configuration['OUTPUTLOG'], debug = False)
+''',Configuration['OUTPUTLOG'])
         neg_index = np.where(maj_axis < center_of_profile)[0]
         pos_index = np.where(maj_axis > center_of_profile)[0]
         avg_profile_new = []
@@ -582,11 +607,11 @@ def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
         diff_new = diff_new/np.nanmin([neg_index.size,pos_index.size])
         if debug:
             print_log(f'''GUESS_ORIENTATION: We have this old difference {diff} and this new difference {diff_new}
-''',Configuration['OUTPUTLOG'], debug = False)
+''',Configuration['OUTPUTLOG'])
         if diff_new < diff:
             if debug:
                 print_log(f'''GUESS_ORIENTATION: We are updating the center from {center[0]},{center[1]} to {center[0]-center_of_profile/(2.*np.sin(np.radians(pa[0])))*maj_resolution},{center[1]+center_of_profile/(2.*np.cos(np.radians(pa[0])))*maj_resolution}
-''',Configuration['OUTPUTLOG'], debug = False)
+''',Configuration['OUTPUTLOG'])
             avg_profile = avg_profile_new
             center[0] = center[0]-center_of_profile/(2.*np.sin(np.radians(pa[0])))*maj_resolution
             center[1] = center[1]+center_of_profile/(2.*np.cos(np.radians(pa[0])))*maj_resolution
@@ -633,13 +658,13 @@ def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
     if debug:
         print_log(f'''GUESS_ORIENTATION: We found the following initial VSYS:
 {'':8s}vsys = {map[int(round(center[1])),int(round(center[0]))]}, at {center}
-''',Configuration['OUTPUTLOG'], debug = False)
+''',Configuration['OUTPUTLOG'])
     map = map  - map[int(round(center[1])),int(round(center[0]))]
-    VROT_initial = extract_vrot(Configuration, hdr,map ,pa[0],center, debug= debug)
+    VROT_initial = extract_vrot(Configuration,map ,pa[0],center, debug= debug)
     min_RC_length= len(VROT_initial)
     if pa[1] < 10.:
         for x in [pa[0]-pa[1],pa[0]-pa[1]/2.,pa[0]+pa[1]/2.,pa[0]+pa[1]]:
-            tmp  = extract_vrot(Configuration, hdr,map ,x,center, debug= debug)
+            tmp  = extract_vrot(Configuration,map ,x,center, debug= debug)
             if len(tmp) > 0.:
                 RC_length = len(tmp)
                 if RC_length < min_RC_length:
@@ -649,7 +674,7 @@ def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
 {'':8s}GUESS_ORIENTATION: RC length = {RC_length}, min_RC length = {min_RC_length}, Vrot ini = {len(VROT_initial)}, tmnp = {len(tmp)}
 {'':8s}GUESS_ORIENTATION: Vrot {VROT_initial}
 {'':8s}GUESS_ORIENTATION: tmp {tmp}
-''',Configuration['OUTPUTLOG'], debug = False, screen =True)
+''',Configuration['OUTPUTLOG'])
                 VROT_initial = np.vstack((VROT_initial[:min_RC_length],tmp[:min_RC_length]))
                 VROT_initial = np.mean(VROT_initial,axis=0)
 
@@ -659,63 +684,57 @@ def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
     if debug:
         print_log(f'''GUESS_ORIENTATION: We found the following initial rotation curve:
 {'':8s}GUESS_ORIENTATION: RC = {VROT_initial}
-''',Configuration['OUTPUTLOG'], debug = False)
+''',Configuration['OUTPUTLOG'])
     return np.array(pa),np.array(inclination),SBR_initial,maj_extent,center[0],center[1],VROT_initial
 guess_orientation.__doc__ =f'''
-;+
-; NAME:
-;       guess_orientation
-;
-; PURPOSE:
-        Obtain the initial estimates for the galaxy from the SoFiA products
+ NAME:
+    guess_orientation
 
-;
-; CATEGORY:
-;       read_functions
-;
-;
-; INPUTS:
-;      Configuration  = Genral FAT Configuration Settings
-       Fits_Files  = Paths to the Fits Files used in FAT , center = None, debug = False):
-;
-; OPTIONAL INPUTS:
-;      center = None  ---> Will assume the center of the map provided when unset.
-       debug = False
-;
-; KEYWORD PARAMETERS:
-;       -
-;
-; OUTPUTS:
-        np.array(pa) = [pa, pa errors]
-        np.array(inclination) = [inc, inc error]
-        SBR_initial = Initial guess of the SBR profile from the moment 0 map
-        maj_extent = Initial guess of the extend of the galaxy
-        center[0] = RA
-        center[1] = DEC
-        VROT_initial = initial RC
-;
-; OPTIONAL OUTPUTS:
-;       -
-;
-; PROCEDURES CALLED:
-;      np.mean, astropy.io.fits, np.linspace , unspecified
-;
-; EXAMPLE:
-;
-;
+ PURPOSE:
+    Obtain the initial estimates for the galaxy from the SoFiA products
+
+ CATEGORY:
+    read_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    Fits_Files = Standard FAT dictionary with filenames
+
+ OPTIONAL INPUTS:
+    debug = False
+
+    center = None
+    Will assume the center of the map provided when unset.
+    In pixel coordinates
+ OUTPUTS:
+
+ OPTIONAL OUTPUTS:
+    np.array(pa) = [pa, pa errors]
+    np.array(inclination) = [inc, inc error]
+    SBR_initial = Initial guess of the SBR profile from the moment 0 map
+    maj_extent = Initial guess of the extend of the galaxy
+    center[0] = RA in pixels
+    center[1] = DEC in pixels
+    VROT_initial = initial RC
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
 '''
+
 # load the basic info file to get the Sofia FAT Initial_Estimates
 def load_basicinfo(Configuration,filename, Variables = ['RA','DEC','VSYS','PA','Inclination','Max VRot','V_mask','Tot FLux','D_HI','Distance','HI_Mass' ,'D_HI' ], unpack = True, debug = False):
     outputarray = np.zeros((2,len(Variables)), dtype=float)
     try:
-        tmp = open(filename, 'r')
+        with open(filename, 'r') as tmp:
+            fileline = tmp.readlines()
     except FileNotFoundError:
         print("That Basic info file does not exist. Returning empty array.")
         if unpack:
             return (*outputarray.T,)
         else:
             return outputarray
-    fileline = tmp.readlines()
     Var_inFile = [f.strip() for f in fileline[3].split('  ') if f != '']
     del Var_inFile[0]
     invalues = [f.strip() for f in fileline[6].split('  ') if f != '']
@@ -755,9 +774,6 @@ load_basicinfo.__doc__ =f'''
 
     debug = False
 
- KEYWORD PARAMETERS:
-       -
-
  OUTPUTS:
     outputarray = Array with values of all requested parameters
 
@@ -767,25 +783,25 @@ load_basicinfo.__doc__ =f'''
  PROCEDURES CALLED:
     Unspecified
 
- EXAMPLE:
+ NOTE:
 '''
 
 #Function for loading the variables of a tirific def file into a set of variables to be used
-def load_template(Template,Variables = ['BMIN','BMAJ','BPA','RMS','DISTANCE','NUR','RADI','VROT',
+def load_template(Configuration,Template,Variables = ['BMIN','BMAJ','BPA','RMS','DISTANCE','NUR','RADI','VROT',
                  'Z0', 'SBR', 'INCL','PA','XPOS','YPOS','VSYS','SDIS','VROT_2',  'Z0_2','SBR_2',
                  'INCL_2','PA_2','XPOS_2','YPOS_2','VSYS_2','SDIS_2','CONDISP','CFLUX','CFLUX_2'],
                  unpack = True  ,debug = False):
     Variables = np.array([e.upper() for e in Variables],dtype=str)
     if debug:
         print_log(f'''LOAD_TEMPLATE: We get the following number of rings from the template {Template['NUR']}
-''',None, debug=debug)
+''',Configuration['OUTPUTLOG'], debug=True)
     numrings = int(Template['NUR'])
     outputarray=np.zeros((numrings,len(Variables)),dtype=float)
     counter = 0
     for var in Variables:
         if debug:
             print_log(f'''LOAD_TEMPLATE: We are processing {var}.
-{'':8s}LOAD_TEMPLATE: With the following values {Template[var]}''',None, debug=debug)
+{'':8s}LOAD_TEMPLATE: With the following values {Template[var]}''',Configuration['OUTPUTLOG'])
         tmp =  np.array(Template[var].rsplit(),dtype=float)
         outputarray[0:len(tmp),counter] = tmp[0:len(tmp)]
         counter +=1
@@ -794,7 +810,6 @@ def load_template(Template,Variables = ['BMIN','BMAJ','BPA','RMS','DISTANCE','NU
         return (*outputarray.T,)
     else:
         return outputarray
-
 load_template.__doc__ =f'''
  NAME:
     load_template
@@ -806,6 +821,7 @@ load_template.__doc__ =f'''
     read_functions
 
  INPUTS:
+    Configuration = Standard FAT configuration
     Template = The tirific template to extract values from, this is a dictionary where the def file is set as  Template['parameter'] = values
 
  OPTIONAL INPUTS:
@@ -818,8 +834,6 @@ load_template.__doc__ =f'''
 
     debug = False
 
- KEYWORD PARAMETERS:
-
  OUTPUTS:
     outputarray array with all the values of the parameters requested
 
@@ -828,19 +842,19 @@ load_template.__doc__ =f'''
  PROCEDURES CALLED:
     Unspecified
 
- EXAMPLE:
+ NOTE:
 '''
 
 
 #Function for loading the variables of a tirific def file into a set of variables to be used
-def load_tirific(filename,Variables = ['BMIN','BMAJ','BPA','RMS','DISTANCE','NUR','RADI','VROT',
+def load_tirific(Configuration,filename,Variables = ['BMIN','BMAJ','BPA','RMS','DISTANCE','NUR','RADI','VROT',
                  'Z0', 'SBR', 'INCL','PA','XPOS','YPOS','VSYS','SDIS','VROT_2',  'Z0_2','SBR_2',
                  'INCL_2','PA_2','XPOS_2','YPOS_2','VSYS_2','SDIS_2','CONDISP','CFLUX','CFLUX_2'],
                  unpack = True , debug = False ):
     if debug:
         print_log(f'''LOAD_TIRIFIC: Starting to extract the following paramaters:
 {'':8s}{Variables}
-''',None,screen=True, debug = True)
+''',Configuration['OUTPUTLOG'], debug = True)
     Variables = np.array([e.upper() for e in Variables],dtype=str)
     numrings = []
     while len(numrings) < 1:
@@ -878,13 +892,12 @@ def load_tirific(filename,Variables = ['BMIN','BMAJ','BPA','RMS','DISTANCE','NUR
         return (*outputarray.T,)
     else:
         return outputarray
-
-load_template.__doc__ =f'''
+load_tirific.__doc__ =f'''
  NAME:
-    load_template
+    load_tirific
 
  PURPOSE:
-    Load values from variables set in the tirific templates
+    Load values from variables set in the tirific files
 
  CATEGORY:
     read_functions
@@ -902,8 +915,6 @@ load_template.__doc__ =f'''
 
     debug = False
 
- KEYWORD PARAMETERS:
-
  OUTPUTS:
     outputarray array with all the values of the parameters requested
 
@@ -912,7 +923,7 @@ load_template.__doc__ =f'''
  PROCEDURES CALLED:
     Unspecified
 
- EXAMPLE:
+ NOTE:
 '''
 
 
@@ -922,7 +933,7 @@ def sofia_catalogue(Configuration,Fits_Files, Variables =['id','x','x_min','x_ma
                     'dec','v_app','f_sum','kin_pa','w50','err_f_sum','err_x','err_y','err_z'], debug = False):
     if debug:
         print_log(f'''SOFIA_CATLOGUE: Reading the source from the catalogue.
-''',Configuration['OUTPUTLOG'],debug= debug)
+''',Configuration['OUTPUTLOG'],debug= True)
     outlist = [[] for x in Variables]
     with open(Configuration['FITTING_DIR']+'Sofia_Output/'+Configuration['BASE_NAME']+'_cat.txt') as sof_cat:
         for line in sof_cat.readlines():
@@ -942,15 +953,14 @@ def sofia_catalogue(Configuration,Fits_Files, Variables =['id','x','x_min','x_ma
                         if value.lower() in input_columns:
                             continue
                         else:
-                            log_statement=f'''READ_SOFIA_CATALOGUE: We cannot find the required column for {value} in the sofia catalogue.
-{"":8s}READ_SOFIA_CATALOGUE: This can happen because a) you have tampered with the sofiainput.txt file in the Support directory,
-{"":8s}READ_SOFIA_CATALOGUE: b) you are using an updated version of SoFiA2 where the names have changed and FAT is not yet updated.'
-{"":8s}READ_SOFIA_CATALOGUE:    In this case please file a bug report at https://github.com/PeterKamphuis/FAT/issues/'
-{"":8s}READ_SOFIA_CATALOGUE: c) You are using pre processed SoFiA output of your own and do not have all the output'
-{"":8s}READ_SOFIA_CATALOGUE:    Required output is {','.join(Variables)})
-'''
-                            print_log(log_statement,Configuration['OUTPUTLOG'],debug= debug)
-                            raise BadCatalogueError("READ_SOFIA_CATALOGUE: The required columns could not be found in the sofia catalogue.")
+                            print_log(f'''SOFIA_CATALOGUE: We cannot find the required column for {value} in the sofia catalogue.
+{"":8s}SOFIA_CATALOGUE: This can happen because a) you have tampered with the sofiainput.txt file in the Support directory,
+{"":8s}SOFIA_CATALOGUE: b) you are using an updated version of SoFiA2 where the names have changed and FAT is not yet updated.'
+{"":8s}SOFIA_CATALOGUE:    In this case please file a bug report at https://github.com/PeterKamphuis/FAT/issues/'
+{"":8s}SOFIA_CATALOGUE: c) You are using pre processed SoFiA output of your own and do not have all the output'
+{"":8s}SOFIA_CATALOGUE:    Required output is {','.join(Variables)})
+''',Configuration['OUTPUTLOG'],screen= True)
+                            raise BadCatalogueError("SOFIA_CATALOGUE: The required columns could not be found in the sofia catalogue.")
             else:
                 for col in Variables:
                     if input_columns.index(col) == 0:
@@ -978,7 +988,7 @@ def sofia_catalogue(Configuration,Fits_Files, Variables =['id','x','x_min','x_ma
     if len(outlist[0]) > 1 and 'f_sum' in Variables:
         if debug:
             print_log(f'''SOFIA_CATALOGUE: Multiple sources were found we will try to select the correct one.
-''',Configuration['OUTPUTLOG'],debug= False)
+''',Configuration['OUTPUTLOG'])
         found = False
         beam_edge=2.
         if Configuration['VEL_SMOOTH_EXTENDED']:
@@ -1016,7 +1026,7 @@ def sofia_catalogue(Configuration,Fits_Files, Variables =['id','x','x_min','x_ma
             if np.nanmax(no_edge_fluxes) > 10.* np.nanmax(fluxes):
                 if debug:
                     print_log(f'''SOFIA_CATALOGUE: We discarded a very bright source, let's check wether it satisfies our minimum boundaries.
-''',Configuration['OUTPUTLOG'],debug= False)
+''',Configuration['OUTPUTLOG'])
                 index = np.where(np.nanmax(no_edge_fluxes) == no_edge_fluxes)[0][0]
                 edge = check_edge_limits(float(outlist[Variables.index('x_min')][index]),
                                 float(outlist[Variables.index('x_max')][index]),
@@ -1028,21 +1038,21 @@ def sofia_catalogue(Configuration,Fits_Files, Variables =['id','x','x_min','x_ma
 
                 if edge:
                     print_log(f'''SOFIA_CATALOGUE: The bright source is very close to limits
-''',Configuration['OUTPUTLOG'],debug= False)
+''',Configuration['OUTPUTLOG'])
                 else:
                     print_log(f'''SOFIA_CATALOGUE: The bright source is acceptable, restoring its flux
-''',Configuration['OUTPUTLOG'],debug= False)
+''',Configuration['OUTPUTLOG'])
                     many_sources  = copy.deepcopy(outlist)
                     fluxes = np.array(outlist[Variables.index('f_sum')],dtype =float)
         if debug:
             print_log(f'''SOFIA_CATALOGUE: after checking edges we find these fluxes
 {'':8s}{many_sources[Variables.index('f_sum')]}
-''',Configuration['OUTPUTLOG'],debug= False)
+''',Configuration['OUTPUTLOG'])
         outlist = []
         #We want the source with the most total flux.
         index = np.where(np.nanmax(fluxes) == fluxes)[0][0]
         print_log(f'''SOFIA_CATALOGUE: We select the {index} source of this list.
-''',Configuration['OUTPUTLOG'],debug= False)
+''',Configuration['OUTPUTLOG'])
         outlist = [x[index] for x in many_sources]
         # check that our mask has the selected source
     else:
@@ -1051,9 +1061,8 @@ def sofia_catalogue(Configuration,Fits_Files, Variables =['id','x','x_min','x_ma
     if debug:
         print_log(f'''SOFIA_CATALOGUE: we found these values
 {'':8s}{outlist}
-''',Configuration['OUTPUTLOG'],debug= False)
+''',Configuration['OUTPUTLOG'])
     return outlist
-
 sofia_catalogue.__doc__ =f'''
  NAME:
     sofia_catalogue
@@ -1079,8 +1088,6 @@ sofia_catalogue.__doc__ =f'''
 
     debug = False
 
- KEYWORD PARAMETERS:
-
  OUTPUTS:
     outlist = list with the requested values for the brightest source in the catalogue provided it is not on the edge of the cube.
 
@@ -1089,113 +1096,12 @@ sofia_catalogue.__doc__ =f'''
  PROCEDURES CALLED:
     Unspecified
 
- EXAMPLE:
-'''
-
-def check_edge_limits(xmin,xmax,ymin,ymax,zmin,zmax,Configuration,debug=False ,beam_edge = 0.5, vel_edge = 0.5 ):
-    diff = np.array([xmin,abs(xmax - Configuration['NAXES'][0]),
-                     ymin,abs(ymax - Configuration['NAXES'][1])],dtype = float)
-    if debug:
-        print_log(f'''CHECK_EDGE_LIMIT: We find these differences and this edge size {beam_edge*Configuration['BEAM_IN_PIXELS'][0]}
-{'':8s} diff  = {diff}
-''',Configuration['OUTPUTLOG'],debug= True)
-    if np.where(diff < beam_edge*Configuration['BEAM_IN_PIXELS'][0])[0].size:
-        return True
-    diff = np.array([zmin,abs(zmax-Configuration['NAXES'][2])],dtype=float)
-    if debug:
-        print_log(f'''CHECK_EDGE_LIMIT: And for velocity edge =  {vel_edge}
-{'':8s} diff  = {diff}
-''',Configuration['OUTPUTLOG'],debug= False)
-    if np.where(diff < vel_edge)[0].size:
-        return True
-    else:
-        return False
-check_edge_limits.__doc__ =f'''
- NAME:
-       check_edge_limits
-
- PURPOSE:
-       Check whether a Sofia source is properly separated from the edge of the cube.
-       In order to read
-
- CATEGORY:
-       read_functions
-
- INPUTS:
-       xmin,xmax,ymin,ymax,zmin,zmax,header,Configuration
-       these are the parameters that describe the mask + header + Configuration
-
- OPTIONAL INPUTS:
-       debug=False ,beam_edge = 0.5, vel_edge = 0.5
-
- KEYWORD PARAMETERS:
-
- OUTPUTS:
-          Boolean which is True when the source is closer to the edge than beam_edge and vel_edge False other wise
-
- OPTIONAL OUTPUTS:
-
- PROCEDURES CALLED:
-      abs, np.where, np.array, print_log,
-
- EXAMPLE:
-'''
-
-def tirific_template(filename = '', debug = False):
-    if filename == '':
-        template = import_res.open_text(templates, 'template.def')
-    elif filename == 'Installation_Check':
-        from pyFAT import Installation_Check as IC
-        template = import_res.open_text(IC, 'ModelInput.def')
-    else:
-        with open(filename, 'r') as tmp:
-            template = tmp.readlines()
-    result = Proper_Dictionary()
-    counter = 0
-    # Separate the keyword names
-    for line in template:
-        key = str(line.split('=')[0].strip().upper())
-        if key == '':
-            result[f'EMPTY{counter}'] = line
-            counter += 1
-        else:
-            result[key] = str(line.split('=')[1].strip())
-    return result
-tirific_template.__doc__ ='''
- NAME:
-       tirific_template
-
- PURPOSE:
-       Read a tirific def file into a dictionary to use as a template.
-       The parameter ill be the dictionary key with the values stored in that key
-
- CATEGORY:
-       read_functions
-
- INPUTS:
-       filename = Name of the def file
-
- OPTIONAL INPUTS:
-    filename = ''
-    Name of the def file, if unset the def file in Templates is used
-
-    debug =False
-
- KEYWORD PARAMETERS:
-
- OUTPUTS:
-          result = dictionary with the read file
-
- OPTIONAL OUTPUTS:
-
- PROCEDURES CALLED:
-      split, strip, open
-
- EXAMPLE:
+ NOTE:
 '''
 
 def sofia_template(debug = False):
-    template = import_res.open_text(templates, 'sofia_template.par')
+    with import_res.open_text(templates, 'sofia_template.par') as tmp:
+        template = tmp.readlines()
     result = {}
     counter = 0
     counter2 = 0
@@ -1213,28 +1119,79 @@ def sofia_template(debug = False):
     return result
 sofia_template.__doc__ ='''
  NAME:
-       sofia_template
+    sofia_template
 
  PURPOSE:
-       Read the sofia2 file in Templates into a dictionary
+    Read the sofia2 file in Templates into a dictionary
 
  CATEGORY:
-       read_functions
+    read_functions
 
  INPUTS:
 
  OPTIONAL INPUTS:
-       debug = False
-
- KEYWORD PARAMETERS:
+    debug = False
 
  OUTPUTS:
-          result = dictionary with the read file
+    result = dictionary with the read file
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    split, strip, open
+
+ NOTE:
+'''
+
+def tirific_template(filename = '', debug = False):
+    if filename == '':
+        with import_res.open_text(templates, 'template.def') as tmp:
+            template = tmp.readlines()
+    elif filename == 'Installation_Check':
+        from pyFAT import Installation_Check as IC
+        with import_res.open_text(IC, 'ModelInput.def') as tmp:
+            template = tmp.readlines()
+    else:
+        with open(filename, 'r') as tmp:
+            template = tmp.readlines()
+    result = Proper_Dictionary()
+    counter = 0
+    # Separate the keyword names
+    for line in template:
+        key = str(line.split('=')[0].strip().upper())
+        if key == '':
+            result[f'EMPTY{counter}'] = line
+            counter += 1
+        else:
+            result[key] = str(line.split('=')[1].strip())
+    return result
+tirific_template.__doc__ ='''
+ NAME:
+    tirific_template
+
+ PURPOSE:
+    Read a tirific def file into a dictionary to use as a template.
+    The parameter ill be the dictionary key with the values stored in that key
+
+ CATEGORY:
+    read_functions
+
+ INPUTS:
+    filename = Name of the def file
+
+ OPTIONAL INPUTS:
+    filename = ''
+    Name of the def file, if unset the def file in Templates is used
+
+    debug =False
+
+ OUTPUTS:
+    result = dictionary with the read file
 
  OPTIONAL OUTPUTS:
 
  PROCEDURES CALLED:
       split, strip, open
 
- EXAMPLE:
+ NOTE:
 '''

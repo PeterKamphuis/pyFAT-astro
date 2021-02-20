@@ -26,7 +26,7 @@ def check_legitimacy(Configuration,debug=False):
     else:
         if Configuration['FINISHAFTER'] > 0:
             outfile = f"{Configuration['FITTING_DIR']}/One_Step_Convergence/One_Step_Convergence.def"
-    inclination = load_tirific(outfile,Variables=['INCL'],debug=debug)[0]
+    inclination = load_tirific(Configuration,outfile,Variables=['INCL'],debug=debug)[0]
     low_incl_limit = 10.
     low_beam_limit = 0.
     if float(inclination[0]) < low_incl_limit or 2.*Configuration['SIZE_IN_BEAMS'] < low_beam_limit:
@@ -163,10 +163,16 @@ def cleanup(Configuration,Fits_Files, debug = False):
                     'restart_Extent_Convergence.txt','Usage_Statistics.txt', 'clean_map_0.fits','clean_map_1.fits','clean_map.fits',\
                     'dep_map_0.fits','minimum_map_0.fits','rot_map_0.fits','dep_map.fits','minimum_map.fits','rot_map.fits',\
                     'dep_map_1.fits','minimum_map_1.fits','rot_map_1.fits','Convolved_Cube_FAT_opt.fits']
-
     for file in files_in_log:
         try:
             os.remove(f"{Configuration['FITTING_DIR']}Logs/{file}")
+        except FileNotFoundError:
+            pass
+    files_in_main = ['dep_map_0.0.fits','minimum_map_0.0.fits','clean_map_0.0.fits','rot_map_0.0.fits']
+
+    for file in files_in_main:
+        try:
+            os.remove(f"{Configuration['FITTING_DIR']}{file}")
         except FileNotFoundError:
             pass
     directories = ['Finalmodel','Sofia_Output','Def_Files']
@@ -379,9 +385,9 @@ def installation_check(Configuration, debug =False):
 
     Model = tirific_template(filename = 'Installation_Check', debug= debug)
     Variables_to_Compare = ['VROT','INCL','PA','SBR','SDIS','Z0','XPOS','YPOS','VSYS']
-    Model_values = load_template(Model,Variables = Variables_to_Compare,unpack = False,debug=debug)
+    Model_values = load_template(Configuration,Model,Variables = Variables_to_Compare,unpack = False,debug=debug)
     #Then the fitted file
-    Fitted_values =load_tirific(f"{Configuration['FITTING_DIR']}Finalmodel/Finalmodel.def",Variables = Variables_to_Compare,unpack = False,debug=debug)
+    Fitted_values =load_tirific(Configuration,f"{Configuration['FITTING_DIR']}Finalmodel/Finalmodel.def",Variables = Variables_to_Compare,unpack = False,debug=debug)
     succes = False
 
     try:
@@ -519,9 +525,7 @@ def finish_galaxy(Configuration,maximum_directory_length,current_run = 'Not init
                 if Configuration['FINISHAFTER'] == 1 and Configuration['START_POINT'] == 4:
                     print_log("Moments should exist",Configuration['OUTPUTLOG'],screen =True)
                 else:
-                    make_moments(filename = f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel.fits",\
-                             basename = 'Finalmodel', directory = f"{Configuration['FITTING_DIR']}/Finalmodel/",\
-                             mask_cube = f"{Configuration['FITTING_DIR']}/Sofia_Output/{Fits_Files['MASK']}",vel_unit = 'm/s',debug=debug)
+                    make_moments(Configuration,Fits_Files,fit_type = 'Generic_Final',vel_unit = 'm/s',debug=debug)
                 make_overview_plot(Configuration,Fits_Files,debug=debug)
 
     log_statement = f'''Finished final output in {Configuration['FITTING_DIR']}.
@@ -579,8 +583,9 @@ def transfer_errors(Configuration,fit_type='Undefined',debug = False):
     Tirific_Template = tirific_template(filename = f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def",debug= debug)
     # Get the errors from the input
     errors_to_transfer= ['VROT_ERR','VROT_2_ERR','INCL_ERR','INCL_2_ERR','PA_ERR','PA_2_ERR','SDIS_ERR','SDIS_2_ERR','Z0_ERR','Z0_2_ERR']
-    FAT_Model = load_tirific(f"{Configuration['FITTING_DIR']}{fit_type}_In.def",Variables=errors_to_transfer,unpack=False,debug=debug)
+    FAT_Model = load_tirific(Configuration,f"{Configuration['FITTING_DIR']}{fit_type}_In.def",Variables=errors_to_transfer,unpack=False,debug=debug)
     # add to the templatethere
+    Tirific_Template['GR_CONT']=' '
     Tirific_Template.insert('GR_CONT','RESTARTID','0')
     for key in errors_to_transfer:
         format = set_format(key[:-4])

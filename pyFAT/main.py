@@ -9,6 +9,7 @@ import numpy as np
 from argparse import ArgumentParser
 import traceback
 import warnings
+
 from datetime import datetime
 from astropy.io import fits
 from astropy.wcs import WCS
@@ -305,7 +306,7 @@ def main(argv):
 {'':8s}SciPy {spversion}
 {'':8s}AstroPy {apversion}
 {'':8s}Matplotlib {mpversion}
-''',Configuration['OUTPUTLOG'], screen =True)
+''',Configuration['OUTPUTLOG'])
 
 
 
@@ -440,45 +441,23 @@ def main(argv):
         cf.finish_galaxy(Configuration,maximum_directory_length,current_run =current_run,debug=Configuration['DEBUG'])
 
 main.__doc__ = '''
-;+
-; NAME:
-;      FAT
-; PURPOSE:
-;      Fit Tilted Ring Models with Tirific in a fully automated manner
-; CATEGORY:
-;      Main for fitting galaxies. Tirific still requires interactive fitting this code attempts
-;      to remedy that
-;
-; CALLING SEQUENCE:
-;      FAT,support='supportdir',configuration_file='configfile'
-;
-; INPUTS:
-;      -
-; OPTIONAL INPUTS:
-;      SUPPORT  = path to the directory where FAT's support
-;      routines are located. The default location is ./Support/
-;      CONFIGURATION_FILE = A configuration file for FAT. This file
-;      should contain the locations of the galaxies to be fitted. See
-;      readme for more detailed info.
-;
-; OPTIONAL INPUT KEYWORDS
-;     /INSTALLATION_CHECK = Flag to run the Installation check.
-; ---------------------------------------------------------------------------------
-;     The following input keywords are only meant to be used by
-;     developers. Except for the /debug flag they will not work for
-;     the common user. If you want to know about these please contact Peter
-;     Kamphuis.
-; ---------------------------------------------------------------------------------
-;     /DEBUG = Flag to print debugging information in several routines
-;     /LVHIS_TEST = Flag to run the LVHIS Test.
-;     /PAPER_TEST = Flag to run the paper artificial galaxies.
-;     /RESOLUTION_TEST = Flag to run the additional resolution tests
-; OPTIONAL KEYWORD OUTPUT:
-;      -
-;
-; OUTPUTS:
-;     See Readme or just run the code
-;
-; EXAMPLE:
-;     python3 FAT.py --cf /home/your_computer/FAT_dir/FAT_INPUT.config'
+ NAME:
+     main
+ PURPOSE:
+      Fit Tilted Ring Models with Tirific in a fully automated manner
+ CATEGORY:
+      Main for fitting galaxies. Tirific still requires interactive fitting this code attempts
+      to remedy that
+
+ CALLING SEQUENCE:
+     see pyFAT -h
+
+ INPUTS:
+    see pyFAT -h
+
+ OUTPUTS:
+     See Readme or just run the code
+
+ EXAMPLE:
+     pyFAT -t --cf /home/your_computer/FAT_dir/FAT_INPUT.config'
 '''
