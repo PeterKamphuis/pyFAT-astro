@@ -183,7 +183,7 @@ def check_size(Configuration,Tirific_Template, fit_type = 'Undefined', stage = '
         print_log(f'''CHECK_SIZE: We set these as the last reliable rings {Configuration['LAST_RELIABLE_RINGS']}
 ''',Configuration['OUTPUTLOG'])
     #if we haven't subtracted we check if we should add
-    if new_rings == Configuration['NO_RINGS']:
+    if int(new_rings) == int(Configuration['NO_RINGS']):
         if (np.any(sbr[:,-2] > sbr_ring_limits[:,-2]*7.) and np.any(sbr[:,-1] > sbr_ring_limits[:,-1]*3.)) or \
             np.any(sbr[:,-1] > sbr_ring_limits[:,-1]*5.):
             if debug:
@@ -219,11 +219,11 @@ def check_size(Configuration,Tirific_Template, fit_type = 'Undefined', stage = '
     # limit between 3 and the maximum allowed from the sofia estimate
     size_in_beams,ring_size,number_of_rings = set_ring_size(Configuration, size_in_beams=size_in_beams,check_set_rings = True, debug=debug)
 
-    print_log(f'''CHECK_SIZE: We find the following size in beams {size_in_beams} with size {ring_size}.
-{'':8s}CHECK_SIZE: The previous iteration had {Configuration['SIZE_IN_BEAMS']} rings with size  {Configuration['RING_SIZE']} .
-{'':8s}CHECK_SIZE: This results in {new_rings} rings in the model compared to {Configuration['NO_RINGS']} previously.
+    print_log(f'''CHECK_SIZE: We find the following size in beams {size_in_beams:.1f} with size {ring_size:.1f}.
+{'':8s}CHECK_SIZE: The previous iteration had {Configuration['SIZE_IN_BEAMS']:.1f} rings with size  {Configuration['RING_SIZE']:.1f} .
+{'':8s}CHECK_SIZE: This results in {int(new_rings):.1f} rings in the model compared to {int(Configuration['NO_RINGS'])} previously.
 ''', Configuration['OUTPUTLOG'],screen=True)
-    if float(ring_size) != float(Configuration['RING_SIZE']):
+    if f"{ring_size:.1f}" != f"{Configuration['RING_SIZE']:.1f}":
         Configuration['NEW_RING_SIZE'] = True
     else:
         Configuration['NEW_RING_SIZE'] = False
@@ -424,7 +424,7 @@ def fit_polynomial(Configuration,radii,profile,sm_profile,error, key, Tirific_Te
         error[zero_locations+st_fit] = 1./np.nanmax(1./error)
 
     for ord in order:
-        fit_prof = np.poly1d(np.polyfit(radii[st_fit:],profile[st_fit:],ord,w=1./error[st_fit:]))
+        fit_prof = np.poly1d(np.polyfit(radii[st_fit:],sm_profile[st_fit:],ord,w=1./error[st_fit:]))
         if st_fit > 0.:
             fit_profile = np.concatenate(([sm_profile[0]],[e for e in fit_prof(radii[st_fit:])]))
         else:
@@ -2712,6 +2712,11 @@ def update_disk_angles(Configuration,Tirific_Template,debug = False):
     for ext in extension:
         PA = np.array(get_from_template(Configuration,Tirific_Template,[f'PA{ext}'],debug=debug))[0]
         inc = np.array(get_from_template(Configuration,Tirific_Template,[f'INCL{ext}'],debug=debug))[0]
+        if debug:
+            print_log(f'''UPDATE_DISK_ANGLES: abtained  this from the template
+{'':8s} inc{ext} = {inc}
+{'':8s} PA{ext} = {PA}
+''', Configuration['OUTPUTLOG'])
         angle_adjust=np.array(np.tan((PA[0]-PA)*np.cos(inc*np.pi/180.)*np.pi/180.)*180./np.pi,dtype = float)
         if ext == '_2':
             angle_adjust[:] +=180.

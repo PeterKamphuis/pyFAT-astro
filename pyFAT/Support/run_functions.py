@@ -5,6 +5,8 @@ class BadSourceError(Exception):
     pass
 class SofiaRunError(Exception):
     pass
+class InclinationRunError(Exception):
+    pass
 class SofiaFaintError(Exception):
     pass
 
@@ -126,87 +128,104 @@ def check_inclination(Configuration,Tirific_Template,Fits_Files, fit_type = 'Und
     if debug:
         print_log(f'''CHECK_INCLINATION: estimating whether our inclination estimate is decent.
 ''',Configuration['OUTPUTLOG'],debug = True)
+    to_extract=['VROT','INCL','INCL_2','PA','XPOS','YPOS']
+    current = rf.load_template(Configuration,Tirific_Template,
+                Variables= to_extract)
 
-    current = rf.load_tirific(Configuration,f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def",
-                Variables= ['VROT','INCL','PA','XPOS','YPOS','INCL_ERR'])
 
-
-    inclination = float(current[1][0])
+    inclination = float(current[to_extract.index('INCL')][0])
     if debug:
         print_log(f'''CHECK_INCLINATION: This is the initial inclination {inclination}
 ''',Configuration['OUTPUTLOG'],debug = True)
 
     if Configuration['SIZE_IN_BEAMS'] < 5:
-        incl_to_check = np.linspace(inclination-15.,inclination+15.,20)
+        incl_to_check = np.linspace(-15.,+15.,20)
     else:
-        incl_to_check = np.linspace(10,50,20)
+        max=inclination-10
+        min=inclination-50
+        incl_to_check = np.linspace(min,max,20)
     # Let's make a directory to put things in
     tmp_stage = 'tmp_incl_check'
     try:
         os.mkdir(f"{Configuration['FITTING_DIR']}/{tmp_stage}")
     except:
         pass
-    other_run = Configuration['TIRIFIC_RUNNING']
-    Configuration['TIRIFIC_RUNNING'] = False
-    #and a copy of the tirific template
-    Check_Template = copy.deepcopy(Tirific_Template)
-    write_new_to_template(Configuration, f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def", Check_Template,debug = debug)
-    Check_Template['LOOPS'] = '0'
-    Check_Template['INIMODE'] = '0'
-    Check_Template['INSET'] = f"{Fits_Files['FITTING_CUBE']}"
-    Check_Template['RESTARTNAME'] = f"Logs/restart_{tmp_stage}.txt"
-    out_keys = ['LOGNAME','OUTSET','TIRDEF']
-    out_extensions = ['log','fits','def']
-    incl_run= 'Not Initialized'
-    for i,key in enumerate(out_keys):
-        Check_Template[key] = f"{tmp_stage}/{tmp_stage}.{out_extensions[i]}"
-
-
-    vobs = [x*np.sin(np.radians(y)) for x,y in zip(current[0][:],current[1][:])]
-    if debug:
-        print_log(f'''CHECK_INCLINATION: These are the values we get as input
-{'':8s}Inclination = {current[1][:]}
-{'':8s}Vrot = {current[0][:]}
-{'':8s}Vobs = {vobs}
-''',Configuration['OUTPUTLOG'])
-    mom_chi = []
-    model_mom0 = fits.open(f"{Configuration['FITTING_DIR']}/Sofia_Output/{Fits_Files['MOMENT0']}")
-    #model_mom0 = remove_inhomogeneities(Configuration,model_mom0,inclination=float(current[1][0]), pa = float(current[2][0]), center = [current[3][0],current[4][0]],debug=debug)
-    chan_map = fits.open(f"{Configuration['FITTING_DIR']}/Sofia_Output/{Fits_Files['CHANNEL_MAP']}")
-    noisemap = np.sqrt(chan_map[0].data)*Configuration['NOISE']/np.nanmax(model_mom0[0].data)
-    max_in_moment = np.nanmax(model_mom0[0].data)
-    model_mom0[0].data = model_mom0[0].data
-    #/max_in_moment
-    for incl in incl_to_check:
-        #print(f'We are doing this inclination {incl}')
-        vrot = [x/np.sin(np.radians(incl)) for x in vobs]
-        for key in ['INCL','INCL_2']:
-            Check_Template[key]= f"{incl:.2f}"
-        for key in ['VROT','VROT_2']:
-            Check_Template[key]= f"{' '.join([f'{x:.2f}' for x in vrot])}"
-        wf.tirific(Configuration,Check_Template,name = f'{tmp_stage}_In.def',debug=False)
-        accepted,incl_run = run_tirific(Configuration,incl_run, stage = 'incl_check', fit_type=tmp_stage,debug=False)
-        make_moments(Configuration,Fits_Files,fit_type=tmp_stage,\
-                     moments = [0], \
-                     overwrite = True, vel_unit = 'm/s',debug=False)
-        #make_moments(filename = f"{Configuration['FITTING_DIR']}{tmp_stage}/{tmp_stage}.fits", basename = 'tmp_incl', directory = f"{Configuration['FITTING_DIR']}{tmp_stage}/",\
-        #             moments = [0],level = 3.*Configuration['NOISE'], \
-        #             overwrite = True, log= Configuration['OUTPUTLOG'], vel_unit = 'm/s',debug=debug)
-        incl_mom0 = fits.open(f"{Configuration['FITTING_DIR']}{tmp_stage}/{tmp_stage}_mom0.fits")
+    other_run = [Configuration['TIRIFIC_RUNNING'],Configuration['TIRIFIC_PID']]
+    try:
+        Configuration['TIRIFIC_RUNNING'] = False
+        #and a copy of the tirific template
         if debug:
-            try:
-                os.remove(f"{Configuration['FITTING_DIR']}{tmp_stage}/tmp_{incl:.1f}_mom0.fits")
-            except:
-                pass
-            os.rename(f"{Configuration['FITTING_DIR']}{tmp_stage}/{tmp_stage}_mom0.fits",f"{Configuration['FITTING_DIR']}{tmp_stage}/tmp_{incl:.1f}_mom0.fits")
-        chi = np.nansum((model_mom0[0].data[noisemap > 0.]-incl_mom0[0].data[noisemap > 0.])**2/noisemap[noisemap > 0.]**2)
-        mom_chi.append(abs(chi))
-        incl_mom0.close()
-    Check_Template = []
-    chan_map.close()
-    model_mom0.close()
-    finish_current_run(Configuration, incl_run)
-    Configuration['TIRIFIC_RUNNING'] = other_run
+                print_log(f'''CHECK_INCLINATION: pytho is so stupif
+{'':8s}PA = {Tirific_Template['PA']}
+''',Configuration['OUTPUTLOG'])
+        Check_Template = copy.deepcopy(Tirific_Template)
+        #write_new_to_template(Configuration, f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def", Check_Template,debug = debug)
+        Check_Template['LOOPS'] = '0'
+        Check_Template['INIMODE'] = '0'
+        Check_Template['INSET'] = f"{Fits_Files['FITTING_CUBE']}"
+        Check_Template['RESTARTNAME'] = f"Logs/restart_{tmp_stage}.txt"
+        out_keys = ['LOGNAME','OUTSET','TIRDEF']
+        out_extensions = ['log','fits','def']
+        incl_run= 'Not Initialized'
+        for i,key in enumerate(out_keys):
+            Check_Template[key] = f"{tmp_stage}/{tmp_stage}.{out_extensions[i]}"
+
+
+        vobs = [x*np.sin(np.radians(np.mean([float(y),float(z)]))) for x,y,z in \
+                zip(current[to_extract.index('VROT')][:],current[to_extract.index('INCL')][:],current[to_extract.index('INCL_2')][:])]
+        if debug:
+            print_log(f'''CHECK_INCLINATION: These are the values we get as input
+    {'':8s}Inclination = {current[to_extract.index('INCL')][:]}, {current[to_extract.index('INCL_2')][:]}
+    {'':8s}Vrot = {current[to_extract.index('VROT')][:]}
+    {'':8s}Vobs = {vobs}
+    {'':8s}PA = {Check_Template['PA']}
+    ''',Configuration['OUTPUTLOG'])
+        mom_chi = []
+        model_mom0 = fits.open(f"{Configuration['FITTING_DIR']}/Sofia_Output/{Fits_Files['MOMENT0']}")
+        #model_mom0 = remove_inhomogeneities(Configuration,model_mom0,inclination=float(current[1][0]), pa = float(current[2][0]), center = [current[3][0],current[4][0]],debug=debug)
+        chan_map = fits.open(f"{Configuration['FITTING_DIR']}/Sofia_Output/{Fits_Files['CHANNEL_MAP']}")
+        noisemap = np.sqrt(chan_map[0].data)*Configuration['NOISE']/np.nanmax(model_mom0[0].data)
+        max_in_moment = np.nanmax(model_mom0[0].data)
+        model_mom0[0].data = model_mom0[0].data
+        #/max_in_moment
+        for incl in incl_to_check:
+            #print(f'We are doing this inclination {incl}')
+            vrot = [x/np.sin(np.radians(inclination+incl)) for x in vobs]
+            format = set_format('INCL')
+            for key in ['INCL','INCL_2']:
+                Check_Template[key]= f"{' '.join([f'{x+incl:{format}}' for x in current[to_extract.index(key)][:]])}"
+            format = set_format('VROT')
+            for key in ['VROT','VROT_2']:
+                Check_Template[key]= f"{' '.join([f'{x:{format}}' for x in vrot])}"
+            wf.tirific(Configuration,Check_Template,name = f'{tmp_stage}_In.def',debug=True)
+            accepted,incl_run = run_tirific(Configuration,incl_run, stage = 'incl_check', fit_type=tmp_stage,debug=False)
+            make_moments(Configuration,Fits_Files,fit_type=tmp_stage,\
+                         moments = [0], \
+                         overwrite = True, vel_unit = 'm/s',debug=False)
+            #make_moments(filename = f"{Configuration['FITTING_DIR']}{tmp_stage}/{tmp_stage}.fits", basename = 'tmp_incl', directory = f"{Configuration['FITTING_DIR']}{tmp_stage}/",\
+            #             moments = [0],level = 3.*Configuration['NOISE'], \
+            #             overwrite = True, log= Configuration['OUTPUTLOG'], vel_unit = 'm/s',debug=debug)
+            incl_mom0 = fits.open(f"{Configuration['FITTING_DIR']}{tmp_stage}/{tmp_stage}_mom0.fits")
+            if debug:
+                try:
+                    os.remove(f"{Configuration['FITTING_DIR']}{tmp_stage}/tmp_{incl:.1f}_mom0.fits")
+                except:
+                    pass
+                os.rename(f"{Configuration['FITTING_DIR']}{tmp_stage}/{tmp_stage}_mom0.fits",f"{Configuration['FITTING_DIR']}{tmp_stage}/tmp_{incl:.1f}_mom0.fits")
+            chi = np.nansum((model_mom0[0].data[noisemap > 0.]-incl_mom0[0].data[noisemap > 0.])**2/noisemap[noisemap > 0.]**2)
+            mom_chi.append(abs(chi))
+            incl_mom0.close()
+        Check_Template = []
+        chan_map.close()
+        model_mom0.close()
+        finish_current_run(Configuration, incl_run)
+    except:
+        finish_current_run(Configuration, incl_run)
+        Configuration['TIRIFIC_RUNNING'] = other_run[0]
+        Configuration['TIRIFIC_PID'] =  other_run[1]
+        raise InclinationRunError('Something went wrong while estimating the inclination. This should not happen.')
+    Configuration['TIRIFIC_RUNNING'] = other_run[0]
+    Configuration['TIRIFIC_PID'] =  other_run[1]
     low= np.where(mom_chi == np.nanmin(mom_chi))[0]
     new_incl = float(incl_to_check[low])
     if debug:
@@ -217,18 +236,30 @@ def check_inclination(Configuration,Tirific_Template,Fits_Files, fit_type = 'Und
 
 
     #exit()
-    incl_err = np.mean(current[5])
+    incl_err = 5.
+    #np.mean(np.array([current[to_extract.index('INCL_ERR')],current[to_extract.index('INCL_2_ERR')]],dtype=float))
     if incl_err < 5.:
         incl_err = 5.
     if not current[1][0]-incl_err < new_incl < current[1][0]+incl_err:
         if debug:
             print_log(f'''CHECK_INCLINATION: The inclination has changed, writing to file.
 ''',Configuration['OUTPUTLOG'])
+
+        vrot = [x/np.sin(np.radians(np.mean([float(y),float(z)])+new_incl)) for x,y,z in \
+            zip(vobs,current[to_extract.index('INCL')][:],current[to_extract.index('INCL_2')][:])]
+        format = set_format(key)
         for key in ['INCL','INCL_2']:
-                Tirific_Template[key]= f"{new_incl:.2f}"
-        vrot = [x/np.sin(np.radians(new_incl)) for x in vobs]
+            Tirific_Template[key]= f"{' '.join([f'{x+new_incl:{format}}' for x in current[to_extract.index(key)][:]])}"
+        format = set_format(key)
         for key in ['VROT','VROT_2']:
-                Tirific_Template[key]= f"{' '.join([f'{x:.2f}' for x in vrot])}"
+            Tirific_Template[key]= f"{' '.join([f'{x:{format}}' for x in vrot])}"
+            if debug:
+                print_log(f'''CHECK_INCLINATION: This has gone to the template
+{'':8s} vrot = {Tirific_Template['VROT']}
+{'':8s} incl = {Tirific_Template['INCL']}
+{'':8s} incl_2 = {Tirific_Template['INCL_2']}
+''',Configuration['OUTPUTLOG'])
+
         #Tirific_Template = copy.deepcopy(Check_Template)
         wf.tirific(Configuration,Tirific_Template,name = f"{fit_type}/{fit_type}.def",debug=debug)
     #return Tirific_Template
@@ -521,6 +552,11 @@ def fitting_osc(Configuration,Fits_Files,Tirific_Template,Initial_Parameters):
         current_run = one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run,debug = Configuration['DEBUG'],allowed_loops = allowed_loops)
 
         if (Configuration['OS_LOOPS'] == 1 or Configuration['ACCEPTED']) and Configuration['SIZE_IN_BEAMS'] < 4:
+            if Configuration['DEBUG']:
+                        print_log(f'''FITTING_OSC: pytho is so stupif
+{'':8s}PA = {Tirific_Template['PA']}
+{'':8s}INCL = {Tirific_Template['INCL']}
+''',Configuration['OUTPUTLOG'])
             check_inclination(Configuration,Tirific_Template,Fits_Files, fit_type = 'One_Step_Convergence', debug = Configuration['DEBUG'])
 
     if Configuration['ACCEPTED']:
