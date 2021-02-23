@@ -1682,7 +1682,11 @@ def set_limit_modifier(Configuration,Inclination, debug= False):
     # The square root is because of the square root between the noise in cube and the noise in J2007
     # The lower limit corresponds to a inclination 80 above which the cos becomes too steep
     for inc in Inclination:
-        modifier_list.append(set_limits(np.sqrt(np.cos(np.radians(inc))/np.cos(np.radians(60.))),0.6,2.))
+        if inc > 90.:
+            inc  = 180.-inc
+        if inc < 0.:
+            inc= abs(inc)
+        modifier_list.append(set_limits(np.sqrt(np.cos(np.radians(inc))/np.cos(np.radians(60.))),0.75,2.))
     if Configuration['OUTER_RINGS_DOUBLED']:
         if len(modifier_list) > 10:
             modifier_list[10:]= np.sqrt(modifier_list[10:])
