@@ -1015,7 +1015,23 @@ def sofia_catalogue(Configuration,Fits_Files, Variables =['id','x','x_min','x_ma
                 elif vel_edge > 0.5:
                     vel_edge = vel_edge/2.
                 else:
-                    raise BadCatalogueError("The found sources are too close to the edges of the cube.")
+                    # if our sources are all close to the edge we check whether there is one which is more than half of the spatial size in the channels it exists
+                    for i in range(len(many_sources[0])):
+                        cube= float(Configuration['NAXES'][0])*float(Configuration['NAXES'][1])* \
+                                (float(many_sources[Variables.index('z_max')][i])-float(many_sources[Variables.index('z_min')][i]))
+                        source_size=(float(many_sources[Variables.index('z_max')][i])-float(many_sources[Variables.index('z_min')][i]))* \
+                                    (float(many_sources[Variables.index('y_max')][i])-float(many_sources[Variables.index('y_min')][i]))* \
+                                    (float(many_sources[Variables.index('x_max')][i])-float(many_sources[Variables.index('x_min')][i]))
+
+                        if source_size/cube > 0.5:
+                            print_log(f'''SOFIA_CATALOGUE: We discarded a very large source, so we will restore is and try for that.
+!!!!!!!!!!!!!!!!!!!!!!!!! This means your original cube is in principle too small!!!!!!!!!!!!!!!!!!!!!!!!
+''',Configuration['OUTPUTLOG'])
+                            many_sources[Variables.index('f_sum')][i]=outlist[Variables.index('f_sum')][i]
+                    if np.nansum(many_sources[Variables.index('f_sum')]) == 0.:
+                        raise BadCatalogueError("The found sources are too close to the edges of the cube. And not large enoughto warrant trying them.")
+                    else:
+                        found = True
             else:
                 found = True
         # We need to check we are not throwing away a source that is infinitely brighter

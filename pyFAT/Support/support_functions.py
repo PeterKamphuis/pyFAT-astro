@@ -1529,7 +1529,7 @@ rename_fit_products.__doc__ =f'''
  NOTE:
 '''
 
-#function to rotate a cube without losing info
+#function to rotate an image without losing info
 def rotateImage(Configuration,image, angle, pivot, debug = False):
     padX = [int(image.shape[1] - pivot[0]), int(pivot[0])]
     padY = [int(image.shape[0] - pivot[1]), int(pivot[1])]

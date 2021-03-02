@@ -462,6 +462,7 @@ installation_check.__doc__ =f'''
 '''
 
 def finish_galaxy(Configuration,maximum_directory_length,current_run = 'Not initialized', Fits_Files= None, debug = False):
+    Configuration['END_TIME'] = datetime.now()
     #make sure we are not leaving stuff
     finish_current_run(Configuration,current_run,debug=debug)
     # We need to check if the final output is legit

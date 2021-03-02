@@ -412,7 +412,6 @@ def main(argv):
                 #Add your personal fitting types here
                 if Configuration['FITTING_TYPE'].lower() == 'one_step_convergence' or Configuration['INSTALLATION_CHECK']:
                     current_run = runf.fitting_osc(Configuration,Fits_Files,Tirific_Template,Initial_Parameters)
-                Configuration['END_TIME'] = datetime.now()
                 cf.finish_galaxy(Configuration,maximum_directory_length, Fits_Files =Fits_Files,current_run =current_run,debug=Configuration['DEBUG'])
                 continue
 
