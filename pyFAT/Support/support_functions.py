@@ -1259,7 +1259,7 @@ def obtain_ratios(Configuration, map, center, angles, noise = 0. ,debug = False)
         #major axis
         x1,x2,y1,y2 = obtain_border_pix(Configuration,angle,center,debug=debug)
         linex,liney = np.linspace(x1,x2,1000), np.linspace(y1,y2,1000)
-        maj_resolution = np.sqrt(((x2-x1)/1000.)**2+((y2-y1)/1000.)**2)
+        maj_resolution = np.sqrt((x2-x1)**2+(y2-y1)**2)/1000.
         #maj_resolution = abs((abs(x2-x1)/1000.)*np.sin(np.radians(angle)))+abs(abs(y2-y1)/1000.*np.cos(np.radians(angle)))
         maj_profile = ndimage.map_coordinates(map, np.vstack((liney,linex)),order=1)
         maj_axis =  np.linspace(0,1000*maj_resolution,1000)
@@ -1274,7 +1274,8 @@ def obtain_ratios(Configuration, map, center, angles, noise = 0. ,debug = False)
             if width_maj**2 > Configuration['BEAM_IN_PIXELS'][0]**2:
                 width_maj = np.sqrt(width_maj**2 - Configuration['BEAM_IN_PIXELS'][0]**2)
             else:
-                width_maj = maj_resolution
+                if width_maj < Configuration['BEAM_IN_PIXELS'][0]:
+                    width_maj = Configuration['BEAM_IN_PIXELS'][0]
 
         if width_maj > max_extent:
             max_extent = width_maj
@@ -1284,7 +1285,7 @@ def obtain_ratios(Configuration, map, center, angles, noise = 0. ,debug = False)
         else:
             x1,x2,y1,y2 = obtain_border_pix(Configuration,angle-90,center,debug=debug)
         linex,liney = np.linspace(x1,x2,1000), np.linspace(y1,y2,1000)
-        min_resolution = np.sqrt(((x2-x1)/1000.)**2+((y2-y1)/1000.)**2)
+        min_resolution = np.sqrt((x2-x1)**2+(y2-y1)**2)/1000.
         #min_resolution =abs((abs(x2-x1)/1000.)*np.sin(np.radians(angle+90)))+abs(abs(y2-y1)/1000.*np.cos(np.radians(angle+90)))
         min_axis =  np.linspace(0,1000*min_resolution,1000)
         min_profile = ndimage.map_coordinates(map, np.vstack((liney,linex)),order=1)
@@ -1299,7 +1300,8 @@ def obtain_ratios(Configuration, map, center, angles, noise = 0. ,debug = False)
             if width_min**2 > Configuration['BEAM_IN_PIXELS'][0]**2:
                 width_min = np.sqrt(width_min**2 - Configuration['BEAM_IN_PIXELS'][0]**2)
             else:
-                width_min = min_resolution
+                if width_min < Configuration['BEAM_IN_PIXELS'][1]:
+                    width_min = Configuration['BEAM_IN_PIXELS'][1]
             if width_min > max_extent:
                 max_extent = width_min
         if width_min != 0. and width_maj != 0.:

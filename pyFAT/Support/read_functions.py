@@ -307,7 +307,7 @@ def config_file(input_parameters, start_dir, debug = False):
     if Configuration['MAPS_OUTPUT'] == 5:
         Configuration['MAPS_OUTPUT'] = 4
     # We double the fix keys so we can  modify one while keeping the original as well
-    fix_keys = ['FIX_PA','FIX_INCLINATION','FIX_SDIS','FIX_Z0']
+    fix_keys = ['FIX_PA','FIX_INCLINATION','FIX_SDIS','FIX_Z0','FIX_SBR']
     for key in fix_keys:
         Configuration[key] = [Configuration[key],Configuration[key]]
     return Configuration
@@ -587,7 +587,8 @@ def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
 {'':8s}{Configuration['BEAM_IN_PIXELS'][0]*0.5} {center_of_profile} {center} {diff}
 ''',Configuration['OUTPUTLOG'])
     # if the center of the profile is more than half a beam off from the Sofia center let's see which on provides a more symmetric profile
-    if abs(center_of_profile) > Configuration['BEAM_IN_PIXELS'][0]*0.5 and SNR > 3.:
+    if (abs(center_of_profile/(2.*np.sin(np.radians(pa[0])))*maj_resolution) > Configuration['BEAM_IN_PIXELS'][0]*0.5 \
+        or abs(center_of_profile/(2.*np.cos(np.radians(pa[0])))*maj_resolution) > Configuration['BEAM_IN_PIXELS'][0]*0.5) and SNR > 3.:
         if debug:
                 print_log(f'''GUESS_ORIENTATION: The SoFiA center and that of the SBR profile are separated by more than half a beam.
 {'':8s}GUESS_ORIENTATION: Determining the more symmetric profile.
@@ -655,6 +656,7 @@ def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
         if ~np.isnan(vel_pa[0]):
             pa = [np.nansum([vel_pa[0]/vel_pa[1],pa[0]/pa[1]])/np.nansum([1./vel_pa[1],1./pa[1]]),2.*1./np.sqrt(np.nansum([1./vel_pa[1],1./pa[1]]))]
     #As python is utterly moronic the center goes in back wards to the map
+    map_vsys = map[int(round(center[1])),int(round(center[0]))]
     if debug:
         print_log(f'''GUESS_ORIENTATION: We found the following initial VSYS:
 {'':8s}vsys = {map[int(round(center[1])),int(round(center[0]))]}, at {center}
@@ -685,7 +687,7 @@ def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
         print_log(f'''GUESS_ORIENTATION: We found the following initial rotation curve:
 {'':8s}GUESS_ORIENTATION: RC = {VROT_initial}
 ''',Configuration['OUTPUTLOG'])
-    return np.array(pa),np.array(inclination),SBR_initial,maj_extent,center[0],center[1],VROT_initial
+    return np.array(pa),np.array(inclination),SBR_initial,maj_extent,center[0],center[1],VROT_initial,map_vsys
 guess_orientation.__doc__ =f'''
  NAME:
     guess_orientation

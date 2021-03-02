@@ -306,6 +306,7 @@ def check_source(Configuration, Fits_Files, debug = False):
     x_min,x_max,y_min,y_max,z_min,z_max = convert_type([x_min,x_max,y_min,y_max,z_min,z_max], type = 'int')
     x,y,z,ra,dec,v_app,f_sum,kin_pa,f_sum_err , err_x,err_y,err_z= convert_type([x,y,z,ra,dec,v_app,f_sum,kin_pa,err_f_sum, err_x,err_y,err_z])
     #How does sofia 2 deal with the fully flagged channels?
+    v_app = v_app/1000.
     # Need to check for that here if NaNs are included
     if f_sum < 0.:
         print_log(f'''CHECK_SOURCE: This galaxy has negative total flux. That will not work. Aborting.
@@ -317,7 +318,7 @@ def check_source(Configuration, Fits_Files, debug = False):
 ''',Configuration['OUTPUTLOG'])
     # If the provided distance  = -1 we assume a Hubble follow
     if float(Configuration['DISTANCE']) == -1.:
-        Configuration['DISTANCE'] = v_app/(1000.*H_0)
+        Configuration['DISTANCE'] = v_app/H_0
     if float(Configuration['DISTANCE']) < 0.5:
         Configuration['DISTANCE'] = 0.5
     if debug:
@@ -340,7 +341,6 @@ def check_source(Configuration, Fits_Files, debug = False):
     data = Cube[0].data
     header = Cube[0].header
 
-
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         cube_wcs = WCS(header)
@@ -359,23 +359,24 @@ def check_source(Configuration, Fits_Files, debug = False):
 {"":8s}CHECK_SOURCE: This should correspond to the WCS coordinates:
 {"":8s}CHECK_SOURCE: RA center = {ra} deg or {rahr}  with boundaries {','.join(convert_type(RAboun,type='str'))}
 {"":8s}CHECK_SOURCE: DEC center = {dec} deg  or {dechr}  with boundaries {','.join(convert_type(DECboun,type='str'))}
-{"":8s}CHECK_SOURCE: V_sys center = {v_app/1000.:.2f} with boundaries {','.join(convert_type(VELboun/1000.,type='str'))}
+{"":8s}CHECK_SOURCE: Sofia V_sys center = {v_app:.2f} with boundaries {','.join(convert_type(VELboun/1000.,type='str'))}
 ''', Configuration['OUTPUTLOG'])
 
     #There is a factor of two missing here but this is necessary otherwise the maxima are far to small
     Configuration['MAX_SIZE_IN_BEAMS'] = int(round(np.sqrt(((x_max-x_min)/2.)**2+((y_max-y_min)/2.)**2) \
                 /(Configuration['BEAM_IN_PIXELS'][0])+5.))
 
-    pa, inclination, SBR_initial, maj_extent,x_new,y_new,VROT_initial = rf.guess_orientation(Configuration,Fits_Files, center = [x,y],debug=debug)
+    pa, inclination, SBR_initial, maj_extent,x_new,y_new,VROT_initial,Central_Velocity = rf.guess_orientation(Configuration,Fits_Files, center = [x,y],debug=debug)
 
     if x_new != x or y_new != y:
         x=x_new
         y=y_new
         ra,dec,v_app = cube_wcs.wcs_pix2world(x,y,z,1)
+        v_app = v_app/1000.
         print_log(f'''CHECK_SOURCE: The center is updated to.
 {"":8s}CHECK_SOURCE: RA center = {ra} with boundaries {','.join(convert_type(RAboun,type='str'))}
 {"":8s}CHECK_SOURCE: DEC center = {dec} with boundaries {','.join(convert_type(DECboun,type='str'))}
-{"":8s}CHECK_SOURCE: V_sys center = {v_app/1000.:.2f} with boundaries {','.join(convert_type(VELboun/1000.,type='str'))}
+{"":8s}CHECK_SOURCE: V_sys center = {v_app:.2f} with boundaries {','.join(convert_type(VELboun/1000.,type='str'))}
 ''', Configuration['OUTPUTLOG'])
     if np.sum(pa) == 0. or any(np.isnan(pa)) or \
         np.sum(inclination) == 0. or any(np.isnan(inclination)) or \
@@ -386,10 +387,21 @@ def check_source(Configuration, Fits_Files, debug = False):
 ''', Configuration['OUTPUTLOG'], screen = True)
         raise BadSourceError("No initial estimates. Likely the source is too faint.")
      # Determine whether the centre is blanked or not
+
+    if abs(Central_Velocity-v_app) < Configuration['CHANNEL_WIDTH']:
+        v_app = np.mean([Central_Velocity,v_app])
+    else:
+        v_app = Central_Velocity
+    if debug:
+        print_log(f'''CHECK_SOURCE: In the center we find the vsys {Central_Velocity} km/s around the location:
+{"":8s}CHECK_SOURCE: x,y,z = {int(round(x))}, {int(round(y))}, {int(round(z))}.
+{'':8s}CHECK_SOURCE: we will use a systemic velocity of {v_app}
+''',Configuration['OUTPUTLOG'])
     Central_Flux = np.mean(data[int(round(z-1)):int(round(z+1)),\
                                 int(round(y-Configuration['BEAM_IN_PIXELS'][0]/2.)):int(round(y+Configuration['BEAM_IN_PIXELS'][0]/2.)),\
                                 int(round(x-Configuration['BEAM_IN_PIXELS'][0]/2.)):int(round(x+Configuration['BEAM_IN_PIXELS'][0]/2.))])
-    print_log(f'''CHECK_SOURCE: In the center we find an average flux of  {Central_Flux} Jy/beam around the location:
+    if debug:
+        print_log(f'''CHECK_SOURCE: In the center we find an average flux of  {Central_Flux} Jy/beam around the location:
 {"":8s}CHECK_SOURCE: x,y,z = {int(round(x))}, {int(round(y))}, {int(round(z))}.
 ''',Configuration['OUTPUTLOG'])
 
@@ -407,14 +419,6 @@ def check_source(Configuration, Fits_Files, debug = False):
 '''
         print_log(log_statement, Configuration['OUTPUTLOG'],screen = True)
         raise BadSourceError(log_statement)
-    #Let's get the initial estimates of the PA and inclination from the axis ratios
-
-
-    if abs(pa[0]-kin_pa) < 25:
-        pa[0] = (pa[0]/pa[1]+kin_pa/10.)/(1./pa[1]+1./10.)
-    else:
-        if np.isfinite(kin_pa):
-            pa[0] = kin_pa
 
     # Size of the galaxy in beams
     Configuration['SIZE_IN_BEAMS'] = set_limits(maj_extent/(Configuration['BEAM'][0]/3600.),1.0,Configuration['MAX_SIZE_IN_BEAMS'])
@@ -472,14 +476,14 @@ def check_source(Configuration, Fits_Files, debug = False):
     wf.basicinfo(Configuration,initialize = True,
               RA=[ra,abs(err_x*header['CDELT1'])],
               DEC=[dec,abs(err_y*header['CDELT2'])],
-              VSYS =[v_app,abs(err_z*header['CDELT3'])],
+              VSYS =[v_app,abs(err_z*header['CDELT3']/1000.)],
               PA=pa, Inclination = inclination, Max_Vrot = [max_vrot,max_vrot_dev], Tot_Flux = [f_sum,f_sum_err], V_mask = [VELboun[1]-VELboun[0],vres],
               Distance = Configuration['DISTANCE'] , DHI = maj_extent*3600.,debug=debug)
 
 
     # extract a PV-Diagram
     if Configuration['START_POINT'] < 3 or not os.path.exists(f"{Configuration['FITTING_DIR']}/Sofia_Output/{Configuration['BASE_NAME']}_sofia_xv.fits"):
-        PV =extract_pv(Configuration,Cube, pa[0], center=[ra,dec,v_app], convert = 1000.,
+        PV =extract_pv(Configuration,Cube, pa[0], center=[ra,dec,v_app*1000.], convert = 1000.,
                        finalsize = [int(round(maj_extent/np.mean([abs(header['CDELT1']),abs(header['CDELT2'])])*1.25+header['NAXIS1']*0.2)),
                                     int(round(z_max-z_min)+10.)],debug=debug)
         if not os.path.isdir(Configuration['FITTING_DIR']+'/Sofia_Output'):
@@ -490,7 +494,7 @@ def check_source(Configuration, Fits_Files, debug = False):
     Initial_Parameters = {}
     Initial_Parameters['XPOS'] = [ra,set_limits(abs(err_x*header['CDELT1']),0.1/3600.*Configuration['BEAM'][0],3./3600.*Configuration['BEAM'][0] )]
     Initial_Parameters['YPOS'] = [dec,set_limits(abs(err_y*header['CDELT2']),0.1/3600.*Configuration['BEAM'][0],3./3600.*Configuration['BEAM'][0] )]
-    Initial_Parameters['VSYS'] =[v_app,set_limits(abs(err_z*header['CDELT3']),abs(header['CDELT3']),5.*abs(header['CDELT3']))]
+    Initial_Parameters['VSYS'] =[v_app*1000.,set_limits(abs(err_z*header['CDELT3']),abs(header['CDELT3']),5.*abs(header['CDELT3']))]
     Initial_Parameters['SBR_profile'] = SBR_initial
     #Initial_Parameters['VROT'] = [max_vrot/1000.,max_vrot_dev/1000.]
     Initial_Parameters['VROT_profile'] = VROT_initial
@@ -553,7 +557,7 @@ def fitting_osc(Configuration,Fits_Files,Tirific_Template,Initial_Parameters):
 
         if (Configuration['OS_LOOPS'] == 1 or Configuration['ACCEPTED']) and Configuration['SIZE_IN_BEAMS'] < 4:
             if Configuration['DEBUG']:
-                        print_log(f'''FITTING_OSC: pytho is so stupif
+                        print_log(f'''FITTING_OSC: Checking the inclination due to small galaxy size.
 {'':8s}PA = {Tirific_Template['PA']}
 {'':8s}INCL = {Tirific_Template['INCL']}
 ''',Configuration['OUTPUTLOG'])

@@ -46,7 +46,7 @@ def basicinfo(Configuration,initialize = False,stage='TiRiFiC', debug = False,
         FAT_Model = load_template(Configuration,template,Variables= Vars_to_Set,unpack=False, debug=debug)
         RA=[FAT_Model[0,Vars_to_Set.index('XPOS')],abs(Configuration['BEAM'][0]/(3600.*2.))]
         DEC=[FAT_Model[0,Vars_to_Set.index('YPOS')],abs(Configuration['BEAM'][0]/(3600.*2.))]
-        VSYS =np.array([FAT_Model[0,Vars_to_Set.index('VSYS')],Configuration['CHANNEL_WIDTH']])*1000.
+        VSYS =np.array([FAT_Model[0,Vars_to_Set.index('VSYS')],Configuration['CHANNEL_WIDTH']])
         PA=[FAT_Model[0,Vars_to_Set.index('PA')], 3.]
         Inclination = [FAT_Model[0,Vars_to_Set.index('INCL')], 3.]
         Max_Vrot = [np.max(FAT_Model[:,Vars_to_Set.index('VROT')]),np.max(FAT_Model[:,Vars_to_Set.index('VROT')])-np.min(FAT_Model[1:,Vars_to_Set.index('VROT')]) ]
@@ -58,7 +58,7 @@ def basicinfo(Configuration,initialize = False,stage='TiRiFiC', debug = False,
         RAhr,DEChr = convertRADEC(Configuration,RA[0],DEC[0],debug=debug)
         RA_c = f'{RAhr}+/-{RA[1]*3600.:0.2f}'
         DEC_c = f'{DEChr}+/-{DEC[1]*3600.:0.2f}'
-        VSYS_c = f'{VSYS[0]/1000.:.2f}+/-{VSYS[1]/1000.:.2f}'
+        VSYS_c = f'{VSYS[0]:.2f}+/-{VSYS[1]:.2f}'
         PA_c = f'{PA[0]:.2f}+/-{PA[1]:.2f}'
         INCL_c = f'{Inclination[0]:.2f}+/-{Inclination[1]:.2f}'
         MVROT_c = f'{Max_Vrot[0]:.2f}+/-{Max_Vrot[1]:.2f}'
@@ -305,7 +305,7 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
         labelleft = False)
     ax_text.text(0.5,1.0,f'''Overview for {name}''',rotation=0, va='top',ha='center', color='black',transform = ax_text.transAxes,
       bbox=dict(facecolor='white',edgecolor='white',pad=0.,alpha=0.),zorder=7,fontsize=14)
-    ax_text.text(0.5,0.25,f'''The ring size used in the model is {Configuration['RING_SIZE']} x BMAJ, with BMAJ = {Configuration['BEAM'][0]:.1f} arcsec. We assumed a distance  of {Configuration['DISTANCE']} Mpc.'''
+    ax_text.text(0.5,0.25,f'''The ring size used in the model is {Configuration['RING_SIZE']:.2f} x BMAJ, with BMAJ = {Configuration['BEAM'][0]:.1f} arcsec. We assumed a distance  of {Configuration['DISTANCE']:.1f} Mpc.'''
       ,rotation=0, va='top',ha='center', color='black',transform = ax_text.transAxes,
       bbox=dict(facecolor='white',edgecolor='white',pad=0.,alpha=0.),zorder=7,fontsize=10)
 
@@ -722,7 +722,7 @@ and increase with {float(momlevel[1])-float(momlevel[0]):.1f} km/s'''
         bottom=True,      # ticks along the bottom edge are off
         top=True,         # ticks along the top edge are off
         labelbottom=False)
-    if Configuration['FIX_INCLINATION']:
+    if Configuration['FIX_INCLINATION'][0]:
         ax_INCL.text(1.01,0.5,'Forced Flat', rotation =-90,va='center',ha='left', color='black',transform = ax_INCL.transAxes,
           bbox=dict(facecolor='white',edgecolor='white',pad=0.,alpha=0.),zorder=7,fontsize=10)
     plt.ylabel('Incl ($^{\circ}$)',**labelfont)
@@ -736,7 +736,7 @@ and increase with {float(momlevel[1])-float(momlevel[0]):.1f} km/s'''
         bottom=True,      # ticks along the bottom edge are off
         top=True,         # ticks along the top edge are off
         labelbottom=True)
-    if Configuration['FIX_PA']:
+    if Configuration['FIX_PA'][0]:
         ax_PA.text(1.01,0.5,'Forced Flat', va='center',ha='left', color='black',rotation = -90, transform = ax_PA.transAxes,
           bbox=dict(facecolor='white',edgecolor='white',pad=0.,alpha=0.),zorder=7,fontsize=10)
     plt.xlabel('Radius (arcsec)',**labelfont)
@@ -750,7 +750,7 @@ and increase with {float(momlevel[1])-float(momlevel[0]):.1f} km/s'''
         bottom=True,      # ticks along the bottom edge are off
         top=True,         # ticks along the top edge are off
         labelbottom=False)
-    if Configuration['FIX_SDIS']:
+    if Configuration['FIX_SDIS'][0]:
         ax_SDIS.text(1.01,0.5,'Forced Flat',rotation=-90, va='center',ha='left', color='black',transform = ax_SDIS.transAxes,
           bbox=dict(facecolor='white',edgecolor='white',pad=0.,alpha=0.),zorder=7,fontsize=10)
 
@@ -766,7 +766,7 @@ and increase with {float(momlevel[1])-float(momlevel[0]):.1f} km/s'''
         bottom=True,      # ticks along the bottom edge are off
         top=True,         # ticks along the top edge are off
         labelbottom=False)
-    if Configuration['FIX_Z0']:
+    if Configuration['FIX_Z0'][0]:
         ax_Z0.text(1.25,0.5,'Forced Flat',rotation=-90, va='center',ha='left', color='black',transform = ax_Z0.transAxes,
           bbox=dict(facecolor='white',edgecolor='white',pad=0.,alpha=0.),zorder=7,fontsize=10)
     plt.ylabel('Z0 (arcsec)',**labelfont)
@@ -793,7 +793,7 @@ and increase with {float(momlevel[1])-float(momlevel[0]):.1f} km/s'''
     sec_ax.figure.canvas.draw()
     sec_ax.set_ylabel('Col. Dens. \n (x10$^{20}$ cm$^{-2}$)',rotation=-90,va='bottom',**labelfont)
 
-    if Configuration['FIX_SBR']:
+    if Configuration['FIX_SBR'][0]:
         ax_SBR.text(1.25,0.5,'Forced Gaussian',rotation=-90, va='center',ha='left', color='black',transform = ax_SBR.transAxes,
           bbox=dict(facecolor='white',edgecolor='white',pad=0.,alpha=0.),zorder=7,fontsize=10)
 

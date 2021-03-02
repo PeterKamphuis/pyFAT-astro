@@ -128,7 +128,7 @@ def main(argv):
         for key in boolean_keys:
             Original_Configuration[key] = False
 
-        other_keys =  {'MINIMUM_WARP_SIZE': 2., # if the number of beams across the major axis/2. is less than this size we will only fit a flat disc,set here.
+        other_keys =  {'MINIMUM_WARP_SIZE': 3., # if the number of beams across the major axis/2. is less than this size we will only fit a flat disc,set here.
                        'MINIMUM_RINGS': 3,  # we need at least this amount of rings (Including 0 and 1/5 beam), set here
                        'TOO_SMALL_GALAXY': 1., # if the number of beams across the major axis/2 is less than this we will not fit the galaxy, set here
 
