@@ -710,7 +710,7 @@ def get_inclination_pa(Configuration, Image, center, cutoff = 0., debug = False)
         ratios, maj_extent = obtain_ratios(Configuration,map, center, angles,noise = cutoff,debug=debug)
         if debug:
             if i == 0:
-                print_log(f'''GET_INCLINATION_PA: We initially find radius of {maj_extent/Configuration['BEAM'][0]/3600.} beams.
+                print_log(f'''GET_INCLINATION_PA: We initially find radius of {maj_extent/(3600.*Configuration['BEAM'][0])} beams.
 ''',Configuration['OUTPUTLOG'], debug = True)
                 print_log(f'''GET_INCLINATION_PA: We initially find the ratios:
 {'':8s} ratios = {ratios}
@@ -876,7 +876,103 @@ get_inner_fix.__doc__ =f'''
     !!!!!!!!!!!!!This appears to currently not be working well.
 '''
 
+def get_kinematical_center(Configuration,map,angle,center= [0.,0],debug=False ):
+    if np.sum(center) == 0.:
+        center = [len(map[0,:])/2.,len(map[:,0])/2.]
+    if angle > 180.:
+        angle= angle-180.
 
+    if angle < 90:
+        angle = angle+90.
+    else:
+        angle= angle-90.
+    buffer = int(round(np.mean(Configuration['BEAM_IN_PIXELS'][:2])/3.))
+    min_axis_prof, min_axis, min_res = get_profile(Configuration,map,angle,center= center,debug=debug)
+    found_vsys = [np.nanmean(min_axis_prof),0,0]
+    found_diff=  abs(np.nanmin(min_axis_prof)-np.nanmax(min_axis_prof))+ np.nansum([abs(x-found_vsys[0]) for x in min_axis_prof])
+    for x in range(-buffer,buffer):
+        for y in range(-buffer,buffer):
+                var_center = [int(round(center[0]+x)),int(round(center[1]+y))]
+                min_axis_prof, min_axis, min_res = get_profile(Configuration,map,angle,center= var_center,debug=debug)
+                var_diff=  abs(np.nanmin(min_axis_prof)-np.nanmax(min_axis_prof))+np.nansum([abs(x-np.nanmean(min_axis_prof)) for x in min_axis_prof])
+                if var_diff < found_diff:
+                    found_diff = copy.deepcopy(var_diff)
+                    found_vsys = [np.nanmean(min_axis_prof),x,y]
+    return found_vsys
+
+get_kinematical_center.__doc__=f'''
+ NAME:
+    get_kinematical_center
+
+ PURPOSE:
+    Determine at which position a profile has the least variation
+
+ CATEGORY:
+    support_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    map = the 2D array with the map
+    angle = the angle of the major axis, with error
+
+ OPTIONAL INPUTS:
+    debug = False
+    center= [0.,0.]
+    default is the cenetr of the map given in pixels
+
+ OUTPUTS:
+    profile, the corresponding axis in pixel size, resolution of a step on the axis
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
+
+
+
+def get_profile(Configuration,map,angle,center= [0.,0.],debug=False):
+    if np.sum(center) == 0.:
+        center = [len(map[0,:])/2.,len(map[:,0])/2.]
+    x1,x2,y1,y2 = obtain_border_pix(Configuration,angle,center,debug=debug)
+    linex,liney = np.linspace(x1,x2,1000), np.linspace(y1,y2,1000)
+    resolution = np.sqrt((x2-x1)**2+(y2-y1)**2)/1000.
+    #maj_resolution = abs((abs(x2-x1)/1000.)*np.sin(np.radians(pa[0])))+abs(abs(y2-y1)/1000.*np.cos(np.radians(pa[0])))
+    profile = ndimage.map_coordinates(map, np.vstack((liney,linex)),order=1)
+    axis =  np.linspace(0,1000*resolution,1000)- (abs((abs(center[0]))*np.sin(np.radians(angle)))+abs(abs(center[1])*np.cos(np.radians(angle))))
+    return profile,axis,resolution
+get_profile.__doc__=f'''
+ NAME:
+    get_profile
+
+ PURPOSE:
+    extract a profile under an arbitry angle from a map.
+
+ CATEGORY:
+    support_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    map = the 2D array with the map
+    pa = the angle
+
+ OPTIONAL INPUTS:
+    debug = False
+    center= [0.,0.]
+    default is the cenetr of the map given in pixels
+
+ OUTPUTS:
+    profile, the corresponding axis in pixel size, resolution of a step on the axis
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
 
 def get_ring_weights(Configuration,Tirific_Template,debug = False):
     if debug:
@@ -1257,12 +1353,7 @@ def obtain_ratios(Configuration, map, center, angles, noise = 0. ,debug = False)
     max_extent = 0.
     for angle in angles:
         #major axis
-        x1,x2,y1,y2 = obtain_border_pix(Configuration,angle,center,debug=debug)
-        linex,liney = np.linspace(x1,x2,1000), np.linspace(y1,y2,1000)
-        maj_resolution = np.sqrt((x2-x1)**2+(y2-y1)**2)/1000.
-        #maj_resolution = abs((abs(x2-x1)/1000.)*np.sin(np.radians(angle)))+abs(abs(y2-y1)/1000.*np.cos(np.radians(angle)))
-        maj_profile = ndimage.map_coordinates(map, np.vstack((liney,linex)),order=1)
-        maj_axis =  np.linspace(0,1000*maj_resolution,1000)
+        maj_profile,maj_axis,maj_resolution = get_profile(Configuration,map,angle,center=center,debug=debug)
         tmp = np.where(maj_profile > noise)[0]
         #gauss =fit_gaussian(maj_axis[tmp], maj_profile[tmp])
         #maj_gaus = gaussian_function(maj_profile, *gauss)
@@ -1281,14 +1372,9 @@ def obtain_ratios(Configuration, map, center, angles, noise = 0. ,debug = False)
             max_extent = width_maj
         #minor axis
         if angle < 90:
-            x1,x2,y1,y2 = obtain_border_pix(Configuration,angle+90,center,debug=debug)
+            min_profile,min_axis,min_resolution = get_profile(Configuration,map,angle+90,center=center,debug=debug)
         else:
-            x1,x2,y1,y2 = obtain_border_pix(Configuration,angle-90,center,debug=debug)
-        linex,liney = np.linspace(x1,x2,1000), np.linspace(y1,y2,1000)
-        min_resolution = np.sqrt((x2-x1)**2+(y2-y1)**2)/1000.
-        #min_resolution =abs((abs(x2-x1)/1000.)*np.sin(np.radians(angle+90)))+abs(abs(y2-y1)/1000.*np.cos(np.radians(angle+90)))
-        min_axis =  np.linspace(0,1000*min_resolution,1000)
-        min_profile = ndimage.map_coordinates(map, np.vstack((liney,linex)),order=1)
+            min_profile,min_axis,min_resolution = get_profile(Configuration,map,angle-90,center=center,debug=debug)
         tmp = np.where(min_profile > noise)[0]
         #gauss =fit_gaussian(min_axis[tmp], maj_profile[tmp])
         #min_gaus = gaussian_function(min_profile,*gauss)

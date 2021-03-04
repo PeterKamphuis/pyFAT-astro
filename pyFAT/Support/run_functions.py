@@ -347,9 +347,11 @@ def check_source(Configuration, Fits_Files, debug = False):
     # convert the boundaries to real coordinates
     ralow,declow,vellow = cube_wcs.wcs_pix2world(x_min,y_min,z_min,1)
     rahigh,dechigh,velhigh = cube_wcs.wcs_pix2world(x_max,y_max,z_max,1)
+
     DECboun = np.sort([float(declow),float(dechigh)])
     RAboun = np.sort([float(ralow),float(rahigh)])
     VELboun = np.sort([float(vellow),float(velhigh)])
+    vsys_error= np.mean(np.abs(np.array(VELboun)-v_app))*0.05
     rahr,dechr = convertRADEC(Configuration,ra,dec,debug=debug)
     # We write the results of the cut cube to the log
     print_log(f'''CHECK_SOURCE: The source finder found the following center in pixels.
@@ -366,7 +368,7 @@ def check_source(Configuration, Fits_Files, debug = False):
     Configuration['MAX_SIZE_IN_BEAMS'] = int(round(np.sqrt(((x_max-x_min)/2.)**2+((y_max-y_min)/2.)**2) \
                 /(Configuration['BEAM_IN_PIXELS'][0])+5.))
 
-    pa, inclination, SBR_initial, maj_extent,x_new,y_new,VROT_initial,Central_Velocity = rf.guess_orientation(Configuration,Fits_Files, center = [x,y],debug=debug)
+    pa, inclination, SBR_initial, maj_extent,x_new,y_new,VROT_initial = rf.guess_orientation(Configuration,Fits_Files, center = [x,y],debug=debug)
 
     if x_new != x or y_new != y:
         x=x_new
@@ -388,15 +390,12 @@ def check_source(Configuration, Fits_Files, debug = False):
         raise BadSourceError("No initial estimates. Likely the source is too faint.")
      # Determine whether the centre is blanked or not
 
-    if abs(Central_Velocity-v_app) < Configuration['CHANNEL_WIDTH']:
-        v_app = np.mean([Central_Velocity,v_app])
-    else:
-        v_app = Central_Velocity
-    if debug:
-        print_log(f'''CHECK_SOURCE: In the center we find the vsys {Central_Velocity} km/s around the location:
-{"":8s}CHECK_SOURCE: x,y,z = {int(round(x))}, {int(round(y))}, {int(round(z))}.
-{'':8s}CHECK_SOURCE: we will use a systemic velocity of {v_app}
-''',Configuration['OUTPUTLOG'])
+
+    #if debug:
+    #    print_log(f'''CHECK_SOURCE: In the center we find the vsys {Central_Velocity} km/s around the location:
+#{"":8s}CHECK_SOURCE: x,y,z = {int(round(x))}, {int(round(y))}, {int(round(z))}.
+#{'':8s}CHECK_SOURCE: we will use a systemic velocity of {v_app}
+#''',Configuration['OUTPUTLOG'])
     Central_Flux = np.mean(data[int(round(z-1)):int(round(z+1)),\
                                 int(round(y-Configuration['BEAM_IN_PIXELS'][0]/2.)):int(round(y+Configuration['BEAM_IN_PIXELS'][0]/2.)),\
                                 int(round(x-Configuration['BEAM_IN_PIXELS'][0]/2.)):int(round(x+Configuration['BEAM_IN_PIXELS'][0]/2.))])
@@ -494,7 +493,7 @@ def check_source(Configuration, Fits_Files, debug = False):
     Initial_Parameters = {}
     Initial_Parameters['XPOS'] = [ra,set_limits(abs(err_x*header['CDELT1']),0.1/3600.*Configuration['BEAM'][0],3./3600.*Configuration['BEAM'][0] )]
     Initial_Parameters['YPOS'] = [dec,set_limits(abs(err_y*header['CDELT2']),0.1/3600.*Configuration['BEAM'][0],3./3600.*Configuration['BEAM'][0] )]
-    Initial_Parameters['VSYS'] =[v_app*1000.,set_limits(abs(err_z*header['CDELT3']),abs(header['CDELT3']),5.*abs(header['CDELT3']))]
+    Initial_Parameters['VSYS'] =[v_app*1000.,vsys_error]
     Initial_Parameters['SBR_profile'] = SBR_initial
     #Initial_Parameters['VROT'] = [max_vrot/1000.,max_vrot_dev/1000.]
     Initial_Parameters['VROT_profile'] = VROT_initial

@@ -2,10 +2,9 @@
 # This module contains a set of functions and classes that are used in FAT to read input files
 
 from pyFAT.Support.support_functions import Proper_Dictionary,print_log,convertRADEC,set_limits, remove_inhomogeneities, \
-                                obtain_border_pix, get_inclination_pa,get_vel_pa,columndensity
+                                obtain_border_pix, get_inclination_pa,get_vel_pa,columndensity,get_profile, get_kinematical_center
 from pyFAT.Support.fits_functions import check_mask
 from astropy.io import fits
-from scipy import ndimage
 import warnings
 with warnings.catch_warnings():
     warnings.simplefilter("ignore")
@@ -344,18 +343,7 @@ def extract_vrot(Configuration,map ,angle,center, debug= False):
 {'':8s} PA= {angle}
 {'':8s} center= {center}
 ''',Configuration['OUTPUTLOG'], debug = True)
-    x1,x2,y1,y2 = obtain_border_pix(Configuration,angle,center,debug=debug)
-    linex,liney = np.linspace(x1,x2,1000), np.linspace(y1,y2,1000)
-    maj_resolution = np.sqrt(((x2-x1)/1000.)**2+((y2-y1)/1000.)**2)
-    if debug:
-        print_log(f'''EXTRACT_VROT: The boundary pixels are
-{'':8s} x1 = {x1}, x2 = {x2}, y1 = {y1}, y2 = {y2}
-''',Configuration['OUTPUTLOG'])
-    #maj_resolution = abs((abs(x2-x1)/1000.)*np.sin(np.radians(angle)))+abs(abs(y2-y1)/1000.*np.cos(np.radians(angle)))
-    maj_profile = ndimage.map_coordinates(map, np.vstack((liney,linex)),order=1)
-    maj_axis =  np.linspace(0,1000*maj_resolution,1000)- (abs((abs(center[0]))*np.sin(np.radians(angle)))+abs(abs(center[1])*np.cos(np.radians(angle))))
-    #neg_index = np.where(maj_axis < 0.)[0]
-    #pos_index = np.where(maj_axis > 0.)[0]
+    maj_profile,maj_axis,maj_resolution = get_profile(Configuration,map,angle,center=center,debug=debug)
     neg_index = np.where(maj_profile > 0.)[0]
     pos_index = np.where(maj_profile < 0.)[0]
     if debug:
@@ -529,7 +517,7 @@ def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
     mom0 = copy.deepcopy(Image)
     Image.close()
     if not center:
-        center = [hdr['NAXIS1']/2.,hdr['NAXIS2']/2.]
+        center = [hdr['NAXIS1']/2.-1,hdr['NAXIS2']/2.-1]
     Image = fits.open(f"{Configuration['FITTING_DIR']}Sofia_Output/{Fits_Files['CHANNEL_MAP']}",\
             uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
     noise_map = np.sqrt(Image[0].data)*Configuration['NOISE']*Configuration['CHANNEL_WIDTH']
@@ -559,13 +547,7 @@ def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
 ''',Configuration['OUTPUTLOG'])
             #map[3*minimum_noise_in_map > noise_map] = 0.
     # From these estimates we also get an initial SBR
-    x1,x2,y1,y2 = obtain_border_pix(Configuration,pa[0],center,debug=debug)
-    linex,liney = np.linspace(x1,x2,1000), np.linspace(y1,y2,1000)
-    maj_resolution = np.sqrt(((x2-x1)/1000.)**2+((y2-y1)/1000.)**2)
-    #maj_resolution = abs((abs(x2-x1)/1000.)*np.sin(np.radians(pa[0])))+abs(abs(y2-y1)/1000.*np.cos(np.radians(pa[0])))
-    maj_profile = ndimage.map_coordinates(map, np.vstack((liney,linex)),order=1)
-    maj_axis =  np.linspace(0,1000*maj_resolution,1000)- (abs((abs(center[0]))*np.sin(np.radians(pa[0])))+abs(abs(center[1])*np.cos(np.radians(pa[0]))))
-
+    maj_profile,maj_axis,maj_resolution = get_profile(Configuration,map, pa[0],center,debug=debug)
     # let's get an intensity weighted center for the extracted profile.
 
     center_of_profile = np.sum(maj_profile*maj_axis)/np.sum(maj_profile)
@@ -637,14 +619,23 @@ def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
     Image.close()
     map[3*minimum_noise_in_map > noise_map] = float('NaN')
     noise_map = []
-    vel_pa = get_vel_pa(Configuration,map,center=center,debug=debug)
+    # First we look for the kinematics center
+    #found_vsys = get_kinematical_center(Configuration,map,float(pa[0]),center=center)
+    #map_vsys = found_vsys[0]
+    #if np.sum([abs(found_vsys[1]), abs(found_vsys[2])]) != 0.:
+    #    center = [center[0]+found_vsys[1], center[1]+found_vsys[2]]
+    #    print_log(f'''GUESS_ORIENTATION: We are updating the center with x,y = {found_vsys[1:]}
+#{'':8s}to {center}
+#''',Configuration['OUTPUTLOG'])
+    #if debug:
+    #    print_log(f'''GUESS_ORIENTATION: We found the following initial VSYS:
+#{'':8s}vsys = {map_vsys}, at {center}
+#''',Configuration['OUTPUTLOG'])
 
-    x1,x2,y1,y2 = obtain_border_pix(Configuration,pa[0],center,debug=debug)
-    linex,liney = np.linspace(x1,x2,1000), np.linspace(y1,y2,1000)
-    #maj_resolution = abs((abs(x2-x1)/1000.)*np.sin(np.radians(pa[0])))+abs(abs(y2-y1)/1000.*np.cos(np.radians(pa[0])))
-    maj_resolution = np.sqrt(((x2-x1)/1000.)**2+((y2-y1)/1000.)**2)
-    maj_profile = ndimage.map_coordinates(map, np.vstack((liney,linex)),order=1)
-    maj_axis =  np.linspace(0,1000*maj_resolution,1000)- (abs((abs(center[0]))*np.sin(np.radians(pa[0])))+abs(abs(center[1])*np.cos(np.radians(pa[0]))))
+
+
+    vel_pa = get_vel_pa(Configuration,map,center=center,debug=debug)
+    maj_profile,maj_axis,maj_resolution = get_profile(Configuration,map,pa[0], center=center,debug=debug)
     loc_max = np.mean(maj_axis[np.where(maj_profile == np.nanmax(maj_profile))[0]])
     if loc_max > 0.:
         pa[0] = pa[0]+180
@@ -656,12 +647,9 @@ def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
         if ~np.isnan(vel_pa[0]):
             pa = [np.nansum([vel_pa[0]/vel_pa[1],pa[0]/pa[1]])/np.nansum([1./vel_pa[1],1./pa[1]]),2.*1./np.sqrt(np.nansum([1./vel_pa[1],1./pa[1]]))]
     #As python is utterly moronic the center goes in back wards to the map
-    map_vsys = map[int(round(center[1])),int(round(center[0]))]
-    if debug:
-        print_log(f'''GUESS_ORIENTATION: We found the following initial VSYS:
-{'':8s}vsys = {map[int(round(center[1])),int(round(center[0]))]}, at {center}
-''',Configuration['OUTPUTLOG'])
-    map = map  - map[int(round(center[1])),int(round(center[0]))]
+    buffer = int(round(np.mean(Configuration['BEAM_IN_PIXELS'][:2])/2.))
+    map_vsys = np.mean(map[int(round(center[1]-buffer)):int(round(center[1]+buffer)),int(round(center[0]-buffer)):int(round(center[0]+buffer))])
+    map = map  - map_vsys
     VROT_initial = extract_vrot(Configuration,map ,pa[0],center, debug= debug)
     min_RC_length= len(VROT_initial)
     if pa[1] < 10.:
@@ -687,7 +675,7 @@ def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
         print_log(f'''GUESS_ORIENTATION: We found the following initial rotation curve:
 {'':8s}GUESS_ORIENTATION: RC = {VROT_initial}
 ''',Configuration['OUTPUTLOG'])
-    return np.array(pa),np.array(inclination),SBR_initial,maj_extent,center[0],center[1],VROT_initial,map_vsys
+    return np.array(pa),np.array(inclination),SBR_initial,maj_extent,center[0],center[1],VROT_initial
 guess_orientation.__doc__ =f'''
  NAME:
     guess_orientation
