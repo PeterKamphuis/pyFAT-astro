@@ -406,7 +406,9 @@ def fit_polynomial(Configuration,radii,profile,sm_profile,error, key, Tirific_Te
     elif key in ['VROT']:
         #fixed =len(radii)-Configuration['OUTER_SLOPE_START']
         fixed =set_limits(len(radii)-np.min(Configuration['LAST_RELIABLE_RINGS']),1,len(radii))
-        error[np.min(Configuration['LAST_RELIABLE_RINGS']):] = Configuration['CHANNEL_WIDTH']/5.
+        error[np.min(Configuration['LAST_RELIABLE_RINGS']):] = Configuration['CHANNEL_WIDTH']
+        error[0] = Configuration['CHANNEL_WIDTH']
+        error[1] = error[1]*3.
     else:
         fixed = 1
     if len(radii) > 15.:
@@ -416,7 +418,9 @@ def fit_polynomial(Configuration,radii,profile,sm_profile,error, key, Tirific_Te
 
     st_fit = int(0)
     if key in ['VROT']:
-        st_fit = int(1)
+        if np.mean(profile[1:3]) > 120.:
+            st_fit = int(1)
+
         #This needs another -1 because the 0 and 1/5. ring are more or less 1 ring
         max_order = set_limits(len(radii)-fixed-2,3,8)
         #The rotation curve varies a lot so the lower limit should be as high as possible
@@ -430,7 +434,7 @@ def fit_polynomial(Configuration,radii,profile,sm_profile,error, key, Tirific_Te
         start_order = set_limits(start_order,lower_limit,max_order)
 
     else:
-        max_order = set_limits(len(radii)-fixed-1,3,7)
+        max_order = set_limits(len(radii)-1,3,7)
 
     if start_order >= max_order:
         max_order = max_order+1
@@ -465,6 +469,8 @@ def fit_polynomial(Configuration,radii,profile,sm_profile,error, key, Tirific_Te
             fit_profile = fix_profile(Configuration, key, fit_profile, Tirific_Template, singular = True,only_inner =only_inner)
         red_chi = np.sum((profile[st_fit:]-fit_profile[st_fit:])**2/error[st_fit:])/(len(radii[st_fit:])-ord)
         reduced_chi.append(red_chi)
+        #if key in ['VROT'] and Configuration['NO_RINGS'] < 2.5*max_order:
+        #    reduced_chi[-1] = reduced_chi[-1]*(ord/Configuration['NO_RINGS'])**2.5
     if debug:
         print_log(f'''FIT_POLYNOMIAL: We have fitted these:
 {'':8s} order = {[x for x in order]}
@@ -1445,6 +1451,8 @@ def regularise_profile(Configuration,Tirific_Template, key,min_error= [0.],debug
             print_log(f'''REGULARISE_PROFILE: Found symmetric profiles.
 ''',Configuration['OUTPUTLOG'])
         sides = [0]
+        error[0] = np.array([np.mean([x,y]) for x,y in zip(error[0],error[1])],dtype=float)
+
     radii =set_rings(Configuration,debug=debug)
     for i in sides:
 

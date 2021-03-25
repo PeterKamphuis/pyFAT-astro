@@ -548,6 +548,7 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, debug
     beam_check=[Configuration['BEAM_IN_PIXELS'][0],Configuration['BEAM_IN_PIXELS'][0]/2.]
     inclination_av, pa_av, maj_extent_av = get_inclination_pa(Configuration, mom0, center, cutoff = scale_factor* median_noise_in_map, debug = debug)
     inclination_av = [inclination_av]
+    int_weight = [2.]
     pa_av = [pa_av]
     maj_extent_av = [maj_extent_av]
     for mod in beam_check:
@@ -556,8 +557,10 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, debug
             inclination_tmp, pa_tmp, maj_extent_tmp= get_inclination_pa(Configuration, mom0, center_tmp, cutoff = scale_factor* median_noise_in_map, debug = debug)
             inclination_av.append(inclination_tmp)
             pa_av.append(pa_tmp)
+            int_weight.append(mod/beam_check[0]*0.25)
             maj_extent_av.append(maj_extent_tmp)
-    weight = np.array([1./x[1] for x in inclination_av],dtype= float)
+    int_weight = np.array(int_weight)
+    weight = np.array([1./x[1] for x in inclination_av],dtype= float)*int_weight
     inclination = np.array([np.nansum(np.array([x[0] for x in inclination_av],dtype=float)*weight)/np.nansum(weight),\
                             np.nansum(np.array([x[1] for x in inclination_av],dtype=float)*weight)/np.nansum(weight)],dtype=float)
     weight = np.array([1./x[1] for x in pa_av],dtype= float)
