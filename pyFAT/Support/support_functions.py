@@ -9,6 +9,7 @@ from scipy import ndimage
 from astropy.wcs import WCS
 from astropy.io import fits
 
+import matplotlib.pyplot as plt
 import os
 import sys
 import signal
@@ -137,7 +138,7 @@ def columndensity(Configuration,levels,systemic = 100.,beam=[-1.,-1.],channel_wi
 {'':8s}Beam = {beam}
 {'':8s}channel_width = {channel_width}
 ''',Configuration['OUTPUTLOG'],debug =True)
-    beam=np.array(beam)
+    beam=np.array(beam,dtype=float)
     f0 = 1.420405751786E9 #Hz rest freq
     c = 299792.458 # light speed in km / s
     pc = 3.086e+18 #parsec in cm
@@ -376,7 +377,7 @@ def convertskyangle(Configuration, angle, distance=1., unit='arcsec', distance_u
         angle = [angle]
 
         # if physical is true default unit is kpc
-    angle = np.array(angle)
+    angle = np.array(angle,dtype=float)
     if physical and unit == 'arcsec':
         unit = 'kpc'
     if distance_unit.lower() == 'mpc':
@@ -558,6 +559,78 @@ finish_current_run.__doc__ =f'''
  NOTE:
 '''
 
+def fit_sine(Configuration,x,y,debug = False):
+    if debug:
+        print_log(f'''FIT_SINE: Starting to fit a Gaussian.
+{'':8s}x = {x}
+{'':8s}y = {y}
+{'':8s} x size = {x.size} y size = {y.size}
+''', Configuration['OUTPUTLOG'],debug =True)
+    # Make sure we have numpy arrays
+    x= np.array(x,dtype=float)
+    y= np.array(y,dtype=float)
+    est_peak = np.nanmax(y)-np.mean(y)
+    peak_location = np.where(y == np.nanmax(y))[0]
+    if peak_location.size > 1:
+        peak_location = int(peak_location[0])
+    min_location =  np.where(y == np.nanmin(y))[0]
+    if min_location.size > 1:
+        min_location = int(min_location[0])
+    est_width = float(abs(x[peak_location]-x[min_location])/(2.*np.pi))
+
+    #print(est_width)
+    est_amp = np.mean(y)
+    peak_location = np.where(y == np.nanmax(y))[0]
+    if peak_location.size > 1:
+        peak_location = int(peak_location[0])
+
+    est_center = float(x[peak_location])
+
+    est_width=est_width*(2.*np.pi/180.)
+    #print(est_peak,est_center,est_width,est_amp)
+    try:
+        sin_parameters, sin_covariance = curve_fit(sine, x[~np.isnan(y)], y[~np.isnan(y)],p0=[est_peak,est_center,est_width,est_amp])
+    except RuntimeError:
+        sin_parameters = [float('NaN') for z in range(4)]
+
+    if not 0.4 < sin_parameters[2] <0.6:
+        ratios = y
+        sin_parameters = [est_peak,est_center,est_width,est_amp]
+    else:
+        ratios = sine(x,*sin_parameters)
+    return ratios,sin_parameters
+
+fit_sine.__doc__= '''
+NAME:
+   fit_sine
+PURPOSE:
+   Fit a modified sine function to a profile, with initial estimates
+
+CATEGORY:
+   support_functions
+
+INPUTS:
+   x = x-axis of profile
+   y = y-axis of profile
+   Configuration = Standard FAT configuration
+
+OPTIONAL INPUTS:
+
+   debug = False
+
+OUTPUTS:
+   ratios
+   the fitted sin profile or when the  width is too small or to wide the original profiles
+
+OPTIONAL OUTPUTS:
+
+PROCEDURES CALLED:
+   Unspecified
+
+NOTE:
+'''
+
+
 def fit_gaussian(Configuration,x,y, covariance = False,errors = None, debug = False):
     if debug:
         print_log(f'''FIT_GAUSSIAN: Starting to fit a Gaussian.
@@ -702,21 +775,35 @@ get_from_template.__doc__ =f'''
 '''
 
 def get_inclination_pa(Configuration, Image, center, cutoff = 0., debug = False):
-    map = Image[0].data
+    map = copy.deepcopy(Image[0].data)
     for i in [0,1]:
         # now we need to get profiles under many angles let's say 100
         #extract the profiles under a set of angles
-        angles = np.linspace(0, 180, 180)
+        angles = np.linspace(0, 360, 180)
         ratios, maj_extent = obtain_ratios(Configuration,map, center, angles,noise = cutoff,debug=debug)
+        sin_ratios,sin_parameters = fit_sine(Configuration,angles,ratios,debug=debug)
+        if np.any(np.isnan(sin_parameters)):
+            return [float('NaN'),float('NaN')],  [float('NaN'),float('NaN')],float('NaN')
+
+        '''
+        import matplotlib
+        matplotlib.use('TkAgg')
+        fig = plt.figure()
+        plt.plot(angles,ratios)
+        plt.plot(angles,sin_ratios)
+        plt.show()
+        '''
+
+        ratios=sin_ratios
         if debug:
             if i == 0:
-                print_log(f'''GET_INCLINATION_PA: We initially find radius of {maj_extent/(3600.*Configuration['BEAM'][0])} beams.
+                print_log(f'''GET_INCLINATION_PA: We initially find radius of {maj_extent*3600./(Configuration['BEAM'][0])} beams.
 ''',Configuration['OUTPUTLOG'], debug = True)
                 print_log(f'''GET_INCLINATION_PA: We initially find the ratios:
 {'':8s} ratios = {ratios}
 ''',Configuration['OUTPUTLOG'])
             else:
-                print_log(f'''GET_INCLINATION_PA: From the cleaned map we find radius of {maj_extent/Configuration['BEAM'][0]/3600.} beams.
+                print_log(f'''GET_INCLINATION_PA: From the cleaned map we find radius of {maj_extent*3600./Configuration['BEAM'][0]} beams.
 ''',Configuration['OUTPUTLOG'])
                 print_log(f'''GET_INCLINATION_PA: We  find these ratios from the cleaned map:
 {'':8s} ratios = {ratios}
@@ -744,15 +831,16 @@ def get_inclination_pa(Configuration, Image, center, cutoff = 0., debug = False)
             tenp_min_index= [min_index-2,min_index+2]
         if angles[min_index]-90 > 0.:
             if angles[max_index] > 165:
-                pa = float(np.mean([angles[min_index]+90,angles[max_index]]))
+                pa = float(np.nanmean([angles[min_index]+90,angles[max_index]]))
             else:
-                pa = float(np.mean([angles[min_index]-90,angles[max_index]]))
+                pa = float(np.nanmean([angles[min_index]-90,angles[max_index]]))
         else:
             if angles[max_index] < 15:
-                print(min_index,max_index)
-                pa = float(np.mean([angles[min_index]-90,angles[max_index]]))
+                pa = float(np.nanmean([angles[min_index]-90,angles[max_index]]))
             else:
-                pa = float(np.mean([angles[min_index]+90,angles[max_index]]))
+                pa = float(np.nanmean([angles[min_index]+90,angles[max_index]]))
+        if 180. < pa:
+            pa = pa -180
         if debug:
             if i == 0:
                 print_log(f'''GET_INCLINATION_PA: We initially find a pa of {pa}.
@@ -760,14 +848,16 @@ def get_inclination_pa(Configuration, Image, center, cutoff = 0., debug = False)
             else:
                 print_log(f'''GET_INCLINATION_PA: From the cleaned map we find pa = {pa}.
 ''',Configuration['OUTPUTLOG'])
-        pa_error = set_limits(np.mean([abs(angles[int(tenp_min_index[0])]-angles[min_index]),\
+        pa_error = set_limits(np.nanmean([abs(angles[int(tenp_min_index[0])]-angles[min_index]),\
                             abs(angles[int(tenp_min_index[-1])]-angles[min_index]),\
                             abs(angles[int(tenp_max_index[0])]-angles[max_index]), \
                             abs(angles[int(tenp_min_index[-1])]-angles[max_index])]), \
                             0.5,15.)
         ratios[ratios < 0.204] = 0.204
         ratios[1./ratios < 0.204] = 1./0.204
-        inclination = np.mean([np.degrees(np.arccos(np.sqrt((ratios[min_index]**2-0.2**2)/0.96))) \
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            inclination = np.nanmean([np.degrees(np.arccos(np.sqrt((ratios[min_index]**2-0.2**2)/0.96))) \
                               ,np.degrees(np.arccos(np.sqrt(((1./ratios[max_index])**2-0.2**2)/0.96))) ])
         if debug:
             if i == 0:
@@ -778,7 +868,9 @@ def get_inclination_pa(Configuration, Image, center, cutoff = 0., debug = False)
 ''',Configuration['OUTPUTLOG'])
 
         if i == 0:
-            inclination_error = set_limits(np.nanmean([abs(np.degrees(np.arccos(np.sqrt((ratios[min_index]**2-0.2**2)/0.96))) - np.degrees(np.arccos(np.sqrt((ratios[tenp_min_index[0]]**2-0.2**2)/0.96)))),\
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                inclination_error = set_limits(np.nanmean([abs(np.degrees(np.arccos(np.sqrt((ratios[min_index]**2-0.2**2)/0.96))) - np.degrees(np.arccos(np.sqrt((ratios[tenp_min_index[0]]**2-0.2**2)/0.96)))),\
                                      abs(np.degrees(np.arccos(np.sqrt((ratios[min_index]**2-0.2**2)/0.96))) - np.degrees(np.arccos(np.sqrt((ratios[tenp_min_index[-1]]**2-0.2**2)/0.96)))),\
                                      abs(np.degrees(np.arccos(np.sqrt(((1./ratios[max_index])**2-0.2**2)/0.96))) - np.degrees(np.arccos(np.sqrt(((1./ratios[tenp_max_index[0]])**2-0.2**2)/0.96)))),\
                                      abs(np.degrees(np.arccos(np.sqrt(((1./ratios[max_index])**2-0.2**2)/0.96))) - np.degrees(np.arccos(np.sqrt(((1./ratios[tenp_max_index[0]])**2-0.2**2)/0.96))))]), \
@@ -789,16 +881,18 @@ def get_inclination_pa(Configuration, Image, center, cutoff = 0., debug = False)
             inclination = float(inclination-(inclination*0.01/(ratios[max_index]-ratios[min_index])))
             if i == 0:
                 inclination_error = float(inclination_error*0.4/(ratios[max_index]-ratios[min_index]))
-        if maj_extent/Configuration['BEAM'][0]*3600. < 4:
+        if maj_extent*3600./Configuration['BEAM'][0] < 4:
             inclination = float(inclination+(inclination/10.*np.sqrt(4./(maj_extent/Configuration['BEAM'][0]*3600.))))
             if i == 0:
-                inclination_error = float(inclination_error*4./(maj_extent/Configuration['BEAM'][0]*3600.))
+                inclination_error = float(inclination_error*4./(maj_extent*3600./Configuration['BEAM'][0]))
         # this leads to trouble for small sources due to uncertain PA and inclination estimates
-        if inclination < 70. and maj_extent/Configuration['BEAM'][0]/3600. > 4:
-            Image = remove_inhomogeneities(Configuration,Image,inclination=inclination, pa = pa,iteration=i, center = center,WCS_center = False, debug=debug)
-            map = Image[0].data
+        if inclination < 70. and maj_extent*3600./Configuration['BEAM'][0] > 4:
+            Image_clean = remove_inhomogeneities(Configuration,Image,inclination=inclination, pa = pa,iteration=i, center = center,WCS_center = False, debug=debug)
+            map = Image_clean[0].data
+            Image_clean.close()
         else:
             break
+    inclination_error = inclination_error/np.sin(np.radians(inclination))
     return [inclination,inclination_error], [pa,pa_error],maj_extent
 
 get_inclination_pa.__doc__ =f'''
@@ -835,6 +929,66 @@ get_inclination_pa.__doc__ =f'''
 '''
 
 
+
+
+
+def check_tiltogram(Configuration, tiltogram,inner_min=3,debug=False):
+    for i in [0,1]:
+        theta_inner = np.array([np.mean(tiltogram[i,0:x+1,0:x+1]) for x in range(tiltogram.shape[1])],dtype=float)
+        theta_mutual = np.array([np.mean(tiltogram[i,x:,0:x+1]) for x in range(tiltogram.shape[1])],dtype=float)
+        #theta_outer = np.array([np.mean(tiltogram[i,x+1:,x+1:]) for x in range(tiltogram.shape[1])],dtype=float)
+        #And then we want to apply the rules
+        # (i) the difference between theta_inner and theta_mutual is larger than the differences observed at other radii
+        # (ii) theta_inner < 5 deg
+        # (iii) thetamut > 15 deg
+        diff = np.array(abs(theta_inner-theta_mutual),dtype = float)
+        if debug:
+            print_log(f'''CHECK_TILTOGRAM: Checking the tiltogram in side {i}.
+{'':8s} Diff = {diff}
+''',Configuration['OUTPUTLOG'])
+        rings_found = False
+        while not rings_found:
+            ring_location = np.where(np.nanmax(diff) == diff)[0]
+            if ring_location.size > 1:
+                ring_location = ring_location[0]
+            if theta_inner[ring_location] < 5. and theta_mutual[ring_location] > 15.:
+                Configuration['INNER_FIX'][i] = int(set_limits(ring_location-1,inner_min,Configuration['NO_RINGS']*3./4.-1))
+                rings_found = True
+            else:
+                diff[ring_location] = 0.
+            if np.nansum(diff) == 0.:
+                Configuration['INNER_FIX'][i] = int(Configuration['NO_RINGS']*3./4.-1)
+                rings_found = True
+
+check_tiltogram.__doc__ =f'''
+NAME:
+    check_tiltogram
+
+PURPOSE:
+   Set the inner_fix values based on the tiltograms
+
+CATEGORY:
+   support_functions
+
+INPUTS:
+   Configuration = standard FAT Configuration
+   tiltogram = the array containing the tiltogram for both sides
+
+OPTIONAL INPUTS:
+   debug = False
+   inner_min = minimum set of inner rings that should be fixed
+
+OUTPUTS:
+   Updates Configuration['INNER_FIX']
+
+OPTIONAL OUTPUTS:
+
+PROCEDURES CALLED:
+   Unspecified
+
+NOTE:
+
+'''
 # Function to get the amount of inner rings to fix
 def get_inner_fix(Configuration,Tirific_Template, debug =False):
     if debug:
@@ -844,8 +998,15 @@ def get_inner_fix(Configuration,Tirific_Template, debug =False):
     column_levels = columndensity(Configuration,sbr_av, arcsquare = True, debug = debug)
     column_levels[0]= 1e21
     tmp = np.where(column_levels > 1e20)[0]
-    Configuration['INNER_FIX'] = set_limits(int(np.floor(tmp[-1]/1.5-1)), 4, int(Configuration['NO_RINGS']*0.9))
+    if Configuration['OUTER_RINGS_DOUBLED']:
+        inner_min =set_limits(Configuration['NO_RINGS']/3.,5.,11)
+    else:
+        inner_min =set_limits(Configuration['NO_RINGS']/5.,4.,Configuration['NO_RINGS']*0.7)
+    inner_min = int(set_limits(np.floor(tmp[-1]/1.5-1), inner_min, Configuration['NO_RINGS']*0.9))
 
+
+    tiltogram = make_tiltogram(Configuration,Tirific_Template,debug=debug)
+    check_tiltogram(Configuration,tiltogram,inner_min=inner_min,debug=debug)
 get_inner_fix.__doc__ =f'''
  NAME:
     get_inner_fix
@@ -1272,8 +1433,74 @@ linenumber.__doc__ =f'''
     the first debug message in every function should set this to true and later messages not.
     !!!!Not sure whether currently the linenumber is produced due to the restructuring.
 '''
+def make_tiltogram(Configuration,Tirific_Template,debug =False):
+    if debug:
+        print_log(f'''MAKE_TILTOGRAM: Starting tiltogram.
+''',Configuration['OUTPUTLOG'])
+    pa_incl = np.array(get_from_template(Configuration,Tirific_Template,Variables=['PA','PA_2','INCL','INCL_2']),dtype=float)
+    sbr = np.array(get_from_template(Configuration,Tirific_Template, ["SBR",f"SBR_2"]),dtype=float)
+    systemic = np.array(get_from_template(Configuration,Tirific_Template, ["VSYS"]),dtype=float)
+    systemic = systemic[0,0]
+    radii,cut_off_limits = sbr_limits(Configuration, systemic= systemic , debug = debug)
+    add = [[],[]]
+    Theta = [[],[]]
+    phi = [[],[]]
+    x = [[],[]]
+    y = [[],[]]
+    z = [[],[]]
+    tiltogram = [[],[]]
+    for i in [0,1]:
+        add[i] = [0. if x < 90 else 90. if  90 <= x < 180. else 180. if 180<= x < 270 else 270. for x in pa_incl[i]]
+        pa_incl[i] = pa_incl[i]-add[i]
+        pa_incl[i] = np.array([x if x!= 0. else 0.00001 for x in pa_incl[i]],dtype=float)
+        Theta[i] = np.arctan(np.tan(np.radians(pa_incl[i+2]))*np.tan(np.radians(pa_incl[i])))
+        phi[i] = np.arctan(np.tan(np.radians(pa_incl[i]))/np.sin(Theta[i]))
+        x[i]=np.sin(Theta[i])*np.cos(phi[i])
+        y[i]=np.sin(Theta[i])*np.sin(phi[i])
+        z[i]=np.cos(Theta[i])
+        if debug:
+            print_log(f'''MAKE_TILTOGRAM: For the cartesian coordinates we find in side {i}
+{'':8s} x = {x[i]}
+{'':8s} y = {y[i]}
+{'':8s} z = {z[i]}
+''',Configuration['OUTPUTLOG'])
 
+        tiltogram[i] = np.degrees(np.arccos(np.multiply.outer(x[i], x[i]).ravel().reshape(len(x[i]),len(x[i])) + \
+                                         np.multiply.outer(y[i], y[i]).ravel().reshape(len(x[i]),len(x[i])) + \
+                                         np.multiply.outer(z[i], z[i]).ravel().reshape(len(x[i]),len(x[i]))))
+    tiltogram = np.array(tiltogram,dtype = float)
+    tiltogram[np.isnan(tiltogram)]= 0.
 
+    return tiltogram
+
+make_tiltogram.__doc__ =f'''
+ NAME:
+     make_tiltogram
+
+ PURPOSE:
+    Make the tiltogram of the current Template
+
+ CATEGORY:
+    support_functions
+
+ INPUTS:
+    Configuration = standard FAT Configuration
+    Tirific_Template = Standard Tirific template
+
+ OPTIONAL INPUTS:
+    debug = False
+
+ OUTPUTS:
+    a multidimensionals array containig the tiltograms for both sides
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+
+'''
 
 def obtain_border_pix(Configuration,angle,center, debug = False):
     rotate = False
@@ -1392,6 +1619,8 @@ def obtain_ratios(Configuration, map, center, angles, noise = 0. ,debug = False)
                 max_extent = width_min
         if width_min != 0. and width_maj != 0.:
             ratios.append(width_maj/width_min)
+        else:
+            ratios.append(float('NaN'))
     #as the extend is at 25% let's take 2 time the sigma of that
     #max_extent = (max_extent/(2.*np.sqrt(2*np.log(2))))*2.
     max_extent = max_extent/2.
@@ -1472,7 +1701,8 @@ print_log.__doc__ =f'''
     This is useful for testing functions.
 '''
 
-def remove_inhomogeneities(Configuration,fits_map,inclination=30., pa = 90. , center = [0.,0.],WCS_center = True, iteration= 0 , debug=False):
+def remove_inhomogeneities(Configuration,fits_map_in,inclination=30., pa = 90. , center = [0.,0.],WCS_center = True, iteration= 0 , debug=False):
+    fits_map = copy.deepcopy(fits_map_in)
     if debug:
         print_log(f'''REMOVE_INHOMOGENEITIES: These are the values we get as input
 {'':8s}Inclination = {inclination}
@@ -1572,14 +1802,14 @@ def rename_fit_products(Configuration,stage = 'initial', fit_type='Undefined',de
                 os.system(f"cp {Configuration['FITTING_DIR']}{fit_type}/{fit_type}.{filetype} {Configuration['FITTING_DIR']}{fit_type}/{fit_type}_Prev.{filetype} ")
         else:
             if filetype == 'def':
-                if fit_type == 'Extent_Convergence' and stage == 'run_ec':
-                    Loopnr = f"EC_{Configuration['EC_LOOPS']-1}"
-                elif fit_type == 'Centre_Convergence' and stage == 'run_cc' :
-                    Loopnr = f"CC_{Configuration['CC_LOOPS']-1}"
-                elif fit_type == 'One_Step_Convergence' and stage == 'run_os' :
-                    Loopnr = f"OS_{Configuration['OS_LOOPS']-1}"
+                if stage in ['run_ec','run_os','run_cc']:
+                    Loopnr = f"Iteration_{Configuration['LOOPS']-1}"
+                elif stage in ['after_cc','after_ec','after_os'] :
+                    Loopnr = f"Iteration_{Configuration['LOOPS']}"
+                elif fit_type == 'One_Step_Convergence' and stage in ['final_os']:
+                    Loopnr = f"Smoothed_1"
                 else:
-                    Loopnr = 'final_output_before_'+stage
+                    Loopnr = 'Output_before_'+stage
                 if os.path.exists(f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.{filetype}"):
                     os.system(f"mv {Configuration['FITTING_DIR']}{fit_type}/{fit_type}.{filetype} {Configuration['FITTING_DIR']}{fit_type}/{fit_type}_{Loopnr}.{filetype}")
 
@@ -1956,15 +2186,15 @@ def set_rings(Configuration,ring_size = 0. , debug = False):
                                         no_rings-2)+1./5.*Configuration['BEAM'][0])))
     if debug:
         if Configuration['OUTER_RINGS_DOUBLED']:
-            req_outer_ring = 2.*Configuration['BEAM'][0]
+            req_outer_ring = 2.*Configuration['BEAM'][0]*ring_size
         else:
-            req_outer_ring = Configuration['BEAM'][0]
+            req_outer_ring = Configuration['BEAM'][0]*ring_size
         print_log(f'''SET_RINGS: Got the following radii.
 {'':8s}{radii}
 {'':8s}We should have {Configuration['NO_RINGS']} or we incorrectly updated and should have {no_rings}
 {'':8s}We have {len(radii)} rings.
 {'':8s}The last ring should be around {Configuration['BEAM'][0]*Configuration['SIZE_IN_BEAMS']}
-{'':8s}The rings should be size {Configuration['BEAM'][0]} and outer rings {req_outer_ring}
+{'':8s}The rings should be size {Configuration['BEAM'][0]*ring_size} and outer rings {req_outer_ring}
 {'':8s}They are {radii[3]-radii[2]} and {radii[-1]-radii[-2]}
 ''', Configuration['OUTPUTLOG'])
     return np.array(radii,dtype = float)
@@ -1989,6 +2219,38 @@ set_rings.__doc__ =f'''
 
  OUTPUTS:
     numpy array with the central locations of the rings in arcsec.
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
+
+def sine(x,amp,center,f,mean):
+    return amp*np.sin(np.radians(x/f+abs(center)))+mean
+
+sine.__doc__ =f'''
+ NAME:
+    sine
+
+ PURPOSE:
+    A sin function that can be modified
+
+ CATEGORY:
+    support_functions
+
+ INPUTS:
+    x = xaxis
+    amp = amplitude size
+    center = the location of the first highest point of the sin
+    f = width of the size profile, should correspond to 2pi on the xaxis
+    mean = the average value of the sin, basically the offset from 0.
+
+ OPTIONAL INPUTS:
+
+ OUTPUTS:
 
  OPTIONAL OUTPUTS:
 

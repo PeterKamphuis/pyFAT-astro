@@ -13,9 +13,11 @@ class SofiaFaintError(Exception):
 from pyFAT.Support.support_functions import print_log, convert_type,set_limits,rename_fit_products,\
                               set_ring_size,calc_rings,get_usage_statistics,get_inner_fix,convertskyangle,\
                               finish_current_run, remove_inhomogeneities,get_from_template,set_format, \
-                              set_rings, convertRADEC, is_available
+                              set_rings, convertRADEC, is_available,sbr_limits
 from pyFAT.Support.clean_functions import clean_before_sofia,clean_after_sofia
 from pyFAT.Support.fits_functions import cut_cubes,extract_pv,make_moments
+from pyFAT.Support.read_functions import load_template
+
 from pyFAT.Support.modify_template import write_new_to_template,smooth_profile,set_cflux,fix_sbr, \
                                           regularise_profile,set_fitting_parameters,check_size, \
                                           no_declining_vrot, set_new_size,set_errors,get_warp_slope
@@ -164,6 +166,9 @@ def check_inclination(Configuration,Tirific_Template,Fits_Files, fit_type = 'Und
         Check_Template['INIMODE'] = '0'
         Check_Template['INSET'] = f"{Fits_Files['FITTING_CUBE']}"
         Check_Template['RESTARTNAME'] = f"Logs/restart_{tmp_stage}.txt"
+        #These are small galaxies make sure the VARINDX is not meesing things up
+        Check_Template['VARINDX'] = ''
+
         out_keys = ['LOGNAME','OUTSET','TIRDEF']
         out_extensions = ['log','fits','def']
         incl_run= 'Not Initialized'
@@ -227,6 +232,8 @@ def check_inclination(Configuration,Tirific_Template,Fits_Files, fit_type = 'Und
     Configuration['TIRIFIC_RUNNING'] = other_run[0]
     Configuration['TIRIFIC_PID'] =  other_run[1]
     low= np.where(mom_chi == np.nanmin(mom_chi))[0]
+    if low.size > 1:
+        low = low[0]
     new_incl = float(incl_to_check[low])
     if debug:
         print_log(f'''CHECK_INCLINATION: This is the new inclination {new_incl} it was {current[1][0]}.
@@ -351,7 +358,7 @@ def check_source(Configuration, Fits_Files, debug = False):
     DECboun = np.sort([float(declow),float(dechigh)])
     RAboun = np.sort([float(ralow),float(rahigh)])
     VELboun = np.sort([float(vellow),float(velhigh)])
-    vsys_error= np.mean(np.abs(np.array(VELboun)-v_app))*0.05
+    vsys_error= np.mean(np.abs(np.array(VELboun,dtype=float)-v_app))*0.05
     rahr,dechr = convertRADEC(Configuration,ra,dec,debug=debug)
     # We write the results of the cut cube to the log
     print_log(f'''CHECK_SOURCE: The source finder found the following center in pixels.
@@ -427,7 +434,6 @@ def check_source(Configuration, Fits_Files, debug = False):
 ''',Configuration['OUTPUTLOG'])
         raise BadSourceError('The extracted source is too small')
     set_ring_size(Configuration, debug = debug)
-    new_radii = set_rings(Configuration, debug = debug)
     old_radii = np.linspace(0.,Configuration['BEAM'][0]*(len(SBR_initial)-1),len(SBR_initial))
     new_radii = set_rings(Configuration, debug = debug)
     SBR_initial = np.interp(new_radii,old_radii, SBR_initial)
@@ -535,7 +541,7 @@ def fitting_osc(Configuration,Fits_Files,Tirific_Template,Initial_Parameters):
     allowed_loops = 15
     if Configuration['INSTALLATION_CHECK']:
         allowed_loops = 1
-    Configuration['OS_LOOPS'] = 0
+    Configuration['LOOPS'] = 0
     if not os.path.isdir(Configuration['FITTING_DIR']+'One_Step_Convergence'):
         os.mkdir(Configuration['FITTING_DIR']+'One_Step_Convergence')
     wf.initialize_def_file(Configuration, Fits_Files,Tirific_Template, \
@@ -547,14 +553,14 @@ def fitting_osc(Configuration,Fits_Files,Tirific_Template,Initial_Parameters):
     Configuration['PREP_END_TIME'] = datetime.now()
         # If we have no directory to put the output we create it
 
-    while not Configuration['ACCEPTED'] and Configuration['OS_LOOPS'] < allowed_loops:
-        Configuration['OS_LOOPS'] = Configuration['OS_LOOPS']+1
-        print_log(f'''FITTING_OSC: We are starting loop {Configuration['OS_LOOPS']} of trying to converge the center and extent.
+    while not Configuration['ACCEPTED'] and Configuration['LOOPS'] < allowed_loops:
+        Configuration['LOOPS'] = Configuration['LOOPS']+1
+        print_log(f'''FITTING_OSC: We are starting loop {Configuration['LOOPS']} of trying to converge the center and extent.
 ''',Configuration['OUTPUTLOG'],screen =True)
         # Run the step
         current_run = one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run,debug = Configuration['DEBUG'],allowed_loops = allowed_loops)
 
-        if (Configuration['OS_LOOPS'] == 1 or Configuration['ACCEPTED']) and Configuration['SIZE_IN_BEAMS'] < 4:
+        if (Configuration['LOOPS'] == 1 or Configuration['ACCEPTED']) and Configuration['SIZE_IN_BEAMS'] < 4:
             if Configuration['DEBUG']:
                         print_log(f'''FITTING_OSC: Checking the inclination due to small galaxy size.
 {'':8s}PA = {Tirific_Template['PA']}
@@ -611,11 +617,7 @@ def fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run, s
     #if we have only a few rings we only smooth. else we fit a polynomial to the RC and smooth the SBR
     #smoothed_sbr = smooth_profile(Configuration,Tirific_Template,'SBR',hdr, min_error= np.max([float(Tirific_Template['CFLUX']),float(Tirific_Template['CFLUX_2'])]),debug = debug)
     fix_sbr(Configuration,Tirific_Template,smooth = True, debug = debug)
-    if stage == 'after_cc':
-        smoothed_vrot = smooth_profile(Configuration,Tirific_Template,'VROT',min_error = Configuration['CHANNEL_WIDTH'],debug = debug)
-    else:
-        smoothed_vrot = regularise_profile(Configuration,Tirific_Template,'VROT',min_error = Configuration['CHANNEL_WIDTH'],debug = debug)
-    no_declining_vrot(Configuration, Tirific_Template, debug = debug)
+
     if stage in ['after_ec', 'after_os']:
         min_error = []
         pars_to_smooth = []
@@ -642,16 +644,21 @@ def fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run, s
 
         if not Configuration['FIX_SDIS'][0]:
             pars_to_smooth.append('SDIS')
-            min_error.append(Configuration['CHANNEL_WIDTH']/2.*Configuration['LIMIT_MODIFIER'])
+            min_error.append(Configuration['CHANNEL_WIDTH']/2./Configuration['LIMIT_MODIFIER'])
         else:
             not_to_smooth.append('SDIS')
-            fixed_errors.append(Configuration['CHANNEL_WIDTH']/2.*Configuration['LIMIT_MODIFIER'])
+            fixed_errors.append(Configuration['CHANNEL_WIDTH']/3.)
 
         for key,min_err in zip(pars_to_smooth,min_error):
             smoothed = regularise_profile(Configuration,Tirific_Template,key,min_error = min_err,debug = debug)
 
         for key,min_err in zip(not_to_smooth,fixed_errors):
             set_errors(Configuration,Tirific_Template,key,min_error = min_err,debug = debug)
+    if stage == 'after_cc':
+        smoothed_vrot = smooth_profile(Configuration,Tirific_Template,'VROT',min_error = Configuration['CHANNEL_WIDTH'],debug = debug)
+    else:
+        smoothed_vrot = regularise_profile(Configuration,Tirific_Template,'VROT',min_error = Configuration['CHANNEL_WIDTH'],debug = debug)
+
     #If our fit stage is after cc we want to make sure we do an extra check on low inclinations or small Galaxies
     #if stage =='after_cc' and (Configuration['SIZE_IN_BEAMS'] < 5 or incl[0] < 50.):
     #    check_inclination(Configuration,Tirific_Template,Fits_Files,debug=debug)
@@ -668,16 +675,31 @@ def fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run, s
         parameters = {'VSYS': [vsys[0], Configuration['CHANNEL_WIDTH']], \
                       'XPOS': [xpos[0], Configuration['PIXEL_SIZE']],
                       'YPOS': [ypos[0], Configuration['PIXEL_SIZE']],
-                      'INCL':[incl[0],10.],
+                      'INCL':[incl[0],10./np.sin(np.radians(incl[0]))],
                       'PA':  [pa[0],5.],
-                      'VROT': [np.max(smoothed_vrot),np.max(smoothed_vrot)*0.1],  }
+                      'VROT': [np.max(smoothed_vrot),np.max(smoothed_vrot)*0.05],  }
+
+        if incl[0] < 40 and Configuration['NO_RINGS'] > 5.:
+                parameters_to_adjust = ['VSYS','SBR','XPOS','YPOS','PA','SDIS','VROT']
+        else:
+            parameters_to_adjust = ['NO_ADJUSTMENT'] #This triggers the default settings in set_fitting_parameters
 
         set_fitting_parameters(Configuration, Tirific_Template,stage = stage,\
-                          initial_estimates = parameters, debug = debug)
+                          initial_estimates = parameters,parameters_to_adjust = parameters_to_adjust, debug = debug)
     os.system(f"cp {Configuration['FITTING_DIR']}{fit_type}_In.def {Configuration['FITTING_DIR']}{fit_type}/{fit_type}_Last_Unsmoothed_Input.def")
     wf.tirific(Configuration,Tirific_Template,name = f'{fit_type}_In.def',debug=debug)
     accepted,current_run = run_tirific(Configuration,current_run, stage = stage, fit_type=fit_type,debug=debug)
 
+    write_new_to_template(Configuration, f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def", Tirific_Template,debug = debug)
+    if Configuration['NO_RINGS'] > 5.:
+        write_new_to_template(Configuration, f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def", Tirific_Template,debug = debug)
+        smoothed_vrot = regularise_profile(Configuration,Tirific_Template,'VROT',min_error = Configuration['CHANNEL_WIDTH'],debug = debug)
+        set_fitting_parameters(Configuration, Tirific_Template,stage = 'final_os',\
+                          initial_estimates = parameters,parameters_to_adjust  = ['VROT'], debug = debug)
+
+        os.system(f"cp {Configuration['FITTING_DIR']}{fit_type}_In.def {Configuration['FITTING_DIR']}{fit_type}/{fit_type}_First_Smoothed_Input.def")
+        wf.tirific(Configuration,Tirific_Template,name = f'{fit_type}_In.def',debug=debug)
+        accepted,current_run = run_tirific(Configuration,current_run, stage = 'final_os', fit_type=fit_type,debug=debug)
 
     return current_run
 fit_smoothed_check.__doc__ =f'''
@@ -760,9 +782,10 @@ make_full_resolution.__doc__ =f'''
 
  NOTE:
 '''
+
 def one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run, debug = False,allowed_loops = 10.):
     if debug:
-        print_log(f'''ONE_STEP_CONVERGENCE: Starting with loop {Configuration['OS_LOOPS']} out of maximum {allowed_loops}.
+        print_log(f'''ONE_STEP_CONVERGENCE: Starting with loop {Configuration['LOOPS']} out of maximum {allowed_loops}.
 ''',Configuration['OUTPUTLOG'],debug = True)
     fit_type = 'One_Step_Convergence'
     stage = 'run_os'
@@ -778,7 +801,7 @@ def one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run, de
         Configuration['ACCEPTED'] = True
     else:
         Configuration['ACCEPTED'] = False
-        if Configuration['OS_LOOPS'] > allowed_loops:
+        if Configuration['LOOPS'] > allowed_loops:
                 print_log(f'''ONE_STEP_CONVERGENCE: We have ran the convergence more than {allowed_loops} times aborting the fit.
     ''',Configuration['OUTPUTLOG'])
                 return current_run

@@ -995,7 +995,7 @@ regrid_cube.__doc__ =f'''
  PROCEDURES CALLED:
     copy.deepcopy, regridder, np.array
 
- NOTE:
+ NOTE: This might not work well with extended projections.
 '''
 
 def regridder(oldarray, newshape):

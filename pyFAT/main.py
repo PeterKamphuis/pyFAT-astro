@@ -107,7 +107,7 @@ def main(argv):
         loop_counters=['RUN_COUNTER']
         timing_keys = ['PREP_END_TIME','START_TIME']
         fitting_status = ['OS_ACCEPTED']
-        loop_counters.append('OS_LOOPS')
+        loop_counters.append('LOOPS')
         for key in timing_keys:
             Original_Configuration[key] = 'Not completed'
         for key in loop_counters:
@@ -154,7 +154,7 @@ def main(argv):
 
                        'NO_POINTSOURCES': 0. , # Number of point sources, set in run_tirific
 
-                       'INNER_FIX': 3, #Number of rings that are fixed in the inner part for the INCL and PA, , adapted after every run in get_inner_fix in support_functions
+                       'INNER_FIX': [4.,4.], #Number of rings that are fixed in the inner part for the INCL and PA, , adapted after every run in get_inner_fix in support_functions and for both sides
                        'WARP_SLOPE': [0.,0.], #Ring numbers from which outwards the warping should be fitted as a slope, set in get_warp_slope in modify_template
                        'OUTER_SLOPE_START': 1, # Ring number from where the RC is fitted as a slope
                        'RC_UNRELIABLE': 1, # Ring number from where the RC values are set flat. Should only be set in check_size
@@ -394,9 +394,7 @@ def main(argv):
                     continue
 
                     # We assume sofia is ran and created the proper files
-            allowed_loops = 15
-            if input_parameters.installation_check:
-                allowed_loops = 1
+
             try:
                 current_run = 'Not Initialized'
                 # Process the found source in sofia to set up the proper fitting and make sure source can be fitted

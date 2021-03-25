@@ -163,12 +163,25 @@ def cleanup(Configuration,Fits_Files, debug = False):
                     'restart_Extent_Convergence.txt','Usage_Statistics.txt', 'clean_map_0.fits','clean_map_1.fits','clean_map.fits',\
                     'dep_map_0.fits','minimum_map_0.fits','rot_map_0.fits','dep_map.fits','minimum_map.fits','rot_map.fits',\
                     'dep_map_1.fits','minimum_map_1.fits','rot_map_1.fits','Convolved_Cube_FAT_opt.fits']
+    #            !!!!!!!!!!!!!!! The Directories cleanup should be removed before release
+    Directories = ['Extent_Convergence', 'Centre_Convergence','tmp_incl_check']
+    for dir in Directories:
+
+        try:
+            for f in os.listdir(f"{Configuration['FITTING_DIR']}{dir}"):
+                os.remove(os.path.join(f"{Configuration['FITTING_DIR']}{dir}", f))
+        except FileNotFoundError:
+            pass
+        try:
+            os.rmdir(f"{Configuration['FITTING_DIR']}{dir}")
+        except FileNotFoundError:
+            pass
     for file in files_in_log:
         try:
             os.remove(f"{Configuration['FITTING_DIR']}Logs/{file}")
         except FileNotFoundError:
             pass
-    files_in_main = ['dep_map_0.0.fits','minimum_map_0.0.fits','clean_map_0.0.fits','rot_map_0.0.fits']
+    files_in_main = ['dep_map_0.0.fits','minimum_map_0.0.fits','clean_map_0.0.fits','rot_map_0.0.fits','tmp_incl_check_In.def']
 
     for file in files_in_main:
         try:

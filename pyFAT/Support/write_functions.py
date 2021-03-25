@@ -46,7 +46,7 @@ def basicinfo(Configuration,initialize = False,stage='TiRiFiC', debug = False,
         FAT_Model = load_template(Configuration,template,Variables= Vars_to_Set,unpack=False, debug=debug)
         RA=[FAT_Model[0,Vars_to_Set.index('XPOS')],abs(Configuration['BEAM'][0]/(3600.*2.))]
         DEC=[FAT_Model[0,Vars_to_Set.index('YPOS')],abs(Configuration['BEAM'][0]/(3600.*2.))]
-        VSYS =np.array([FAT_Model[0,Vars_to_Set.index('VSYS')],Configuration['CHANNEL_WIDTH']])
+        VSYS =np.array([FAT_Model[0,Vars_to_Set.index('VSYS')],Configuration['CHANNEL_WIDTH']],dtype=float)
         PA=[FAT_Model[0,Vars_to_Set.index('PA')], 3.]
         Inclination = [FAT_Model[0,Vars_to_Set.index('INCL')], 3.]
         Max_Vrot = [np.max(FAT_Model[:,Vars_to_Set.index('VROT')]),np.max(FAT_Model[:,Vars_to_Set.index('VROT')])-np.min(FAT_Model[1:,Vars_to_Set.index('VROT')]) ]
@@ -216,7 +216,7 @@ initialize_def_file.__doc__ =f'''
  NOTE:
 '''
 
-def make_overview_plot(Configuration,Fits_Files, debug = False):
+def make_overview_plot(Configuration,Fits_Files,fit_type='One_Step_Convergence', debug = False):
     if debug:
         print_log(f'''MAKE_OVERVIEW_PLOT: We are starting the overview plot.
 ''',Configuration['OUTPUTLOG'],debug =True )
@@ -253,7 +253,7 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
                     'INCL_2_ERR','PA','PA_ERR','PA_2','PA_2_ERR','SDIS','SDIS_ERR','SDIS_2','SDIS_2_ERR','SBR',
                     'SBR_2','Z0','Z0_2','Z0_ERR','Z0_2_ERR']
     FAT_Model = load_tirific(Configuration,f"{Configuration['FITTING_DIR']}Finalmodel/Finalmodel.def",Variables= Vars_to_plot,unpack=False,debug=debug)
-    Extra_Model_File = f"{Configuration['FITTING_DIR']}One_Step_Convergence/One_Step_Convergence_final_output_before_after_os.def"
+    Extra_Model_File = f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}_Iteration_{Configuration['LOOPS']}.def"
 
     if os.path.exists(Extra_Model_File):
         Extra_Model = load_tirific(Configuration,Extra_Model_File,Variables= Vars_to_plot,unpack=False,debug=debug)
@@ -336,13 +336,13 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
     if mindism0 > maxdism0:
         mindism0 = 0.1*maxdism0
     if maxdism0 < 16*mindism0:
-        momlevel = np.array([1,4,8,12])* mindism0
+        momlevel = np.array([1,4,8,12],dtype=float)* mindism0
     elif maxdism0 < 32*mindism0:
-        momlevel = np.array([1,4,8,16,24,32])* mindism0
+        momlevel = np.array([1,4,8,16,24,32],dtype=float)* mindism0
     else:
-        momlevel = np.array([1,4,8,32,64,128]) * mindism0
+        momlevel = np.array([1,4,8,32,64,128],dtype=float) * mindism0
     #print("We find this {} as the minimum of the moment0 map".format(mindism0))
-    momlevel = np.array([x for x in momlevel if x < np.max(moment0[0].data)*0.95])
+    momlevel = np.array([x for x in momlevel if x < np.max(moment0[0].data)*0.95],dtype=float)
     if momlevel.size == 0:
         momlevel=0.5*mindism0
     ax_moment0.contour(moment0[0].data, transform=ax_moment0.get_transform(im_wcs),
@@ -421,7 +421,8 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
     #Comp_ax1.set_facecolor('black')
     # we need contour levels and
     inclination_correction = set_limits(FAT_Model[0,Vars_to_plot.index('INCL')]+12.5,20.,90.)
-    velocity_width= 1.25*np.nanmax(FAT_Model[:,Vars_to_plot.index('VROT')])*np.sin(np.radians(inclination_correction))
+    velocity_width= set_limits(1.25*np.nanmax(FAT_Model[:,Vars_to_plot.index('VROT')])*np.sin(np.radians(inclination_correction)),30.,700.)
+
     max_color= FAT_Model[0,Vars_to_plot.index('VSYS')]+velocity_width
     min_color= FAT_Model[0,Vars_to_plot.index('VSYS')]-velocity_width
 
@@ -433,9 +434,7 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
     # contours
     velocity_step=set_limits(int((int(max_color-min_color)*0.9)/20.),1.,30.)
     integer_array = np.linspace(0,20,21)-10
-
     momlevel = [FAT_Model[0,Vars_to_plot.index('VSYS')]+x*velocity_step for x in integer_array if min_color < FAT_Model[0,Vars_to_plot.index('VSYS')]+x*velocity_step < max_color]
-
     ax_moment1.contour(moment1[0].data, transform=ax_moment1.get_transform(im_wcs),
                levels=momlevel, colors='white',linewidths=1.2 , zorder =4)
     ax_moment1.contour(moment1[0].data, transform=ax_moment1.get_transform(im_wcs),
@@ -474,8 +473,13 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
     cbar.ax.set_title(f"{moment1[0].header['BUNIT']}", y= 0.2)
 
     column_levels = ', '.join(["{:.1f}".format(x) for x in momlevel])
-    info_string= f'''The contours start at {float(momlevel[0]):.1f} km/s
-and increase with {float(momlevel[1])-float(momlevel[0]):.1f} km/s'''
+    info_string= f'''The contours start at {float(momlevel[0]):.1f} km/s'''
+    if len(momlevel) > 1:
+        info_string=f'''{info_string} and increase with {float(momlevel[1])-float(momlevel[0]):.1f} km/s.'''
+    else:
+        info_string=f'''{info_string}.'''
+
+
     '''
     if len(column_levels) < 4:
         info_string = f"The contours are at {column_levels} km/s."
@@ -609,7 +613,7 @@ and increase with {float(momlevel[1])-float(momlevel[0]):.1f} km/s'''
     #Add some contours
     neg_cont = np.array([-3,-1.5],dtype=float)*Configuration['NOISE']
     pos_cont =  np.array([1.5,3,6,12,24,48,96],dtype=float)*Configuration['NOISE']
-    pos_cont = np.array([x for x in pos_cont if x < np.max(PV[0].data) * 0.95])
+    pos_cont = np.array([x for x in pos_cont if x < np.max(PV[0].data) * 0.95],dtype=float)
     if pos_cont.size == 0:
         pos_cont = 0.5 * mindism0
 

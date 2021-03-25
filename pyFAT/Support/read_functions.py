@@ -344,36 +344,49 @@ def extract_vrot(Configuration,map ,angle,center, debug= False):
 {'':8s} center= {center}
 ''',Configuration['OUTPUTLOG'], debug = True)
     maj_profile,maj_axis,maj_resolution = get_profile(Configuration,map,angle,center=center,debug=debug)
-    neg_index = np.where(maj_profile > 0.)[0]
-    pos_index = np.where(maj_profile < 0.)[0]
+    # We should base extracting the RC on where the profile is negative and positive to avoid mistakes in the ceneter coming through
+    neg_index = np.where(maj_profile < 0.)[0]
+    pos_index = np.where(maj_profile > 0.)[0]
     if debug:
         print_log(f'''EXTRACT_VROT: The resolution on the extracted axis
 {'':8s} resolution = {maj_resolution}
 ''',Configuration['OUTPUTLOG'])
     avg_profile = []
     neg_profile = []
-    pos_profile = []
+    #pos_profile = []
     diff = 0.
+    counter = 1.
     for i in range(np.nanmin([neg_index.size,pos_index.size])):
-        avg_profile.append(np.nanmean([maj_profile[neg_index[neg_index.size-i-1]],-1*maj_profile[pos_index[i]]]))
-        neg_profile.append(maj_profile[neg_index[neg_index.size-i-1]])
-        pos_profile.append(-1*maj_profile[pos_index[i]])
+        if not np.all(np.isnan([maj_profile[neg_index[neg_index.size-i-1]],-1*maj_profile[pos_index[i]]])):
+            avg_profile.append(np.nanmean([-1*maj_profile[neg_index[neg_index.size-i-1]],maj_profile[pos_index[i]]]))
+            #neg_profile.append(-1*maj_profile[neg_index[neg_index.size-i-1]])
+            #pos_profile.append(maj_profile[pos_index[i]])
+        else:
+            avg_profile.append(avg_profile[-1])
+            #neg_profile.append(float('NaN'))
+            #pos_profile.append(float('NaN'))
+        # When they start declining we just keep them flat
+        if i > 1:
+            if avg_profile[-1] < avg_profile[-2]:
+                avg_profile[-1] = avg_profile[-2]
         #correct for beam smearing in the center
-        beam_back = -1*int(Configuration['BEAM_IN_PIXELS'][0]*maj_resolution)
+        beam_back = -1*int(Configuration['BEAM_IN_PIXELS'][0]/maj_resolution)
 
-        if Configuration['BEAM_IN_PIXELS'][0]*maj_resolution < i < -2.*beam_back:
-            avg_profile[beam_back] = avg_profile[beam_back]+0.5*avg_profile[int(beam_back/2.)]+0.1*avg_profile[-1]
-            neg_profile[beam_back] = neg_profile[beam_back]+0.5*neg_profile[int(beam_back/2.)]+0.1*neg_profile[-1]
-            pos_profile[beam_back] = pos_profile[beam_back]+0.5*pos_profile[int(beam_back/2.)]+0.1*pos_profile[-1]
+        if Configuration['BEAM_IN_PIXELS'][0]/maj_resolution < i < -2.*beam_back:
+            avg_profile[beam_back] = avg_profile[beam_back]+0.25*avg_profile[int(beam_back/2.)]+0.1*avg_profile[-1]
+        elif -2.*beam_back <= i < -3.*beam_back:
+            avg_profile[beam_back] = avg_profile[beam_back]+0.25/counter*avg_profile[int(beam_back/2.)]+0.1/counter*avg_profile[-1]
+            counter += 1
+            #neg_profile[beam_back] = neg_profile[beam_back]+0.5*neg_profile[int(beam_back/2.)]+0.1*neg_profile[-1]
+            #pos_profile[beam_back] = pos_profile[beam_back]+0.5*pos_profile[int(beam_back/2.)]+0.1*pos_profile[-1]
     if debug:
         print_log(f'''EXTRACT_VROT: starting extraction of initial VROT.
 ''',Configuration['OUTPUTLOG'])
-
     ring_size_req = Configuration['BEAM_IN_PIXELS'][0]/maj_resolution
     if debug:
         print_log(f'''EXTRACT_VROT: We need a rings size of
 {'':8s} ringsize= {ring_size_req}
-{'':8s} because bmaj  ={Configuration['BEAM'][0]} cdelt = {Configuration['BEAM'][0]/(3600.*Configuration['BEAM_IN_PIXELS'][0])} and the resolution = {maj_resolution}
+{'':8s} because bmaj in pixels  ={Configuration['BEAM_IN_PIXELS'][0]}  and the resolution of the profile = {maj_resolution} pixels
 ''',Configuration['OUTPUTLOG'])
     profile = np.array(avg_profile[0::int(ring_size_req)],dtype=float)
     if debug:
@@ -426,7 +439,6 @@ def get_DHI(Configuration,Model='Finalmodel' ,debug=False):
     sbr_2_msolar = columndensity(Configuration,sbr_2*1000.,systemic=systemic[0],arcsquare=True,solar_mass_output=True)
     # interpolate these to ~1" steps
     new_radii = np.linspace(0,radi[-1],int(radi[-1]))
-    print(new_radii)
     new_sbr_msolar = np.interp(new_radii,radi,sbr_msolar)
     new_sbr_2_msolar = np.interp(new_radii,radi,sbr_2_msolar)
 
@@ -505,7 +517,7 @@ get_totflux.__doc__ =f'''
 '''
 
 # Function to get the PA and inclination from the moment 0 for initial estimates
-def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
+def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, debug = False):
     #open the moment 0
     if debug:
         print_log(f'''GUESS_ORIENTATION: starting extraction of initial parameters.
@@ -533,8 +545,26 @@ def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
         print_log(f'''GUESS_ORIENTATION: We find SNR = {SNR} and a scale factor {scale_factor} and the noise median {median_noise_in_map}
 {'':8s} minimum {minimum_noise_in_map}
 ''',Configuration['OUTPUTLOG'])
-    inclination, pa, maj_extent = get_inclination_pa(Configuration, mom0, center, cutoff = scale_factor* median_noise_in_map, debug = debug)
+    beam_check=[Configuration['BEAM_IN_PIXELS'][0],Configuration['BEAM_IN_PIXELS'][0]/2.]
+    inclination_av, pa_av, maj_extent_av = get_inclination_pa(Configuration, mom0, center, cutoff = scale_factor* median_noise_in_map, debug = debug)
+    inclination_av = [inclination_av]
+    pa_av = [pa_av]
+    maj_extent_av = [maj_extent_av]
+    for mod in beam_check:
+        for i in [[-1,-1],[-1,1],[1,-1],[1,1]]:
+            center_tmp = [center[0]+mod*i[0],center[1]+mod*i[1]]
+            inclination_tmp, pa_tmp, maj_extent_tmp= get_inclination_pa(Configuration, mom0, center_tmp, cutoff = scale_factor* median_noise_in_map, debug = debug)
+            inclination_av.append(inclination_tmp)
+            pa_av.append(pa_tmp)
+            maj_extent_av.append(maj_extent_tmp)
+    weight = np.array([1./x[1] for x in inclination_av],dtype= float)
+    inclination = np.array([np.nansum(np.array([x[0] for x in inclination_av],dtype=float)*weight)/np.nansum(weight),\
+                            np.nansum(np.array([x[1] for x in inclination_av],dtype=float)*weight)/np.nansum(weight)],dtype=float)
+    weight = np.array([1./x[1] for x in pa_av],dtype= float)
+    pa = np.array([np.nansum(np.array([x[0] for x in pa_av],dtype=float)*weight)/np.nansum(weight),\
+                            np.nansum(np.array([x[1] for x in pa_av],dtype=float)*weight)/np.nansum(weight)],dtype=float)
 
+    maj_extent= np.nansum(maj_extent_av*weight)/np.nansum(weight)
     # For very small galaxies we do not want to correct the extend
     if maj_extent/Configuration['BEAM'][0]/3600. > 3.:
         maj_extent = maj_extent+(Configuration['BEAM'][0]/3600.*0.2/scale_factor)
@@ -543,7 +573,7 @@ def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
         print_log(f'''GUESS_ORIENTATION: From the maps we find
 {'':8s} inclination = {inclination}
 {'':8s} pa = {pa}
-{'':8s} size in beams = {maj_extent/Configuration['BEAM'][0]/3600.}
+{'':8s} size in beams = {maj_extent/(Configuration['BEAM'][0]/3600.)}
 ''',Configuration['OUTPUTLOG'])
             #map[3*minimum_noise_in_map > noise_map] = 0.
     # From these estimates we also get an initial SBR
@@ -619,6 +649,7 @@ def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
     Image.close()
     map[3*minimum_noise_in_map > noise_map] = float('NaN')
     noise_map = []
+
     # First we look for the kinematics center
     #found_vsys = get_kinematical_center(Configuration,map,float(pa[0]),center=center)
     #map_vsys = found_vsys[0]
@@ -635,6 +666,7 @@ def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
 
 
     vel_pa = get_vel_pa(Configuration,map,center=center,debug=debug)
+
     maj_profile,maj_axis,maj_resolution = get_profile(Configuration,map,pa[0], center=center,debug=debug)
     loc_max = np.mean(maj_axis[np.where(maj_profile == np.nanmax(maj_profile))[0]])
     if loc_max > 0.:
@@ -648,7 +680,13 @@ def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
             pa = [np.nansum([vel_pa[0]/vel_pa[1],pa[0]/pa[1]])/np.nansum([1./vel_pa[1],1./pa[1]]),2.*1./np.sqrt(np.nansum([1./vel_pa[1],1./pa[1]]))]
     #As python is utterly moronic the center goes in back wards to the map
     buffer = int(round(np.mean(Configuration['BEAM_IN_PIXELS'][:2])/2.))
-    map_vsys = np.mean(map[int(round(center[1]-buffer)):int(round(center[1]+buffer)),int(round(center[0]-buffer)):int(round(center[0]+buffer))])
+    if v_sys == -1:
+        map_vsys = np.nanmean(map[int(round(center[1]-buffer)):int(round(center[1]+buffer)),int(round(center[0]-buffer)):int(round(center[0]+buffer))])
+    else:
+        map_vsys = v_sys
+    if debug:
+        print_log(f'''GUESS_ORIENTATION: We subtract {map_vsys:.2f} km/s from the moment 1 map to get the VROT
+''' , Configuration['OUTPUTLOG'])
     map = map  - map_vsys
     VROT_initial = extract_vrot(Configuration,map ,pa[0],center, debug= debug)
     min_RC_length= len(VROT_initial)
@@ -670,12 +708,12 @@ def guess_orientation(Configuration,Fits_Files, center = None, debug = False):
 
     map= []
     VROT_initial[0] = 0
-    VROT_initial = VROT_initial/np.sin(np.radians(inclination[0]))
+    VROT_initial = np.abs(VROT_initial/np.sin(np.radians(inclination[0])))
     if debug:
         print_log(f'''GUESS_ORIENTATION: We found the following initial rotation curve:
 {'':8s}GUESS_ORIENTATION: RC = {VROT_initial}
 ''',Configuration['OUTPUTLOG'])
-    return np.array(pa),np.array(inclination),SBR_initial,maj_extent,center[0],center[1],VROT_initial
+    return np.array(pa,dtype=float),np.array(inclination,dtype=float),SBR_initial,maj_extent,center[0],center[1],VROT_initial
 guess_orientation.__doc__ =f'''
  NAME:
     guess_orientation
@@ -791,7 +829,8 @@ def load_template(Configuration,Template,Variables = ['BMIN','BMAJ','BPA','RMS',
     for var in Variables:
         if debug:
             print_log(f'''LOAD_TEMPLATE: We are processing {var}.
-{'':8s}LOAD_TEMPLATE: With the following values {Template[var]}''',Configuration['OUTPUTLOG'])
+{'':8s}LOAD_TEMPLATE: With the following values {Template[var]}
+''',Configuration['OUTPUTLOG'])
         tmp =  np.array(Template[var].rsplit(),dtype=float)
         outputarray[0:len(tmp),counter] = tmp[0:len(tmp)]
         counter +=1
@@ -1025,7 +1064,6 @@ def sofia_catalogue(Configuration,Fits_Files, Variables =['id','x','x_min','x_ma
             else:
                 found = True
         # We need to check we are not throwing away a source that is infinitely brighter
-        print(many_sources[Variables.index('f_sum')])
         fluxes = np.array(many_sources[Variables.index('f_sum')],dtype =float)
         if np.any(fluxes == 0.):
             no_edge_fluxes = np.array(outlist[Variables.index('f_sum')],dtype =float)
