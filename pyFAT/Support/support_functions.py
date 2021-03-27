@@ -814,6 +814,8 @@ def get_inclination_pa(Configuration, Image, center, cutoff = 0., debug = False)
         min_index = np.where(ratios == np.nanmin(ratios))[0]
         if min_index.size > 1:
             min_index =int(min_index[0])
+        max_index = set_limits(max_index,2,177)
+        min_index = set_limits(min_index,2,177)
         if debug:
             if i == 0:
                 print_log(f'''GET_INCLINATION_PA: We initially find these indeces min {min_index } {angles[min_index]} max {max_index} {angles[max_index]}.
@@ -825,8 +827,10 @@ def get_inclination_pa(Configuration, Image, center, cutoff = 0., debug = False)
 
         tenp_max_index = np.where(ratios > np.nanmax(ratios)*0.9)[0]
         tenp_min_index = np.where(ratios < np.nanmin(ratios)*1.1)[0]
-        if tenp_max_index.size <= 1:
+        
+        if tenp_max_index.size <= 1 and 2 <= max_index <=177 :
             tenp_max_index= [max_index-2,max_index+2]
+    
         if tenp_min_index.size <= 1:
             tenp_min_index= [min_index-2,min_index+2]
         if angles[min_index]-90 > 0.:
