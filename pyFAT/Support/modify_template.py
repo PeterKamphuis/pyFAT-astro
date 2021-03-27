@@ -609,7 +609,7 @@ def fix_profile(Configuration, key, profile, Tirific_Template, debug= False, sin
         inner_mean = 0.
     else:
         if np.sum(indexes) == 1:
-            print(int(Configuration['INNER_FIX'][0]),int(Configuration['INNER_FIX'][1]),profile[1,:])
+            #print(int(Configuration['INNER_FIX'][0]),int(Configuration['INNER_FIX'][1]),profile[1,:])
             inner_mean = np.nanmean(np.concatenate((profile[0,:int(Configuration['INNER_FIX'][0])],profile[1,:int(Configuration['INNER_FIX'][1])])))
         else:
             inner_mean = np.nanmean([profile[0,:Configuration['INNER_FIX'][0]]])
