@@ -466,7 +466,7 @@ def fit_polynomial(Configuration,radii,profile,sm_profile,error, key, Tirific_Te
             fit_profile = fit_prof(radii)
         #fit_profile = fit_prof(radii)
         if key != 'SBR':
-            fit_profile = fix_profile(Configuration, key, fit_profile, Tirific_Template, singular = True,only_inner =only_inner)
+            fit_profile = fix_profile(Configuration, key, fit_profile, Tirific_Template,inner_fix=inner_fix, singular = True,only_inner =only_inner)
         red_chi = np.sum((profile[st_fit:]-fit_profile[st_fit:])**2/error[st_fit:])/(len(radii[st_fit:])-ord)
         reduced_chi.append(red_chi)
         #if key in ['VROT'] and Configuration['NO_RINGS'] < 2.5*max_order:
@@ -489,7 +489,7 @@ def fit_polynomial(Configuration,radii,profile,sm_profile,error, key, Tirific_Te
     #if key in ['VROT'] and profile[1] < profile[2]:
     #    new_profile[1] = profile[1]
     if key != 'SBR':
-        new_profile = fix_profile(Configuration, key, new_profile, Tirific_Template,debug =debug, singular = True,only_inner =only_inner)
+        new_profile = fix_profile(Configuration, key, new_profile, Tirific_Template,debug =debug,inner_fix=inner_fix,singular = True,only_inner =only_inner)
 
     return new_profile#,new_error
 fit_polynomial.__doc__ =f'''
@@ -581,7 +581,11 @@ fix_outer_rotation.__doc__ =f'''
  NOTE: Declining rotation curves are dealt with in no_declining_vrot
 '''
 
-def fix_profile(Configuration, key, profile, Tirific_Template, debug= False, singular = False,only_inner = False ):
+def fix_profile(Configuration, key, profile, Tirific_Template, debug= False, inner_fix = [4,4], singular = False,only_inner = False ):
+
+    if isinstance(inner_fix,int):
+        print("We doing this?")
+        inner_fix = [inner_fix]
     if debug:
         print_log(f'''FIX_PROFILE: Starting to fix {key} with the input values:
 {'':8s}{profile}
@@ -593,30 +597,23 @@ def fix_profile(Configuration, key, profile, Tirific_Template, debug= False, sin
         raise FunctionCallError("FIX_PROFILE: To fix sbr profiles use check SBR.")
     if singular:
         indexes = [0]
-        profile = [profile,profile]
+        profile = np.array([profile,profile])
+        print(inner_fix)
+        inner_mean = np.nanmean([profile[0,:inner_fix[0]]])
     else:
         indexes = [0,1]
+        inner_mean = np.nanmean(np.concatenate((profile[0,:inner_fix[0]],profile[1,:inner_fix[1]])))
     profile = np.array(profile,dtype=float)
 
 
-
-    if key in ['SDIS']:
-        inner_mean = np.nanmean(profile[indexes,:3])
-        profile[indexes,:3] = inner_mean
-
-    elif key in ['VROT']:
+    if key in ['VROT']:
         indexes = [0]
         inner_mean = 0.
     else:
-        if np.sum(indexes) == 1:
-            #print(int(Configuration['INNER_FIX'][0]),int(Configuration['INNER_FIX'][1]),profile[1,:])
-            inner_mean = np.nanmean(np.concatenate((profile[0,:int(Configuration['INNER_FIX'][0])],profile[1,:int(Configuration['INNER_FIX'][1])])))
-        else:
-            inner_mean = np.nanmean([profile[0,:Configuration['INNER_FIX'][0]]])
         for i in indexes:
-            profile[i,:Configuration['INNER_FIX'][i]] = inner_mean
+            profile[i,:inner_fix[i]] = inner_mean
         if debug:
-            print_log(f'''FIX_PROFILE: the  {Configuration['INNER_FIX']} inner rings are fixed for the profile:
+            print_log(f'''FIX_PROFILE: the  {inner_fix} inner rings are fixed for the profile:
 ''', Configuration['OUTPUTLOG'])
 
 
@@ -634,8 +631,8 @@ def fix_profile(Configuration, key, profile, Tirific_Template, debug= False, sin
             xrange = set_limits((int(round(len(profile[0])-5.)/4.)),1,4)
         # need to make sure this connects smoothly
             for x in range(0,xrange):
-                if Configuration['INNER_FIX'][i]+x < len(profile[i,:]):
-                    profile[i,Configuration['INNER_FIX'][i]+x] = 1/(x+0.5)*inner_mean+ (1-1/(x+0.5))*profile[i,Configuration['INNER_FIX'][i]+x]
+                if inner_fix[i]+x < len(profile[i,:]):
+                    profile[i,inner_fix[i]+x] = 1/(x+0.5)*inner_mean+ (1-1/(x+0.5))*profile[i,inner_fix[i]+x]
 
         #profile[:,:Configuration['INNER_FIX']] = np.nanmean(profile[:,:Configuration['INNER_FIX']])
         if key in ['SDIS']:
@@ -759,7 +756,7 @@ def fix_sbr(Configuration,Tirific_Template, smooth = False, debug=False):
                     gaussian = gaussian_function(radii,*vals)
                 else:
                     gaussian = fit_polynomial(Configuration,radii,sbr[i,:],sm_sbr[i,:],errors[i,:],'SBR', Tirific_Template,\
-                                              inner_fix=Configuration['INNER_FIX'][i],min_error=cutoff_limits[i,:],debug= debug)
+                                             min_error=cutoff_limits[i,:],debug= debug)
                 # if the peak of this gaussian is in the inner two points replace it with the smoothed profile
                 if np.any(np.where(np.max(gaussian) == gaussian)[0] < 2):
                     if debug:
@@ -1243,7 +1240,7 @@ inner_sbr_fix.__doc__ =f'''
  NOTE:
 '''
 
-def modify_flat(Configuration,profile,original_profile,errors,key, debug=False):
+def modify_flat(Configuration,profile,original_profile,errors,key,inner_fix = [4,4], debug=False):
 
     if debug:
          print_log(f'''MODIFY_FLAT: These {key} profiles are checked to be flat.
@@ -1253,8 +1250,10 @@ def modify_flat(Configuration,profile,original_profile,errors,key, debug=False):
 ''',Configuration['OUTPUTLOG'],debug = True)
 
     flatness = []
+
+
     for side in [0,1]:
-         flatness.append(check_flat(Configuration,profile[side],errors[side],key,inner_fix= Configuration['INNER_FIX'][side]\
+         flatness.append(check_flat(Configuration,profile[side],errors[side],key,inner_fix=inner_fix[side]\
                                     ,last_reliable_ring= Configuration['LAST_RELIABLE_RINGS'][side],debug=debug))
     if debug:
          print_log(f'''MODIFY_FLAT: Side 0 is flat = {flatness[0]}
@@ -1284,16 +1283,14 @@ def modify_flat(Configuration,profile,original_profile,errors,key, debug=False):
                         #    profile[side,:] = np.nanmedian(original_profile[side,:])
                         else:
                             profile[side,:]  = np.median(original_profile[side,:round(len(original_profile)/2.)])
-                        if key not in ['SDIS']:
-                            flat_val = profile[side,0]
+
+                        flat_val = profile[side,0]
                         errors[side] = get_error(Configuration,original_profile[side],profile[side],key,apply_max_error = True,min_error =np.nanmin(errors[side]),singular = True ,debug=debug)
                 profile[:,0:3] = flat_val
                 profile[:,4] = (flat_val+profile[:,4])/2.
             else:
-                if flatness[0]:
-                    profile[0] = profile[1,0]
-                else:
-                    profile[1] = profile[0,0]
+                profile[:] = np.nanmedian(original_profile[:,:round(len(original_profile)/2.)])
+                errors = get_error(Configuration,original_profile,profile,key,apply_max_error = True,min_error =np.nanmin(errors) , debug=debug)
 
     if debug:
         print_log(f'''MODIFY_FLAT: Returning:
@@ -1462,6 +1459,7 @@ def regularise_profile(Configuration,Tirific_Template, key,min_error= [0.],debug
             except:
                 fit_profile = np.full(len(sm_profile[i]), np.mean(sm_profile[i]))
 
+
         else:
             fit_profile = fit_polynomial(Configuration,radii,profile[i],sm_profile[i],error[i],key, Tirific_Template,\
                                          inner_fix = Configuration['INNER_FIX'][i],min_error=min_error,debug= debug)
@@ -1477,10 +1475,10 @@ def regularise_profile(Configuration,Tirific_Template, key,min_error= [0.],debug
 {'':8s}{profile}
 ''',Configuration['OUTPUTLOG'])
 #then we want to fit the profiles with a polynomial
-    if key not in ['SBR','VROT']:
+    if key not in ['SBR','VROT','SDIS']:
         #We should not fix the profile again as the fitted profile is fixed should be good
 
-        profile,error = modify_flat(Configuration, profile, original, error,key,debug=debug)
+        profile,error = modify_flat(Configuration, profile, original, error,key,inner_fix= Configuration['INNER_FIX'],debug=debug)
 
 
     format = set_format(key)
@@ -1886,20 +1884,34 @@ def set_fitting_parameters(Configuration, Tirific_Template, parameters_to_adjust
                     inner =  Configuration['INNER_FIX']
             elif key in ['SDIS']:
                 flat_slope = True
-                inner = int(set_limits(Configuration['NO_RINGS']*0.33,3,Configuration['NO_RINGS']*0.5))
+
+                inner = int(set_limits(Configuration['NO_RINGS']*0.33,4,Configuration['NO_RINGS']*0.5))
                 slope = [int(Configuration['NO_RINGS']*0.66),int(Configuration['NO_RINGS']*0.66)]
             else:
-                inner = 3
+                inner = 4
                 slope = [0.,0.]
+
+            if key in ['SDIS','INCL']:
+                fact = set_limits(float(initial_estimates['INCL'][0])/20.-2.5,1.,2.)
+                try:
+                    inner[0] = int(set_limits(inner[0]*fact,4,Configuration['NO_RINGS']/2.))
+                    inner[1] = int(set_limits(inner[1]*fact,4,Configuration['NO_RINGS']/2.))
+                except:
+                    inner = int(set_limits(inner*fact,4,Configuration['NO_RINGS']/2.))
 
             if key != 'SDIS':
                 limits = set_boundary_limits(Configuration,Tirific_Template,key, tolerance = 0.1, values = initial_estimates[key],\
                                 upper_bracket = brackets[0],lower_bracket = brackets[1],fixed = fixed,debug=debug)
                 flat_slope = False
+                symmetric = False
+            else:
+                symmetric = True
 
 
-            fitting_settings[key] =  set_generic_fitting(Configuration,key,stage = stage, values = initial_estimates[key], debug = debug,\
-                                                        limits=limits,slope= slope, flat_slope = flat_slope, fixed =fixed, flat_inner = inner, step_modifier = modifiers[key])
+            fitting_settings[key] =  set_generic_fitting(Configuration,key,stage = stage, values = initial_estimates[key],\
+                                                        debug = debug, limits=limits,slope= slope, flat_slope = flat_slope,\
+                                                         fixed =fixed, flat_inner = inner, step_modifier = modifiers[key], \
+                                                         symmetric = symmetric)
 
     # Reset the fitting parameters
     for fit_key in fitting_keys:
@@ -2755,10 +2767,16 @@ def smooth_profile(Configuration,Tirific_Template,key,min_error = 0.,debug=False
     min_error = np.array(min_error,dtype=float)
     if min_error.size == 1:
         min_error = np.full(profile.size,min_error)
+    if key in ['INCL','Z0', 'PA']:
+        inner_fixed = Configuration['INNER_FIX']
+    elif key in ['SDIS']:
+        inner_fixed = [4,4]
+    else:
+        inner_fixed = [0,0]
 
     #he sbr profile is already fixed before geting to the smoothing
     if not fix_sbr_call:
-        profile =fix_profile(Configuration, key, profile, Tirific_Template,debug=debug)
+        profile =fix_profile(Configuration, key, profile, Tirific_Template,inner_fix = inner_fixed,debug=debug)
 
     if key == 'VROT':
         #if profile[0,1] > profile[0,2] or np.mean(profile[1:3]) > 120.:
@@ -2804,7 +2822,7 @@ def smooth_profile(Configuration,Tirific_Template,key,min_error = 0.,debug=False
             profile[:,0] = 0.
 
     if not fix_sbr_call:
-        profile =fix_profile(Configuration, key, profile, Tirific_Template,debug=debug)
+        profile =fix_profile(Configuration, key, profile, Tirific_Template,inner_fix=inner_fixed,debug=debug)
 
 
     if debug:
@@ -2816,7 +2834,7 @@ def smooth_profile(Configuration,Tirific_Template,key,min_error = 0.,debug=False
         errors = get_error(Configuration,original_profile,profile,key,weights = weights, min_error=min_error,debug=debug)
         if key not in ['VROT']:
             # Check whether it should be flat
-            profile,errors =modify_flat(Configuration,profile,original_profile,errors,key,debug=debug)
+            profile,errors =modify_flat(Configuration,profile,original_profile,errors,key,inner_fix=inner_fixed,debug=debug)
 
         Tirific_Template[key]= f"{' '.join([f'{x:{format}}' for x in profile[0,:int(Configuration['NO_RINGS'])]])}"
         Tirific_Template[f"{key}_2"]= f"{' '.join([f'{x:{format}}' for x in profile[1,:int(Configuration['NO_RINGS'])]])}"
