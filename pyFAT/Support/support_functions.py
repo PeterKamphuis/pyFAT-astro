@@ -561,7 +561,7 @@ finish_current_run.__doc__ =f'''
 
 def fit_sine(Configuration,x,y,debug = False):
     if debug:
-        print_log(f'''FIT_SINE: Starting to fit a Gaussian.
+        print_log(f'''FIT_SINE: Starting to fit a sin.
 {'':8s}x = {x}
 {'':8s}y = {y}
 {'':8s} x size = {x.size} y size = {y.size}
@@ -777,6 +777,9 @@ get_from_template.__doc__ =f'''
 def get_inclination_pa(Configuration, Image, center, cutoff = 0., debug = False):
     map = copy.deepcopy(Image[0].data)
     for i in [0,1]:
+        if debug:
+            print_log(f'''GET_INCLINATION_PA: Doing iteration {i} in the estimates
+''',Configuration['OUTPUTLOG'])
         # now we need to get profiles under many angles let's say 100
         #extract the profiles under a set of angles
         angles = np.linspace(0, 360, 180)
@@ -827,10 +830,10 @@ def get_inclination_pa(Configuration, Image, center, cutoff = 0., debug = False)
 
         tenp_max_index = np.where(ratios > np.nanmax(ratios)*0.9)[0]
         tenp_min_index = np.where(ratios < np.nanmin(ratios)*1.1)[0]
-        
+
         if tenp_max_index.size <= 1 and 2 <= max_index <=177 :
             tenp_max_index= [max_index-2,max_index+2]
-    
+
         if tenp_min_index.size <= 1:
             tenp_min_index= [min_index-2,min_index+2]
         if angles[min_index]-90 > 0.:
@@ -847,10 +850,10 @@ def get_inclination_pa(Configuration, Image, center, cutoff = 0., debug = False)
             pa = pa -180
         if debug:
             if i == 0:
-                print_log(f'''GET_INCLINATION_PA: We initially find a pa of {pa}.
+                print_log(f'''GET_INCLINATION_PA: The initial final pa = {pa}.
 ''',Configuration['OUTPUTLOG'])
             else:
-                print_log(f'''GET_INCLINATION_PA: From the cleaned map we find pa = {pa}.
+                print_log(f'''GET_INCLINATION_PA: The pa from the cleaned map  = {pa}.
 ''',Configuration['OUTPUTLOG'])
         pa_error = set_limits(np.nanmean([abs(angles[int(tenp_min_index[0])]-angles[min_index]),\
                             abs(angles[int(tenp_min_index[-1])]-angles[min_index]),\
@@ -863,13 +866,7 @@ def get_inclination_pa(Configuration, Image, center, cutoff = 0., debug = False)
             warnings.simplefilter("ignore")
             inclination = np.nanmean([np.degrees(np.arccos(np.sqrt((ratios[min_index]**2-0.2**2)/0.96))) \
                               ,np.degrees(np.arccos(np.sqrt(((1./ratios[max_index])**2-0.2**2)/0.96))) ])
-        if debug:
-            if i == 0:
-                print_log(f'''GET_INCLINATION_PA: We initially find an inclinatio of {inclination}.
-''',Configuration['OUTPUTLOG'])
-            else:
-                print_log(f'''GET_INCLINATION_PA: From the cleaned map we find inclinatio = {inclination}.
-''',Configuration['OUTPUTLOG'])
+
 
         if i == 0:
             with warnings.catch_warnings():
@@ -881,6 +878,7 @@ def get_inclination_pa(Configuration, Image, center, cutoff = 0., debug = False)
                                      1.5,10.)
             if not np.isfinite(inclination_error):
                 inclination_error = 90./inclination
+
         if ratios[max_index]-ratios[min_index] < 0.4:
             inclination = float(inclination-(inclination*0.01/(ratios[max_index]-ratios[min_index])))
             if i == 0:
@@ -889,6 +887,13 @@ def get_inclination_pa(Configuration, Image, center, cutoff = 0., debug = False)
             inclination = float(inclination+(inclination/10.*np.sqrt(4./(maj_extent/Configuration['BEAM'][0]*3600.))))
             if i == 0:
                 inclination_error = float(inclination_error*4./(maj_extent*3600./Configuration['BEAM'][0]))
+        if debug:
+            if i == 0:
+                print_log(f'''GET_INCLINATION_PA: The initial inclination = {inclination}.
+''',Configuration['OUTPUTLOG'])
+            else:
+                print_log(f'''GET_INCLINATION_PA: From the cleaned map we find inclination = {inclination}.
+''',Configuration['OUTPUTLOG'])
         # this leads to trouble for small sources due to uncertain PA and inclination estimates
         if inclination < 70. and maj_extent*3600./Configuration['BEAM'][0] > 4:
             Image_clean = remove_inhomogeneities(Configuration,Image,inclination=inclination, pa = pa,iteration=i, center = center,WCS_center = False, debug=debug)
