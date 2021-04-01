@@ -784,6 +784,8 @@ def get_inclination_pa(Configuration, Image, center, cutoff = 0., debug = False)
         #extract the profiles under a set of angles
         angles = np.linspace(0, 360, 180)
         ratios, maj_extent = obtain_ratios(Configuration,map, center, angles,noise = cutoff,debug=debug)
+        if np.any(np.isnan(ratios)):
+            return [float('NaN'),float('NaN')],  [float('NaN'),float('NaN')],float('NaN')
         sin_ratios,sin_parameters = fit_sine(Configuration,angles,ratios,debug=debug)
         if np.any(np.isnan(sin_parameters)):
             return [float('NaN'),float('NaN')],  [float('NaN'),float('NaN')],float('NaN')
