@@ -136,6 +136,10 @@ def clean_header(Configuration,hdr, debug = False):
         hdr['CUNIT3'] = 'm/s'
         hdr['CDELT3'] = hdr['CDELT3']*1000.
         hdr['CRVAL3'] = hdr['CRVAL3']*1000.
+    #because astropy is truly stupid
+
+    if hdr['CUNIT3'] == 'M/S':
+        hdr['CUNIT3'] = 'm/s'
     # Check for the beam
     if not 'BMAJ' in hdr:
         if 'BMMAJ' in hdr:
