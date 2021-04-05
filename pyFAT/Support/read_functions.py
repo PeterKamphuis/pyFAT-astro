@@ -98,7 +98,7 @@ def check_edge_limits(xmin,xmax,ymin,ymax,zmin,zmax,Configuration,debug=False ,b
         print_log(f'''CHECK_EDGE_LIMIT: And for velocity edge =  {vel_edge}
 {'':8s} diff  = {diff}
 ''',Configuration['OUTPUTLOG'])
-    if np.where(diff < vel_edge)[0].size:
+    if np.where(diff <= vel_edge)[0].size:
         return True
     else:
         return False
@@ -667,9 +667,10 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, debug
 #''',Configuration['OUTPUTLOG'])
 
 
-
-    vel_pa = get_vel_pa(Configuration,map,center=center,debug=debug)
-
+    try:
+        vel_pa = get_vel_pa(Configuration,map,center=center,debug=debug)
+    except:
+        vel_pa = [float('NaN'),float('NaN')]
     maj_profile,maj_axis,maj_resolution = get_profile(Configuration,map,pa[0], center=center,debug=debug)
     loc_max = np.mean(maj_axis[np.where(maj_profile == np.nanmax(maj_profile))[0]])
     if loc_max > 0.:
@@ -1024,9 +1025,11 @@ def sofia_catalogue(Configuration,Fits_Files, Variables =['id','x','x_min','x_ma
         found = False
         beam_edge=2.
         if Configuration['VEL_SMOOTH_EXTENDED']:
-            vel_edge = 0.
-        else:
             vel_edge = 1.
+            min_vel_edge = 0.
+        else:
+            vel_edge = 2.
+            min_vel_edge = 1.
         while not found:
             many_sources  = copy.deepcopy(outlist)
             # We want to exclude any edge sources
@@ -1044,8 +1047,10 @@ def sofia_catalogue(Configuration,Fits_Files, Variables =['id','x','x_min','x_ma
             if np.nansum(many_sources[Variables.index('f_sum')]) == 0.:
                 if beam_edge > 0.5:
                     beam_edge = beam_edge/2.
-                elif vel_edge > 0.5:
+                elif vel_edge > min_vel_edge:
                     vel_edge = vel_edge/2.
+                    if vel_edge < 1.:
+                        vel_edge= 0.
                 else:
                     # if our sources are all close to the edge we check whether there is one which is more than half of the spatial size in the channels it exists
                     for i in range(len(many_sources[0])):
@@ -1104,6 +1109,7 @@ def sofia_catalogue(Configuration,Fits_Files, Variables =['id','x','x_min','x_ma
         # check that our mask has the selected source
     else:
         outlist = [x[0] for x in outlist]
+    
     check_mask(Configuration,outlist[Variables.index('id')],Fits_Files,debug=debug)
     if debug:
         print_log(f'''SOFIA_CATALOGUE: we found these values

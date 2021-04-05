@@ -1266,8 +1266,12 @@ def get_vel_pa(Configuration,velocity_field,center= [0.,0.], debug =False):
     while len(sm_velocity_field[~np.isnan(sm_velocity_field)]) < 10 and sigma[0] > 0.5:
         sigma = [x-0.5 for x in sigma]
         sm_velocity_field = ndimage.gaussian_filter(velocity_field, sigma=(sigma[1], sigma[0]), order=0)
+    if len(sm_velocity_field[~np.isnan(sm_velocity_field)]) < 10:
+        sm_velocity_field = copy.deepcopy(velocity_field)
+        
     max_pos = np.where(np.nanmax(sm_velocity_field) == sm_velocity_field)
     #Python is a super weird language so make a decent list of np output
+
     max_pos = [float(max_pos[0]),float(max_pos[1])]
     min_pos = np.where(np.nanmin(sm_velocity_field) == sm_velocity_field)
     min_pos = [float(min_pos[0]),float(min_pos[1])]
