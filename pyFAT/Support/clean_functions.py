@@ -601,6 +601,7 @@ def transfer_errors(Configuration,fit_type='Undefined',debug = False):
     # add to the templatethere
     Tirific_Template['GR_CONT']=' '
     Tirific_Template.insert('GR_CONT','RESTARTID','0')
+    Tirific_Template.insert('MINDELTA','DISTANCE',Configuration['DISTANCE'])
     for key in errors_to_transfer:
         format = set_format(key[:-4])
         Tirific_Template.insert(key[:-4],f"# {key}",f"{' '.join([f'{x:{format}}' for x in FAT_Model[:,errors_to_transfer.index(key)]])}")

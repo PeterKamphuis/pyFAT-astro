@@ -37,11 +37,19 @@ Configuration['FITTING_DIR']=f"{homedir}/FAT_Main/FAT_Testers/Database-09-10-202
 Configuration['FITTING_DIR']= f"{homedir}/FAT_Main/FAT_Testers/Database-09-10-2020/M_83_6.0Beams_3.0SNR/"
 #Configuration['FITTING_DIR']= f"{homedir}/FAT_Main/FAT_Testers/Database-09-10-2020/Mass2.5e+12-i15d14.0-7.5pa35.0w0.0-0.0-No_Flare-ba12SNR8bm20.0-20.0ch4.0-Arms-No_Bar-rm0.0/"
 #Configuration['FITTING_DIR']= f"{homedir}/FAT_Main/FAT_Testers/Database-09-10-2020/NGC_3198_36.9Beams_1.0SNR/"
-Fits_Files = {'ORIGINAL_CUBE': "Convolved_Cube.fits"}
+Configuration['FITTING_DIR']= f"{homedir}/FAT_Main/FAT_Testers/LVHIS-26_3/HPASS00018/"
+
+#Fits_Files = {'ORIGINAL_CUBE': "Convolved_Cube.fits"}
+
+#Configuration['CUBENAME']= 'Convolved_Cube'
+#Configuration['BASE_NAME']= 'Convolved_Cube_FAT'
+Fits_Files = {'ORIGINAL_CUBE': "Cube.fits"}
+Configuration['CUBENAME']= 'Cube'
+Configuration['BASE_NAME']= 'Cube_FAT'
 Configuration['SUB_DIR']= 'Mass2.5e+12-i30d14.0-7.5pa35.0w0.0-0.0-No_Flare-ba12SNR8bm20.0-20.0ch4.0-Arms-No_Bar-rm0.0'
 
-Configuration['CUBENAME']= 'Convolved_Cube'
-Configuration['BASE_NAME']= 'Convolved_Cube_FAT'
+#Configuration['CUBENAME']= 'Convolved_Cube'
+#Configuration['BASE_NAME']= 'Convolved_Cube_FAT'
 Fits_Files['NOISEMAP'] = f"{Configuration['BASE_NAME']}_noisemap.fits"
 Fits_Files['FITTING_CUBE'] = f"{Configuration['CUBENAME']}_FAT.fits"
 Fits_Files['OPTIMIZED_CUBE'] = f"{Configuration['CUBENAME']}_FAT_opt.fits"
@@ -76,7 +84,7 @@ other_keys =  {'MINIMUM_WARP_SIZE': 3., # if the number of beams across the majo
 
                'NO_POINTSOURCES': 0. , # Number of point sources, set in run_tirific
 
-               'INNER_FIX': 3, #Number of rings that are fixed in the inner part for the INCL and PA, , adapted after every run in get_inner_fix in support_functions
+               'INNER_FIX': [4,4], #Number of rings that are fixed in the inner part for the INCL and PA, , adapted after every run in get_inner_fix in support_functions
                'WARP_SLOPE': [0.,0.], #Ring numbers from which outwards the warping should be fitted as a slope, set in get_warp_slope in modify_template
                'OUTER_SLOPE_START': 1, # Ring number from where the RC is fitted as a slope
                'RC_UNRELIABLE': 1, # Ring number from where the RC values are set flat. Should only be set in check_size
@@ -86,7 +94,9 @@ other_keys =  {'MINIMUM_WARP_SIZE': 3., # if the number of beams across the majo
                'BEAM': [0.,0.,0.], #  FWHM BMAJ, BMIN in arcsec and BPA, set in main
                'NAXES': [0.,0.,0.], #  Size of the cube in pixels x,y,z arranged like sane people not python, set in main
                'NAXES_LIMITS': [[0.,0.],[0.,0.],[0.,0.]], #  Size of the cube in degree and km/s,  x,y,z arranged like sane people not python, set in main updated in cut_cubes
-               'MAX_ERROR': {'SDIS': 4.}, #The maximum allowed errors for the parameters, set in main derived from cube
+               'MAX_ERROR': {'SDIS': 4.,\
+                             'PA' : 15.,\
+                             'INCL': 15.}, #The maximum allowed errors for the parameters, set in main derived from cube
                'CHANNEL_WIDTH': 0., #Width of the channel in the cube in km/s, set in main derived from cube
                'PIXEL_SIZE': 0., #'Size of the pixels in degree'
                }
@@ -106,7 +116,7 @@ Configuration['OUTER_RINGS_DOUBLED'] = False
 Configuration['DISTANCE'] = 5.
 Configuration['TIRIFIC_RUNNING'] = False
 Configuration['TIMING'] = False
-
+Configuration['PA_CURRENT_BOUNDARY'] = [120.,280.]
 cube_hdr = fits.getheader(f"{Configuration['FITTING_DIR']}{Fits_Files['FITTING_CUBE']}")
 
 beamarea=(np.pi*abs(cube_hdr['BMAJ']*cube_hdr['BMIN']))/(4.*np.log(2.))
@@ -130,12 +140,14 @@ with warnings.catch_warnings():
 def Test_Regularise():
     #Variables = ['VROT','VROT_2','PA', 'PA_2','INCL','INCL_2','SDIS','SDIS_2','SBR','SBR_2','VSYS']
     Variables = ['SDIS']
-    Tirific_Template = rf.tirific_template(f"{Configuration['FITTING_DIR']}/One_Step_Convergence/One_Step_Convergence_Iteration_4.def")
+    Tirific_Template = rf.tirific_template(f"{Configuration['FITTING_DIR']}/One_Step_Convergence/One_Step_Convergence.def")
     Configuration['NO_RINGS'] = int(Tirific_Template['NUR'])
     Configuration['SIZE_IN_BEAMS'] = Configuration['NO_RINGS']-2
+    Configuration['LIMIT_MODIFIER']= [3.469106943427586/2.5]
     radii = np.array(Tirific_Template['RADI'].split(),dtype=float)
-
+    print(f"Size before checking {Configuration['SIZE_IN_BEAMS']}")
     accepted_size = mt.check_size(Configuration,Tirific_Template, fit_type = 'One_Step_Convergence', stage = 'after_os', debug=True,Fits_Files=Fits_Files)
+    print(f"We are  modifying size {accepted_size}, {Configuration['SIZE_IN_BEAMS']}")
 
     if Configuration['NO_RINGS'] > 5:
         inner_slope = 0.
@@ -144,7 +156,7 @@ def Test_Regularise():
     if Configuration['NO_RINGS'] > 15 and inner_slope > int(Configuration['NO_RINGS']*4./5.) :
         inner_slope = int(Configuration['NO_RINGS']*4./5.)
     Configuration['OUTER_SLOPE'] = inner_slope
-    Variables_red = ['SDIS']
+    Variables_red = ['PA']
     for i,key in enumerate(Variables_red):
         sm_profile = mt.smooth_profile(Configuration,Tirific_Template, key,debug=True,no_apply=True)
         reg_prof = mt.regularise_profile(Configuration,Tirific_Template, key,min_error= 1.,debug = True, no_apply =True)
@@ -363,4 +375,4 @@ basic.__doc__ =f'''
 
 
 if __name__ == '__main__':
-    Test_One_Orientation()
+    Test_Regularise()

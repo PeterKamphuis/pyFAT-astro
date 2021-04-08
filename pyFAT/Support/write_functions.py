@@ -612,32 +612,37 @@ def make_overview_plot(Configuration,Fits_Files,fit_type='One_Step_Convergence',
 
     #Add some contours
     neg_cont = np.array([-3,-1.5],dtype=float)*Configuration['NOISE']
-    pos_cont =  np.array([1.5,3,6,12,24,48,96],dtype=float)*Configuration['NOISE']
-    pos_cont = np.array([x for x in pos_cont if x < np.max(PV[0].data) * 0.95],dtype=float)
+    pos_cont =  np.array([1.5,3.,6,12,24,48,96],dtype=float)*Configuration['NOISE']
+    pos_cont = np.array([x for x in pos_cont if x < np.nanmax(PV[0].data) * 0.95],dtype=float)
+    if debug:
+            print_log(f'''MAKE_OVERVIEW_PLOT: postive {pos_cont}, negative {neg_cont}, noise {Configuration['NOISE']}
+    ''',Configuration['OUTPUTLOG'],debug =True )
     if pos_cont.size == 0:
-        pos_cont = 0.5 * mindism0
-
-    ax_PV.contour(PV[0].data, levels=pos_cont, colors='k',transform=ax_PV.get_transform(xv_proj))
-    ax_PV.contour(PV[0].data, levels=neg_cont, colors='grey',linestyles='--',transform=ax_PV.get_transform(xv_proj))
-    ax_PV.contour(PV_model[0].data, levels=pos_cont, colors='b',transform=ax_PV.get_transform(xv_model_proj),linewidths=1.)
+        pos_cont = 0.5 * np.nanmax(PV[0].data) * 0.95
+    try:
+        ax_PV.contour(PV[0].data, levels=pos_cont, colors='k',transform=ax_PV.get_transform(xv_proj))
+        ax_PV.contour(PV[0].data, levels=neg_cont, colors='grey',linestyles='--',transform=ax_PV.get_transform(xv_proj))
+        ax_PV.contour(PV_model[0].data, levels=pos_cont, colors='b',transform=ax_PV.get_transform(xv_model_proj),linewidths=1.)
+        momlevel = np.hstack((neg_cont,pos_cont))
+        column_levels = ', '.join(["{:.1f}".format(x*1000.) for x in momlevel])
+        if len(momlevel) < 4:
+            info_string = f"The contours are at {column_levels} mJy/beam"
+        else:
+            info_string = f"The contours are at {', '.join(['{:.1f}'.format(x*1000.) for x in momlevel[0:4]])}"
+            counter = 5
+            while counter < len(momlevel):
+                info_string = info_string+f"\n {', '.join(['{:.1f}'.format(x*1000.) for x in momlevel[counter:counter+7]])}"
+                counter += 7
+            info_string = info_string+" mJy/beam."
+    except:
+        info_string = f"Something went wrong plotting the contours."
     divider = make_axes_locatable(ax_PV)
     cax = divider.append_axes("top", size="5%", pad=0.05, axes_class=maxes.Axes)
     cbar = plt.colorbar(PV_plot, cax=cax, orientation='horizontal')
     cax.xaxis.set_ticks_position('top')
     cbar.set_ticks([minint, maxint])
     cbar.ax.set_title(f"{PV[0].header['BUNIT']}", y= 0.2)
-    momlevel = np.hstack((neg_cont,pos_cont))
-    column_levels = ', '.join(["{:.1f}".format(x*1000.) for x in momlevel])
 
-    if len(momlevel) < 4:
-        info_string = f"The contours are at {column_levels} mJy/beam"
-    else:
-        info_string = f"The contours are at {', '.join(['{:.1f}'.format(x*1000.) for x in momlevel[0:4]])}"
-        counter = 5
-        while counter < len(momlevel):
-            info_string = info_string+f"\n {', '.join(['{:.1f}'.format(x*1000.) for x in momlevel[counter:counter+7]])}"
-            counter += 7
-        info_string = info_string+" mJy/beam."
     ax_PV.text(-0.1,-0.2,info_string, va='top',ha='left', color='black',transform = ax_PV.transAxes,
           bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7)
 

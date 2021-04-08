@@ -644,8 +644,10 @@ def prep_cube(Configuration,hdr,data, debug = False):
         noise_top_right =  np.nanstd(data[:,-6:,-6:])
         noise_bottom_left =  np.nanstd(data[:,:6,:6])
         noise_top_left =  np.nanstd(data[:,-6:,:6])
-        noise_corner = np.mean([noise_top_right,noise_bottom_right,noise_bottom_left,noise_top_left])
-        channel_noise = np.mean([noise_first_channel,noise_last_channel])
+        noise_corner = np.nanmean([noise_top_right,noise_bottom_right,noise_bottom_left,noise_top_left])
+        channel_noise = np.nanmean([noise_first_channel,noise_last_channel])
+        if ~np.isfinite(noise_corner):
+            noise_corner = copy.deepcopy(channel_noise)
         difference = abs((noise_first_channel-noise_last_channel)/noise_first_channel)
         if noise_corner/channel_noise >1.5 and difference < 0.2:
             noise_corner = copy.deepcopy(channel_noise)
@@ -691,7 +693,10 @@ def prep_cube(Configuration,hdr,data, debug = False):
                 print_log(f'''PREPROCESSING: This cube has noise statistics that cannot be dealt with.
 ''',Configuration['OUTPUTLOG'],screen=True)
                 raise BadCubeError('The Cube has noise statistics that cannot be dealt with')
-
+    if ~np.isfinite(noise_corner):
+        print_log(f'''PREPROCESSING: This cube has noise statistics that cannot be dealt with.
+''',Configuration['OUTPUTLOG'],screen=True)
+        raise BadCubeError('The Cube has noise statistics that cannot be dealt with')
     hdr['FATNOISE'] = noise_corner
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")

@@ -840,14 +840,14 @@ def get_inclination_pa(Configuration, Image, center, cutoff = 0., debug = False)
             tenp_min_index= [min_index-2,min_index+2]
         if angles[min_index]-90 > 0.:
             if angles[max_index] > 165:
-                pa = float(np.nanmean([angles[min_index]+90,angles[max_index]]))
+                pa = float(np.nanmean(np.array([angles[min_index]+90,angles[max_index]],dtype=float)))
             else:
-                pa = float(np.nanmean([angles[min_index]-90,angles[max_index]]))
+                pa = float(np.nanmean(np.array([angles[min_index]-90,angles[max_index]],dtype=float)))
         else:
             if angles[max_index] < 15:
-                pa = float(np.nanmean([angles[min_index]-90,angles[max_index]]))
+                pa = float(np.nanmean(np.array([angles[min_index]-90,angles[max_index]],dtype=float)))
             else:
-                pa = float(np.nanmean([angles[min_index]+90,angles[max_index]]))
+                pa = float(np.nanmean(np.array([angles[min_index]+90,angles[max_index]],dtype=float)))
         if 180. < pa:
             pa = pa -180
         if debug:
@@ -857,17 +857,17 @@ def get_inclination_pa(Configuration, Image, center, cutoff = 0., debug = False)
             else:
                 print_log(f'''GET_INCLINATION_PA: The pa from the cleaned map  = {pa}.
 ''',Configuration['OUTPUTLOG'])
-        pa_error = set_limits(np.nanmean([abs(angles[int(tenp_min_index[0])]-angles[min_index]),\
-                            abs(angles[int(tenp_min_index[-1])]-angles[min_index]),\
-                            abs(angles[int(tenp_max_index[0])]-angles[max_index]), \
-                            abs(angles[int(tenp_min_index[-1])]-angles[max_index])]), \
+        pa_error = set_limits(np.nanmean([abs(float(angles[int(tenp_min_index[0])])-float(angles[min_index])),\
+                            abs(float(angles[int(tenp_min_index[-1])])-float(angles[min_index])),\
+                            abs(float(angles[int(tenp_max_index[0])])-float(angles[max_index])), \
+                            abs(float(angles[int(tenp_min_index[-1])])-float(angles[max_index]))]), \
                             0.5,15.)
         ratios[ratios < 0.204] = 0.204
         ratios[1./ratios < 0.204] = 1./0.204
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            inclination = np.nanmean([np.degrees(np.arccos(np.sqrt((ratios[min_index]**2-0.2**2)/0.96))) \
-                              ,np.degrees(np.arccos(np.sqrt(((1./ratios[max_index])**2-0.2**2)/0.96))) ])
+            inclination = np.nanmean([np.degrees(np.arccos(np.sqrt((float(ratios[min_index])**2-0.2**2)/0.96))) \
+                              ,np.degrees(np.arccos(np.sqrt(((1./float(ratios[max_index]))**2-0.2**2)/0.96))) ])
 
 
         if i == 0:
@@ -1158,8 +1158,8 @@ def get_ring_weights(Configuration,Tirific_Template,debug = False):
     for i in [0,1]:
         weights[i] = [set_limits(x/y,0.1,10.) for x,y in zip(sbr[i],cut_off_limits)]
         weights[i] = weights[i]/np.nanmax(weights[i])
-        weights[i][0:1] = np.nanmin(weights[i])
-
+        weights[i][0:2] = np.nanmin(weights[i])
+        weights[i] = [set_limits(x,0.1,1.) for x in weights[i]]
     if debug:
         print_log(f'''GET_RING_WEIGTHS: Obtained the following weights.
 {'':8s}{weights}
@@ -1268,7 +1268,7 @@ def get_vel_pa(Configuration,velocity_field,center= [0.,0.], debug =False):
         sm_velocity_field = ndimage.gaussian_filter(velocity_field, sigma=(sigma[1], sigma[0]), order=0)
     if len(sm_velocity_field[~np.isnan(sm_velocity_field)]) < 10:
         sm_velocity_field = copy.deepcopy(velocity_field)
-        
+
     max_pos = np.where(np.nanmax(sm_velocity_field) == sm_velocity_field)
     #Python is a super weird language so make a decent list of np output
 
@@ -1468,19 +1468,21 @@ def make_tiltogram(Configuration,Tirific_Template,debug =False):
         add[i] = [0. if x < 90 else 90. if  90 <= x < 180. else 180. if 180<= x < 270 else 270. for x in pa_incl[i]]
         pa_incl[i] = pa_incl[i]-add[i]
         pa_incl[i] = np.array([x if x!= 0. else 0.00001 for x in pa_incl[i]],dtype=float)
-        Theta[i] = np.arctan(np.tan(np.radians(pa_incl[i+2]))*np.tan(np.radians(pa_incl[i])))
-        phi[i] = np.arctan(np.tan(np.radians(pa_incl[i]))/np.sin(Theta[i]))
-        x[i]=np.sin(Theta[i])*np.cos(phi[i])
-        y[i]=np.sin(Theta[i])*np.sin(phi[i])
-        z[i]=np.cos(Theta[i])
-        if debug:
-            print_log(f'''MAKE_TILTOGRAM: For the cartesian coordinates we find in side {i}
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            Theta[i] = np.arctan(np.tan(np.radians(pa_incl[i+2]))*np.tan(np.radians(pa_incl[i])))
+            phi[i] = np.arctan(np.tan(np.radians(pa_incl[i]))/np.sin(Theta[i]))
+            x[i]=np.sin(Theta[i])*np.cos(phi[i])
+            y[i]=np.sin(Theta[i])*np.sin(phi[i])
+            z[i]=np.cos(Theta[i])
+            if debug:
+                print_log(f'''MAKE_TILTOGRAM: For the cartesian coordinates we find in side {i}
 {'':8s} x = {x[i]}
 {'':8s} y = {y[i]}
 {'':8s} z = {z[i]}
 ''',Configuration['OUTPUTLOG'])
 
-        tiltogram[i] = np.degrees(np.arccos(np.multiply.outer(x[i], x[i]).ravel().reshape(len(x[i]),len(x[i])) + \
+            tiltogram[i] = np.degrees(np.arccos(np.multiply.outer(x[i], x[i]).ravel().reshape(len(x[i]),len(x[i])) + \
                                          np.multiply.outer(y[i], y[i]).ravel().reshape(len(x[i]),len(x[i])) + \
                                          np.multiply.outer(z[i], z[i]).ravel().reshape(len(x[i]),len(x[i]))))
     tiltogram = np.array(tiltogram,dtype = float)

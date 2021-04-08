@@ -187,7 +187,7 @@ def check_size(Configuration,Tirific_Template, fit_type = 'Undefined', stage = '
     #the lower the inclination the sooner the RC becomes unreliable
     limit_factor = set_limits(2.5*np.mean(Configuration['LIMIT_MODIFIER']) ,2.,4.)
     if debug:
-        print_log(f'''CHECK_SIZE: Using a limti factor for reliable RC of  {limit_factor}
+        print_log(f'''CHECK_SIZE: Using a limit factor for reliable RC of  {limit_factor}
 ''',Configuration['OUTPUTLOG'])
     Configuration['RC_UNRELIABLE'] = get_number_of_rings(Configuration,sbr,limit_factor*sbr_ring_limits, debug=debug)-1
     if Configuration['RC_UNRELIABLE'] == Configuration['NO_RINGS']:
@@ -389,7 +389,7 @@ fit_arc.__doc__ =f'''
  NOTE:
 '''
 
-def fit_polynomial(Configuration,radii,profile,sm_profile,error, key, Tirific_Template,inner_fix = 4,min_error =0., debug = False ):
+def fit_polynomial(Configuration,radii,profile,sm_profile,error, key, Tirific_Template,inner_fix = 4,min_error =0.,boundary_limits = [0,0.], debug = False ):
     if debug:
         print_log(f'''FIT_POLYNOMIAL: starting to fit the polynomial with the following input:
 {'':8s} key = {key}
@@ -434,7 +434,11 @@ def fit_polynomial(Configuration,radii,profile,sm_profile,error, key, Tirific_Te
         start_order = set_limits(start_order,lower_limit,max_order)
 
     else:
-        max_order = set_limits(len(radii)-1,3,7)
+        if key in ['PA','INCL','Z0']:
+            max_order = set_limits(len(radii)-fixed,3,7)
+        else:
+            max_order = set_limits(len(radii)-1,3,7)
+
 
     if start_order >= max_order:
         max_order = max_order+1
@@ -468,6 +472,16 @@ def fit_polynomial(Configuration,radii,profile,sm_profile,error, key, Tirific_Te
         if key != 'SBR':
             fit_profile = fix_profile(Configuration, key, fit_profile, Tirific_Template,inner_fix=inner_fix, singular = True,only_inner =only_inner)
         red_chi = np.sum((profile[st_fit:]-fit_profile[st_fit:])**2/error[st_fit:])/(len(radii[st_fit:])-ord)
+        #We penailze profiles that go outside the boundaries
+
+        if np.sum(np.absolute(np.array(boundary_limits,dtype=float))) != 0.:
+                diff = np.sum(np.array([abs(x-set_limits(x,\
+                                                  boundary_limits[0],\
+                                                  boundary_limits[1])) \
+                                        for x in  fit_profile[st_fit:]],dtype = float))
+                if diff > 1.:
+                    red_chi = red_chi*(diff)
+
         reduced_chi.append(red_chi)
         #if key in ['VROT'] and Configuration['NO_RINGS'] < 2.5*max_order:
         #    reduced_chi[-1] = reduced_chi[-1]*(ord/Configuration['NO_RINGS'])**2.5
@@ -584,7 +598,6 @@ fix_outer_rotation.__doc__ =f'''
 def fix_profile(Configuration, key, profile, Tirific_Template, debug= False, inner_fix = [4,4], singular = False,only_inner = False ):
 
     if isinstance(inner_fix,int):
-        print("We doing this?")
         inner_fix = [inner_fix]
     if debug:
         print_log(f'''FIX_PROFILE: Starting to fix {key} with the input values:
@@ -598,11 +611,13 @@ def fix_profile(Configuration, key, profile, Tirific_Template, debug= False, inn
     if singular:
         indexes = [0]
         profile = np.array([profile,profile])
-        print(inner_fix)
         inner_mean = np.nanmean([profile[0,:inner_fix[0]]])
     else:
         indexes = [0,1]
-        inner_mean = np.nanmean(np.concatenate((profile[0,:inner_fix[0]],profile[1,:inner_fix[1]])))
+        if np.sum(inner_fix) != 0.:
+            inner_mean = np.nanmean(np.concatenate((profile[0,:inner_fix[0]],profile[1,:inner_fix[1]])))
+
+
     profile = np.array(profile,dtype=float)
 
 
@@ -614,8 +629,11 @@ def fix_profile(Configuration, key, profile, Tirific_Template, debug= False, inn
             profile[i,:inner_fix[i]] = inner_mean
         if debug:
             print_log(f'''FIX_PROFILE: the  {inner_fix} inner rings are fixed for the profile:
+{'':8s} profile = {profile[i,:]}
 ''', Configuration['OUTPUTLOG'])
-
+    if debug:
+        print_log(f'''FIX_PROFILE: the  inner mean is {inner_mean}.
+''', Configuration['OUTPUTLOG'])
 
     for i in indexes:
         if Configuration['LAST_RELIABLE_RINGS'][i] < len(profile[i,:]) and not only_inner:
@@ -624,7 +642,10 @@ def fix_profile(Configuration, key, profile, Tirific_Template, debug= False, inn
 ''', Configuration['OUTPUTLOG'])
             #profile[i,Configuration['LAST_RELIABLE_RINGS'][i]:] = profile[i,Configuration['LAST_RELIABLE_RINGS'][i]:]*0.25+profile[i,Configuration['LAST_RELIABLE_RINGS'][i]-1]*0.75
             profile[i,Configuration['LAST_RELIABLE_RINGS'][i]:] = profile[i,Configuration['LAST_RELIABLE_RINGS'][i]-1]
-
+        if debug:
+            print_log(f'''FIX_PROFILE:After fixing the last reliable rings
+{'':8s} profile = {profile[i,:]}
+''', Configuration['OUTPUTLOG'])
         if key == 'VROT':
             profile[i] =fix_outer_rotation(Configuration,profile[i],debug= debug)
         if key in ['PA','INCL','Z0']:
@@ -632,8 +653,12 @@ def fix_profile(Configuration, key, profile, Tirific_Template, debug= False, inn
         # need to make sure this connects smoothly
             for x in range(0,xrange):
                 if inner_fix[i]+x < len(profile[i,:]):
-                    profile[i,inner_fix[i]+x] = 1/(x+0.5)*inner_mean+ (1-1/(x+0.5))*profile[i,inner_fix[i]+x]
+                    profile[i,inner_fix[i]+x] = 1/(x+4./xrange)*inner_mean+ (1-1/(x+4./xrange))*profile[i,inner_fix[i]+x]
 
+        if debug:
+            print_log(f'''FIX_PROFILE:After smoothe transition
+{'':8s} profile = {profile[i,:]}
+''', Configuration['OUTPUTLOG'])
         #profile[:,:Configuration['INNER_FIX']] = np.nanmean(profile[:,:Configuration['INNER_FIX']])
         if key in ['SDIS']:
             inner_max = np.nanmax(profile[i,:int(len(profile[i,:])/2.)])
@@ -1461,8 +1486,13 @@ def regularise_profile(Configuration,Tirific_Template, key,min_error= [0.],debug
 
 
         else:
+            if f"{key}_CURRENT_BOUNDARY" in Configuration:
+                boundary = Configuration[f"{key}_CURRENT_BOUNDARY"][i+1]
+            else:
+                boundary = [0.,0.]
             fit_profile = fit_polynomial(Configuration,radii,profile[i],sm_profile[i],error[i],key, Tirific_Template,\
-                                         inner_fix = Configuration['INNER_FIX'][i],min_error=min_error,debug= debug)
+                                         inner_fix = Configuration['INNER_FIX'][i],min_error=min_error,\
+                                         boundary_limits= boundary,debug= debug)
         profile[i] = fit_profile
 
     if not diff:
@@ -1536,19 +1566,23 @@ regularise_profile.__doc__ =f'''
 
 
 def set_boundary_limits(Configuration,Tirific_Template,key, tolerance = 0.01, values = [10,1],upper_bracket = [10.,100.], lower_bracket=[0., 50.], fixed = False,increase=10., debug = False):
+    if debug:
+        print_log(f'''SET_BOUNDARY_LIMITS: checking limits for {key},
+''',Configuration['OUTPUTLOG'],debug = True)
     profile = np.array(get_from_template(Configuration,Tirific_Template, [key,f"{key}_2"]),dtype = float)
 
     current_boundaries = Configuration[f"{key}_CURRENT_BOUNDARY"]
     if debug:
         print_log(f'''SET_BOUNDARY_LIMITS: We have found the following limits,
 {'':8s} current Boundaries = {current_boundaries}
-''',Configuration['OUTPUTLOG'],debug = True)
+{'':8s} Applying to the profiles {profile}
+''',Configuration['OUTPUTLOG'])
 
     if np.sum(current_boundaries) == 0.:
         current_boundaries =[[set_limits(values[0]-values[1]*5.,*lower_bracket),\
                     set_limits(values[0]+values[1]*5.,*upper_bracket)] for x in range(3)]
         if debug:
-            print_log(f'''SET_BOUNDARY_LIMITS: We have set the boundaries to as all were 0.
+            print_log(f'''SET_BOUNDARY_LIMITS: We have set the boundaries to the following as all were 0.
 {'':8s} current Boundaries = {current_boundaries}
 ''',Configuration['OUTPUTLOG'])
 
@@ -1558,21 +1592,36 @@ def set_boundary_limits(Configuration,Tirific_Template,key, tolerance = 0.01, va
         range_to_check = [0,1,2]
     for i in range_to_check:
         buffer = float(current_boundaries[i][1]-current_boundaries[i][0]) * tolerance
+        if debug:
+            print_log(f'''SET_BOUNDARY_LIMITS: Using a buffer of {buffer}.
+''',Configuration['OUTPUTLOG'])
         if i == 0:
             profile_part = profile[0,:int(np.mean(Configuration['INNER_FIX']))+1]
         else:
             profile_part = profile[i-1,Configuration['INNER_FIX'][i-1]:]
+        if debug:
+            print_log(f'''SET_BOUNDARY_LIMITS: Checking {profile_part}.
+''',Configuration['OUTPUTLOG'])
         #check the upper bounderies
         on_boundary = np.where(profile_part > float(current_boundaries[i][1])-buffer)[0]
+        if debug:
+            print_log(f'''SET_BOUNDARY_LIMITS: Found the following on the upper {on_boundary}.
+''',Configuration['OUTPUTLOG'])
         if len(on_boundary) > 0:
             if on_boundary[0] != len(profile[0])-1:
                 current_boundaries[i][1] = set_limits(current_boundaries[i][1] + buffer*increase,*upper_bracket)
         #check the lower boundaries.
         on_boundary = np.where(profile_part < float(current_boundaries[i][0])+buffer)[0]
+        if debug:
+            print_log(f'''SET_BOUNDARY_LIMITS: Found the following on the lower {on_boundary}.
+''',Configuration['OUTPUTLOG'])
         if len(on_boundary) > 0:
             if on_boundary[0] != len(profile[0])-1:
-                current_boundaries[i][0] = set_limits(current_boundaries[i][1] - buffer*increase,*lower_bracket)
+                current_boundaries[i][0] = set_limits(current_boundaries[i][0] - buffer*increase,*lower_bracket)
     Configuration[f"{key}_CURRENT_BOUNDARY"] = current_boundaries
+    if debug:
+        print_log(f'''SET_BOUNDARY_LIMITS: We have adjusted the boundaries to  {Configuration[f"{key}_CURRENT_BOUNDARY"]}.
+''',Configuration['OUTPUTLOG'])
     return current_boundaries
 set_boundary_limits.__doc__ =f'''
  NAME:

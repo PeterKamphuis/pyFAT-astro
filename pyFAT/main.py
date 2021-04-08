@@ -29,7 +29,14 @@ from  pyFAT.Support.modify_template import write_new_to_template
 
 class MissingProgramError(Exception):
     pass
+def warn_with_traceback(message, category, filename, lineno, file=None, line=None):
+    log = file if hasattr(file,'write') else sys.stderr
+    traceback.print_stack(file=log)
+    log.write(warnings.formatwarning(message, category, filename, lineno, line))
+
 def main(argv):
+
+
     try:
         #First we check for sofia and TiRiFiC
         if sf.is_available('sofia2'):
@@ -102,7 +109,8 @@ def main(argv):
         Original_Configuration['DEBUG'] = input_parameters.debug
         Original_Configuration['NCPU'] = input_parameters.ncpu
         Original_Configuration['FINAL_COMMENT'] = "This fitting stopped with an unregistered exit."
-
+        if Original_Configuration['DEBUG']:
+            warnings.showwarning = warn_with_traceback
         # Keys that change depending on which type of fitting is run
         loop_counters=['RUN_COUNTER']
         timing_keys = ['PREP_END_TIME','START_TIME']
@@ -175,7 +183,7 @@ def main(argv):
         # The parameters that need boundary limits are set here
         boundary_limit_keys = ['PA','INCL', 'SDIS', 'Z0','VSYS','XPOS','YPOS']
         for key in boundary_limit_keys:
-            Original_Configuration[f"{key}_CURRENT_BOUNDARY"] = [0.,0.]
+            Original_Configuration[f"{key}_CURRENT_BOUNDARY"] = [[0.,0.],[0.,0.],[0.,0.]]
         #Then read the input Catalogue
         if input_parameters.single_cube != 'CataloguE':
             Full_Catalogue = sf.Proper_Dictionary({})
@@ -424,6 +432,7 @@ def main(argv):
                 continue
 
             DHI = rf.get_DHI(Configuration,Model='One_Step_Convergence',debug=Configuration['DEBUG'])
+            Configuration['FINAL_COMMENT'] = 'The fit has converged succesfully'
             cf.finish_galaxy(Configuration,maximum_directory_length,current_run =current_run, Fits_Files =Fits_Files,debug = Configuration['DEBUG'])
             if Configuration['MAPS_OUTPUT'] < 4:
                 Totflux = rf.get_totflux(Configuration,f"/Finalmodel/Finalmodel_mom0.fits", debug=Configuration['DEBUG'])
