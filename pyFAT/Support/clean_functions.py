@@ -321,11 +321,21 @@ def cleanup_final(Configuration,Fits_Files, debug =False):
                 except FileNotFoundError:
                     pass
             if (Configuration['MAPS_OUTPUT'] == 2 and extension != '.fits') or (5 >= Configuration['MAPS_OUTPUT'] >= 3) :
-                if len(name.split('_')) > 2:
+                if len(name.split('_')) > 3 and (file != 'One_Step_Convergence.def' and file != 'One_Step_Convergence.fits') :
                     try:
                         os.remove(f"{Configuration['FITTING_DIR']}{dir}/{file}")
                     except FileNotFoundError:
                         pass
+
+    if 5 >= Configuration['MAPS_OUTPUT'] >= 1:
+        if os.path.isdir(f"{Configuration['FITTING_DIR']}tmp_incl_check"):
+            files_in_dir = os.listdir(f"{Configuration['FITTING_DIR']}tmp_incl_check")
+            for file in files_in_dir:
+                try:
+                    os.remove(f"{Configuration['FITTING_DIR']}tmp_incl_check/{file}")
+                except FileNotFoundError:
+                    pass
+            os.rmdir(f"{Configuration['FITTING_DIR']}tmp_incl_check")
 
 cleanup_final.__doc__ =f'''
  NAME:
@@ -530,7 +540,7 @@ def finish_galaxy(Configuration,maximum_directory_length,current_run = 'Not init
 
 
             transfer_errors(Configuration,fit_type='One_Step_Convergence')
-            linkname = f"{Configuration['FITTING_DIR']}/One_Step_Convergence/One_Step_Convergence"
+            linkname = f"../One_Step_Convergence/One_Step_Convergence"
             os.symlink(f"{linkname}.fits",f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel.fits")
             os.symlink(f"{linkname}.def",f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel.def")
 

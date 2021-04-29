@@ -30,11 +30,22 @@ TiRiFiC and SoFiA2 should be accessible for subproccess calls this normally mean
 Installation
 ------------
 
-Unpack the zip file in a desired directory and you are ready to run FAT from this directory.
+Download the source code from the Github. Once downloaded pyFAT can be installed with:
+
+  pip install path_to_code
+
+This should also install all required python dependencies.
+We recommend the use of python virtual environments. If so desired a pyFAT installation would look like:
+
+  python3 -m venv FAT_venv
+  source FAT_venv/bin/activate
+  pip install path_to_code
+  deactivate
+  source FAT_venv/bin/activate
 
 Once you have installed FAT you can check that it has been installed properly by running FAT as.
 
-  FAT>python3 FAT.py --ic
+  FAT>  pyFAT --ic
 
 This should take typically 10 min and should finish with the message:
 
@@ -60,20 +71,18 @@ Sometimes, due to updates in SoFiA2 or TiRiFiC, the check might show differences
 
 Running FAT
 -----------
-FAT is currently run under python3 and simply run as a script.
+FAT is currently run under python and can be run from the command line
 
-    FAT> python3 FAT.py -h
+    FAT> pyFAT -h
 
 Will provide an overview of call options. For the most basic usage one can call FAT with a configuration file.
 
-    FAT> python3 FAT.py -c pathtodir/configfile.config
+    FAT> pyFAT -c pathtodir/configfile.config
 
-FAT is intended for batch fitting and as such it is recommended
-
+FAT is intended for batch fitting and as such it is recommended to have all source in separate directories
 
 All information that the code needs about output directories fitting steps and input parameters are taken from the configfile.
 If a config file is not given it will look for the file 'FAT_INPUT.config' in the directory from which FAT is run.
-The default support directory is ./Support however you can specify an alternative directory with the keyword support.
 
 Configuration File
 ------

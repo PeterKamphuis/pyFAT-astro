@@ -314,6 +314,8 @@ def check_source(Configuration, Fits_Files, debug = False):
     x,y,z,ra,dec,v_app,f_sum,kin_pa,f_sum_err , err_x,err_y,err_z= convert_type([x,y,z,ra,dec,v_app,f_sum,kin_pa,err_f_sum, err_x,err_y,err_z])
     #How does sofia 2 deal with the fully flagged channels?
     v_app = v_app/1000.
+
+
     # Need to check for that here if NaNs are included
     if f_sum < 0.:
         print_log(f'''CHECK_SOURCE: This galaxy has negative total flux. That will not work. Aborting.

@@ -176,7 +176,10 @@ def clean_header(Configuration,hdr, debug = False):
 {"":8s}CLEAN_HEADER: !!!!!!!!!!         This will not work.          !!!!!!!!!!!!!!!!
 ''',Configuration['OUTPUTLOG'],screen = True)
         raise BadHeaderError("Your spatial axes are reversed")
-
+    if hdr['CRVAL1'] < 0.:
+        print_log(f'''CLEAN_HEADER: your RA crval is negative, this can lead to errors. Adding 360. deg
+''',Configuration['OUTPUTLOG'])
+        hdr['CRVAL1'] = hdr['CRVAL1']+360.
     if not 'BMIN' in hdr:
         if 'BMMIN' in hdr:
             hdr['BMIN']= hdr['BMMIN']/3600.

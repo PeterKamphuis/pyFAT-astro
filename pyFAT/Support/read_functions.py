@@ -167,28 +167,32 @@ def config_file(input_parameters, start_dir, debug = False):
     integer_keys = ['STARTGALAXY','ENDGALAXY','MAPS_OUTPUT','OPT_PIXELBEAM','FINISHAFTER','FITTING_TYPE']
     # Separate the keyword names
     for tmp in tmpfile:
+        print(f"|{tmp}|")
         if tmp[0] != '#':
         # python is really annoying with needing endlines. Let's strip them here and add them when writing
-            add_key = tmp.split('=', 1)[0].strip().upper()
-            if add_key in boolean_keys:
-                invalid_input = True
-                inp = tmp.split('=', 1)[1].strip()
-                while invalid_input:
-                    if inp.lower() == "true" or inp.lower() == "t" or inp.lower() == "y" or inp.lower() == "yes" or inp[0] == '1':
-                        value = True
-                        invalid_input = False
-                    elif inp.lower() == "false" or inp.lower() == "f" or inp.lower() == "n" or inp.lower() == "no" or inp[0] == '0':
-                        value = False
-                        invalid_input = False
-                    else:
-                        inp = input(f"The parameter {add_key} in the configuration file  must be true/false or yes/no. Please give the correct value. \n".format(add_key))
-                Configuration[add_key] = value
-            elif add_key in string_keys:
-                Configuration[add_key] = tmp.split('=', 1)[1].strip()
-            elif add_key in integer_keys:
-                Configuration[add_key] = int(tmp.split('=', 1)[1].strip())
-            else:
-                Configuration[add_key] = float(tmp.split('=', 1)[1].strip())
+            add_key_in = tmp.split('=', 1)
+            if len(add_key_in) > 1:
+                add_key = add_key_in[0].strip().upper()
+                if add_key in boolean_keys:
+                    invalid_input = True
+                    inp = tmp.split('=', 1)[1].strip()
+                    while invalid_input:
+                        if inp.lower() == "true" or inp.lower() == "t" or inp.lower() == "y" or inp.lower() == "yes" or inp[0] == '1':
+                            value = True
+                            invalid_input = False
+                        elif inp.lower() == "false" or inp.lower() == "f" or inp.lower() == "n" or inp.lower() == "no" or inp[0] == '0':
+                            value = False
+                            invalid_input = False
+                        else:
+                            inp = input(f"The parameter {add_key} in the configuration file  must be true/false or yes/no. Please give the correct value. \n".format(add_key))
+                    Configuration[add_key] = value
+                elif add_key in string_keys:
+                    Configuration[add_key] = tmp.split('=', 1)[1].strip()
+                elif add_key in integer_keys:
+                    Configuration[add_key] = int(tmp.split('=', 1)[1].strip())
+                else:
+                    Configuration[add_key] = float(tmp.split('=', 1)[1].strip())
+    
     #if we are checking the installation then the maindir, outputcatalogue and
     #Log go into the original_dir+installation_check.
     if input_parameters.installation_check:
@@ -1109,7 +1113,7 @@ def sofia_catalogue(Configuration,Fits_Files, Variables =['id','x','x_min','x_ma
         # check that our mask has the selected source
     else:
         outlist = [x[0] for x in outlist]
-    
+
     check_mask(Configuration,outlist[Variables.index('id')],Fits_Files,debug=debug)
     if debug:
         print_log(f'''SOFIA_CATALOGUE: we found these values
