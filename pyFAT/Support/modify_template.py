@@ -1145,7 +1145,7 @@ def get_warp_slope(Configuration,Tirific_Template, debug = False):
     for i in [0,1]:
         slope = difference_with_limit[i]
         final = slope[slope < 0.]
-        if len(final) > 0.:
+        if len(slope) > len(final) > 0.:
             not_found = True
             counter = len(slope)-1
             while not_found:
@@ -1154,6 +1154,12 @@ def get_warp_slope(Configuration,Tirific_Template, debug = False):
                     final = counter+1
                 else:
                     counter -= 1
+        elif len(final) == len(slope):
+            final = 1.
+            Configuration['FIX_INCLINATION'][0] = True
+            Configuration['FIX_PA'][0] = True
+            Configuration['FIX_SDIS'][0] = True
+            Configuration['FIX_Z0'][0] = True
         else:
             final = len(slope)
         if final > Configuration['LAST_RELIABLE_RINGS'][i]:

@@ -4,7 +4,7 @@
 
 from collections import OrderedDict #used in Proper_Dictionary
 from inspect import getframeinfo,stack
-from scipy.optimize import curve_fit
+from scipy.optimize import curve_fit, OptimizeWarning
 from scipy import ndimage
 from astropy.wcs import WCS
 from astropy.io import fits
@@ -588,10 +588,21 @@ def fit_sine(Configuration,x,y,debug = False):
 
     est_width=est_width*(2.*np.pi/180.)
     #print(est_peak,est_center,est_width,est_amp)
-    try:
-        sin_parameters, sin_covariance = curve_fit(sine, x[~np.isnan(y)], y[~np.isnan(y)],p0=[est_peak,est_center,est_width,est_amp])
-    except RuntimeError:
-        sin_parameters = [float('NaN') for z in range(4)]
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", OptimizeWarning)
+        try:
+            sin_parameters, sin_covariance = curve_fit(sine, x[~np.isnan(y)], y[~np.isnan(y)],p0=[est_peak,est_center,est_width,est_amp])
+        except RuntimeError:
+            sin_parameters = [float('NaN') for z in range(4)]
+        except OptimizeWarning:
+            if debug:
+                print_log(f'''FIT_SINE: the covariance could not be estimated. Using initial estimates
+{'':8s}peak est = {est_peak}
+{'':8s}center est = {est_center}
+{'':8s}width est = {est_width}
+{'':8s}amp est = {est_amp}
+''', Configuration['OUTPUTLOG'],debug =True)
+                sin_parameters = [0.,0.,0.,0.]
 
     if not 0.4 < sin_parameters[2] <0.6:
         ratios = y

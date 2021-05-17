@@ -146,7 +146,7 @@ def config_file(input_parameters, start_dir, debug = False):
                 from pyFAT import Installation_Check as IC
                 with import_res.open_text(IC,'FAT_INPUT.config') as tmp:
                     tmpfile = tmp.readlines()
-            elif input_parameters.configfile == 'No Default' and input_parameters.single_cube != 'CataloguE' :
+            elif input_parameters.configfile == 'No Default' and input_parameters.single_cube != 'CataloguE' :   #single_cube should be set, so can not be CataloguE
                 import pyFAT
                 with import_res.open_text(pyFAT,'FAT_INPUT.config') as tmp:
                     tmpfile = tmp.readlines()
@@ -167,7 +167,6 @@ def config_file(input_parameters, start_dir, debug = False):
     integer_keys = ['STARTGALAXY','ENDGALAXY','MAPS_OUTPUT','OPT_PIXELBEAM','FINISHAFTER','FITTING_TYPE']
     # Separate the keyword names
     for tmp in tmpfile:
-        print(f"|{tmp}|")
         if tmp[0] != '#':
         # python is really annoying with needing endlines. Let's strip them here and add them when writing
             add_key_in = tmp.split('=', 1)
@@ -192,7 +191,7 @@ def config_file(input_parameters, start_dir, debug = False):
                     Configuration[add_key] = int(tmp.split('=', 1)[1].strip())
                 else:
                     Configuration[add_key] = float(tmp.split('=', 1)[1].strip())
-    
+
     #if we are checking the installation then the maindir, outputcatalogue and
     #Log go into the original_dir+installation_check.
     if input_parameters.installation_check:

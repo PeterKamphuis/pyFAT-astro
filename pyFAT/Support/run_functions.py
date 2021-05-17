@@ -821,7 +821,11 @@ def one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run, de
         fix_sbr(Configuration,Tirific_Template,debug = debug)    # Then we determine the inner rings that should remain fixed
 
         get_inner_fix(Configuration, Tirific_Template,debug=debug)
-        get_warp_slope(Configuration,Tirific_Template, debug=debug)
+        if all([Configuration['FIX_INCLINATION'][0],Configuration['FIX_PA'][0],Configuration['FIX_Z0'][0],Configuration['FIX_SDIS'][0]]):
+            Configuration['WARP_SLOPE'] = [0.,0.]
+        else:
+            get_warp_slope(Configuration,Tirific_Template, debug=debug)
+
         set_cflux(Configuration,Tirific_Template,debug = debug)
         keys_to_smooth =['INCL','PA','SDIS','Z0','VROT']
         min_errors = [3.*np.mean(Configuration['LIMIT_MODIFIER']),2.,Configuration['CHANNEL_WIDTH']/(2.*Configuration['LIMIT_MODIFIER']), \
