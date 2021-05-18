@@ -602,7 +602,7 @@ def fit_sine(Configuration,x,y,debug = False):
 {'':8s}width est = {est_width}
 {'':8s}amp est = {est_amp}
 ''', Configuration['OUTPUTLOG'],debug =True)
-                sin_parameters = [0.,0.,0.,0.]
+            sin_parameters = [0.,0.,0.,0.]
 
     if not 0.4 < sin_parameters[2] <0.6:
         ratios = y
