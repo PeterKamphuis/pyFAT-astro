@@ -1,7 +1,7 @@
 # -*- coding: future_fstrings -*-
 # This module contains a set of functions and classes that are used to write text files to Disk
 
-from pyFAT.Support.support_functions import print_log,convertRADEC,convertskyangle,set_limit_modifier,columndensity,set_limits,get_inner_fix
+from pyFAT.Support.support_functions import print_log,convertRADEC,convertskyangle,set_limit_modifier,columndensity,set_limits,get_inner_fix,linenumber
 from pyFAT.Support.modify_template import set_model_parameters, set_overall_parameters, set_fitting_parameters,get_warp_slope, update_disk_angles
 from pyFAT.Support.fits_functions import extract_pv
 from pyFAT.Support.read_functions import load_tirific,load_basicinfo, load_template
@@ -1218,13 +1218,18 @@ tirific.__doc__ =f'''
 
 def write_config(file,Configuration,debug = False):
     if debug:
-        print_log(f'''WRITE_CONFIG: writing the configuration to {file}
-''', Configuration['OUTPUTLOG'],debug = True)
+        if Configuration['OUTPUTLOG'].find('Logs') == -1:
+            log_write_config = f'''{linenumber(debug=debug)}WRITE_CONFIG: writing the configuration to {file}'''
+        else:
+            print_log(f'''WRITE_CONFIG: writing the configuration to {file}
+''',Configuration['OUTPUTLOG'], screen = True)
+            log_write_config = 'Empty'
+
     # Separate the keyword names
     with open(file,'w') as tmp:
         for key in Configuration:
             tmp.write(f'{key} = {Configuration[key]} \n')
-
+    return log_write_config
 write_config.__doc__ =f'''
  NAME:
     write_config

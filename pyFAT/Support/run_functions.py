@@ -394,8 +394,14 @@ def check_source(Configuration, Fits_Files, debug = False):
         np.sum(maj_extent) == 0. or np.isnan(maj_extent) or \
         np.sum(SBR_initial) == 0. or all(np.isnan(SBR_initial)) or \
         np.sum(VROT_initial) == 0. or all(np.isnan(VROT_initial)):
-        print_log(f'''CHECK_SOURCE: We could not establish proper initial estimates from the moment maps.
-''', Configuration['OUTPUTLOG'], screen = True)
+        print_log(f'''CHECK_SOURCE: We could not establish proper initial estimates from the moment maps. These are what we got
+{"":8s}CHECK_SOURCE: pa = {pa}
+{"":8s}CHECK_SOURCE: inclination = {inclination}
+{"":8s}CHECK_SOURCE: maj_extent = {maj_extent}
+{"":8s}CHECK_SOURCE: SBR_initial = {SBR_initial}
+{"":8s}CHECK_SOURCE: VROT_initial = {VROT_initial}
+''', Configuration['OUTPUTLOG'])
+
         raise BadSourceError("No initial estimates. Likely the source is too faint.")
      # Determine whether the centre is blanked or not
 
@@ -510,6 +516,7 @@ def check_source(Configuration, Fits_Files, debug = False):
     Initial_Parameters['PA'] = pa
     Initial_Parameters['INCL'] = inclination
     Initial_Parameters['FLUX'] = [f_sum,f_sum_err]
+
     return Initial_Parameters
 check_source.__doc__='''
  NAME:

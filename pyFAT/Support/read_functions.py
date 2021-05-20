@@ -5,6 +5,7 @@ from pyFAT.Support.support_functions import Proper_Dictionary,print_log,convertR
                                 obtain_border_pix, get_inclination_pa,get_vel_pa,columndensity,get_profile, get_kinematical_center
 from pyFAT.Support.fits_functions import check_mask
 from astropy.io import fits
+from scipy import ndimage
 import warnings
 with warnings.catch_warnings():
     warnings.simplefilter("ignore")
@@ -140,6 +141,7 @@ check_edge_limits.__doc__ =f'''
 #Function to read FAT configuration file into a dictionary
 def config_file(input_parameters, start_dir, debug = False):
     No_File = True
+    log_write_config = 'Empty'
     while No_File:
         try:
             if input_parameters.configfile == 'ChecK.ConfiG':
@@ -226,7 +228,7 @@ def config_file(input_parameters, start_dir, debug = False):
         Configuration['CATALOGUE'] = None
         if Configuration['OUTPUTLOG'] == "Logfileforthepergalaxyfit.txt":
             Configuration['OUTPUTLOG'] = f"Log_{os.path.splitext(file_location[-1])[0]}.txt"
-        write_config(f"{single_dir}FAT_INPUT_{os.path.splitext(file_location[-1])[0]}.config", Configuration,debug=debug)
+        log_write_config = write_config(f"{single_dir}FAT_INPUT_{os.path.splitext(file_location[-1])[0]}.config", Configuration,debug=debug)
 
     #Make the input idiot safe
     if Configuration['MAINDIR'][-1] != '/':
@@ -312,7 +314,7 @@ def config_file(input_parameters, start_dir, debug = False):
     fix_keys = ['FIX_PA','FIX_INCLINATION','FIX_SDIS','FIX_Z0','FIX_SBR']
     for key in fix_keys:
         Configuration[key] = [Configuration[key],Configuration[key]]
-    return Configuration
+    return Configuration, log_write_config
 config_file.__doc__ =f'''
  NAME:
     config_file
@@ -536,11 +538,13 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, debug
     Image = fits.open(f"{Configuration['FITTING_DIR']}Sofia_Output/{Fits_Files['CHANNEL_MAP']}",\
             uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
     noise_map = np.sqrt(Image[0].data)*Configuration['NOISE']*Configuration['CHANNEL_WIDTH']
+
     SNR = np.nanmean(map[noise_map > 0.]/noise_map[noise_map > 0.])
     noise_hdr = Image[0].header
     Image.close()
     median_noise_in_map = np.nanmedian(noise_map[noise_map > 0.])
     minimum_noise_in_map = np.nanmin(noise_map[noise_map > 0.])
+
     map[0.5*minimum_noise_in_map > noise_map] = 0.
     mom0[0].data= map
     scale_factor = set_limits(SNR/3.*minimum_noise_in_map/median_noise_in_map, 0.05, 1.)
@@ -650,10 +654,45 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, debug
 
     Image = fits.open(f"{Configuration['FITTING_DIR']}Sofia_Output/{Fits_Files['MOMENT1']}",\
             uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
-    map = Image[0].data
+    map = copy.deepcopy(Image[0].data)
     hdr = Image[0].header
-    Image.close()
+    if debug:
+        print_log(f'''GUESS_ORIENTATION: This is the amount of values we find initially {len(map[noise_map > 0.])}
+''',Configuration['OUTPUTLOG'])
+    #Image.close()
+    #map[3*minimum_noise_in_map > noise_map] = float('NaN')
     map[3*minimum_noise_in_map > noise_map] = float('NaN')
+    if debug:
+        print_log(f'''GUESS_ORIENTATION: This is the amount of values we find after blanking low SNR {len(map[~np.isnan(map)])}
+''',Configuration['OUTPUTLOG'])
+    if len(map[~np.isnan(map)]) < 5:
+        no_values  = True
+        noise_level = 2.5
+        sigma = [0.5,0.5]
+        while no_values:
+            if debug:
+                print_log(f'''GUESS_ORIENTATION: We smooth the velocity field to use a lower Noise threshold
+''',Configuration['OUTPUTLOG'])
+            tmp = copy.deepcopy(Image[0].data)
+            tmp =  ndimage.gaussian_filter(Image[0].data, sigma=(sigma[1], sigma[0]), order=0)
+            tmp[noise_level*minimum_noise_in_map > noise_map] =  float('NaN')
+            if debug:
+                print_log(f'''GUESS_ORIENTATION: We used the threshold {noise_level} and sigme = {sigma}
+{'':8s}We find the len {len(tmp[~np.isnan(tmp)])}
+''',Configuration['OUTPUTLOG'])
+            if len(tmp[~np.isnan(tmp)]) < 5:
+                sigma = [sigma[0]+0.5,sigma[0]+0.5]
+                noise_level -= 0.5
+            else:
+                no_values = False
+                map = tmp
+            if noise_level < 1. and no_values:
+                VROT_initial = [0]
+                SBR_initial = [0]
+                Image.close()
+                return np.array(pa,dtype=float),np.array(inclination,dtype=float),SBR_initial,maj_extent,center[0],center[1],VROT_initial
+
+    Image.close()
     noise_map = []
 
     # First we look for the kinematics center
@@ -687,6 +726,9 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, debug
             pa = [np.nansum([vel_pa[0]/vel_pa[1],pa[0]/pa[1]])/np.nansum([1./vel_pa[1],1./pa[1]]),2.*1./np.sqrt(np.nansum([1./vel_pa[1],1./pa[1]]))]
     #As python is utterly moronic the center goes in back wards to the map
     buffer = int(round(np.mean(Configuration['BEAM_IN_PIXELS'][:2])/2.))
+    if debug:
+        print_log(f'''GUESS_ORIENTATION: We start with vsys = {v_sys:.2f} km/s
+''' , Configuration['OUTPUTLOG'])
     if v_sys == -1:
         map_vsys = np.nanmean(map[int(round(center[1]-buffer)):int(round(center[1]+buffer)),int(round(center[0]-buffer)):int(round(center[0]+buffer))])
     else:
@@ -714,7 +756,11 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, debug
                 VROT_initial = np.mean(VROT_initial,axis=0)
 
     map= []
-    VROT_initial[0] = 0
+    if len(VROT_initial) == 1:
+        VROT_initial = np.array([0.,VROT_initial[0]])
+    else:
+        VROT_initial[0] = 0
+
     VROT_initial = np.abs(VROT_initial/np.sin(np.radians(inclination[0])))
     if debug:
         print_log(f'''GUESS_ORIENTATION: We found the following initial rotation curve:

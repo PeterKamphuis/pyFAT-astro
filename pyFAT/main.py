@@ -91,7 +91,7 @@ def main(argv):
             input_parameters.configfile=fat_main_test_dir+'/Problems/FAT_INPUT.config'
 
         try:
-            Original_Configuration = rf.config_file(input_parameters,start_dir,debug=input_parameters.debug)
+            Original_Configuration,log_write_config = rf.config_file(input_parameters,start_dir,debug=input_parameters.debug)
         except Exception as e:
             print(e)
             exit()
@@ -281,6 +281,9 @@ def main(argv):
                     os.rename(Configuration['OUTPUTLOG'],f"{Configuration['LOG_DIR']}/Previous_Log.txt")
 
             with open(Configuration['OUTPUTLOG'],'w') as log:
+                if log_write_config != 'Empty':
+                    log.write(log_write_config)
+                    log_write_config = 'Empty'
                 log.write(log_statement)
 
 
