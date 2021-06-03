@@ -425,11 +425,7 @@ def main(argv):
                 #continue
                 DHI = rf.get_DHI(Configuration,Model='One_Step_Convergence',debug=Configuration['DEBUG'])
                 Configuration['FINAL_COMMENT'] = 'The fit has converged succesfully'
-                if Configuration['MAPS_OUTPUT'] < 4:
-                    Totflux = rf.get_totflux(Configuration,f"/Finalmodel/Finalmodel_mom0.fits", debug=Configuration['DEBUG'])
-                else:
-                    Totflux = [float('NaN'),float('NaN')]
-                wf.basicinfo(Configuration, template=Tirific_Template,Tot_Flux = Totflux, DHI = DHI,debug=Configuration['DEBUG'] )
+
             except Exception as e:
                 Configuration['FINAL_COMMENT'] = e
                 if e.__class__.__name__ in stop_individual_errors:
