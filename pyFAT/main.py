@@ -436,10 +436,14 @@ def main(argv):
                     Configuration['MAPS_OUTPUT'] = 5
                 else:
                     Configuration['MAPS_OUTPUT'] = 'error'
-                
+
             cf.finish_galaxy(Configuration,maximum_directory_length,current_run =current_run, Fits_Files =Fits_Files,debug = Configuration['DEBUG'])
-            if input_parameters.installation_check and Configuration['MAPS_OUTPUT'] != 5:
-                cf.installation_check(Configuration,debug=Configuration['DEBUG'])
+            if Configuration['MAPS_OUTPUT'] != 5:
+                DHI = rf.get_DHI(Configuration,Model='One_Step_Convergence',debug=Configuration['DEBUG'])
+                Totflux = rf.get_totflux(Configuration,f"/Finalmodel/Finalmodel_mom0.fits", debug=Configuration['DEBUG'])
+                wf.basicinfo(Configuration, template=Tirific_Template,Tot_Flux = Totflux, DHI = DHI,debug=Configuration['DEBUG'] )
+                if input_parameters.installation_check:
+                    cf.installation_check(Configuration,debug=Configuration['DEBUG'])
     except Exception as e:
         Configuration['FINAL_COMMENT'] = e
         Configuration['MAPS_OUTPUT'] = 'error'
