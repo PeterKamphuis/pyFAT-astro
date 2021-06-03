@@ -32,20 +32,20 @@ Installation
 
 Download the source code from the Github. Once downloaded pyFAT can be installed with:
 
-  pip install path_to_code
+  	pip install path_to_code
 
 This should also install all required python dependencies.
 We recommend the use of python virtual environments. If so desired a pyFAT installation would look like:
 
-  python3 -m venv FAT_venv
-  source FAT_venv/bin/activate
-  pip install path_to_code
-  deactivate
-  source FAT_venv/bin/activate
+  	python3 -m venv FAT_venv
+  	source FAT_venv/bin/activate
+  	pip install path_to_code
+  	deactivate
+  	source FAT_venv/bin/activate
 
 Once you have installed FAT you can check that it has been installed properly by running FAT as.
 
-  FAT>  pyFAT --ic
+  	FAT>  pyFAT --ic
 
 This should take typically 10 min and should finish with the message:
 
