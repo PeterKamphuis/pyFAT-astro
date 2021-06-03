@@ -421,28 +421,24 @@ def main(argv):
                 #Add your personal fitting types here
                 if Configuration['FITTING_TYPE'].lower() == 'one_step_convergence' or Configuration['INSTALLATION_CHECK']:
                     current_run = runf.fitting_osc(Configuration,Fits_Files,Tirific_Template,Initial_Parameters)
-                cf.finish_galaxy(Configuration,maximum_directory_length, Fits_Files =Fits_Files,current_run =current_run,debug=Configuration['DEBUG'])
-                continue
-
-
+                #cf.finish_galaxy(Configuration,maximum_directory_length, Fits_Files =Fits_Files,current_run =current_run,debug=Configuration['DEBUG'])
+                #continue
+                DHI = rf.get_DHI(Configuration,Model='One_Step_Convergence',debug=Configuration['DEBUG'])
+                Configuration['FINAL_COMMENT'] = 'The fit has converged succesfully'
+                if Configuration['MAPS_OUTPUT'] < 4:
+                    Totflux = rf.get_totflux(Configuration,f"/Finalmodel/Finalmodel_mom0.fits", debug=Configuration['DEBUG'])
+                else:
+                    Totflux = [float('NaN'),float('NaN')]
+                wf.basicinfo(Configuration, template=Tirific_Template,Tot_Flux = Totflux, DHI = DHI,debug=Configuration['DEBUG'] )
             except Exception as e:
                 Configuration['FINAL_COMMENT'] = e
                 if e.__class__.__name__ in stop_individual_errors:
                     Configuration['MAPS_OUTPUT'] = 5
                 else:
                     Configuration['MAPS_OUTPUT'] = 'error'
-                cf.finish_galaxy(Configuration,maximum_directory_length, Fits_Files =Fits_Files,current_run =current_run,debug=Configuration['DEBUG'])
-                continue
-
-            DHI = rf.get_DHI(Configuration,Model='One_Step_Convergence',debug=Configuration['DEBUG'])
-            Configuration['FINAL_COMMENT'] = 'The fit has converged succesfully'
+                
             cf.finish_galaxy(Configuration,maximum_directory_length,current_run =current_run, Fits_Files =Fits_Files,debug = Configuration['DEBUG'])
-            if Configuration['MAPS_OUTPUT'] < 4:
-                Totflux = rf.get_totflux(Configuration,f"/Finalmodel/Finalmodel_mom0.fits", debug=Configuration['DEBUG'])
-            else:
-                Totflux = [float('NaN'),float('NaN')]
-            wf.basicinfo(Configuration, template=Tirific_Template,Tot_Flux = Totflux, DHI = DHI,debug=Configuration['DEBUG'] )
-            if input_parameters.installation_check:
+            if input_parameters.installation_check and Configuration['MAPS_OUTPUT'] != 5:
                 cf.installation_check(Configuration,debug=Configuration['DEBUG'])
     except Exception as e:
         Configuration['FINAL_COMMENT'] = e
