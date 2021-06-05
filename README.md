@@ -134,10 +134,6 @@ Maps_output controls the amount of outpur created by FAT.  0.= all possible outp
 
 FAT provides the possibility to get information about the fitted warp (Tiltograms, Warp radius, Max angle) if this is required warp_output should be set to 1. 	
 
-# 1 = start from orginal cube (Default)
-# 2 = start from FAT cube if present
-# 3 =  use provided preprocessing from Sofia
-# 4 =  Skip Central Convergence
     start_point=1        
 
 Parameter for setting the type of input for the initial guesses. possible setting are 1, 2, 3, 4
