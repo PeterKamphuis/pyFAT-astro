@@ -484,7 +484,7 @@ installation_check.__doc__ =f'''
  NOTE:
 '''
 
-def finish_galaxy(Configuration,maximum_directory_length,current_run = 'Not initialized', Fits_Files= None, debug = False):
+def finish_galaxy(Configuration,maximum_directory_length,current_run = 'Not initialized', Fits_Files= None, debug = False,exiting = None):
     Configuration['END_TIME'] = datetime.now()
     #make sure we are not leaving stuff
     finish_current_run(Configuration,current_run,debug=debug)
@@ -512,9 +512,11 @@ def finish_galaxy(Configuration,maximum_directory_length,current_run = 'Not init
 '''
         print_log(log_statement,Configuration['OUTPUTLOG'], screen = True)
         print_log(error_message,Configuration['OUTPUTLOG'], screen = True)
-        with open(Configuration['OUTPUTLOG'],'a') as log_file:
-                    traceback.print_exc(file=log_file)
-        traceback.print_exc()
+
+        if exiting:
+            with open(Configuration['OUTPUTLOG'],'a') as log_file:
+                traceback.print_tb(exiting.__traceback__,file=log_file)
+            traceback.print_tb(exiting.__traceback__)
         sys.exit(1)
     elif Configuration['MAPS_OUTPUT'] == 5:
         log_statement = f'''
@@ -524,10 +526,12 @@ def finish_galaxy(Configuration,maximum_directory_length,current_run = 'Not init
 {"":8s}The detected exit reason is {Configuration['FINAL_COMMENT']}.
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 '''
-        with open(Configuration['OUTPUTLOG'],'a') as log_file:
-                    traceback.print_exc(file=log_file)
-        traceback.print_exc()
         print_log(log_statement,Configuration['OUTPUTLOG'])
+        #No traceback as it is a proper exiting error
+        #if exiting:
+        #    with open(Configuration['OUTPUTLOG'],'a') as log_file:
+        #        traceback.print_tb(exiting.__traceback__,file=log_file)
+        #    traceback.print_tb(exiting.__traceback__)
     elif Configuration['MAPS_OUTPUT'] < 4:
         log_statement = f'''Producing final output in {Configuration['FITTING_DIR']}.
 '''

@@ -37,6 +37,7 @@ class BadConfigurationError(Exception):
     pass
 class NoConfigFile(Exception):
     pass
+
 def catalogue(filename, debug = False):
     Catalogue = Proper_Dictionary({})
     with open(filename,'r') as tmpfile:
@@ -403,7 +404,9 @@ def extract_vrot(Configuration,map ,angle,center, debug= False):
         profile[np.isnan(profile)] = profile[~np.isnan(profile)][-1]
     except IndexError:
         profile = []
-
+    
+    if len(profile) < 1 and len(avg_profile) > 0.:
+        profile = [np.max(avg_profile)]
     return profile
 extract_vrot.__doc__ =f'''
  NAME:
@@ -756,7 +759,9 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, debug
                 VROT_initial = np.mean(VROT_initial,axis=0)
 
     map= []
-    if len(VROT_initial) == 1:
+    if len(VROT_initial) < 1:
+        VROT_initial = 0.
+    elif len(VROT_initial) == 1:
         VROT_initial = np.array([0.,VROT_initial[0]])
     else:
         VROT_initial[0] = 0

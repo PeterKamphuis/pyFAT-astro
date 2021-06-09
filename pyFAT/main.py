@@ -29,6 +29,8 @@ from  pyFAT.Support.modify_template import write_new_to_template
 
 class MissingProgramError(Exception):
     pass
+class CatalogError(Exception):
+    pass
 def warn_with_traceback(message, category, filename, lineno, file=None, line=None):
     log = file if hasattr(file,'write') else sys.stderr
     traceback.print_stack(file=log)
@@ -93,7 +95,7 @@ def main(argv):
         try:
             Original_Configuration,log_write_config = rf.config_file(input_parameters,start_dir,debug=input_parameters.debug)
         except Exception as e:
-            print(e)
+            traceback.print_tb(e.__traceback__)
             exit()
         # All Configuration parameters that are not set in the config file should be set here
         # Add the starting directory to the Configuration
@@ -109,8 +111,7 @@ def main(argv):
         Original_Configuration['DEBUG'] = input_parameters.debug
         Original_Configuration['NCPU'] = input_parameters.ncpu
         Original_Configuration['FINAL_COMMENT'] = "This fitting stopped with an unregistered exit."
-        if Original_Configuration['DEBUG']:
-            warnings.showwarning = warn_with_traceback
+
         # Keys that change depending on which type of fitting is run
         loop_counters=['RUN_COUNTER']
         timing_keys = ['PREP_END_TIME','START_TIME']
@@ -231,12 +232,13 @@ def main(argv):
         # start the main fitting loop
 
         if float(Original_Configuration['STARTGALAXY']) > float(Original_Configuration['ENDGALAXY']):
-            print(f''' Your starting galaxy (Line nr = {Original_Configuration['STARTGALAXY']}) is listed after your ending galaxy (Line nr = {Original_Configuration['ENDGALAXY']}), maybe you have double catalogue ids?''')
-            exit()
+            raise CatalogError(f''' Your starting galaxy (Line nr = {Original_Configuration['STARTGALAXY']}) is listed after your ending galaxy (Line nr = {Original_Configuration['ENDGALAXY']}), maybe you have double catalogue ids?''')
+            sys.exit(1)
 
 
         for current_galaxy_index in range(Original_Configuration['STARTGALAXY'],Original_Configuration['ENDGALAXY']):
-
+            registered_exit = None
+            current_run = 'Not Initialized'
             Configuration = copy.deepcopy(Original_Configuration)
             Configuration['START_TIME'] = datetime.now()
             # First check the starttime
@@ -337,7 +339,6 @@ def main(argv):
                 sf.print_log(log_statement,Configuration['OUTPUTLOG'], screen =True)
                 Configuration['FINAL_COMMENT'] = "This galaxy has no fits cube to work with, it is skipped."
                 cf.finish_galaxy(Configuration,maximum_directory_length)
-                traceback.print_exc()
                 continue
 
 
@@ -352,7 +353,7 @@ def main(argv):
                         Configuration['MAPS_OUTPUT'] = 5
                     else:
                         Configuration['MAPS_OUTPUT'] = 'error'
-                    cf.finish_galaxy(Configuration,maximum_directory_length,current_run =current_run,debug=Configuration['DEBUG'])
+                    cf.finish_galaxy(Configuration,maximum_directory_length,current_run =current_run,debug=Configuration['DEBUG'],exiting=e)
                     continue
 
             # We open the header of the fitting cube and get some parameters and make a header wcs structure
@@ -401,13 +402,12 @@ def main(argv):
                         Configuration['MAPS_OUTPUT'] = 5
                     else:
                         Configuration['MAPS_OUTPUT'] = 'error'
-                    cf.finish_galaxy(Configuration,maximum_directory_length,current_run =current_run,debug=Configuration['DEBUG'])
+                    cf.finish_galaxy(Configuration,maximum_directory_length,current_run =current_run,debug=Configuration['DEBUG'],exiting=e)
                     continue
 
                     # We assume sofia is ran and created the proper files
-
             try:
-                current_run = 'Not Initialized'
+
                 # Process the found source in sofia to set up the proper fitting and make sure source can be fitted
                 Initial_Parameters = runf.check_source(Configuration, Fits_Files,debug=Configuration['DEBUG'])
                 sf.sofia_output_exists(Configuration,Fits_Files)
@@ -427,13 +427,13 @@ def main(argv):
                 Configuration['FINAL_COMMENT'] = 'The fit has converged succesfully'
 
             except Exception as e:
+                registered_exception = e
                 Configuration['FINAL_COMMENT'] = e
                 if e.__class__.__name__ in stop_individual_errors:
                     Configuration['MAPS_OUTPUT'] = 5
                 else:
                     Configuration['MAPS_OUTPUT'] = 'error'
-
-            cf.finish_galaxy(Configuration,maximum_directory_length,current_run =current_run, Fits_Files =Fits_Files,debug = Configuration['DEBUG'])
+            cf.finish_galaxy(Configuration,maximum_directory_length,current_run =current_run, Fits_Files =Fits_Files,debug = Configuration['DEBUG'],exiting=registered_exception)
             if Configuration['MAPS_OUTPUT'] != 5:
                 DHI = rf.get_DHI(Configuration,Model='One_Step_Convergence',debug=Configuration['DEBUG'])
                 Totflux = rf.get_totflux(Configuration,f"/Finalmodel/Finalmodel_mom0.fits", debug=Configuration['DEBUG'])
@@ -441,9 +441,10 @@ def main(argv):
                 if input_parameters.installation_check:
                     cf.installation_check(Configuration,debug=Configuration['DEBUG'])
     except Exception as e:
+        registered_exception = e
         Configuration['FINAL_COMMENT'] = e
         Configuration['MAPS_OUTPUT'] = 'error'
-        cf.finish_galaxy(Configuration,maximum_directory_length,current_run =current_run,debug=Configuration['DEBUG'])
+        cf.finish_galaxy(Configuration,maximum_directory_length,current_run =current_run,debug=Configuration['DEBUG'],exiting= registered_exception)
 
 main.__doc__ = '''
  NAME:
