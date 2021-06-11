@@ -237,7 +237,7 @@ def main(argv):
 
 
         for current_galaxy_index in range(Original_Configuration['STARTGALAXY'],Original_Configuration['ENDGALAXY']):
-            registered_exit = None
+            registered_exception = None
             current_run = 'Not Initialized'
             Configuration = copy.deepcopy(Original_Configuration)
             Configuration['START_TIME'] = datetime.now()
