@@ -1329,7 +1329,7 @@ def get_vel_pa(Configuration,velocity_field,center= [0.,0.], debug =False):
             pos2 = max_pos
         if pos1[1]-pos2[1] == 0:
             if pos1[0]-pos2[0] < 0.:
-                pa = 0.
+                pa = 0.0175
             else:
                 pa = np.radians(180.)
         elif pos1[1]-pos2[1] < 0:
@@ -1342,8 +1342,13 @@ def get_vel_pa(Configuration,velocity_field,center= [0.,0.], debug =False):
                 pa = abs(pa)
             else:
                 pa = np.radians(180.) - pa
+
+    if np.degrees(abs(pa-pa_from_max)) > 170. or   np.degrees(abs(pa-pa_from_min)) > 170:
+        pa = pa
+    else:
+        pa = np.nanmean([pa,pa_from_max,pa_from_min])
     center.reverse()
-    return np.degrees([np.nanmean([pa,pa_from_max,pa_from_min]), np.nanstd([pa,pa_from_max,pa_from_min])])
+    return np.degrees([pa, np.nanstd([pa,pa_from_max,pa_from_min])])
 
 get_vel_pa.__doc__ =f'''
  NAME:

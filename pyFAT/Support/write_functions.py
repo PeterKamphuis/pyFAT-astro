@@ -687,7 +687,7 @@ def make_overview_plot(Configuration,Fits_Files,fit_type='One_Step_Convergence',
     labelfont= {'family':'Times New Roman',
             'weight':'normal',
             'size':10}
-    ax_RC = plot_parameters(Configuration,Vars_to_plot,FAT_Model,gs[18:21,3:9],Overview,'VROT',Input_Model = Input_Model, initial = sof_basic_maxrot[0],Extra_Model = Extra_Model,debug=debug)
+    ax_RC = plot_parameters(Configuration,Vars_to_plot,FAT_Model,gs[19:22,3:9],Overview,'VROT',Input_Model = Input_Model, initial = sof_basic_maxrot[0],Extra_Model = Extra_Model,debug=debug)
     ymin =np.min([FAT_Model[1:,Vars_to_plot.index('VROT')],FAT_Model[1:,Vars_to_plot.index('VROT_2')]])
     if len(Extra_Model) > 0:
         ymin2 =np.min([Extra_Model[1:,Vars_to_plot.index('VROT')],Extra_Model[1:,Vars_to_plot.index('VROT_2')]])
@@ -720,9 +720,14 @@ def make_overview_plot(Configuration,Fits_Files,fit_type='One_Step_Convergence',
         top=True,         # ticks along the top edge are off
         labelbottom=False)
     plt.ylabel('RC (km s$^{-1}$)',**labelfont)
+    arcmin,arcmax = ax_RC.get_xlim()
+    sec_ax = ax_RC.twiny()
+    sec_ax.set_xlim(convertskyangle(Configuration,arcmin,Configuration['DISTANCE']),convertskyangle(Configuration,arcmax,Configuration['DISTANCE']))
+    sec_ax.figure.canvas.draw()
+    sec_ax.set_xlabel('Radius (kpc)',va='bottom',**labelfont)
 
 # ------------------------------Inclination------------------------------------
-    ax_INCL = plot_parameters(Configuration,Vars_to_plot,FAT_Model,gs[21:24,3:9],Overview,'INCL',Input_Model = Input_Model, initial =sof_basic_inclination[0],Extra_Model = Extra_Model ,debug=debug)
+    ax_INCL = plot_parameters(Configuration,Vars_to_plot,FAT_Model,gs[22:25,3:9],Overview,'INCL',Input_Model = Input_Model, initial =sof_basic_inclination[0],Extra_Model = Extra_Model ,debug=debug)
 
     plt.tick_params(
         axis='x',          # changes apply to the x-axis
@@ -735,8 +740,14 @@ def make_overview_plot(Configuration,Fits_Files,fit_type='One_Step_Convergence',
         ax_INCL.text(1.01,0.5,'Forced Flat', rotation =-90,va='center',ha='left', color='black',transform = ax_INCL.transAxes,
           bbox=dict(facecolor='white',edgecolor='white',pad=0.,alpha=0.),zorder=7,fontsize=10)
     plt.ylabel('Incl ($^{\circ}$)',**labelfont)
+    arcmin,arcmax = ax_INCL.get_xlim()
+    sec_ax = ax_INCL.twiny()
+    sec_ax.set_xlim(convertskyangle(Configuration,arcmin,Configuration['DISTANCE']),convertskyangle(Configuration,arcmax,Configuration['DISTANCE']))
+    sec_ax.set_xticklabels([])
+    sec_ax.figure.canvas.draw()
+
 # ------------------------------PA------------------------------------
-    ax_PA = plot_parameters(Configuration,Vars_to_plot,FAT_Model,gs[24:27,3:9],Overview,'PA',Input_Model = Input_Model,initial = sof_basic_pa[0],Extra_Model = Extra_Model,debug=debug)
+    ax_PA = plot_parameters(Configuration,Vars_to_plot,FAT_Model,gs[25:28,3:9],Overview,'PA',Input_Model = Input_Model,initial = sof_basic_pa[0],Extra_Model = Extra_Model,debug=debug)
 
     plt.tick_params(
         axis='x',          # changes apply to the x-axis
@@ -750,22 +761,36 @@ def make_overview_plot(Configuration,Fits_Files,fit_type='One_Step_Convergence',
           bbox=dict(facecolor='white',edgecolor='white',pad=0.,alpha=0.),zorder=7,fontsize=10)
     plt.xlabel('Radius (arcsec)',**labelfont)
     plt.ylabel('PA ($^{\circ}$)',**labelfont)
+    arcmin,arcmax = ax_PA.get_xlim()
+    sec_ax = ax_PA.twiny()
+    sec_ax.set_xlim(convertskyangle(Configuration,arcmin,Configuration['DISTANCE']),convertskyangle(Configuration,arcmax,Configuration['DISTANCE']))
+    sec_ax.set_xticklabels([])
+    sec_ax.figure.canvas.draw()
+
 # ------------------------------SDIS------------------------------------
-    ax_SDIS = plot_parameters(Configuration,Vars_to_plot,FAT_Model,gs[18:21,12:18],Overview,'SDIS',Input_Model = Input_Model,Extra_Model = Extra_Model,initial = 8.)
+    ax_SDIS = plot_parameters(Configuration,Vars_to_plot,FAT_Model,gs[19:22,12:18],Overview,'SDIS',Input_Model = Input_Model,Extra_Model = Extra_Model,initial = 8.)
     plt.tick_params(
         axis='x',          # changes apply to the x-axis
         which='both',      # both major and minor ticks are affected
         direction = 'in',
         bottom=True,      # ticks along the bottom edge are off
         top=True,         # ticks along the top edge are off
-        labelbottom=False)
+        labelbottom=False,
+        labeltop= True)
     if Configuration['FIX_SDIS'][0]:
         ax_SDIS.text(1.01,0.5,'Forced Flat',rotation=-90, va='center',ha='left', color='black',transform = ax_SDIS.transAxes,
           bbox=dict(facecolor='white',edgecolor='white',pad=0.,alpha=0.),zorder=7,fontsize=10)
 
     plt.ylabel('Disp (km s$^{-1}$)',**labelfont)
+    arcmin,arcmax = ax_SDIS.get_xlim()
+    sec_ax = ax_SDIS.twiny()
+    sec_ax.set_xlim(convertskyangle(Configuration,arcmin,Configuration['DISTANCE']),convertskyangle(Configuration,arcmax,Configuration['DISTANCE']))
+    sec_ax.figure.canvas.draw()
+    sec_ax.set_xlabel('Radius (kpc)',va='bottom',**labelfont)
+
+
 # ------------------------------Scale height------------------------------------
-    ax_Z0 = plot_parameters(Configuration,Vars_to_plot,FAT_Model,gs[21:24,12:18],Overview,'Z0',Input_Model = Input_Model,\
+    ax_Z0 = plot_parameters(Configuration,Vars_to_plot,FAT_Model,gs[22:25,12:18],Overview,'Z0',Input_Model = Input_Model,\
                             Extra_Model = Extra_Model,initial = convertskyangle(Configuration,0.2,Configuration['DISTANCE'],physical=True),debug=debug)
 
     plt.tick_params(
@@ -774,7 +799,8 @@ def make_overview_plot(Configuration,Fits_Files,fit_type='One_Step_Convergence',
         direction = 'in',
         bottom=True,      # ticks along the bottom edge are off
         top=True,         # ticks along the top edge are off
-        labelbottom=False)
+        labelbottom=False,
+        labeltop=False)
     if Configuration['FIX_Z0'][0]:
         ax_Z0.text(1.25,0.5,'Forced Flat',rotation=-90, va='center',ha='left', color='black',transform = ax_Z0.transAxes,
           bbox=dict(facecolor='white',edgecolor='white',pad=0.,alpha=0.),zorder=7,fontsize=10)
@@ -784,13 +810,23 @@ def make_overview_plot(Configuration,Fits_Files,fit_type='One_Step_Convergence',
     sec_ax.set_ylim(convertskyangle(Configuration,arcmin,Configuration['DISTANCE']),convertskyangle(Configuration,arcmax,Configuration['DISTANCE']))
     sec_ax.figure.canvas.draw()
     sec_ax.set_ylabel('Z0 (kpc)',rotation=-90,va='bottom',**labelfont)
+    arcmin,arcmax = ax_Z0.get_xlim()
+    sec_ax = ax_Z0.twiny()
+    sec_ax.set_xticklabels([])
+    sec_ax.set_xlim(convertskyangle(Configuration,arcmin,Configuration['DISTANCE']),convertskyangle(Configuration,arcmax,Configuration['DISTANCE']))
+    sec_ax.figure.canvas.draw()
 
 
+# ------------------------------SBR------------------------------------
+    ax_SBR = plot_parameters(Configuration,Vars_to_plot,FAT_Model,gs[25:28,12:18],Overview,'SBR',Input_Model = Input_Model,Extra_Model = Extra_Model,debug=debug)
 
-# ------------------------------SDIS------------------------------------
-    ax_SBR = plot_parameters(Configuration,Vars_to_plot,FAT_Model,gs[24:27,12:18],Overview,'SBR',Input_Model = Input_Model,Extra_Model = Extra_Model,debug=debug)
-
-
+    plt.tick_params(
+        axis='x',          # changes apply to the x-axis
+        which='both',      # both major and minor ticks are affected
+        direction = 'in',
+        bottom=True,      # ticks along the bottom edge are off
+        top=True,         # ticks along the top edge are off
+        labeltop=False)
 
 
     plt.ylabel('SBR \n (Jy km s$^{-1}$ arcsec$^{-2}$)',**labelfont)
@@ -799,14 +835,16 @@ def make_overview_plot(Configuration,Fits_Files,fit_type='One_Step_Convergence',
     jymin,jymax = ax_SBR.get_ylim()
     sec_ax = ax_SBR.twinx()
     sec_ax.set_ylim(columndensity(Configuration,jymin*1000.,arcsquare = True)/1e20,columndensity(Configuration,jymax*1000.,arcsquare = True)/1e20)
-    sec_ax.figure.canvas.draw()
     sec_ax.set_ylabel('Col. Dens. \n (x10$^{20}$ cm$^{-2}$)',rotation=-90,va='bottom',**labelfont)
-
+    sec_ax.figure.canvas.draw()
     if Configuration['FIX_SBR'][0]:
         ax_SBR.text(1.25,0.5,'Forced Gaussian',rotation=-90, va='center',ha='left', color='black',transform = ax_SBR.transAxes,
           bbox=dict(facecolor='white',edgecolor='white',pad=0.,alpha=0.),zorder=7,fontsize=10)
-
-
+    sec_ax = ax_SBR.twiny()
+    arcmin,arcmax = ax_SBR.get_xlim()
+    sec_ax.set_xticklabels([])
+    sec_ax.set_xlim(convertskyangle(Configuration,arcmin,Configuration['DISTANCE']),convertskyangle(Configuration,arcmax,Configuration['DISTANCE']))
+    sec_ax.figure.canvas.draw()
 
 
 #----------------------------------------------Distance vs VSYS -----------------------------------------

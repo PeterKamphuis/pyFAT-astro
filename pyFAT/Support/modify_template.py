@@ -60,6 +60,28 @@ arc_tan_function.__doc__ =f'''
  NOTE:
 '''
 
+def check_angles(Configuration,Tirific_Template, debug = False):
+    incl = get_from_template(Configuration,Tirific_Template, ['INCL','INCL_2'],debug=debug)
+    print(incl)
+    print(incl[0],incl[1])
+
+    if incl[0][0] > 90. and incl[1][0] > 90.:
+        Tirific_Template['INCL'] = f"{' '.join(f'{180.-x:.2e}' for x in incl[0])}"
+        Tirific_Template['INCL_2'] = f"{' '.join(f'{180.-x:.2e}' for x in incl[1])}"
+    pa = get_from_template(Configuration,Tirific_Template, ['PA','PA_2'],debug=debug)
+    print(pa)
+    print(pa[0][0],pa[1][4])
+
+    if pa[0][0] > 360. and pa[1][0] > 360.:
+        Tirific_Template['PA'] = f"{' '.join(f'{x-360.:.2e}' for x in pa[0])}"
+        Tirific_Template['PA_2'] = f"{' '.join(f'{x-360.:.2e}' for x in pa[1])}"
+
+    if pa[0][0] < 0. and pa[1][0] < 0.:
+        Tirific_Template['PA'] = f"{' '.join(f'{360.-x:.2e}' for x in pa[0])}"
+        Tirific_Template['PA_2'] = f"{' '.join(f'{360.-x:.2e}' for x in pa[1])}"
+
+
+
 def check_flat(Configuration,profile,error,key, last_reliable_ring = -1,inner_fix = 4, debug = False):
 
 
@@ -826,6 +848,8 @@ def fix_sbr(Configuration,Tirific_Template, smooth = False, debug=False):
                 sbr[i,-2] = last
                 sbr[i,-1] = second
 
+    # and ensure that both sides the inner two rings are the same
+    sbr[:,[0,1]] = np.mean(sbr[:,[0,1]])
 
     if debug:
         print_log(f'''FIX_SBR: After modify.

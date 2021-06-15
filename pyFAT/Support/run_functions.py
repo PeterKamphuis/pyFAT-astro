@@ -20,7 +20,7 @@ from pyFAT.Support.read_functions import load_template
 
 from pyFAT.Support.modify_template import write_new_to_template,smooth_profile,set_cflux,fix_sbr, \
                                           regularise_profile,set_fitting_parameters,check_size, \
-                                          no_declining_vrot, set_new_size,set_errors,get_warp_slope
+                                          no_declining_vrot, set_new_size,set_errors,get_warp_slope,check_angles
 from pyFAT.Support.constants import H_0
 from astropy.wcs import WCS
 from astropy.io import fits
@@ -582,6 +582,7 @@ def fitting_osc(Configuration,Fits_Files,Tirific_Template,Initial_Parameters):
     if Configuration['ACCEPTED']:
         print_log(f'''FITTING_OSC: The model has converged in center and extent and we make a smoothed version.
 ''',Configuration['OUTPUTLOG'],screen =True)
+        check_angles(Configuration, Tirific_Template,debug=Configuration['DEBUG'] )
         current_run = fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run,stage = 'after_os', fit_type = 'One_Step_Convergence',debug = Configuration['DEBUG'])
         if Configuration['OPTIMIZED']:
             make_full_resolution(Configuration,Tirific_Template,Fits_Files,current_run = current_run,fit_type = 'One_Step_Convergence',debug=Configuration['DEBUG'])
@@ -825,6 +826,9 @@ def one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run, de
         if not accepted_size:
             print_log(f'''ONE_STEP_CONVERGENCE: FAT adjusted the rings. Refitting with new settings after smoothing them.
 ''',Configuration['OUTPUTLOG'])
+
+        check_angles(Configuration,Tirific_Template,debug = debug)
+
                     # First we fix the SBR we are left with also to set the reliable ring to configuration.
         fix_sbr(Configuration,Tirific_Template,debug = debug)    # Then we determine the inner rings that should remain fixed
 
@@ -885,6 +889,7 @@ def run_tirific(Configuration, current_run, stage = 'initial',fit_type = 'Undefi
     if debug:
         print_log(f'''RUN_TIRIFIC: Starting a new run in stage {stage} and fit_type {fit_type}
 ''',Configuration['OUTPUTLOG'], screen = True,debug = debug)
+
     # First move the previous fits
     rename_fit_products(Configuration,fit_type = fit_type, stage=stage, debug = debug)
     # Then if already running change restart file

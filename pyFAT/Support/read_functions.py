@@ -353,6 +353,7 @@ def extract_vrot(Configuration,map ,angle,center, debug= False):
     # We should base extracting the RC on where the profile is negative and positive to avoid mistakes in the ceneter coming through
     neg_index = np.where(maj_profile < 0.)[0]
     pos_index = np.where(maj_profile > 0.)[0]
+
     if debug:
         print_log(f'''EXTRACT_VROT: The resolution on the extracted axis
 {'':8s} resolution = {maj_resolution}
@@ -404,7 +405,7 @@ def extract_vrot(Configuration,map ,angle,center, debug= False):
         profile[np.isnan(profile)] = profile[~np.isnan(profile)][-1]
     except IndexError:
         profile = []
-    
+
     if len(profile) < 1 and len(avg_profile) > 0.:
         profile = [np.max(avg_profile)]
     return profile
@@ -536,6 +537,7 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, debug
     hdr = Image[0].header
     mom0 = copy.deepcopy(Image)
     Image.close()
+
     if not center:
         center = [hdr['NAXIS1']/2.-1,hdr['NAXIS2']/2.-1]
     Image = fits.open(f"{Configuration['FITTING_DIR']}Sofia_Output/{Fits_Files['CHANNEL_MAP']}",\
@@ -557,6 +559,7 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, debug
 ''',Configuration['OUTPUTLOG'])
     beam_check=[Configuration['BEAM_IN_PIXELS'][0],Configuration['BEAM_IN_PIXELS'][0]/2.]
     inclination_av, pa_av, maj_extent_av = get_inclination_pa(Configuration, mom0, center, cutoff = scale_factor* median_noise_in_map, debug = debug)
+
     inclination_av = [inclination_av]
     int_weight = [2.]
     pa_av = [pa_av]
@@ -610,7 +613,8 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, debug
     if debug:
         print_log(f'''GUESS_ORIENTATION:'BMAJ in pixels, center of profile, center, difference between pos and neg
 {'':8s}{Configuration['BEAM_IN_PIXELS'][0]*0.5} {center_of_profile} {center} {diff}
-''',Configuration['OUTPUTLOG'])
+''',Configuration['OUTPUTLOG'],screen=True)
+
     # if the center of the profile is more than half a beam off from the Sofia center let's see which on provides a more symmetric profile
     if (abs(center_of_profile/(2.*np.sin(np.radians(pa[0])))*maj_resolution) > Configuration['BEAM_IN_PIXELS'][0]*0.5 \
         or abs(center_of_profile/(2.*np.cos(np.radians(pa[0])))*maj_resolution) > Configuration['BEAM_IN_PIXELS'][0]*0.5) and SNR > 3.:
@@ -710,14 +714,14 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, debug
     #    print_log(f'''GUESS_ORIENTATION: We found the following initial VSYS:
 #{'':8s}vsys = {map_vsys}, at {center}
 #''',Configuration['OUTPUTLOG'])
-
-
     try:
         vel_pa = get_vel_pa(Configuration,map,center=center,debug=debug)
     except:
         vel_pa = [float('NaN'),float('NaN')]
+
     maj_profile,maj_axis,maj_resolution = get_profile(Configuration,map,pa[0], center=center,debug=debug)
     loc_max = np.mean(maj_axis[np.where(maj_profile == np.nanmax(maj_profile))[0]])
+
     if loc_max > 0.:
         pa[0] = pa[0]+180
         print_log(f'''GUESS_ORIENTATION: We have modified the pa by 180 deg as we found the maximum velocity west of the center.
@@ -732,6 +736,7 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, debug
     if debug:
         print_log(f'''GUESS_ORIENTATION: We start with vsys = {v_sys:.2f} km/s
 ''' , Configuration['OUTPUTLOG'])
+
     if v_sys == -1:
         map_vsys = np.nanmean(map[int(round(center[1]-buffer)):int(round(center[1]+buffer)),int(round(center[0]-buffer)):int(round(center[0]+buffer))])
     else:
@@ -1078,7 +1083,7 @@ def sofia_catalogue(Configuration,Fits_Files, Variables =['id','x','x_min','x_ma
 ''',Configuration['OUTPUTLOG'])
         found = False
         beam_edge=2.
-        if Configuration['VEL_SMOOTH_EXTENDED']:
+        if Configuration['VEL_SMOOTH_EXTENDED'] or Configuration['HANNING'] :
             vel_edge = 1.
             min_vel_edge = 0.
         else:
@@ -1113,14 +1118,20 @@ def sofia_catalogue(Configuration,Fits_Files, Variables =['id','x','x_min','x_ma
                         source_size=(float(many_sources[Variables.index('z_max')][i])-float(many_sources[Variables.index('z_min')][i]))* \
                                     (float(many_sources[Variables.index('y_max')][i])-float(many_sources[Variables.index('y_min')][i]))* \
                                     (float(many_sources[Variables.index('x_max')][i])-float(many_sources[Variables.index('x_min')][i]))
-
+                        #print(source_size,cube)
+                        #cube= np.array([float(Configuration['NAXES'][0]),float(Configuration['NAXES'][1]), \
+                        #        (float(many_sources[Variables.index('z_max')][i])-float(many_sources[Variables.index('z_min')][i]))])
+                        #source_size=np.array([(float(many_sources[Variables.index('z_max')][i])-float(many_sources[Variables.index('z_min')][i])), \
+                        #            (float(many_sources[Variables.index('y_max')][i])-float(many_sources[Variables.index('y_min')][i])), \
+                        #            (float(many_sources[Variables.index('x_max')][i])-float(many_sources[Variables.index('x_min')][i]))])
+                        #print(source_size,cube)
                         if source_size/cube > 0.5:
                             print_log(f'''SOFIA_CATALOGUE: We discarded a very large source, so we will restore is and try for that.
 !!!!!!!!!!!!!!!!!!!!!!!!! This means your original cube is in principle too small!!!!!!!!!!!!!!!!!!!!!!!!
-''',Configuration['OUTPUTLOG'])
+''',Configuration['OUTPUTLOG'],screen=True)
                             many_sources[Variables.index('f_sum')][i]=outlist[Variables.index('f_sum')][i]
                     if np.nansum(many_sources[Variables.index('f_sum')]) == 0.:
-                        raise BadCatalogueError("The found sources are too close to the edges of the cube. And not large enoughto warrant trying them.")
+                        raise BadCatalogueError("The found sources are too close to the edges of the cube. And not large enough to warrant trying them.")
                     else:
                         found = True
             else:
