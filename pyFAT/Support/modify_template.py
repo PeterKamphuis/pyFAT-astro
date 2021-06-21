@@ -62,15 +62,11 @@ arc_tan_function.__doc__ =f'''
 
 def check_angles(Configuration,Tirific_Template, debug = False):
     incl = get_from_template(Configuration,Tirific_Template, ['INCL','INCL_2'],debug=debug)
-    print(incl)
-    print(incl[0],incl[1])
 
     if incl[0][0] > 90. and incl[1][0] > 90.:
         Tirific_Template['INCL'] = f"{' '.join(f'{180.-x:.2e}' for x in incl[0])}"
         Tirific_Template['INCL_2'] = f"{' '.join(f'{180.-x:.2e}' for x in incl[1])}"
     pa = get_from_template(Configuration,Tirific_Template, ['PA','PA_2'],debug=debug)
-    print(pa)
-    print(pa[0][0],pa[1][4])
 
     if pa[0][0] > 360. and pa[1][0] > 360.:
         Tirific_Template['PA'] = f"{' '.join(f'{x-360.:.2e}' for x in pa[0])}"
@@ -79,14 +75,36 @@ def check_angles(Configuration,Tirific_Template, debug = False):
     if pa[0][0] < 0. and pa[1][0] < 0.:
         Tirific_Template['PA'] = f"{' '.join(f'{360.-x:.2e}' for x in pa[0])}"
         Tirific_Template['PA_2'] = f"{' '.join(f'{360.-x:.2e}' for x in pa[1])}"
+check_angles.__doc__=f'''
+ NAME:
+    check_angles
 
+ PURPOSE:
+       Check whether PA and INCLination are in the range 0-360. and < 90 in the center. If not modify all angles such that they are.
+
+ CATEGORY:
+       modify_template
+
+ INPUTS:
+    Configuration  = Standard FAT configuration
+    Tirific_Template = Standard FAT Tirific Template
+    
+ OPTIONAL INPUTS:
+    debug = False
+
+ OUTPUTS:
+    No output Tirific_Template is modified
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+      get_from_template, join
+
+ NOTE:
+'''
 
 
 def check_flat(Configuration,profile,error,key, last_reliable_ring = -1,inner_fix = 4, debug = False):
-
-
-
-
     if last_reliable_ring == -1:
         last_reliable_ring = len(profile)-1
     if debug:

@@ -299,7 +299,7 @@ def main(argv):
             Fits_Files['MOMENT2'] = f"{Configuration['BASE_NAME']}_mom2.fits"
             Fits_Files['MASK'] = f"{Configuration['BASE_NAME']}_mask.fits"
             Fits_Files['CHANNEL_MAP'] = f"{Configuration['BASE_NAME']}_chan.fits"
-            if not os.path.exists(Fits_Files['ORIGINAL_CUBE']):
+            if not os.path.exists(f"{Configuration['FITTING_DIR']}/{Fits_Files['ORIGINAL_CUBE']}"):
                 raise CatalogError(f'''We can not find the file {Fits_Files['ORIGINAL_CUBE']}. This is likely to be due to a typo in your catalog.''' )
             # run cleanup
             cf.cleanup(Configuration,Fits_Files)
