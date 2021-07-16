@@ -2,9 +2,12 @@
 # This module contains a set of functions and classes that are used in FAT to read input files
 
 from pyFAT.Support.support_functions import Proper_Dictionary,print_log,convertRADEC,set_limits, remove_inhomogeneities, \
-                                obtain_border_pix, get_inclination_pa,get_vel_pa,columndensity,get_profile, get_kinematical_center
-from pyFAT.Support.fits_functions import check_mask
+                                obtain_border_pix, get_inclination_pa,get_vel_pa,columndensity,get_profile, get_kinematical_center,\
+                                create_directory,copy_homemade_sofia,clean_header
+from pyFAT.Support.fits_functions import check_mask,clean_header
+
 from astropy.io import fits
+from astropy.wcs import WCS
 from scipy import ndimage
 import warnings
 with warnings.catch_warnings():
@@ -100,9 +103,11 @@ def check_edge_limits(xmin,xmax,ymin,ymax,zmin,zmax,Configuration,debug=False ,b
         print_log(f'''CHECK_EDGE_LIMIT: And for velocity edge =  {vel_edge}
 {'':8s} diff  = {diff}
 ''',Configuration['OUTPUTLOG'])
-    if np.where(diff <= vel_edge)[0].size:
+    if np.where(diff < vel_edge)[0].size:
+        print(f"On the edge")
         return True
     else:
+        print(f"Off the edge")
         return False
 check_edge_limits.__doc__ =f'''
  NAME:
@@ -135,210 +140,6 @@ check_edge_limits.__doc__ =f'''
 
  PROCEDURES CALLED:
     abs, np.where, np.array, print_log,
-
- NOTE:
-'''
-
-#Function to read FAT configuration file into a dictionary
-def config_file(input_parameters, start_dir, debug = False):
-    No_File = True
-    log_write_config = 'Empty'
-    while No_File:
-        try:
-            if input_parameters.configfile == 'ChecK.ConfiG':
-                from pyFAT import Installation_Check as IC
-                with import_res.open_text(IC,'FAT_INPUT.config') as tmp:
-                    tmpfile = tmp.readlines()
-            elif input_parameters.configfile == 'No Default' and input_parameters.single_cube != 'CataloguE' :   #single_cube should be set, so can not be CataloguE
-                import pyFAT
-                with import_res.open_text(pyFAT,'FAT_INPUT.config') as tmp:
-                    tmpfile = tmp.readlines()
-            else:
-                with open(input_parameters.configfile, 'r') as tmp:
-                    tmpfile = tmp.readlines()
-            No_File = False
-        except:
-            print(traceback.print_exc())
-            input_parameters.configfile = input(f'''
-                        You have provided a config file but it can't be found.
-                        If you want to provide a config file please give the correct name.
-                        Else press CTRL-C to abort.
-                ''')
-    Configuration = Proper_Dictionary({})
-    boolean_keys = ['NEW_OUTPUT', 'HANNING','FIX_INCLINATION','FIX_PA','FIX_SDIS','FIX_Z0','FIX_SBR','FIX_VROT','WARP_OUTPUT']
-    string_keys = ['OUTPUTLOG', 'OUTPUTCATALOGUE','MAINDIR','CATALOGUE']
-    integer_keys = ['STARTGALAXY','ENDGALAXY','MAPS_OUTPUT','OPT_PIXELBEAM','FINISHAFTER','FITTING_TYPE']
-    # Separate the keyword names
-    for tmp in tmpfile:
-        if tmp[0] != '#':
-        # python is really annoying with needing endlines. Let's strip them here and add them when writing
-            add_key_in = tmp.split('=', 1)
-            if len(add_key_in) > 1:
-                add_key = add_key_in[0].strip().upper()
-                if add_key in boolean_keys:
-                    invalid_input = True
-                    inp = tmp.split('=', 1)[1].strip()
-                    while invalid_input:
-                        if inp.lower() == "true" or inp.lower() == "t" or inp.lower() == "y" or inp.lower() == "yes" or inp[0] == '1':
-                            value = True
-                            invalid_input = False
-                        elif inp.lower() == "false" or inp.lower() == "f" or inp.lower() == "n" or inp.lower() == "no" or inp[0] == '0':
-                            value = False
-                            invalid_input = False
-                        else:
-                            inp = input(f"The parameter {add_key} in the configuration file  must be true/false or yes/no. Please give the correct value. \n".format(add_key))
-                    Configuration[add_key] = value
-                elif add_key in string_keys:
-                    Configuration[add_key] = tmp.split('=', 1)[1].strip()
-                elif add_key in integer_keys:
-                    Configuration[add_key] = int(tmp.split('=', 1)[1].strip())
-                else:
-                    Configuration[add_key] = float(tmp.split('=', 1)[1].strip())
-
-    #if we are checking the installation then the maindir, outputcatalogue and
-    #Log go into the original_dir+installation_check.
-    if input_parameters.installation_check:
-        if Configuration['CATALOGUE'] != f"Installation_Check/FAT_Input_Catalogue.txt" or \
-           Configuration['MAINDIR'] != f"Installation_Check/" or \
-           Configuration['OUTPUTCATALOGUE'] != f"Installation_Check/Output_N2903.txt":
-           raise BadConfigurationError(f"You can not modify the Installation Check input. It is solely for checking the Installation. Aborting")
-        test_files = ['FAT_Input_Catalogue.txt','NGC_2903.fits']
-        test_dir = f"{start_dir}/FAT_Installation_Check/"
-        if not os.path.isdir(test_dir):
-            os.mkdir(test_dir)
-        else:
-            for file in test_files:
-                try:
-                    os.remove(test_dir+file)
-                except:
-                    pass
-        my_resources = import_res.files('pyFAT.Installation_Check')
-        for file in test_files:
-            data = (my_resources / file).read_bytes()
-            with open(test_dir+file,'w+b') as tmp:
-                tmp.write(data)
-        Configuration['CATALOGUE'] = f"{test_dir}FAT_Input_Catalogue.txt"
-        Configuration['MAINDIR'] = test_dir
-        Configuration['OUTPUTCATALOGUE'] =f"{test_dir}Output_N2903.txt"
-    elif input_parameters.single_cube != 'CataloguE':
-        from pyFAT.Support.write_functions import write_config
-        file_location = input_parameters.single_cube.split('/')
-        single_dir = f"{start_dir}{'/'.join(file_location[:-1])}/"
-        Configuration['MAINDIR'] = single_dir
-        Configuration['OUTPUTCATALOGUE'] = None
-        Configuration['CATALOGUE'] = None
-        if Configuration['OUTPUTLOG'] == "Logfileforthepergalaxyfit.txt":
-            Configuration['OUTPUTLOG'] = f"Log_{os.path.splitext(file_location[-1])[0]}.txt"
-        log_write_config = write_config(f"{single_dir}FAT_INPUT_{os.path.splitext(file_location[-1])[0]}.config", Configuration,debug=debug)
-
-    #Make the input idiot safe
-    if Configuration['MAINDIR'][-1] != '/':
-        Configuration['MAINDIR'] = f"{Configuration['MAINDIR']}/"
-
-    while not os.path.isdir(Configuration['MAINDIR']):
-        Configuration['MAINDIR'] = input(f'''
-                    Your main fitting directory ({Configuration['MAINDIR']}) does not exist.
-                    Please provide the correct directory.
-                    ''')
-    if Configuration['CATALOGUE']:
-        while not os.path.exists(Configuration['CATALOGUE']):
-            Configuration['CATALOGUE'] = input(f'''
-                        Your input catalogue ({Configuration['CATALOGUE']}) does not exist.
-                        Please provide the correct file name.
-                        ''')
-    #The output catalogue only needs to be in a valid directory as we create it
-    if Configuration['OUTPUTCATALOGUE']:
-        output_catalogue_dir = Configuration['OUTPUTCATALOGUE'].split('/')
-        if len(output_catalogue_dir) > 1:
-            check_dir = '/'.join(output_catalogue_dir[:-1])
-            while not os.path.isdir(check_dir):
-                check_dir= input(f'''
-                        The directory for your output catalogue ({Configuration['OUTPUTCATALOGUE']}) does not exist.
-                        Please provide the correct directory name.
-                        ''')
-                Configuration['OUTPUTCATALOGUE'] = f"{check_dir}/{output_catalogue_dir[-1]}"
-
-
-    required_configuration_keys = ['FIX_INCLINATION','FIX_PA','FIX_SDIS','FIX_Z0','FIX_SBR','FIX_VROT','HANNING',\
-                                   'STARTGALAXY', 'ENDGALAXY', 'TESTING', 'START_POINT',\
-                                   'RING_SIZE', 'FINISHAFTER', 'CATALOGUE', 'MAINDIR',\
-                                    'OUTPUTCATALOGUE', 'OUTPUTLOG', 'NEW_OUTPUT', 'OPT_PIXELBEAM',\
-                                     'MAPS_OUTPUT','WARP_OUTPUT','FITTING_TYPE']
-
-    for key in required_configuration_keys:
-        if key not in Configuration:
-            if key == 'STARTGALAXY':
-                Configuration[key] = -1
-            elif key == 'FINISHAFTER':
-                Configuration[key] = 2
-            elif key == 'TESTING':
-                Configuration[key] = 0
-            elif key == 'START_POINT': #Previously calle allnew
-                Configuration[key] = 1
-            elif key == 'ENDGALAXY':
-                Configuration[key] = -1
-            elif key == 'NEW_OUTPUT':   # Called newresult in the gdl code
-                Configuration[key] = True
-            elif key == 'HANNING':
-                Configuration[key] = False
-            elif key == 'RING_SIZE': #Previosuly called RINGSPACING in
-                Configuration[key] = 1.1
-            elif key == 'FITTING_TYPE':
-                Configuration[key] = 'One_Step_Convergence'
-            elif key == 'FIX_INCLINATION': #Previosuly called fix_incl
-                Configuration[key] = False
-            elif key == 'FIX_PA':
-                Configuration[key] = False
-            elif key == 'FIX_SDIS':
-                Configuration[key] = False
-            elif key == 'FIX_SBR':
-                Configuration[key] = False
-            elif key == 'FIX_VROT':
-                Configuration[key] = False
-            elif key == 'FIX_Z0':
-                Configuration[key] = True
-            elif key == 'OPT_PIXELBEAM':
-                Configuration[key] = 4
-            elif key == 'MAPS_OUTPUT': # Previously called bookkeeping
-                Configuration[key] = 3
-            elif key == 'WARP_OUTPUT':
-                Configuration[key] = False
-            elif key == 'OUTPUTLOG':
-                Configuration[key] = None
-            else:
-                raise BadConfigurationError(f"Something has gone wrong reading the required config key. This should never ever happen. Please file an issue on github")
-    if Configuration['RING_SIZE'] < 0.5:
-        Configuration['RING_SIZE'] = 0.5
-    if Configuration['MAPS_OUTPUT'] == 5:
-        Configuration['MAPS_OUTPUT'] = 4
-    # We double the fix keys so we can  modify one while keeping the original as well
-    fix_keys = ['FIX_PA','FIX_INCLINATION','FIX_SDIS','FIX_Z0','FIX_SBR']
-    for key in fix_keys:
-        Configuration[key] = [Configuration[key],Configuration[key]]
-    return Configuration, log_write_config
-config_file.__doc__ =f'''
- NAME:
-    config_file
- PURPOSE:
-    Read the FAT config file and write into the a dictionary
- CATEGORY:
-    read_functions
-
- INPUTS:
-    input_parameters = input parameters for run
-    start_dir = the directory where FAT is started from
-
- OPTIONAL INPUTS:
-    debug = False
-    fit_type = 'Undefined'
-
- OUTPUTS:
-    Configuration = dictionary with the config file input
-
- OPTIONAL OUTPUTS:
-
- PROCEDURES CALLED:
-    Unspecified
 
  NOTE:
 '''
@@ -1018,13 +819,52 @@ load_tirific.__doc__ =f'''
  NOTE:
 '''
 
-
-
+def read_cube(Configuration,cube,debug=False):
+    cube_hdr = fits.getheader(f"{Configuration['FITTING_DIR']}{cube}")
+    Configuration['NOISE'] = cube_hdr['FATNOISE']
+    Configuration['CHANNEL_WIDTH'] = cube_hdr['CDELT3']/1000.
+    Configuration['PIXEL_SIZE'] = np.mean([abs(cube_hdr['CDELT1']),abs(cube_hdr['CDELT2'])])
+    Configuration['NAXES'] = [cube_hdr['NAXIS1'],cube_hdr['NAXIS2'], cube_hdr['NAXIS3']]
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        coordinate_frame = WCS(cube_hdr)
+        xlow,ylow,zlow = coordinate_frame.wcs_pix2world(1,1,1., 1.)
+        xhigh,yhigh,zhigh = coordinate_frame.wcs_pix2world(*Configuration['NAXES'], 1.)
+        Configuration['NAXES_LIMITS'] = [np.sort([xlow,xhigh]),np.sort([ylow,yhigh]),np.sort([zlow,zhigh])/1000.]
+    # We write the pixels per beam info to Configuration such that it is easily accesible
+    beamarea=(np.pi*abs(cube_hdr['BMAJ']*cube_hdr['BMIN']))/(4.*np.log(2.))
+    Configuration['BEAM_AREA'] = beamarea*3600.**2 # beamarea in arcsec
+    Configuration['BEAM_IN_PIXELS'] = [cube_hdr['BMAJ']/np.mean([abs(cube_hdr['CDELT1']),abs(cube_hdr['CDELT2'])]),\
+                                       cube_hdr['BMIN']/np.mean([abs(cube_hdr['CDELT1']),abs(cube_hdr['CDELT2'])]),\
+                                       beamarea/(abs(cube_hdr['CDELT1'])*abs(cube_hdr['CDELT2']))]
+    # Ad the major beam to configuration as we need it in many places
+    Configuration['BEAM'] = [float(cube_hdr['BMAJ']*3600.), float(cube_hdr['BMIN']*3600.),float(cube_hdr['BPA'])]
+    #Let's set some maximum errors based on the input cube
+    Configuration['MAX_ERROR'] = {'VROT': [Configuration['CHANNEL_WIDTH']*5.], \
+                                  'VSYS': [Configuration['CHANNEL_WIDTH']*1.5], \
+                                  'SBR': [Configuration['NOISE']/Configuration['BEAM_AREA']*Configuration['CHANNEL_WIDTH']*3.],\
+                                  'PA' : [15.],\
+                                  'INCL': [15.],\
+                                  'SDIS': [Configuration['CHANNEL_WIDTH']*2.5],\
+                                  'Z0' : [Configuration['BEAM'][0]],\
+                                  'XPOS': [cube_hdr['BMAJ']],\
+                                  'YPOS': [cube_hdr['BMAJ']],\
+    }
+    Configuration['MIN_ERROR'] = {'VROT': [Configuration['CHANNEL_WIDTH']*0.5], \
+                                  'VSYS': [Configuration['CHANNEL_WIDTH']*0.1], \
+                                  'SBR': [Configuration['NOISE']/Configuration['BEAM_AREA']*Configuration['CHANNEL_WIDTH']*0.3],\
+                                  'PA' : [1.],\
+                                  'INCL': [2.],\
+                                  'SDIS': [Configuration['CHANNEL_WIDTH']*0.1],\
+                                  'Z0' : [Configuration['BEAM'][0]*0.1],\
+                                  'XPOS': [cube_hdr['BMAJ']*0.1],\
+                                  'YPOS': [cube_hdr['BMAJ']*0.1],\
+                                }
 # function to read the sofia catalogue
 def sofia_catalogue(Configuration,Fits_Files, Variables =['id','x','x_min','x_max','y','y_min','y_max','z','z_min','z_max','ra',\
                     'dec','v_app','f_sum','kin_pa','w50','err_f_sum','err_x','err_y','err_z'], debug = False):
     if debug:
-        print_log(f'''SOFIA_CATLOGUE: Reading the source from the catalogue.
+        print_log(f'''SOFIA_CATALOGUE: Reading the source from the catalogue.
 ''',Configuration['OUTPUTLOG'],debug= True)
     outlist = [[] for x in Variables]
     with open(Configuration['FITTING_DIR']+'Sofia_Output/'+Configuration['BASE_NAME']+'_cat.txt') as sof_cat:
@@ -1033,7 +873,7 @@ def sofia_catalogue(Configuration,Fits_Files, Variables =['id','x','x_min','x_ma
             if line.strip() == '' or line.strip() == '#':
                 pass
             elif tmp[0] == '#' and len(tmp) > 1:
-                if tmp[1].strip().lower() == 'name':
+                if tmp[1].strip().lower() in ['name','id']:
                     # get the present columns
                     input_columns  = [x.strip() for x in tmp[1:]]
                     #determin their location in the line
@@ -1081,90 +921,99 @@ def sofia_catalogue(Configuration,Fits_Files, Variables =['id','x','x_min','x_ma
         if debug:
             print_log(f'''SOFIA_CATALOGUE: Multiple sources were found we will try to select the correct one.
 ''',Configuration['OUTPUTLOG'])
-        found = False
-        beam_edge=2.
-        if Configuration['VEL_SMOOTH_EXTENDED'] or Configuration['HANNING'] :
-            vel_edge = 1.
-            min_vel_edge = 0.
-        else:
-            vel_edge = 2.
-            min_vel_edge = 1.
-        while not found:
-            many_sources  = copy.deepcopy(outlist)
-            # We want to exclude any edge sources
-            for i in range(len(many_sources[0])):
-
-                edge = check_edge_limits(float(many_sources[Variables.index('x_min')][i]),
-                                float(many_sources[Variables.index('x_max')][i]),
-                                float(many_sources[Variables.index('y_min')][i]),
-                                float(many_sources[Variables.index('y_max')][i]),
-                                float(many_sources[Variables.index('z_min')][i]),
-                                float(many_sources[Variables.index('z_max')][i]),
-                                Configuration, debug = debug,beam_edge = beam_edge, vel_edge= vel_edge)
-                if edge:
-                    many_sources[Variables.index('f_sum')][i]=0.
-            if np.nansum(many_sources[Variables.index('f_sum')]) == 0.:
-                if beam_edge > 0.5:
-                    beam_edge = beam_edge/2.
-                elif vel_edge > min_vel_edge:
-                    vel_edge = vel_edge/2.
-                    if vel_edge < 1.:
-                        vel_edge= 0.
-                else:
-                    # if our sources are all close to the edge we check whether there is one which is more than half of the spatial size in the channels it exists
-                    for i in range(len(many_sources[0])):
-                        cube= float(Configuration['NAXES'][0])*float(Configuration['NAXES'][1])* \
-                                (float(many_sources[Variables.index('z_max')][i])-float(many_sources[Variables.index('z_min')][i]))
-                        source_size=(float(many_sources[Variables.index('z_max')][i])-float(many_sources[Variables.index('z_min')][i]))* \
-                                    (float(many_sources[Variables.index('y_max')][i])-float(many_sources[Variables.index('y_min')][i]))* \
-                                    (float(many_sources[Variables.index('x_max')][i])-float(many_sources[Variables.index('x_min')][i]))
-                        #print(source_size,cube)
-                        #cube= np.array([float(Configuration['NAXES'][0]),float(Configuration['NAXES'][1]), \
-                        #        (float(many_sources[Variables.index('z_max')][i])-float(many_sources[Variables.index('z_min')][i]))])
-                        #source_size=np.array([(float(many_sources[Variables.index('z_max')][i])-float(many_sources[Variables.index('z_min')][i])), \
-                        #            (float(many_sources[Variables.index('y_max')][i])-float(many_sources[Variables.index('y_min')][i])), \
-                        #            (float(many_sources[Variables.index('x_max')][i])-float(many_sources[Variables.index('x_min')][i]))])
-                        #print(source_size,cube)
-                        if source_size/cube > 0.5:
-                            print_log(f'''SOFIA_CATALOGUE: We discarded a very large source, so we will restore is and try for that.
-!!!!!!!!!!!!!!!!!!!!!!!!! This means your original cube is in principle too small!!!!!!!!!!!!!!!!!!!!!!!!
-''',Configuration['OUTPUTLOG'],screen=True)
-                            many_sources[Variables.index('f_sum')][i]=outlist[Variables.index('f_sum')][i]
-                    if np.nansum(many_sources[Variables.index('f_sum')]) == 0.:
-                        raise BadCatalogueError("The found sources are too close to the edges of the cube. And not large enough to warrant trying them.")
-                    else:
-                        found = True
+        if Configuration['SOFIA_RAN']:
+            found = False
+            beam_edge=2.
+            if Configuration['VEL_SMOOTH_EXTENDED'] or Configuration['HANNING_SMOOTHED'] :
+                vel_edge = 1.
+                min_vel_edge = 0.
             else:
-                found = True
-        # We need to check we are not throwing away a source that is infinitely brighter
-        fluxes = np.array(many_sources[Variables.index('f_sum')],dtype =float)
-        if np.any(fluxes == 0.):
-            no_edge_fluxes = np.array(outlist[Variables.index('f_sum')],dtype =float)
-            if np.nanmax(no_edge_fluxes) > 10.* np.nanmax(fluxes):
-                if debug:
-                    print_log(f'''SOFIA_CATALOGUE: We discarded a very bright source, let's check wether it satisfies our minimum boundaries.
-''',Configuration['OUTPUTLOG'])
-                index = np.where(np.nanmax(no_edge_fluxes) == no_edge_fluxes)[0][0]
-                edge = check_edge_limits(float(outlist[Variables.index('x_min')][index]),
-                                float(outlist[Variables.index('x_max')][index]),
-                                float(outlist[Variables.index('y_min')][index]),
-                                float(outlist[Variables.index('y_max')][index]),
-                                float(outlist[Variables.index('z_min')][index]),
-                                float(outlist[Variables.index('z_max')][index]),
-                                Configuration,debug = debug)
+                vel_edge = 2.
+                min_vel_edge = 1.
 
-                if edge:
-                    print_log(f'''SOFIA_CATALOGUE: The bright source is very close to limits
-''',Configuration['OUTPUTLOG'])
+            while not found:
+                many_sources  = copy.deepcopy(outlist)
+                # We want to exclude any edge sources
+                for i in range(len(many_sources[0])):
+
+                    edge = check_edge_limits(float(many_sources[Variables.index('x_min')][i]),
+                                    float(many_sources[Variables.index('x_max')][i]),
+                                    float(many_sources[Variables.index('y_min')][i]),
+                                    float(many_sources[Variables.index('y_max')][i]),
+                                    float(many_sources[Variables.index('z_min')][i]),
+                                    float(many_sources[Variables.index('z_max')][i]),
+                                    Configuration, debug = debug,beam_edge = beam_edge, vel_edge= vel_edge)
+                    if edge:
+                        many_sources[Variables.index('f_sum')][i]=0.
+                if np.nansum(many_sources[Variables.index('f_sum')]) == 0.:
+                    if beam_edge > 0.5:
+                        beam_edge = beam_edge/2.
+                    elif vel_edge > min_vel_edge:
+                        vel_edge = vel_edge/2.
+                        if vel_edge < 1.:
+                            vel_edge= 0.
+                    else:
+                        # if our sources are all close to the edge we check whether there is one which is more than half of the spatial size in the channels it exists
+                        for i in range(len(many_sources[0])):
+                            cube= float(Configuration['NAXES'][0])*float(Configuration['NAXES'][1])* \
+                                    (float(many_sources[Variables.index('z_max')][i])-float(many_sources[Variables.index('z_min')][i]))
+                            source_size=(float(many_sources[Variables.index('z_max')][i])-float(many_sources[Variables.index('z_min')][i]))* \
+                                        (float(many_sources[Variables.index('y_max')][i])-float(many_sources[Variables.index('y_min')][i]))* \
+                                        (float(many_sources[Variables.index('x_max')][i])-float(many_sources[Variables.index('x_min')][i]))
+                            #print(source_size,cube)
+                            #cube= np.array([float(Configuration['NAXES'][0]),float(Configuration['NAXES'][1]), \
+                            #        (float(many_sources[Variables.index('z_max')][i])-float(many_sources[Variables.index('z_min')][i]))])
+                            #source_size=np.array([(float(many_sources[Variables.index('z_max')][i])-float(many_sources[Variables.index('z_min')][i])), \
+                            #            (float(many_sources[Variables.index('y_max')][i])-float(many_sources[Variables.index('y_min')][i])), \
+                            #            (float(many_sources[Variables.index('x_max')][i])-float(many_sources[Variables.index('x_min')][i]))])
+                            #print(source_size,cube)
+                            if source_size/cube > 0.5:
+                                print_log(f'''SOFIA_CATALOGUE: We discarded a very large source, so we will restore is and try for that.
+    !!!!!!!!!!!!!!!!!!!!!!!!! This means your original cube is in principle too small!!!!!!!!!!!!!!!!!!!!!!!!
+    ''',Configuration['OUTPUTLOG'],screen=True)
+                                many_sources[Variables.index('f_sum')][i]=outlist[Variables.index('f_sum')][i]
+                        if np.nansum(many_sources[Variables.index('f_sum')]) == 0.:
+                            print_log(f'''SOFIA_CATALOGUE:The found sources are too close to the edges of the cube. And not large enough to warrant trying them.
+    {'':8s} The edge limits were {beam_edge} beams spatially and {vel_edge} channels.
+    ''',Configuration['OUTPUTLOG'],screen=True)
+                            raise BadCatalogueError("The found sources are too close to the edges of the cube. And not large enough to warrant trying them.")
+                        else:
+                            found = True
                 else:
-                    print_log(f'''SOFIA_CATALOGUE: The bright source is acceptable, restoring its flux
-''',Configuration['OUTPUTLOG'])
-                    many_sources  = copy.deepcopy(outlist)
-                    fluxes = np.array(outlist[Variables.index('f_sum')],dtype =float)
-        if debug:
-            print_log(f'''SOFIA_CATALOGUE: after checking edges we find these fluxes
+                    found = True
+            # We need to check we are not throwing away a source that is infinitely brighter
+            fluxes = np.array(many_sources[Variables.index('f_sum')],dtype =float)
+            if np.any(fluxes == 0.):
+                no_edge_fluxes = np.array(outlist[Variables.index('f_sum')],dtype =float)
+                if np.nanmax(no_edge_fluxes) > 10.* np.nanmax(fluxes):
+                    if debug:
+                        print_log(f'''SOFIA_CATALOGUE: We discarded a very bright source, let's check wether it satisfies our minimum boundaries.
+    ''',Configuration['OUTPUTLOG'])
+                    index = np.where(np.nanmax(no_edge_fluxes) == no_edge_fluxes)[0][0]
+                    edge = check_edge_limits(float(outlist[Variables.index('x_min')][index]),
+                                    float(outlist[Variables.index('x_max')][index]),
+                                    float(outlist[Variables.index('y_min')][index]),
+                                    float(outlist[Variables.index('y_max')][index]),
+                                    float(outlist[Variables.index('z_min')][index]),
+                                    float(outlist[Variables.index('z_max')][index]),
+                                    Configuration,debug = debug,vel_edge=min_vel_edge)
+
+                    if edge:
+                        print_log(f'''SOFIA_CATALOGUE: The bright source is very close to limits
+    ''',Configuration['OUTPUTLOG'])
+                    else:
+                        print_log(f'''SOFIA_CATALOGUE: The bright source is acceptable, restoring its flux
+    ''',Configuration['OUTPUTLOG'])
+                        many_sources  = copy.deepcopy(outlist)
+                        fluxes = np.array(outlist[Variables.index('f_sum')],dtype =float)
+            if debug:
+                print_log(f'''SOFIA_CATALOGUE: after checking edges we find these fluxes
 {'':8s}{many_sources[Variables.index('f_sum')]}
 ''',Configuration['OUTPUTLOG'])
+        else:
+            #If we did not run SoFia we simply assume we want to fit the brightest source in the cube
+            many_sources  = copy.deepcopy(outlist)
+            fluxes = np.array(outlist[Variables.index('f_sum')],dtype =float)
         outlist = []
         #We want the source with the most total flux.
         index = np.where(np.nanmax(fluxes) == fluxes)[0][0]
@@ -1208,6 +1057,117 @@ sofia_catalogue.__doc__ =f'''
 
  OUTPUTS:
     outlist = list with the requested values for the brightest source in the catalogue provided it is not on the edge of the cube.
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
+
+def sofia_input_catalogue(Configuration,debug=False):
+    Catalogue = Proper_Dictionary({})
+
+    Catalogue = {'ENTRIES':  ['ENTRIES','DISTANCE','NUMBER','DIRECTORYNAME','CUBENAME'],\
+                'DISTANCE': [],'DIRECTORYNAME': [],\
+                'NUMBER': [], 'CUBENAME': []}
+    basename = Configuration['CATALOGUE'].split('_cat.txt')[0]
+    Variables =['id','x','x_min','x_max','y','y_min','y_max','z','z_min','z_max','ra',\
+                    'dec','v_app','f_sum','kin_pa','w50','err_f_sum','err_x','err_y','err_z']
+    headerlines=[]
+    #Read the sofia catalogue
+    with open(Configuration['CATALOGUE']) as sof_cat:
+        for line in sof_cat.readlines():
+            tmp =line.split()
+
+            if line.strip() == '' or line.strip() == '#':
+                headerlines.append(line)
+                pass
+            elif tmp[0] == '#' and len(tmp) > 1:
+                headerlines.append(line)
+                if tmp[1].strip().lower() in ['name']:
+
+                    input_columns = [x.strip() for x in tmp[1:]]
+                    column_locations = []
+                    for col in input_columns:
+                        column_locations.append(line.find(col)+len(col))
+
+                    # check that we found all parameters
+                    for value in Variables:
+                        if value.lower() in input_columns:
+                            continue
+                        else:
+                            print_log(f'''SOFIA_CATALOGUE: We cannot find the required column for {value} in the sofia catalogue.
+{"":8s}SOFIA_CATALOGUE: This can happen because a) you have tampered with the sofiainput.txt file in the Support directory,
+{"":8s}SOFIA_CATALOGUE: b) you are using an updated version of SoFiA2 where the names have changed and FAT is not yet updated.'
+{"":8s}SOFIA_CATALOGUE:    In this case please file a bug report at https://github.com/PeterKamphuis/FAT/issues/'
+{"":8s}SOFIA_CATALOGUE: c) You are using pre processed SoFiA output of your own and do not have all the output'
+{"":8s}SOFIA_CATALOGUE:    Required output is {','.join(Variables)})
+''',Configuration['OUTPUTLOG'],screen= True)
+                            raise BadCatalogueError("SOFIA_CATALOGUE: The required columns could not be found in the sofia catalogue.")
+            else:
+
+                outlist = ['' for x in input_columns]
+                for col in input_columns:
+                    if input_columns.index(col) == 0:
+                        start = 0
+                    else:
+                        start = column_locations[input_columns.index(col)-1]
+                    end = column_locations[input_columns.index(col)]
+                    outlist[input_columns.index(col)] = line[start:end].strip()
+
+                if not os.path.exists(f"{Configuration['MAIN_DIRECTORY']}{basename}_FAT_cubelets/{basename}_{outlist[input_columns.index('id')]}"):
+                    create_directory(f"{Configuration['MAIN_DIRECTORY']}{basename}_FAT_cubelets/{basename}_{outlist[input_columns.index('id')]}",f"{Configuration['MAIN_DIRECTORY']}")
+                Cube = fits.open(f"{Configuration['MAIN_DIRECTORY']}{basename}_cubelets/{basename}_{outlist[input_columns.index('id')]}_cube.fits",uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
+                data = Cube[0].data
+                hdr = Cube[0].header
+                if hdr['NAXIS'] == 4:
+                    data = data[0,:,:,:]
+                    del hdr['NAXIS4']
+                    hdr['NAXIS'] = 3
+                # clean the header
+                hdr = clean_header(Configuration,hdr,debug=debug)
+                hdr['FATNOISE'] = np.mean([np.nanstd(data[0,:,:]),np.nanstd(data[-1,:,:])])
+                if hdr['CDELT3'] < -1:
+                    raise InputError(f"Your velocity axis is declining this won't work. exiting")
+                fits.writeto(f"{Configuration['MAIN_DIRECTORY']}{basename}_FAT_cubelets/{basename}_{outlist[input_columns.index('id')]}/{basename}_{outlist[input_columns.index('id')]}_FAT.fits",data,hdr,overwrite=True)
+                create_directory(f"{Configuration['MAIN_DIRECTORY']}{basename}_FAT_cubelets/{basename}_{outlist[input_columns.index('id')]}/Sofia_Output",f"{Configuration['MAIN_DIRECTORY']}")
+                if not Configuration['SOFIA_DIR']:
+                    Configuration['SOFIA_DIR']=f"{Configuration['MAIN_DIRECTORY']}{basename}_cubelets/"
+                Configuration['FITTING_DIR']=f"{Configuration['MAIN_DIRECTORY']}{basename}_FAT_cubelets/{basename}_{outlist[input_columns.index('id')]}/"
+                Configuration['SOFIA_BASENAME'] = f"{basename}_{outlist[input_columns.index('id')]}"
+                Configuration['BASE_NAME'] =  f"{basename}_{outlist[input_columns.index('id')]}_FAT"
+                copy_homemade_sofia(Configuration,no_cat=True,debug=False)
+                Catalogue['DISTANCE'].append(float(-1))
+                Catalogue['NUMBER'].append(f"{outlist[input_columns.index('id')]}")
+                Catalogue['DIRECTORYNAME'].append(f"{basename}_FAT_cubelets/{basename}_{outlist[input_columns.index('id')]}")
+                Catalogue['CUBENAME'].append(f"{basename}_{outlist[input_columns.index('id')]}")
+                with open(f"{Configuration['FITTING_DIR']}/Sofia_Output/{Configuration['BASE_NAME']}_cat.txt",'w') as cat:
+                    for hline in headerlines:
+                        cat.write(f"{hline}\n")
+                    cat.write(line)
+    Configuration['SOFIA_BASENAME'] = None
+    Configuration['BASE_NAME'] = 'Unset'
+    Configuration['FITTING_DIR'] = 'Unset'
+    return Catalogue
+sofia_input_catalogue.__doc__=f'''
+NAME:
+    sofia_input_catalogue
+
+ PURPOSE:
+     The input catalogue is a sofia 2 catalogue that should be arranged into directories and fitted.
+
+ CATEGORY:
+    read_functions
+
+ INPUTS:
+    filename = the name of the sofia catalogue
+
+ OPTIONAL INPUTS:
+
+ OUTPUTS:
+    catalogue = the sofia catalogue configured to work as a FAT catalogue
 
  OPTIONAL OUTPUTS:
 

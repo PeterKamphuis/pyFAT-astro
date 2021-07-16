@@ -88,7 +88,7 @@ check_angles.__doc__=f'''
  INPUTS:
     Configuration  = Standard FAT configuration
     Tirific_Template = Standard FAT Tirific Template
-    
+
  OPTIONAL INPUTS:
     debug = False
 
@@ -197,7 +197,7 @@ def check_size(Configuration,Tirific_Template, fit_type = 'Undefined', stage = '
     sbr = np.array(get_from_template(Configuration,Tirific_Template, ['SBR','SBR_2'],debug=debug),dtype = float)
     if debug:
         print_log(f'''CHECK_SIZE: This is the sizes
-{'':8s}CHECK_SIZE: SBR = {len(sbr[0])}
+{'':8s}CHECK_SIZE: SBR = {len(sbr[0])},{len(sbr[1])}
 {'':8s}CHECK_SIZE: limits = {len(sbr_ring_limits)}
 {'':8s}CHECK_SIZE: No. Rings  = {Configuration['NO_RINGS']}
 ''',Configuration['OUTPUTLOG'])
@@ -816,7 +816,7 @@ def fix_sbr(Configuration,Tirific_Template, smooth = False, debug=False):
                 print_log(f'''FIX_SBR: The values used for fitting are {fit_sbr}.
 ''',Configuration['OUTPUTLOG'])
             try:
-                if Configuration['FIX_SBR']:
+                if 'SBR' in Configuration['FIXED_PARAMETERS'][0]:
                     vals = fit_gaussian(Configuration,radii[corr_val],fit_sbr,errors=errors[i,corr_val],debug=debug)
                     gaussian = gaussian_function(radii,*vals)
                 else:
@@ -1033,7 +1033,10 @@ def get_error(Configuration,profile,sm_profile,key,min_error = [0.],singular = F
         else:
             error[i] = [np.max([x,min_error[0]]) for x in error[i]]
         if apply_max_error:
-                error[i] = [np.nanmin([x,Configuration['MAX_ERROR'][key]]) for x in error[i]]
+            if len(Configuration['MAX_ERROR'][key]) == len(error[i]):
+                error[i] = [np.nanmin([x,y]) for x,y in zip(error[i],Configuration['MAX_ERROR'][key])]
+            else:
+                error[i] = [np.nanmin([x,float(Configuration['MAX_ERROR'][key][0])]) for x in error[i]]
         if key in ['PA','INCL','Z0']:
             error[i][:Configuration['INNER_FIX'][i]+1] = [np.min(min_error) for x in error[i][:Configuration['INNER_FIX'][i]+1]]
     if singular:
@@ -1198,10 +1201,9 @@ def get_warp_slope(Configuration,Tirific_Template, debug = False):
                     counter -= 1
         elif len(final) == len(slope):
             final = 1.
-            Configuration['FIX_INCLINATION'][0] = True
-            Configuration['FIX_PA'][0] = True
-            Configuration['FIX_SDIS'][0] = True
-            Configuration['FIX_Z0'][0] = True
+            for parameter in ['INCL',"PA",'SDIS','Z0']:
+                if parameter not in Configuration['FIXED_PARAMETERS'][0]:
+                    Configuration['FIXED_PARAMETERS'][0].append(parameter)
         else:
             final = len(slope)
         if final > Configuration['LAST_RELIABLE_RINGS'][i]:
@@ -1213,7 +1215,8 @@ def get_warp_slope(Configuration,Tirific_Template, debug = False):
     Configuration['WARP_SLOPE'] = warp_slope
     incl = np.array(get_from_template(Configuration,Tirific_Template, ['INCL','INCL_2'],debug=debug),dtype = float)
     if np.mean(incl[:,:int(Configuration['NO_RINGS']/2.)]) < 35. :
-        Configuration['FIX_INCLINATION'][0] = True
+        if 'INCL' not in Configuration['FIXED_PARAMETERS'][0]:
+            Configuration['FIXED_PARAMETERS'][0].append('INCL')
 
 get_warp_slope.__doc__ =f'''
  NAME:
@@ -1940,31 +1943,30 @@ def set_fitting_parameters(Configuration, Tirific_Template, parameters_to_adjust
         if initial_estimates['INCL'][0] < 40.:
             if 'INCL' in modifiers:
                 modifiers['INCL'] = np.array(modifiers['INCL'],dtype=float)*(0.2)
-
+    
     for key in parameters_to_adjust:
         if key == 'VROT':
             fitting_settings['VROT'] = set_vrot_fitting(Configuration,stage = stage, rotation = initial_estimates['VROT'], debug = debug )
         elif key == 'SBR':
             fitting_settings['SBR'] = set_sbr_fitting(Configuration,stage = stage, systemic = initial_estimates['VSYS'][0], debug = debug)
         else:
+            if key in Configuration['FIXED_PARAMETERS'][0]:
+                fixed=True
+            else:
+                fixed =False
             if key == 'INCL':
                 brackets = [[60.,90.],[5.,50.]]
-                fixed =  Configuration['FIX_INCLINATION'][0]
             elif key == 'PA':
                 brackets = [[190.,370.],[-10,170]]
-                fixed =  Configuration['FIX_PA'][0]
             elif key == 'Z0':
-                fixed =  Configuration['FIX_Z0'][0]
                 brackets = [convertskyangle(Configuration,[0.2,2.5],Configuration['DISTANCE'], physical = True), \
                             convertskyangle(Configuration,[0.05,0.2],Configuration['DISTANCE'], physical = True)]
             elif key in ['XPOS','YPOS','VSYS']:
-                fixed = True
                 if key == 'XPOS': i = 0
                 elif key == 'YPOS': i = 1
                 elif key == 'VSYS': i = 2
                 brackets = [Configuration['NAXES_LIMITS'][i],Configuration['NAXES_LIMITS'][i]]
             elif key == 'SDIS':
-                fixed = Configuration['FIX_SDIS'][0]
                 if stage in ['initial','run_cc','after_cc','after_ec','after_os']:
                     limits = [[Configuration['CHANNEL_WIDTH'], 16.],\
                               [Configuration['CHANNEL_WIDTH']/4., 16.], \
@@ -2479,29 +2481,22 @@ def set_new_size(Configuration,Tirific_Template, Fits_Files, fit_type = 'Undefin
     #    flatten_the_curve(Configuration,Tirific_Template,debug=debug)
     # Check whether the galaxy has become to small for variations
     if Configuration['SIZE_IN_BEAMS'] > Configuration['MINIMUM_WARP_SIZE']:
-        Configuration['FIX_INCLINATION'][0] =Configuration['FIX_INCLINATION'][1]
-        Configuration['FIX_SDIS'][0] = Configuration['FIX_SDIS'][1]
-        Configuration['FIX_PA'][0] = Configuration['FIX_PA'][1]
-        Configuration['FIX_Z0'][0] = Configuration['FIX_Z0'][1]
+        Configuration['FIXED_PARAMETERS'][0] = Configuration['FIXED_PARAMETERS'][1]
     else:
-        Configuration['FIX_INCLINATION'][0] = True
-        Configuration['FIX_SDIS'][0] = True
-        Configuration['FIX_PA'][0] = True
-        Configuration['FIX_Z0'][0] = True
+        for parameter in ['INCL','Z0','SDIS','PA']:
+            if parameter not in Configuration['FIXED_PARAMETERS'][0]:
+                Configuration['FIXED_PARAMETERS'][0].append(parameter)
         flatten_the_curve(Configuration,Tirific_Template,debug=debug)
     if debug:
-        print_log(f'''Settings for the variations will be.
-{'':8s} INCLINATION: Fixed = {Configuration['FIX_INCLINATION'][0]}
-{'':8s} PA: Fixed = {Configuration['FIX_PA'][0]}
-{'':8s} SDIS: Fixed = {Configuration['FIX_SDIS'][0]}
-{'':8s} Z0: Fixed = {Configuration['FIX_Z0'][0]}
+        print_log(f'''The following parameters will be fixed'
+{'':8s} {Configuration['FIXED_PARAMETERS'][0]}
 ''',Configuration['OUTPUTLOG'])
 
     #update the limit_modifier
     Inclination = np.array([(float(x)+float(y))/2. for x,y in zip(Tirific_Template['INCL'].split(),Tirific_Template['INCL_2'].split())],dtype=float)
     set_limit_modifier(Configuration,Inclination,debug=debug)
     # Maybe increase the amount of loops in smaller galaxies
-    set_overall_parameters(Configuration, Fits_Files,Tirific_Template,loops = 10 ,fit_type=fit_type, debug=debug,stage=stage)
+    set_overall_parameters(Configuration, Fits_Files,Tirific_Template ,fit_type=fit_type, debug=debug,stage=stage)
     # if we change the radii we need to restart tirific
     finish_current_run(Configuration,current_run,debug=debug)
 set_new_size.__doc__ =f'''
@@ -2546,7 +2541,7 @@ set_new_size.__doc__ =f'''
  NOTE:
 '''
 
-def set_overall_parameters(Configuration, Fits_Files,Tirific_Template,stage = 'initial',fit_type='Undefined', loops = 0, flux = None,debug = False):
+def set_overall_parameters(Configuration, Fits_Files,Tirific_Template,stage = 'initial',fit_type='Undefined', flux = None,debug = False):
 
             if Configuration['OPTIMIZED']:
                 Tirific_Template['INSET'] = f"{Fits_Files['OPTIMIZED_CUBE']}"
@@ -2578,7 +2573,7 @@ def set_overall_parameters(Configuration, Fits_Files,Tirific_Template,stage = 'i
                 #Tirific_Template['INDINTY'] = 2
             Tirific_Template['NUR'] = f"{Configuration['NO_RINGS']}"
 
-            Tirific_Template['RESTARTNAME'] = f"Logs/restart_{fit_type}.txt"
+            Tirific_Template['RESTARTNAME'] = f"{Configuration['LOG_DIRECTORY']}restart_{fit_type}.txt"
             #this could be fancier
             '''
             if Configuration['NO_RINGS'] < 3:
@@ -2593,7 +2588,7 @@ def set_overall_parameters(Configuration, Fits_Files,Tirific_Template,stage = 'i
 
             Tirific_Template['NCORES'] = Configuration['NCPU']
 
-            Tirific_Template['LOOPS'] = f"{int(loops)}"
+            Tirific_Template['LOOPS'] = f"{Configuration['LOOPS']}"
             Tirific_Template['DISTANCE'] = f"{Configuration['DISTANCE']}"
             out_keys = ['LOGNAME','OUTSET','TIRDEF']
             out_extensions = ['log','fits','def']
@@ -2606,7 +2601,7 @@ def set_overall_parameters(Configuration, Fits_Files,Tirific_Template,stage = 'i
             Tirific_Template['BPA'] = f"{Configuration['BEAM'][2]:.2f}"
             Tirific_Template['RMS'] = f"{Configuration['NOISE']:.2e}"
 
-            if Configuration['HANNING']:
+            if Configuration['HANNING_SMOOTHED']:
                 instrumental_vres = (Configuration['CHANNEL_WIDTH']*2)/(2.*np.sqrt(2.*np.log(2)))
             else:
                 instrumental_vres = (Configuration['CHANNEL_WIDTH']*1.2)/(2.*np.sqrt(2.*np.log(2)))
@@ -2637,9 +2632,6 @@ set_overall_parameters.__doc__ =f'''
 
     fit_type='Undefined_Stage'
     type of fitting
-
-    loops = 0
-    max number of loops allowed in tirific run
 
     flux = None,
     Total flux in the model

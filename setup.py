@@ -11,6 +11,7 @@ requirements = [
     'numpy>=1.14',
     'scipy',
     'astropy',
+    'omegaconf',
     'matplotlib',
     'future-fstrings',
     'importlib_resources>=3.3.0',

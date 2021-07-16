@@ -4,14 +4,21 @@
 
 from collections import OrderedDict #used in Proper_Dictionary
 from inspect import getframeinfo,stack
+
 from scipy.optimize import curve_fit, OptimizeWarning
 from scipy import ndimage
 from astropy.wcs import WCS
 from astropy.io import fits
-
+from dataclasses import  asdict
+try:
+    import importlib.resources as import_res
+except ImportError:
+    # Try backported to PY<37 `importlib_resources`.
+    import importlib_resources as import_res
 import matplotlib.pyplot as plt
 import os
 import sys
+import inspect
 import signal
 import time
 import traceback
@@ -28,10 +35,24 @@ class FileNotFoundError(Exception):
     pass
 class TirificKillError(Exception):
     pass
-
+class InputError(Exception):
+    pass
+class ProgramError(Exception):
+    pass
 
 # A class of ordered dictionary where keys can be inserted in at specified locations or at the end.
 class Proper_Dictionary(OrderedDict):
+    def __setitem__(self, key, value):
+        if key not in self:
+            # If it is a new item we only allow it if it is not Configuration or Original_Cube or if we are in setup_configuration
+            function,variable,empty = traceback.format_stack()[-2].split('\n')
+            function = function.split()[-1].strip()
+            variable = variable.split('[')[0].strip()
+            if variable == 'Original_Configuration' or variable == 'Configuration':
+                if function != 'setup_configuration':
+                    raise ProgramError("FAT does not allow additional values to the Configuration outside the setup_configuration in support_functions.")
+        OrderedDict.__setitem__(self,key, value)
+    #    print("what habbens now")
     def insert(self, existing_key, new_key, key_value):
         done = False
         if new_key in self:
@@ -119,7 +140,217 @@ calc_rings.__doc__ =f'''
 '''
 
 
+def check_sofia(Configuration,Fits_Files,debug=False):
+    files =['_mask.fits','_mom0.fits','_mom1.fits','_chan.fits','_mom2.fits','_cat.txt']
+    for file in files:
+        if os.path.exists(f'{Configuration["FITTING_DIR"]}Sofia_Output/{Configuration["BASE_NAME"]}{file}'):
+            pass
+        else:
+            raise InputError()
 
+check_sofia.__doc__ =f'''
+ NAME:
+    check_sofia
+
+ PURPOSE:
+    Check that the sofia files are in place when no sofia stages is used
+
+ CATEGORY:
+    support_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    Fits_Files = Standard FAT dictionary with filenames
+
+ OPTIONAL INPUTS:
+    debug = False
+
+ OUTPUTS:
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
+# clean the header
+def clean_header(Configuration,hdr_in,two_dim=False,mask_file=False, debug = False):
+    hdr = copy.deepcopy(hdr_in)
+    if debug:
+        print_log(f'''CLEAN_HEADER: Starting to clean the header.
+''',Configuration['OUTPUTLOG'],debug=True)
+    keywords = ['CDELT','CUNIT','CRPIX','CRVAL','CTYPE']
+    for key in keywords:
+        try:
+            del hdr[f'{key}4']
+        except:
+            pass
+    if not two_dim:
+        hdr['NAXIS'] = 3
+        if not 'CUNIT3' in hdr:
+            if hdr['CDELT3'] > 500:
+                hdr['CUNIT3'] = 'm/s'
+            else:
+                hdr['CUNIT3'] = 'km/s'
+            print_log(f'''CLEAN_HEADER: Your header did not have a unit for the third axis, that is bad policy.
+    {"":8s} We have set it to {hdr['CUNIT3']}. Please ensure that is correct.'
+    ''',Configuration['OUTPUTLOG'])
+        if hdr['CUNIT3'].upper() == 'HZ' or hdr['CTYPE3'].upper() == 'FREQ':
+            print_log('CLEAN_HEADER: FREQUENCY IS NOT A SUPPORTED VELOCITY AXIS.', Configuration['OUTPUTLOG'],screen=True)
+            raise BadHeaderError('The Cube has frequency as a velocity axis this is not supported')
+
+        vel_types = ['VELO-HEL','VELO-LSR','VELO', 'VELOCITY']
+        if hdr['CTYPE3'].upper() not in vel_types:
+            if hdr['CTYPE3'].split('-')[0].upper() in ['RA','DEC']:
+                print_log(f'''CLEAN_HEADER: Your zaxis is a spatial axis not a velocity axis.
+    {"":8s}CLEAN_HEADER: Please arrange your cube logically
+    ''',Configuration['OUTPUTLOG'],screen=True)
+                raise BadHeaderError("The Cube's third axis is not a velocity axis")
+            hdr['CTYPE3'] = 'VELO'
+            print_log(f'''CLEAN_HEADER: Your velocity projection is not standard. The keyword is changed to VELO (relativistic definition). This might be dangerous.
+    ''',Configuration['OUTPUTLOG'])
+
+        if hdr['CUNIT3'].lower() == 'km/s':
+            print_log( f'''CLEAN_HEADER: The channels in your input cube are in km/s. This sometimes leads to problems with wcs lib, hence we change it to m/s.'
+    ''',Configuration['OUTPUTLOG'])
+            hdr['CUNIT3'] = 'm/s'
+            hdr['CDELT3'] = hdr['CDELT3']*1000.
+            hdr['CRVAL3'] = hdr['CRVAL3']*1000.
+        #because astropy is truly stupid
+
+        if hdr['CUNIT3'] == 'M/S':
+            hdr['CUNIT3'] = 'm/s'
+
+    if not 'EPOCH' in hdr:
+        if 'EQUINOX' in hdr:
+            print_log(f'''CLEAN_HEADER: Your cube has no EPOCH keyword but we found EQUINOX.
+{"":8s}We have set EPOCH to {hdr['EQUINOX']}
+''',Configuration['OUTPUTLOG'])
+            hdr['EPOCH'] = hdr['EQUINOX']
+            del hdr['EQUINOX']
+        else:
+            print_log(f'''CLEAN_HEADER: Your cube has no EPOCH keyword
+{"":8s}CLEAN_HEADER: We assumed J2000
+''',Configuration['OUTPUTLOG'])
+            hdr['EPOCH'] = 2000.
+
+
+
+    if f'PC01_01' in hdr:
+        del hdr['PC0*_0*']
+
+
+    # Check for the beam
+    if not 'BMAJ' in hdr and not mask_file:
+        if 'BMMAJ' in hdr:
+            hdr['BMAJ']= hdr['BMMAJ']/3600.
+        else:
+            found = False
+            for line in hdr['HISTORY']:
+                tmp = [x.strip().upper() for x in line.split()]
+                if 'BMAJ=' in tmp:
+                    hdr['BMAJ'] = tmp[tmp.index('BMAJ=') + 1]
+                    found = True
+                if 'BMIN=' in tmp:
+                    hdr['BMIN'] = tmp[tmp.index('BMIN=') + 1]
+                if 'BPA=' in tmp:
+                    hdr['BPA'] = tmp[tmp.index('BPA=') + 1]
+                if found:
+                    break
+            if not found:
+                print_log(f'''CLEAN_HEADER: WE CANNOT FIND THE MAJOR AXIS FWHM IN THE HEADER
+''',Configuration['OUTPUTLOG'],screen=True)
+                raise BadHeaderError("The Cube has no major axis FWHM in the header.")
+    if not 'CTYPE1' in hdr or not 'CTYPE2' in hdr:
+        print_log(f'''CLEAN_HEADER: Your spatial axes have no ctype. this can lead to errors.
+''',Configuration['OUTPUTLOG'],screen=True)
+        raise BadHeaderError("The Cube header has no ctypes.")
+
+    if hdr['CTYPE1'].split('-')[0].upper() in ['DEC']:
+        print_log(f'''CLEAN_HEADER: !!!!!!!!!!Your declination is in the first axis. !!!!!!!!!!!!!!!!!
+{"":8s}CLEAN_HEADER: !!!!!!!!!!         This will not work.          !!!!!!!!!!!!!!!!
+''',Configuration['OUTPUTLOG'],screen = True)
+        raise BadHeaderError("Your spatial axes are reversed")
+    if hdr['CTYPE2'].split('-')[0].upper() in ['RA']:
+        print_log( f'''CLEAN_HEADER: !!!!!!!!!!Your right ascension is on the second axis. !!!!!!!!!!!!!!!!!
+{"":8s}CLEAN_HEADER: !!!!!!!!!!         This will not work.          !!!!!!!!!!!!!!!!
+''',Configuration['OUTPUTLOG'],screen = True)
+        raise BadHeaderError("Your spatial axes are reversed")
+    if hdr['CRVAL1'] < 0.:
+        print_log(f'''CLEAN_HEADER: your RA crval is negative, this can lead to errors. Adding 360. deg
+''',Configuration['OUTPUTLOG'])
+        hdr['CRVAL1'] = hdr['CRVAL1']+360.
+    if not 'BMIN' in hdr and not mask_file:
+        if 'BMMIN' in hdr:
+            hdr['BMIN']= hdr['BMMIN']/3600.
+        else:
+            print_log(f'''CLEAN_HEADER: We cannot find the minor axis FWHM. Assuming a circular beam.
+''',Configuration['OUTPUTLOG'])
+            hdr['BMIN'] = hdr['BMAJ']
+    if not 'BPA' in hdr and not mask_file:
+            print_log(f'''CLEAN_HEADER: We cannot find the Beam PA assuming it to be 0
+''',Configuration['OUTPUTLOG'])
+            hdr['BPA'] = 0.
+
+    try:
+        if len(hdr['HISTORY']) > 10:
+            del hdr['HISTORY']
+            print_log( f'''CLEAN_HEADER: Your cube has a significant history attached we are removing it for easier interpretation.
+''',Configuration['OUTPUTLOG'])
+    except KeyError:
+        pass
+    try:
+        if abs(hdr['BMAJ']/hdr['CDELT1']) < 2:
+            print_log( f'''CLEAN_HEADER: !!!!!!!!!!Your cube has less than two pixels per beam major axis.!!!!!!!!!!!!!!!!!
+    {"":8s}CLEAN_HEADER: !!!!!!!!!!           This will lead to bad results.              !!!!!!!!!!!!!!!!'
+    ''',Configuration['OUTPUTLOG'])
+
+        if abs(hdr['BMAJ']/hdr['CDELT1']) > hdr['NAXIS1']:
+            print_log( f'''CLEAN_HEADER: !!!!!!!!!!Your cube is smaller than the beam major axis. !!!!!!!!!!!!!!!!!
+    {"":8s}CLEAN_HEADER: !!!!!!!!!!         This will not work.          !!!!!!!!!!!!!!!!
+    ''',Configuration['OUTPUTLOG'])
+            raise BadHeaderError("Your cube is too small for your beam")
+    except KeyError:
+        pass
+    #Make sure the header is WCS compatible
+    if not mask_file:
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                check_wcs = WCS(hdr)
+        except:
+            raise BadHeaderError("The header of your cube contains keywords that confuse astropy. Please make your header astropy WCS compatible")
+
+    return hdr
+clean_header.__doc__ =f'''
+ NAME:
+    clean_header
+
+ PURPOSE:
+    Clean up the cube header and make sure it has all the right
+    variables that we require in the process of fitting
+
+ CATEGORY:
+    supprot_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    hdr = header to be cleaned
+
+ OPTIONAL INPUTS:
+    debug = False
+
+ OUTPUTS:
+    the updated header
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
 
 def columndensity(Configuration,levels,systemic = 100.,beam=[-1.,-1.],channel_width=-1.,column= False,arcsquare=False,solar_mass_input =False,solar_mass_output=False, debug = False):
 
@@ -455,6 +686,129 @@ convertskyangle.__doc__ =f'''
     converted value or values
 
  OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
+
+
+def copy_homemade_sofia(Configuration,no_cat=False,debug=False):
+    create_directory('Sofia_Output',Configuration['FITTING_DIR'])
+    files =['_mask.fits','_mom0.fits','_mom1.fits','_chan.fits','_mom2.fits']
+    if not no_cat:
+        files.append('_cat.txt')
+    for file in files:
+        os.system(f'''cp {Configuration['SOFIA_DIR']}{Configuration['SOFIA_BASENAME']}{file} {Configuration['FITTING_DIR']}Sofia_Output/{Configuration['BASE_NAME']}{file}''')
+        if not os.path.exists(f"{Configuration['FITTING_DIR']}Sofia_Output/{Configuration['BASE_NAME']+file}"):
+            if file in ['_mask.fits','_cat.txt']:
+                print_log(f'''COPY_HOMEMADE_SOFIA: Something went wrong copying the file  {Configuration['SOFIA_DIR']}{Configuration['SOFIA_BASENAME']+file}
+{'':8s} to the file {Configuration['FITTING_DIR']}Sofia_Output/{Configuration['BASE_NAME']+file}.
+{'':8s}We are aborting this fit as we cannot make it without Sofia input.
+''',Configuration['OUTPUTLOG'],screen=True,debug=debug )
+                raise SofiaMissingError("Either the sofia mask or catalogue is missing. We can not run without it")
+            else:
+                pass
+        elif file != '_cat.txt':
+            #make sure the header is decent
+            two_dim = True
+            mask_file=False
+            if file == '_mask.fits':
+                two_dim = False
+                mask_file = True
+            initial = fits.open(f"{Configuration['FITTING_DIR']}Sofia_Output/{Configuration['BASE_NAME']}{file}")
+            hdr_in = initial[0].header
+            data=initial[0].data
+            initial.close()
+            two_dim = True
+            hdr = clean_header(Configuration,hdr_in,two_dim=two_dim,mask_file=mask_file,debug=debug)
+            update = False
+            for key in hdr:
+                try:
+                    if hdr[key] != hdr_in[key]:
+                        update =True
+                except:
+                    update = True
+            if file == '_mom0.fits':
+                if hdr['BUNIT'].strip().lower() == 'jy/beam*m/s':
+                    update = True
+                    hdr['BUNIT'] = 'Jy/beam*km/s'
+                    data = data/1000.
+            if file in ['_mom1.fits','_mom2.fits'] :
+                if hdr['BUNIT'].strip().lower() == 'm/s':
+                    update = True
+                    hdr['BUNIT'] = 'km/s'
+                    data = data/1000.
+            if update:
+                 fits.writeto(f"{Configuration['FITTING_DIR']}Sofia_Output/{Configuration['BASE_NAME']}{file}",data,hdr,overwrite=True)
+
+copy_homemade_sofia.__doc__ =f'''
+ NAME:
+    copy_homemade_sofia
+
+ PURPOSE:
+    Copy user provided Sofia files to the FAT specified directory such that the original are a) kept in place, b) Never modified.
+
+ CATEGORY:
+    clean_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+
+
+ OPTIONAL INPUTS:
+    debug = False
+    check = False
+    if set to true FAT merely checks for the existings of the sofia files where they expect them
+ OUTPUTS:
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
+
+
+def create_directory(directory,base_directory,debug=False):
+    split_directory = [x for x in directory.split('/') if x]
+    split_directory_clean = [x for x in directory.split('/') if x]
+    split_base = [x for x in base_directory.split('/') if x]
+    #First remove the base from the directory but only if the first directories are the same
+    if split_directory[0] == split_base[0]:
+        for dirs,dirs2 in zip(split_base,split_directory):
+            if dirs == dirs2:
+                split_directory_clean.remove(dirs2)
+            else:
+                if dirs != split_base[-1]:
+                    raise InputError(f"You are not arranging the directory input properly ({directory},{base_directory}).")
+    for new_dir in split_directory_clean:
+        if not os.path.isdir(f"{base_directory}/{new_dir}"):
+            os.mkdir(f"{base_directory}/{new_dir}")
+        base_directory = f"{base_directory}/{new_dir}"
+create_directory.__doc__ =f'''
+ NAME:
+    create_directory
+
+ PURPOSE:
+    create a directory recursively if it does not exists and strip leading directories when the same fro the base directory and directory to create
+
+ CATEGORY:
+    support_functions
+
+ INPUTS:
+    directory = string with directory to be created
+    base_directory = string with directory that exists and from where to start the check from
+
+ OPTIONAL INPUTS:
+    debug = False
+
+ OUTPUTS:
+
+ OPTIONAL OUTPUTS:
+    The requested directory is created but only if it does not yet exist
 
  PROCEDURES CALLED:
     Unspecified
@@ -809,7 +1163,6 @@ def get_inclination_pa(Configuration, Image, center, cutoff = 0., debug = False)
         plt.plot(angles,sin_ratios)
         plt.show()
         '''
-
         ratios=sin_ratios
         if debug:
             if i == 0:
@@ -1011,6 +1364,46 @@ PROCEDURES CALLED:
 NOTE:
 
 '''
+def find_program(name,search):
+    found = False
+    while not found:
+        try:
+            run = subprocess.Popen([name], stdout = subprocess.PIPE, stderr = subprocess.PIPE)
+            run.stdout.close()
+            run.stderr.close()
+            os.kill(run.pid, signal.SIGKILL)
+            found = True
+        except:
+            name = input(f'''You have indicated to use {name} for using {search} but it cannot be found.
+Please provide the correct name : ''')
+    return name
+
+find_program.__doc__ =f'''
+ NAME:
+    find_program
+
+ PURPOSE:
+    check whether a program is available for use.
+
+ CATEGORY:
+    support_functions
+
+ INPUTS:
+    name = command name of the program to run
+    search = Program we are looking for
+ OPTIONAL INPUTS:
+
+ OUTPUTS:
+    the correct command for running the program
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
+
 # Function to get the amount of inner rings to fix
 def get_inner_fix(Configuration,Tirific_Template, debug =False):
     if debug:
@@ -1370,42 +1763,6 @@ get_vel_pa.__doc__ =f'''
 
  OUTPUTS:
     mean and standard deviation of the pa from minimum value to center, maximum to center and minimum to maximum
-
- OPTIONAL OUTPUTS:
-
- PROCEDURES CALLED:
-    Unspecified
-
- NOTE:
-'''
-
-def is_available(name):
-    try:
-        run = subprocess.Popen([name], stdout = subprocess.PIPE, stderr = subprocess.PIPE)
-        run.stdout.close()
-        run.stderr.close()
-        os.kill(run.pid, signal.SIGKILL)
-        return True
-    except:
-        return False
-
-is_available.__doc__ =f'''
- NAME:
-    is_available
-
- PURPOSE:
-    check whether a program is available for use.
-
- CATEGORY:
-    write_functions
-
- INPUTS:
-    name = name of the program to run
-
- OPTIONAL INPUTS:
-
- OUTPUTS:
-    Boolean which is False upon error and True with a succesful call
 
  OPTIONAL OUTPUTS:
 
@@ -1836,10 +2193,10 @@ def rename_fit_products(Configuration,stage = 'initial', fit_type='Undefined',de
         else:
             if filetype == 'def':
                 if stage in ['run_ec','run_os','run_cc']:
-                    Loopnr = f"Iteration_{Configuration['LOOPS']-1}"
+                    Loopnr = f"Iteration_{Configuration['ITERATIONS']-1}"
                 elif stage in ['after_cc','after_ec','after_os'] :
-                    Loopnr = f"Iteration_{Configuration['LOOPS']}"
-                elif fit_type == 'One_Step_Convergence' and stage in ['final_os']:
+                    Loopnr = f"Iteration_{Configuration['ITERATIONS']}"
+                elif fit_type == Configuration['USED_FITTING'] and stage in ['final_os']:
                     Loopnr = f"Smoothed_1"
                 else:
                     Loopnr = 'Output_before_'+stage
@@ -1917,6 +2274,225 @@ rotateImage.__doc__ =f'''
 
  NOTE:
 '''
+
+#Function to read FAT configuration file into a dictionary
+def setup_configuration(cfg):
+    if cfg.installation_check:
+        cfg.fitting.fixed_parameters=['INCL','PA','SDIS']
+        cfg.advanced.max_iterations= 1
+        cfg.advanced.loops= 1
+        cfg.input.main_directory= f'{cfg.input.main_directory}/FAT_Installation_Check/'
+        cfg.output.output_quantity = 0
+        cfg.fitting.fitting_stages = ['Create_FAT_Cube','Run_Sofia','Fit_Tirific_OSC']
+        cfg.cube_name = 'NGC_2903.fits'
+        test_files = ['NGC_2903.fits','ModelInput.def']
+        if not os.path.isdir(cfg.input.main_directory):
+            os.mkdir(cfg.input.main_directory)
+        else:
+            for file in test_files:
+                try:
+                    os.remove(test_dir+file)
+                except:
+                    pass
+        my_resources = import_res.files('pyFAT.Installation_Check')
+        for file in test_files:
+            data = (my_resources / file).read_bytes()
+            with open(cfg.input.main_directory+file,'w+b') as tmp:
+                tmp.write(data)
+    if cfg.cube_name:
+        cfg.input.catalogue = None
+
+
+    Configuration = Proper_Dictionary({})
+
+    for key in cfg._content:
+        input_key = getattr(cfg,key)
+        if str(type(input_key)) == 'omegaconf.dictconfig.DictConfig':
+            for sub_key in input_key._content:
+                if str(key) == 'output' and str(sub_key) == 'catalogue':
+                    Configuration['OUTPUT_CATALOGUE'] =  getattr(input_key,sub_key)
+                elif str(key) == 'fitting' and str(sub_key) == 'fixed_parameters':
+                    value = getattr(input_key,sub_key)
+                    for req_key in ['Z0','XPOS','YPOS','VSYS']:
+                        if req_key not in value:
+                            value.append(req_key)
+                    Configuration[str(sub_key).upper()] =  [value,value]
+                else:
+                    Configuration[str(sub_key).upper()] =  getattr(input_key,sub_key)
+        else:
+            Configuration[str(key).upper()] = input_key
+
+    # None cfg additions, that is additions that should be reset for every galaxy
+
+    boolean_keys = ['OPTIMIZED', # Are we fitting an optimized cube
+                'TIRIFIC_RUNNING', # Is there a tirific initialized
+                'OUTER_RINGS_DOUBLED', #Do the outer rings have twice the size of the inner rings
+                'NEW_RING_SIZE',  #Have we update the size of the ring while not yet updating the template
+                'VEL_SMOOTH_EXTENDED', # Is the velocity smoothing extended ????
+                'EXCLUDE_CENTRAL', # Do we exclude the central part of the fitting due to blanks/an absorption source
+                'ACCEPTED',
+                'SOFIA_RAN', #Check if we have ran Sofia
+                'NO_RADEC'
+                ]
+#
+    for key in boolean_keys:
+        Configuration[key] = False
+
+    other_keys={'ID_NR': 'Unset', # ID of the galaxy in the catalogue , set from the catalogue at start of loop
+               'SUB_DIR': 'Unset', # Name of the directory in which galaxy resides, set from the catalogue at start of loop
+               'FITTING_DIR': 'Unset', # Full path of the directory in which the fitting takes place, set at start of loop
+               'BASE_NAME': 'Unset', #Basename for FAT products, typically {input_cube}_FAT, set at start of loop
+               'LOG_DIR': 'Unset', #Directory to put log files from run, set at start of loop
+
+               'PREP_END_TIME': 'Not completed',
+               'START_TIME':'Not completed',
+               'END_TIME':'Not completed',
+               'OUTPUTLOG':'Not set yet',
+               'RUN_COUNTER': 0,
+               'ITERATIONS': 0,
+               'CURRENT_STAGE': 'initial', #Current stage of the fitting process, set at switiching stages
+               'USED_FITTING': None,
+               'TIRIFIC_PID': 'Not Initialized', #Process ID of tirific that is running
+               'FINAL_COMMENT': "This fitting stopped with an unregistered exit.",
+
+               'MAX_SIZE_IN_BEAMS': 30, # The galaxy is not allowed to extend beyond this number of beams in radius, set in check_source
+               'MIN_SIZE_IN_BEAMS': 0., # Minimum allowed radius in number of beams of the galaxy, set in check_source
+               'SIZE_IN_BEAMS': 0, # The radius of the galaxy in number of beams, adapted after running Sofia
+               'NO_RINGS': 0., # The number of rings in the fit,
+               'LAST_RELIABLE_RINGS': [0.,0.], # Location of the rings where the SBR drops below the cutoff limits, adapted after every run. Should only be modified in check_size
+               'LIMIT_MODIFIER': [1.], #Modifier for the cutoff limits based on the inclination , adapted after every run.
+               'OLD_RINGS': [], # List to keep track of the ring sizes that have been fitted.
+
+               'NO_POINTSOURCES': 0. , # Number of point sources, set in run_tirific
+
+               'INNER_FIX': [4.,4.], #Number of rings that are fixed in the inner part for the INCL and PA, , adapted after every run in get_inner_fix in support_functions and for both sides
+               'WARP_SLOPE': [0.,0.], #Ring numbers from which outwards the warping should be fitted as a slope, set in get_warp_slope in modify_template
+               'OUTER_SLOPE_START': 1, # Ring number from where the RC is fitted as a slope
+               'RC_UNRELIABLE': 1, # Ring number from where the RC values are set flat. Should only be set in check_size
+
+               'NOISE': 0. , #Noise of the input cube in Jy/beam, set in read_cube
+               'BEAM_IN_PIXELS': [0.,0.,0.], #FWHM BMAJ, BMIN in pixels and total number of pixels in beam area, set in main
+               'BEAM': [0.,0.,0.], #  FWHM BMAJ, BMIN in arcsec and BPA, set in main
+               'BEAM_AREA': 0., #BEAM_AREA in arcsec set in main
+               'NAXES': [0.,0.,0.], #  Size of the cube in pixels x,y,z arranged like sane people not python, set in main
+               'NAXES_LIMITS': [[0.,0.],[0.,0.],[0.,0.]], #  Size of the cube in degree and km/s,  x,y,z arranged like sane people not python, set in main updated in cut_cubes
+               'MAX_ERROR': {}, #The maximum allowed errors for the parameters, set in main derived from cube
+               'MIN_ERROR': {}, #The minumum allowed errors for the parameters, initially set in check_source but can be modified through out INCL,PA,SDSIS,Z0 errors change when the parameters is fixed or release
+               'CHANNEL_WIDTH': 0., #Width of the channel in the cube in km/s, set in main derived from cube
+               'PIXEL_SIZE': 0., #'Size of the pixels in degree'
+               }
+    #####!!!!!!!!!!!!!!!!!!!!!!!!!!!! The use of min_error is not full implemented yet!!!!!!!!!!!!!!!!!!!!!!!!!
+    for key in other_keys:
+        Configuration[key] = other_keys[key]
+
+# The parameters that need boundary limits are set here
+    boundary_limit_keys = ['PA','INCL', 'SDIS', 'Z0','VSYS','XPOS','YPOS']
+    for key in boundary_limit_keys:
+        Configuration[f"{key}_CURRENT_BOUNDARY"] = [[0.,0.],[0.,0.],[0.,0.]]
+
+
+
+    #Make the input idiot safe
+    if Configuration['MAIN_DIRECTORY'][-1] != '/':
+        Configuration['MAIN_DIRECTORY'] = f"{Configuration['MAIN_DIRECTORY']}/"
+
+    while not os.path.isdir(Configuration['MAIN_DIRECTORY']):
+        Configuration['MAIN_DIRECTORY'] = input(f'''
+Your main fitting directory ({Configuration['MAIN_DIRECTORY']}) does not exist.
+Please provide the correct directory.
+:  ''')
+    if Configuration['CATALOGUE']:
+        while not os.path.exists(Configuration['CATALOGUE']):
+            Configuration['CATALOGUE'] = input(f'''
+Your input catalogue ({Configuration['CATALOGUE']}) does not exist.
+Please provide the correct file name.
+: ''')
+    #Make sure there is only one Fit_ stage
+
+    # Make sure all selected stages exist
+    possible_stages = ['Fit_Tirific_OSC','Create_FAT_Cube','Run_Sofia','Existing_Sofia','Sofia_Catalogue']
+    possible_stages_l = [x.lower() for x in possible_stages]
+    approved_stages = []
+    fit_count = 0
+    for stage in Configuration['FITTING_STAGES']:
+        while stage.lower() not in possible_stages_l:
+            stage = input(f'''
+    The stage {stage} is not supported by FAT.
+    Please pick one of the following {', '.join(possible_stages)}.
+    : ''')
+
+        if 'fit_' in stage.lower():
+            fit_count += 1
+            if fit_count == 1:
+                Configuration['USED_FITTING'] = possible_stages[possible_stages_l.index(stage.lower())]
+
+        if fit_count > 1 and 'fit_' in stage.lower():
+            print(f''' FAT only supports one single fitting stage. You have already selected one and hence {stage} will be ignored.
+    ''')
+        else:
+            approved_stages.append(stage.lower())
+
+    Configuration['FITTING_STAGES'] =approved_stages
+    if 'sofia_catalogue' in Configuration['FITTING_STAGES'] and 'existing_sofia' in Configuration['FITTING_STAGES']:
+        Configuration['FITTING_STAGES'].remove('existing_sofia')
+    if ('sofia_catalogue' in Configuration['FITTING_STAGES'] or 'existing_sofia' in Configuration['FITTING_STAGES']) and 'run_sofia' in Configuration['FITTING_STAGES']:
+        Configuration['FITTING_STAGES'].remove('run_sofia')
+    if 'sofia_catalogue' in Configuration['FITTING_STAGES'] and 'create_fat_cube' in Configuration['FITTING_STAGES']:
+        Configuration['FITTING_STAGES'].remove('create_fat_cube')
+
+    if 'run_sofia' in Configuration['FITTING_STAGES'] and 'existing_sofia' in Configuration['FITTING_STAGES']:
+        raise InputError(f"You are both providing existing sofia input and ask for sofia to be ran. This won't work exiting.")
+
+
+
+    #The output catalogue only needs to be in a valid directory as we create it
+    if Configuration['OUTPUT_CATALOGUE']:
+        output_catalogue_dir = Configuration['OUTPUT_CATALOGUE'].split('/')
+        if len(output_catalogue_dir) > 1:
+            check_dir = '/'.join(output_catalogue_dir[:-1])
+            while not os.path.isdir(check_dir):
+                check_dir= input(f'''
+                        The directory for your output catalogue ({Configuration['OUTPUT_CATALOGUE']}) does not exist.
+                        Please provide the correct directory name.
+                        ''')
+                Configuration['OUTPUT_CATALOGUE'] = f"{check_dir}/{output_catalogue_dir[-1]}"
+
+
+    if Configuration['RING_SIZE'] < 0.5:
+        Configuration['RING_SIZE'] = 0.5
+    if Configuration['OUTPUT_QUANTITY'] == 5:
+        Configuration['OUTPUT_QUANTITY'] = 4
+
+    return Configuration
+setup_configuration.__doc__ =f'''
+ NAME:
+    setup_configuration
+
+ PURPOSE:
+    Read the FAT config file and write into a dictionary
+
+ CATEGORY:
+    support_functions
+
+ INPUTS:
+    cfg = OmegaConf input object
+
+ OPTIONAL INPUTS:
+    debug = False
+    fit_type = 'Undefined'
+
+ OUTPUTS:
+    Configuration = dictionary with the config file input
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE: Only this function can add entries to Original_Configuration or Configuration
+'''
+
+
 
 def sbr_limits(Configuration, systemic= 100. , debug = False):
     radii = set_rings(Configuration,debug=debug)
@@ -2297,7 +2873,7 @@ def sofia_output_exists(Configuration,Fits_Files, debug = False):
     if debug:
         print_log(f'''SOFIA_OUTPUT_EXISTS: Starting check
 ''', Configuration['OUTPUTLOG'],debug = True)
-    req_files= ['MOMENT1','MOMENT0','MOMENT2','MASK']
+    req_files= ['MOMENT1','MOMENT0','MASK']
     for file in req_files:
         if os.path.exists(Configuration['FITTING_DIR']+'Sofia_Output/'+Fits_Files[file]):
             continue
@@ -2306,8 +2882,8 @@ def sofia_output_exists(Configuration,Fits_Files, debug = False):
             print_log(log_statement, Configuration['OUTPUTLOG'],screen =True)
             raise FileNotFoundError(log_statement)
 
-    if not os.path.exists(Configuration['FITTING_DIR']+'Sofia_Output/'+Configuration['BASE_NAME']+'_cat.txt'):
-        log_statement = f"SOFIA_OUTPUT_EXISTS: The file {Configuration['FITTING_DIR']+'Sofia_Output/'+Configuration['BASE_NAME']+'_cat.txt'} is not found."
+    if not os.path.exists(Configuration['FITTING_DIR']+'Sofia_Output/'+Configuration['SOFIA_BASENAME']+'_cat.txt'):
+        log_statement = f"SOFIA_OUTPUT_EXISTS: The file {Configuration['FITTING_DIR']+'Sofia_Output/'+Configuration['SOFIA_BASENAME']+'_cat.txt'} is not found."
         print_log(log_statement, Configuration['OUTPUTLOG'],screen =True)
         raise FileNotFoundError(log_statement)
 

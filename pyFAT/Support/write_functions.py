@@ -145,7 +145,7 @@ def initialize_def_file(Configuration, Fits_Files,Tirific_Template,Initial_Param
 
         if 'VSYS' in Initial_Parameters:
             Initial_Parameters['VSYS'] = [x/1000. for x in Initial_Parameters['VSYS']]
-        set_overall_parameters(Configuration, Fits_Files,Tirific_Template,loops=10,fit_type=fit_type, flux = Initial_Parameters['FLUX'][0], debug=debug)
+        set_overall_parameters(Configuration, Fits_Files,Tirific_Template,fit_type=fit_type, flux = Initial_Parameters['FLUX'][0], debug=debug)
         # Then set the values for the various parameters of the model
 
         set_model_parameters(Configuration, Tirific_Template,Initial_Parameters, debug=debug)
@@ -156,12 +156,12 @@ def initialize_def_file(Configuration, Fits_Files,Tirific_Template,Initial_Param
                                 initial_estimates = Initial_Parameters, debug=debug)
         if 'VSYS' in Initial_Parameters:
             Initial_Parameters['VSYS'] = [x*1000. for x in Initial_Parameters['VSYS']]
-    elif fit_type in ['Extent_Convergence','One_Step_Convergence']:
-        if 'VSYS' in Initial_Parameters and fit_type == 'One_Step_Convergence':
+    elif fit_type in ['Extent_Convergence','Fit_Tirific_OSC']:
+        if 'VSYS' in Initial_Parameters and fit_type == 'Fit_Tirific_OSC':
             Initial_Parameters['VSYS'] = [x/1000. for x in Initial_Parameters['VSYS']]
-        set_overall_parameters(Configuration, Fits_Files,Tirific_Template,loops = 10 ,fit_type=fit_type, debug=debug,stage='initialize_ec')
+        set_overall_parameters(Configuration, Fits_Files,Tirific_Template ,fit_type=fit_type, debug=debug,stage='initialize_ec')
         Vars_to_Set =  ['XPOS','YPOS','VSYS','VROT','INCL','PA','SDIS','SBR','SBR_2','Z0']
-        if fit_type == 'One_Step_Convergence':
+        if fit_type == 'Fit_Tirific_OSC':
             set_model_parameters(Configuration, Tirific_Template,Initial_Parameters,stage='initialize_def_file', debug=debug)
         FAT_Model = load_template(Configuration,Tirific_Template,Variables= Vars_to_Set,unpack=False, debug=debug)
 
@@ -216,24 +216,11 @@ initialize_def_file.__doc__ =f'''
  NOTE:
 '''
 
-def make_overview_plot(Configuration,Fits_Files,fit_type='One_Step_Convergence', debug = False):
+def make_overview_plot(Configuration,Fits_Files, debug = False):
+    fit_type = Configuration['USED_FITTING']
     if debug:
         print_log(f'''MAKE_OVERVIEW_PLOT: We are starting the overview plot.
 ''',Configuration['OUTPUTLOG'],debug =True )
-    if os.path.exists(f"{Configuration['FITTING_DIR']}Overview.png"):
-        if os.path.exists(f"{Configuration['FITTING_DIR']}Overview_Prev.png"):
-            if debug:
-                print_log(f'''MAKE_OVERVIEW_PLOT: Removing an old Overview_Prev
-''',Configuration['OUTPUTLOG'])
-            os.remove(f"{Configuration['FITTING_DIR']}Overview_Prev.png")
-        if debug:
-            print_log(f'''MAKE_OVERVIEW_PLOT: Moving an old Overview
-''',Configuration['OUTPUTLOG'])
-        os.rename( f"{Configuration['FITTING_DIR']}Overview.png",f"{Configuration['FITTING_DIR']}Overview_Prev.png")
-    else:
-        if debug:
-            print_log(f'''MAKE_OVERVIEW_PLOT: No Old overview found in {Configuration['FITTING_DIR']}Overview.png
-''',Configuration['OUTPUTLOG'])
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
@@ -253,7 +240,7 @@ def make_overview_plot(Configuration,Fits_Files,fit_type='One_Step_Convergence',
                     'INCL_2_ERR','PA','PA_ERR','PA_2','PA_2_ERR','SDIS','SDIS_ERR','SDIS_2','SDIS_2_ERR','SBR',
                     'SBR_2','Z0','Z0_2','Z0_ERR','Z0_2_ERR']
     FAT_Model = load_tirific(Configuration,f"{Configuration['FITTING_DIR']}Finalmodel/Finalmodel.def",Variables= Vars_to_plot,unpack=False,debug=debug)
-    Extra_Model_File = f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}_Iteration_{Configuration['LOOPS']}.def"
+    Extra_Model_File = f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}_Iteration_{Configuration['ITERATIONS']}.def"
 
     if os.path.exists(Extra_Model_File):
         Extra_Model = load_tirific(Configuration,Extra_Model_File,Variables= Vars_to_plot,unpack=False,debug=debug)
@@ -326,7 +313,7 @@ def make_overview_plot(Configuration,Fits_Files,fit_type='One_Step_Convergence',
     median_noise_in_map = np.sqrt(np.nanmedian(channels_map[0].data[channels_map[0].data > 0.]))*Configuration['NOISE']*Configuration['CHANNEL_WIDTH']
     mindism0 = median_noise_in_map
     mindism0 = median_noise_in_map
-    #print("We find this {} as the minimum of the moment0 map".format(mindism0))
+    #"We find this {} as the minimum of the moment0 map".format(mindism0))
     if mindism0 < 0.:
         mindism0  =abs(mindism0)*2.
     if mindism0 == 0:
@@ -736,7 +723,7 @@ def make_overview_plot(Configuration,Fits_Files,fit_type='One_Step_Convergence',
         bottom=True,      # ticks along the bottom edge are off
         top=True,         # ticks along the top edge are off
         labelbottom=False)
-    if Configuration['FIX_INCLINATION'][0]:
+    if 'INCL' in Configuration['FIXED_PARAMETERS'][0]:
         ax_INCL.text(1.01,0.5,'Forced Flat', rotation =-90,va='center',ha='left', color='black',transform = ax_INCL.transAxes,
           bbox=dict(facecolor='white',edgecolor='white',pad=0.,alpha=0.),zorder=7,fontsize=10)
     plt.ylabel('Incl ($^{\circ}$)',**labelfont)
@@ -756,7 +743,7 @@ def make_overview_plot(Configuration,Fits_Files,fit_type='One_Step_Convergence',
         bottom=True,      # ticks along the bottom edge are off
         top=True,         # ticks along the top edge are off
         labelbottom=True)
-    if Configuration['FIX_PA'][0]:
+    if 'PA' in Configuration['FIXED_PARAMETERS'][0]:
         ax_PA.text(1.01,0.5,'Forced Flat', va='center',ha='left', color='black',rotation = -90, transform = ax_PA.transAxes,
           bbox=dict(facecolor='white',edgecolor='white',pad=0.,alpha=0.),zorder=7,fontsize=10)
     plt.xlabel('Radius (arcsec)',**labelfont)
@@ -777,7 +764,7 @@ def make_overview_plot(Configuration,Fits_Files,fit_type='One_Step_Convergence',
         top=True,         # ticks along the top edge are off
         labelbottom=False,
         labeltop= True)
-    if Configuration['FIX_SDIS'][0]:
+    if 'SDIS' in Configuration['FIXED_PARAMETERS'][0]:
         ax_SDIS.text(1.01,0.5,'Forced Flat',rotation=-90, va='center',ha='left', color='black',transform = ax_SDIS.transAxes,
           bbox=dict(facecolor='white',edgecolor='white',pad=0.,alpha=0.),zorder=7,fontsize=10)
 
@@ -801,7 +788,7 @@ def make_overview_plot(Configuration,Fits_Files,fit_type='One_Step_Convergence',
         top=True,         # ticks along the top edge are off
         labelbottom=False,
         labeltop=False)
-    if Configuration['FIX_Z0'][0]:
+    if 'Z0' in Configuration['FIXED_PARAMETERS'][0]:
         ax_Z0.text(1.25,0.5,'Forced Flat',rotation=-90, va='center',ha='left', color='black',transform = ax_Z0.transAxes,
           bbox=dict(facecolor='white',edgecolor='white',pad=0.,alpha=0.),zorder=7,fontsize=10)
     plt.ylabel('Z0 (arcsec)',**labelfont)
@@ -837,7 +824,7 @@ def make_overview_plot(Configuration,Fits_Files,fit_type='One_Step_Convergence',
     sec_ax.set_ylim(columndensity(Configuration,jymin*1000.,arcsquare = True)/1e20,columndensity(Configuration,jymax*1000.,arcsquare = True)/1e20)
     sec_ax.set_ylabel('Col. Dens. \n (x10$^{20}$ cm$^{-2}$)',rotation=-90,va='bottom',**labelfont)
     sec_ax.figure.canvas.draw()
-    if Configuration['FIX_SBR'][0]:
+    if 'SBR' in Configuration['FIXED_PARAMETERS'][0]:
         ax_SBR.text(1.25,0.5,'Forced Gaussian',rotation=-90, va='center',ha='left', color='black',transform = ax_SBR.transAxes,
           bbox=dict(facecolor='white',edgecolor='white',pad=0.,alpha=0.),zorder=7,fontsize=10)
     sec_ax = ax_SBR.twiny()
@@ -1028,15 +1015,7 @@ plot_parameters.__doc__ =f'''
 '''
 
 def plot_usage_stats(Configuration,debug = False):
-
-    if os.path.exists(f"{Configuration['FITTING_DIR']}Logs/ram_cpu.pdf"):
-        if os.path.exists(f"{Configuration['FITTING_DIR']}Logs/ram_cpu_prev.pdf"):
-            os.remove(f"{Configuration['FITTING_DIR']}Logs/ram_cpu_prev.pdf")
-        os.rename( f"{Configuration['FITTING_DIR']}Logs/ram_cpu.pdf",f"{Configuration['FITTING_DIR']}Logs/ram_cpu_prev.pdf")
-
-
-
-    with open(f"{Configuration['FITTING_DIR']}Logs/Usage_Statistics.txt") as file:
+    with open(f"{Configuration['LOG_DIRECTORY']}Usage_Statistics.txt") as file:
         lines = file.readlines()
     labels = []
     label_times = []
@@ -1148,7 +1127,7 @@ def plot_usage_stats(Configuration,debug = False):
             prev_label = label
         #This is beyond stupid again, but hey it is python so needed to make things work.
         ax2.set_ylim([ax2miny,ax2maxy])
-        fig.savefig(f"{Configuration['FITTING_DIR']}Logs/ram_cpu.pdf")
+        fig.savefig(f"{Configuration['LOG_DIRECTORY']}ram_cpu.pdf")
         plt.close()
 
 plot_usage_stats.__doc__ =f'''
@@ -1222,7 +1201,6 @@ def tirific(Configuration,Tirific_Template, name = 'tirific.def', debug = False)
                 file.write('\n')
             else:
                 file.write((f"{key}= {Tirific_Template[key]} \n"))
-
 tirific.__doc__ =f'''
  NAME:
     tirific
@@ -1256,18 +1234,13 @@ tirific.__doc__ =f'''
 
 def write_config(file,Configuration,debug = False):
     if debug:
-        if Configuration['OUTPUTLOG'].find('Logs') == -1:
-            log_write_config = f'''{linenumber(debug=debug)}WRITE_CONFIG: writing the configuration to {file}'''
-        else:
-            print_log(f'''WRITE_CONFIG: writing the configuration to {file}
+        print_log(f'''WRITE_CONFIG: writing the configuration to {file}
 ''',Configuration['OUTPUTLOG'], screen = True)
-            log_write_config = 'Empty'
-
     # Separate the keyword names
     with open(file,'w') as tmp:
         for key in Configuration:
             tmp.write(f'{key} = {Configuration[key]} \n')
-    return log_write_config
+
 write_config.__doc__ =f'''
  NAME:
     write_config

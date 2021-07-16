@@ -334,6 +334,209 @@ check_inclination.__doc__ =f'''
 
  NOTE: This should efinitely be further explored.
 '''
+#Function to read FAT configuration file into a dictionary
+def config_file(input_parameters, start_dir, debug = False):
+    No_File = True
+    log_write_config = 'Empty'
+    while No_File:
+        try:
+            if input_parameters.configfile == 'ChecK.ConfiG':
+                from pyFAT import Installation_Check as IC
+                with import_res.open_text(IC,'FAT_INPUT.config') as tmp:
+                    tmpfile = tmp.readlines()
+            elif input_parameters.configfile == 'No Default' and input_parameters.single_cube != 'CataloguE' :   #single_cube should be set, so can not be CataloguE
+                import pyFAT
+                with import_res.open_text(pyFAT,'FAT_INPUT.config') as tmp:
+                    tmpfile = tmp.readlines()
+            else:
+                with open(input_parameters.configfile, 'r') as tmp:
+                    tmpfile = tmp.readlines()
+            No_File = False
+        except:
+            print(traceback.print_exc())
+            input_parameters.configfile = input(f'''
+                        You have provided a config file but it can't be found.
+                        If you want to provide a config file please give the correct name.
+                        Else press CTRL-C to abort.
+                ''')
+    Configuration = Proper_Dictionary({})
+    boolean_keys = ['NEW_OUTPUT', 'HANNING','FIX_INCLINATION','FIX_PA','FIX_SDIS','FIX_Z0','FIX_SBR','FIX_VROT','WARP_OUTPUT']
+    string_keys = ['OUTPUTLOG', 'OUTPUTCATALOGUE','MAINDIR','CATALOGUE']
+    integer_keys = ['STARTGALAXY','ENDGALAXY','MAPS_OUTPUT','OPT_PIXELBEAM','FINISHAFTER','FITTING_TYPE']
+    # Separate the keyword names
+    for tmp in tmpfile:
+        if tmp[0] != '#':
+        # python is really annoying with needing endlines. Let's strip them here and add them when writing
+            add_key_in = tmp.split('=', 1)
+            if len(add_key_in) > 1:
+                add_key = add_key_in[0].strip().upper()
+                if add_key in boolean_keys:
+                    invalid_input = True
+                    inp = tmp.split('=', 1)[1].strip()
+                    while invalid_input:
+                        if inp.lower() == "true" or inp.lower() == "t" or inp.lower() == "y" or inp.lower() == "yes" or inp[0] == '1':
+                            value = True
+                            invalid_input = False
+                        elif inp.lower() == "false" or inp.lower() == "f" or inp.lower() == "n" or inp.lower() == "no" or inp[0] == '0':
+                            value = False
+                            invalid_input = False
+                        else:
+                            inp = input(f"The parameter {add_key} in the configuration file  must be true/false or yes/no. Please give the correct value. \n".format(add_key))
+                    Configuration[add_key] = value
+                elif add_key in string_keys:
+                    Configuration[add_key] = tmp.split('=', 1)[1].strip()
+                elif add_key in integer_keys:
+                    Configuration[add_key] = int(tmp.split('=', 1)[1].strip())
+                else:
+                    Configuration[add_key] = float(tmp.split('=', 1)[1].strip())
+
+    #if we are checking the installation then the maindir, outputcatalogue and
+    #Log go into the original_dir+installation_check.
+    if input_parameters.installation_check:
+        if Configuration['CATALOGUE'] != f"Installation_Check/FAT_Input_Catalogue.txt" or \
+           Configuration['MAIN_DIRECTORY'] != f"Installation_Check/" or \
+           Configuration['OUTPUTCATALOGUE'] != f"Installation_Check/Output_N2903.txt":
+           raise BadConfigurationError(f"You can not modify the Installation Check input. It is solely for checking the Installation. Aborting")
+        test_files = ['FAT_Input_Catalogue.txt','NGC_2903.fits']
+        test_dir = f"{start_dir}/FAT_Installation_Check/"
+        if not os.path.isdir(test_dir):
+            os.mkdir(test_dir)
+        else:
+            for file in test_files:
+                try:
+                    os.remove(test_dir+file)
+                except:
+                    pass
+        my_resources = import_res.files('pyFAT.Installation_Check')
+        for file in test_files:
+            data = (my_resources / file).read_bytes()
+            with open(test_dir+file,'w+b') as tmp:
+                tmp.write(data)
+        Configuration['CATALOGUE'] = f"{test_dir}FAT_Input_Catalogue.txt"
+        Configuration['MAIN_DIRECTORY'] = test_dir
+        Configuration['OUTPUTCATALOGUE'] =f"{test_dir}Output_N2903.txt"
+    elif input_parameters.single_cube != 'CataloguE':
+        from pyFAT.Support.write_functions import write_config
+        file_location = input_parameters.single_cube.split('/')
+        single_dir = f"{start_dir}{'/'.join(file_location[:-1])}/"
+        Configuration['MAIN_DIRECTORY'] = single_dir
+        Configuration['OUTPUTCATALOGUE'] = None
+        Configuration['CATALOGUE'] = None
+        if Configuration['OUTPUTLOG'] == "Logfileforthepergalaxyfit.txt":
+            Configuration['OUTPUTLOG'] = f"Log_{os.path.splitext(file_location[-1])[0]}.txt"
+        log_write_config = write_config(f"{single_dir}FAT_INPUT_{os.path.splitext(file_location[-1])[0]}.config", Configuration,debug=debug)
+
+    #Make the input idiot safe
+    if Configuration['MAIN_DIRECTORY'][-1] != '/':
+        Configuration['MAIN_DIRECTORY'] = f"{Configuration['MAIN_DIRECTORY']}/"
+
+    while not os.path.isdir(Configuration['MAIN_DIRECTORY']):
+        Configuration['MAIN_DIRECTORY'] = input(f'''
+                    Your main fitting directory ({Configuration['MAIN_DIRECTORY']}) does not exist.
+                    Please provide the correct directory.
+                    ''')
+    if Configuration['CATALOGUE']:
+        while not os.path.exists(Configuration['CATALOGUE']):
+            Configuration['CATALOGUE'] = input(f'''
+                        Your input catalogue ({Configuration['CATALOGUE']}) does not exist.
+                        Please provide the correct file name.
+                        ''')
+    #The output catalogue only needs to be in a valid directory as we create it
+    if Configuration['OUTPUTCATALOGUE']:
+        output_catalogue_dir = Configuration['OUTPUTCATALOGUE'].split('/')
+        if len(output_catalogue_dir) > 1:
+            check_dir = '/'.join(output_catalogue_dir[:-1])
+            while not os.path.isdir(check_dir):
+                check_dir= input(f'''
+                        The directory for your output catalogue ({Configuration['OUTPUTCATALOGUE']}) does not exist.
+                        Please provide the correct directory name.
+                        ''')
+                Configuration['OUTPUTCATALOGUE'] = f"{check_dir}/{output_catalogue_dir[-1]}"
+
+
+    required_configuration_keys = ['FIX_INCLINATION','FIX_PA','FIX_SDIS','FIX_Z0','FIX_SBR','FIX_VROT','HANNING',\
+                                   'STARTGALAXY', 'ENDGALAXY', 'TESTING', 'START_POINT',\
+                                   'RING_SIZE', 'FINISHAFTER', 'CATALOGUE', 'MAINDIR',\
+                                    'OUTPUTCATALOGUE', 'OUTPUTLOG', 'NEW_OUTPUT', 'OPT_PIXELBEAM',\
+                                     'MAPS_OUTPUT','WARP_OUTPUT','FITTING_TYPE']
+
+    for key in required_configuration_keys:
+        if key not in Configuration:
+            if key == 'STARTGALAXY':
+                Configuration[key] = -1
+            elif key == 'FINISHAFTER':
+                Configuration[key] = 2
+            elif key == 'TESTING':
+                Configuration[key] = 0
+            elif key == 'START_POINT': #Previously calle allnew
+                Configuration[key] = 1
+            elif key == 'ENDGALAXY':
+                Configuration[key] = -1
+            elif key == 'NEW_OUTPUT':   # Called newresult in the gdl code
+                Configuration[key] = True
+            elif key == 'HANNING':
+                Configuration[key] = False
+            elif key == 'RING_SIZE': #Previosuly called RINGSPACING in
+                Configuration[key] = 1.1
+            elif key == 'FITTING_TYPE':
+                Configuration[key] = 'Fit_Tirific_OSC'
+            elif key == 'FIX_INCLINATION': #Previosuly called fix_incl
+                Configuration[key] = False
+            elif key == 'FIX_PA':
+                Configuration[key] = False
+            elif key == 'FIX_SDIS':
+                Configuration[key] = False
+            elif key == 'FIX_SBR':
+                Configuration[key] = False
+            elif key == 'FIX_VROT':
+                Configuration[key] = False
+            elif key == 'FIX_Z0':
+                Configuration[key] = True
+            elif key == 'OPT_PIXELBEAM':
+                Configuration[key] = 4
+            elif key == 'MAPS_OUTPUT': # Previously called bookkeeping
+                Configuration[key] = 3
+            elif key == 'WARP_OUTPUT':
+                Configuration[key] = False
+            elif key == 'OUTPUTLOG':
+                Configuration[key] = None
+            else:
+                raise BadConfigurationError(f"Something has gone wrong reading the required config key. This should never ever happen. Please file an issue on github")
+    if Configuration['RING_SIZE'] < 0.5:
+        Configuration['RING_SIZE'] = 0.5
+    if Configuration['OUTPUT_QUANTITY'] == 5:
+        Configuration['OUTPUT_QUANTITY'] = 4
+    # We double the fix keys so we can  modify one while keeping the original as well
+    fix_keys = ['FIX_PA','FIX_INCLINATION','FIX_SDIS','FIX_Z0','FIX_SBR']
+    for key in fix_keys:
+        Configuration[key] = [Configuration[key],Configuration[key]]
+    return Configuration, log_write_config
+config_file.__doc__ =f'''
+ NAME:
+    config_file
+ PURPOSE:
+    Read the FAT config file and write into the a dictionary
+ CATEGORY:
+    read_functions
+
+ INPUTS:
+    input_parameters = input parameters for run
+    start_dir = the directory where FAT is started from
+
+ OPTIONAL INPUTS:
+    debug = False
+    fit_type = 'Undefined'
+
+ OUTPUTS:
+    Configuration = dictionary with the config file input
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
 
 
 

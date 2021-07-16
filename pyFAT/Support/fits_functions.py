@@ -2,7 +2,7 @@
 # This module contains a set of functions and classes that are used in several different Python scripts in the Database.
 from astropy.io import fits
 from astropy.wcs import WCS
-from pyFAT.Support.support_functions import linenumber,print_log,set_limits
+from pyFAT.Support.support_functions import linenumber,print_log,set_limits,clean_header
 from pyFAT.Support.read_functions import obtain_border_pix
 from scipy import ndimage
 import numpy as np
@@ -45,7 +45,8 @@ def check_mask(Configuration,id,Fits_Files,debug=False):
     mask[0].header['BITPIX'] = -32
     fits.writeto(f"{Configuration['FITTING_DIR']}/Sofia_Output/{Configuration['BASE_NAME']}_chan.fits",chan_map,header=mask[0].header,overwrite = True)
     mask.close()
-    make_moments(Configuration, Fits_Files,fit_type='Generic_Initialize',vel_unit = 'm/s',debug=debug)
+    if Configuration['SOFIA_RAN']:
+        make_moments(Configuration, Fits_Files,fit_type='Generic_Initialize',vel_unit = 'm/s',debug=debug)
 check_mask.__doc__ =f'''
  NAME:
     check_mask
@@ -80,165 +81,7 @@ check_mask.__doc__ =f'''
 '''
 
 
-# clean the header
-def clean_header(Configuration,hdr, debug = False):
-    if debug:
-        print_log(f'''CLEAN_HEADER: Starting to clean the header.
-''',Configuration['OUTPUTLOG'],debug=True)
-    keywords = ['CDELT','CUNIT','CRPIX','CRVAL','CTYPE']
-    for key in keywords:
-        try:
-            del hdr[f'{key}4']
-        except:
-            pass
-    hdr['NAXIS'] = 3
-    if not 'EPOCH' in hdr:
-        if 'EQUINOX' in hdr:
-            print_log(f'''CLEAN_HEADER: Your cube has no EPOCH keyword but we found EQUINOX.
-{"":8s}We have set EPOCH to {hdr['EQUINOX']}
-''',Configuration['OUTPUTLOG'])
-            hdr['EPOCH'] = hdr['EQUINOX']
-            del hdr['EQUINOX']
-        else:
-            print_log(f'''CLEAN_HEADER: Your cube has no EPOCH keyword
-{"":8s}CLEAN_HEADER: We assumed J2000
-''',Configuration['OUTPUTLOG'])
-            hdr['EPOCH'] = 2000.
 
-
-    if not 'CUNIT3' in hdr:
-        if hdr['CDELT3'] > 500:
-            hdr['CUNIT3'] = 'm/s'
-        else:
-            hdr['CUNIT3'] = 'km/s'
-        print_log(f'''CLEAN_HEADER: Your header did not have a unit for the third axis, that is bad policy.
-{"":8s} We have set it to {hdr['CUNIT3']}. Please ensure that is correct.'
-''',Configuration['OUTPUTLOG'])
-
-    if hdr['CUNIT3'].upper() == 'HZ' or hdr['CTYPE3'].upper() == 'FREQ':
-        print_log('CLEAN_HEADER: FREQUENCY IS NOT A SUPPORTED VELOCITY AXIS.', Configuration['OUTPUTLOG'],screen=True)
-        raise BadHeaderError('The Cube has frequency as a velocity axis this is not supported')
-
-    vel_types = ['VELO-HEL','VELO-LSR','VELO', 'VELOCITY']
-    if hdr['CTYPE3'].upper() not in vel_types:
-        if hdr['CTYPE3'].split('-')[0].upper() in ['RA','DEC']:
-            print_log(f'''CLEAN_HEADER: Your zaxis is a spatial axis not a velocity axis.
-{"":8s}CLEAN_HEADER: Please arrange your cube logically
-''',Configuration['OUTPUTLOG'],screen=True)
-            raise BadHeaderError("The Cube's third axis is not a velocity axis")
-        hdr['CTYPE3'] = 'VELO'
-        print_log(f'''CLEAN_HEADER: Your velocity projection is not standard. The keyword is changed to VELO (relativistic definition). This might be dangerous.
-''',Configuration['OUTPUTLOG'])
-
-    if hdr['CUNIT3'].lower() == 'km/s':
-        print_log( f'''CLEAN_HEADER: The channels in your input cube are in km/s. This sometimes leads to problems with wcs lib, hence we change it to m/s.'
-''',Configuration['OUTPUTLOG'])
-        hdr['CUNIT3'] = 'm/s'
-        hdr['CDELT3'] = hdr['CDELT3']*1000.
-        hdr['CRVAL3'] = hdr['CRVAL3']*1000.
-    #because astropy is truly stupid
-
-    if hdr['CUNIT3'] == 'M/S':
-        hdr['CUNIT3'] = 'm/s'
-    # Check for the beam
-    if not 'BMAJ' in hdr:
-        if 'BMMAJ' in hdr:
-            hdr['BMAJ']= hdr['BMMAJ']/3600.
-        else:
-            found = False
-            for line in hdr['HISTORY']:
-                tmp = [x.strip().upper() for x in line.split()]
-                if 'BMAJ=' in tmp:
-                    hdr['BMAJ'] = tmp[tmp.index('BMAJ=') + 1]
-                    found = True
-                if 'BMIN=' in tmp:
-                    hdr['BMIN'] = tmp[tmp.index('BMIN=') + 1]
-                if 'BPA=' in tmp:
-                    hdr['BPA'] = tmp[tmp.index('BPA=') + 1]
-                if found:
-                    break
-            if not found:
-                print_log(f'''CLEAN_HEADER: WE CANNOT FIND THE MAJOR AXIS FWHM IN THE HEADER
-''',Configuration['OUTPUTLOG'],screen=True)
-                raise BadHeaderError("The Cube has no major axis FWHM in the header.")
-    if not 'CTYPE1' in hdr or not 'CTYPE2' in hdr:
-        print_log(f'''CLEAN_HEADER: Your spatial axes have no ctype. this can lead to errors.
-''',Configuration['OUTPUTLOG'],screen=True)
-        raise BadHeaderError("The Cube header has no ctypes.")
-
-    if hdr['CTYPE1'].split('-')[0].upper() in ['DEC']:
-        print_log(f'''CLEAN_HEADER: !!!!!!!!!!Your declination is in the first axis. !!!!!!!!!!!!!!!!!
-{"":8s}CLEAN_HEADER: !!!!!!!!!!         This will not work.          !!!!!!!!!!!!!!!!
-''',Configuration['OUTPUTLOG'],screen = True)
-        raise BadHeaderError("Your spatial axes are reversed")
-    if hdr['CTYPE2'].split('-')[0].upper() in ['RA']:
-        print_log( f'''CLEAN_HEADER: !!!!!!!!!!Your right ascension is on the second axis. !!!!!!!!!!!!!!!!!
-{"":8s}CLEAN_HEADER: !!!!!!!!!!         This will not work.          !!!!!!!!!!!!!!!!
-''',Configuration['OUTPUTLOG'],screen = True)
-        raise BadHeaderError("Your spatial axes are reversed")
-    if hdr['CRVAL1'] < 0.:
-        print_log(f'''CLEAN_HEADER: your RA crval is negative, this can lead to errors. Adding 360. deg
-''',Configuration['OUTPUTLOG'])
-        hdr['CRVAL1'] = hdr['CRVAL1']+360.
-    if not 'BMIN' in hdr:
-        if 'BMMIN' in hdr:
-            hdr['BMIN']= hdr['BMMIN']/3600.
-        else:
-            print_log(f'''CLEAN_HEADER: We cannot find the minor axis FWHM. Assuming a circular beam.
-''',Configuration['OUTPUTLOG'])
-            hdr['BMIN'] = hdr['BMAJ']
-    if not 'BPA' in hdr:
-            print_log(f'''CLEAN_HEADER: We cannot find the Beam PA assuming it to be 0
-''',Configuration['OUTPUTLOG'])
-            hdr['BPA'] = 0.
-
-    try:
-        if len(hdr['HISTORY']) > 10:
-            del hdr['HISTORY']
-            print_log( f'''CLEAN_HEADER: Your cube has a significant history attached we are removing it for easier interpretation.
-''',Configuration['OUTPUTLOG'])
-    except KeyError:
-        pass
-
-    if abs(hdr['BMAJ']/hdr['CDELT1']) < 2:
-        print_log( f'''CLEAN_HEADER: !!!!!!!!!!Your cube has less than two pixels per beam major axis.!!!!!!!!!!!!!!!!!
-{"":8s}CLEAN_HEADER: !!!!!!!!!!           This will lead to bad results.              !!!!!!!!!!!!!!!!'
-''',Configuration['OUTPUTLOG'])
-
-    if abs(hdr['BMAJ']/hdr['CDELT1']) > hdr['NAXIS1']:
-        print_log( f'''CLEAN_HEADER: !!!!!!!!!!Your cube is smaller than the beam major axis. !!!!!!!!!!!!!!!!!
-{"":8s}CLEAN_HEADER: !!!!!!!!!!         This will not work.          !!!!!!!!!!!!!!!!
-''',Configuration['OUTPUTLOG'])
-        raise BadHeaderError("Your cube is too small for your beam")
-    return hdr
-clean_header.__doc__ =f'''
- NAME:
-    clean_header
-
- PURPOSE:
-    Clean up the cube header and make sure it has all the right
-    variables that we require in the process of fitting
-
- CATEGORY:
-    fits_functions
-
- INPUTS:
-    Configuration = Standard FAT configuration
-    hdr = header to be cleaned
-
- OPTIONAL INPUTS:
-    debug = False
-
- OUTPUTS:
-    the updated header
-
- OPTIONAL OUTPUTS:
-
- PROCEDURES CALLED:
-    Unspecified
-
- NOTE:
-'''
 
 # Create a cube suitable for FAT
 def create_fat_cube(Configuration, Fits_Files, debug = False):
@@ -297,7 +140,7 @@ create_fat_cube.__doc__ =f'''
 
 def cut_cubes(Configuration, Fits_Files, galaxy_box, debug = False):
 
-    cube_edge= [5.,3.*round(Configuration['BEAM_IN_PIXELS'][0]),3.*round(Configuration['BEAM_IN_PIXELS'][0])]
+    cube_edge= [6.,5.*round(Configuration['BEAM_IN_PIXELS'][0]),5.*round(Configuration['BEAM_IN_PIXELS'][0])]
     cube_size= []
     new_cube = []
     for i in [2,1,0]:
@@ -314,7 +157,7 @@ def cut_cubes(Configuration, Fits_Files, galaxy_box, debug = False):
             new_cube[i,1] = limit[1]+int(cube_edge[i])
 
 
-    if cut and Configuration['START_POINT'] < 2:
+    if cut:
         files_to_cut = [Fits_Files['FITTING_CUBE'],'Sofia_Output/'+Fits_Files['MASK'],\
                         'Sofia_Output/'+Fits_Files['MOMENT0'],\
                         'Sofia_Output/'+Fits_Files['MOMENT1'],\
@@ -754,7 +597,7 @@ prep_cube.__doc__ =f'''
 #Create an optimized cube if required
 def optimized_cube(Configuration,Fits_Files, debug = False):
     pix_per_beam = Configuration['BEAM_IN_PIXELS'][1]
-    if pix_per_beam > Configuration['OPT_PIXELBEAM']:
+    if pix_per_beam > Configuration['OPT_PIXEL_BEAM']:
         cube = fits.open(Configuration['FITTING_DIR']+Fits_Files['FITTING_CUBE'])
         data = cube[0].data
         hdr = cube[0].header
@@ -763,7 +606,7 @@ def optimized_cube(Configuration,Fits_Files, debug = False):
 {"":8s}OPTIMIZED_CUBE: FAT cannot optimize your cube.
 ''', Configuration['OUTPUTLOG'])
         cube.close()
-        required_cdelt = hdr['BMIN']/int(Configuration['OPT_PIXELBEAM'])
+        required_cdelt = hdr['BMIN']/int(Configuration['OPT_PIXEL_BEAM'])
         ratio = required_cdelt/abs(hdr['CDELT2'])
         opt_data,opt_hdr = regrid_cube(data, hdr, ratio)
 
@@ -771,13 +614,13 @@ def optimized_cube(Configuration,Fits_Files, debug = False):
 
         Configuration['OPTIMIZED'] = True
         print_log(f'''OPTIMIZED_CUBE: Your input cube has {pix_per_beam} pixels along the minor FWHM.
-{"":8s}OPTIMIZED_CUBE: You requested { Configuration['OPT_PIXELBEAM']} therefore we regridded the cube into a new cube.
+{"":8s}OPTIMIZED_CUBE: You requested { Configuration['OPT_PIXEL_BEAM']} therefore we regridded the cube into a new cube.
 {"":8s}OPTIMIZED_CUBE: We are using the pixel size of {required_cdelt}.
 ''', Configuration['OUTPUTLOG'])
 
     else:
         print_log(f'''OPTIMIZED_CUBE: Your input cube has {pix_per_beam} pixels along the minor FWHM.
-{"":8s}OPTIMIZED_CUBE: You requested {Configuration['OPT_PIXELBEAM']} but we cannot improve the resolution.
+{"":8s}OPTIMIZED_CUBE: You requested {Configuration['OPT_PIXEL_BEAM']} but we cannot improve the resolution.
 {"":8s}OPTIMIZED_CUBE: We are using the pixel size of the original cube.
 ''', Configuration['OUTPUTLOG'])
 optimized_cube.__doc__ =f'''

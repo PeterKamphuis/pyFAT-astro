@@ -13,7 +13,7 @@ class SofiaFaintError(Exception):
 from pyFAT.Support.support_functions import print_log, convert_type,set_limits,rename_fit_products,\
                               set_ring_size,calc_rings,get_usage_statistics,get_inner_fix,convertskyangle,\
                               finish_current_run, remove_inhomogeneities,get_from_template,set_format, \
-                              set_rings, convertRADEC, is_available,sbr_limits
+                              set_rings, convertRADEC,sbr_limits, create_directory
 from pyFAT.Support.clean_functions import clean_before_sofia,clean_after_sofia
 from pyFAT.Support.fits_functions import cut_cubes,extract_pv,make_moments
 from pyFAT.Support.read_functions import load_template
@@ -148,24 +148,22 @@ def check_inclination(Configuration,Tirific_Template,Fits_Files, fit_type = 'Und
         incl_to_check = np.linspace(min,max,20)
     # Let's make a directory to put things in
     tmp_stage = 'tmp_incl_check'
-    try:
-        os.mkdir(f"{Configuration['FITTING_DIR']}/{tmp_stage}")
-    except:
-        pass
+    create_directory(tmp_stage,f"{Configuration['FITTING_DIR']}")
+
     other_run = [Configuration['TIRIFIC_RUNNING'],Configuration['TIRIFIC_PID']]
     try:
         Configuration['TIRIFIC_RUNNING'] = False
         #and a copy of the tirific template
         if debug:
                 print_log(f'''CHECK_INCLINATION: pytho is so stupif
-{'':8s}PA = {Tirific_Template['PA']}
-''',Configuration['OUTPUTLOG'])
+    {'':8s}PA = {Tirific_Template['PA']}
+    ''',Configuration['OUTPUTLOG'])
         Check_Template = copy.deepcopy(Tirific_Template)
         #write_new_to_template(Configuration, f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def", Check_Template,debug = debug)
         Check_Template['LOOPS'] = '0'
         Check_Template['INIMODE'] = '0'
         Check_Template['INSET'] = f"{Fits_Files['FITTING_CUBE']}"
-        Check_Template['RESTARTNAME'] = f"Logs/restart_{tmp_stage}.txt"
+        Check_Template['RESTARTNAME'] = f"{Configuration['LOG_DIRECTORY']}restart_{tmp_stage}.txt"
         #These are small galaxies make sure the VARINDX is not meesing things up
         Check_Template['VARINDX'] = ''
 
@@ -476,7 +474,7 @@ def check_source(Configuration, Fits_Files, debug = False):
 
 
 
-    if Configuration['HANNING']:
+    if Configuration['HANNING_SMOOTHED']:
         vres = (Configuration['CHANNEL_WIDTH']*2)/(2.*np.sqrt(2.*np.log(2)))
     else:
         vres = (Configuration['CHANNEL_WIDTH']*1.2)/(2.*np.sqrt(2.*np.log(2)))
@@ -497,13 +495,10 @@ def check_source(Configuration, Fits_Files, debug = False):
 
 
     # extract a PV-Diagram
-    if Configuration['START_POINT'] < 3 or not os.path.exists(f"{Configuration['FITTING_DIR']}/Sofia_Output/{Configuration['BASE_NAME']}_sofia_xv.fits"):
+    if not os.path.exists(f"{Configuration['FITTING_DIR']}/Sofia_Output/{Configuration['SOFIA_BASENAME']}_sofia_xv.fits"):
         PV =extract_pv(Configuration,Cube, pa[0], center=[ra,dec,v_app*1000.], convert = 1000.,
                        finalsize = [int(round(maj_extent/np.mean([abs(header['CDELT1']),abs(header['CDELT2'])])*1.25+header['NAXIS1']*0.2)),
                                     int(round(z_max-z_min)+10.)],debug=debug)
-        if not os.path.isdir(Configuration['FITTING_DIR']+'/Sofia_Output'):
-                os.mkdir(Configuration['FITTING_DIR']+'/Sofia_Output')
-
         fits.writeto(f"{Configuration['FITTING_DIR']}/Sofia_Output/{Configuration['BASE_NAME']}_sofia_xv.fits",PV[0].data,PV[0].header)
     Cube.close()
     Initial_Parameters = {}
@@ -517,6 +512,10 @@ def check_source(Configuration, Fits_Files, debug = False):
     Initial_Parameters['PA'] = pa
     Initial_Parameters['INCL'] = inclination
     Initial_Parameters['FLUX'] = [f_sum,f_sum_err]
+    new_errors = np.array([pa[1],inclination[1],vsys_error])*0.1
+    para = ['PA','INCL','VSYS']
+    for err,parameter in zip(new_errors,para):
+        Configuration['MIN_ERROR'][parameter] = [set_limits(err,Configuration['MIN_ERROR'][parameter][0],Configuration['MAX_ERROR'][parameter][0]/2.)]
 
     return Initial_Parameters
 check_source.__doc__='''
@@ -549,45 +548,38 @@ check_source.__doc__='''
 
 def fitting_osc(Configuration,Fits_Files,Tirific_Template,Initial_Parameters):
     current_run = 'Not Initialized'
-    allowed_loops = 15
-    if Configuration['INSTALLATION_CHECK']:
-        allowed_loops = 1
-    Configuration['LOOPS'] = 0
-    if not os.path.isdir(Configuration['FITTING_DIR']+'One_Step_Convergence'):
-        os.mkdir(Configuration['FITTING_DIR']+'One_Step_Convergence')
+    create_directory(Configuration['USED_FITTING'],Configuration['FITTING_DIR'])
     wf.initialize_def_file(Configuration, Fits_Files,Tirific_Template, \
                            Initial_Parameters= Initial_Parameters, \
-                           fit_type='One_Step_Convergence',\
+                           fit_type=Configuration['USED_FITTING'],\
                            debug=Configuration['DEBUG'])
     print_log(f'''FITTING_OSC: The initial def file is written and we will now start fitting.
 ''' ,Configuration['OUTPUTLOG'], screen =True, debug = Configuration['DEBUG'])
     Configuration['PREP_END_TIME'] = datetime.now()
         # If we have no directory to put the output we create it
 
-    while not Configuration['ACCEPTED'] and Configuration['LOOPS'] < allowed_loops:
-        Configuration['LOOPS'] = Configuration['LOOPS']+1
-        print_log(f'''FITTING_OSC: We are starting loop {Configuration['LOOPS']} of trying to converge the center and extent.
-''',Configuration['OUTPUTLOG'],screen =True)
+    while not Configuration['ACCEPTED'] and Configuration['ITERATIONS'] <  Configuration['MAX_ITERATIONS']:
+        Configuration['ITERATIONS'] = Configuration['ITERATIONS']+1
         # Run the step
-        current_run = one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run,debug = Configuration['DEBUG'],allowed_loops = allowed_loops)
+        current_run = one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run,debug = Configuration['DEBUG'])
 
-        if (Configuration['LOOPS'] == 1 or Configuration['ACCEPTED']) and Configuration['SIZE_IN_BEAMS'] < 4:
+        if (Configuration['ITERATIONS'] == 1 or Configuration['ACCEPTED']) and Configuration['SIZE_IN_BEAMS'] < 4:
             if Configuration['DEBUG']:
                         print_log(f'''FITTING_OSC: Checking the inclination due to small galaxy size.
 {'':8s}PA = {Tirific_Template['PA']}
 {'':8s}INCL = {Tirific_Template['INCL']}
 ''',Configuration['OUTPUTLOG'])
-            check_inclination(Configuration,Tirific_Template,Fits_Files, fit_type = 'One_Step_Convergence', debug = Configuration['DEBUG'])
+            check_inclination(Configuration,Tirific_Template,Fits_Files, fit_type =Configuration['USED_FITTING'], debug = Configuration['DEBUG'])
 
     if Configuration['ACCEPTED']:
         print_log(f'''FITTING_OSC: The model has converged in center and extent and we make a smoothed version.
 ''',Configuration['OUTPUTLOG'],screen =True)
         check_angles(Configuration, Tirific_Template,debug=Configuration['DEBUG'] )
-        current_run = fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run,stage = 'after_os', fit_type = 'One_Step_Convergence',debug = Configuration['DEBUG'])
+        current_run = fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run,stage = 'after_os', fit_type = Configuration['USED_FITTING'],debug = Configuration['DEBUG'])
         if Configuration['OPTIMIZED']:
-            make_full_resolution(Configuration,Tirific_Template,Fits_Files,current_run = current_run,fit_type = 'One_Step_Convergence',debug=Configuration['DEBUG'])
+            make_full_resolution(Configuration,Tirific_Template,Fits_Files,current_run = current_run,fit_type = Configuration['USED_FITTING'],debug=Configuration['DEBUG'])
     elif Configuration['INSTALLATION_CHECK']:
-        print_log(f'''FITTING_OSC: The Installation_check has run a fit suvccessfully.
+        print_log(f'''FITTING_OSC: The Installation_check has run a fit successfully.
 ''',Configuration['OUTPUTLOG'],screen =True)
     else:
         Configuration['FINAL_COMMENT'] = 'We could not converge on the extent or centre of the galaxy'
@@ -635,37 +627,44 @@ def fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run, s
         pars_to_smooth = []
         not_to_smooth = []
         fixed_errors = []
-        if not Configuration['FIX_INCLINATION'][0]:
-            pars_to_smooth.append('INCL')
-            min_error.append(set_limits(3.*np.mean(Configuration['LIMIT_MODIFIER']),2,5))
-        else:
-            not_to_smooth.append('INCL')
-            fixed_errors.append(set_limits(2.*np.mean(Configuration['LIMIT_MODIFIER']),2,5))
-        if not Configuration['FIX_Z0'][0]:
-            pars_to_smooth.append('Z0')
-            min_error.append(convertskyangle(Configuration,0.1,Configuration['DISTANCE'],physical= True))
-        else:
-            not_to_smooth.append('Z0')
-            fixed_errors.append(convertskyangle(Configuration,0.1,Configuration['DISTANCE'],physical= True))
-        if not Configuration['FIX_PA'][0]:
-            pars_to_smooth.append('PA')
-            min_error.append(2.)
-        else:
-            not_to_smooth.append('PA')
-            fixed_errors.append(1.)
+        for parameter in ['INCL','Z0','SDIS','PA']:
+            if parameter in Configuration['FIXED_PARAMETERS'][0]:
+                not_to_smooth.append(parameter)
+            else:
+                pars_to_smooth.append(parameter)
+            min_error.append(Configuration['MIN_ERROR'][parameter])
 
-        if not Configuration['FIX_SDIS'][0]:
-            pars_to_smooth.append('SDIS')
-            min_error.append(Configuration['CHANNEL_WIDTH']/2./Configuration['LIMIT_MODIFIER'])
-        else:
-            not_to_smooth.append('SDIS')
-            fixed_errors.append(Configuration['CHANNEL_WIDTH']/3.)
+        #if not Configuration['FIX_INCLINATION'][0]:
+        #    pars_to_smooth.append('INCL')
+        #    min_error.append(set_limits(3.*np.mean(Configuration['LIMIT_MODIFIER']),2,5))
+        #else:
+        #    not_to_smooth.append('INCL')
+        #    fixed_errors.append(set_limits(2.*np.mean(Configuration['LIMIT_MODIFIER']),2,5))
+        #if not Configuration['FIX_Z0'][0]:
+        #    pars_to_smooth.append('Z0')
+        #    min_error.append(convertskyangle(Configuration,0.1,Configuration['DISTANCE'],physical= True))
+        #else:
+        #    not_to_smooth.append('Z0')
+        #    fixed_errors.append(convertskyangle(Configuration,0.1,Configuration['DISTANCE'],physical= True))
+        #if not Configuration['FIX_PA'][0]:
+        #    pars_to_smooth.append('PA')
+        #    min_error.append(2.)
+        #else:
+        #    not_to_smooth.append('PA')
+        #    fixed_errors.append(1.)
+
+        #if not Configuration['FIX_SDIS'][0]:
+        #    pars_to_smooth.append('SDIS')
+        #    min_error.append(Configuration['CHANNEL_WIDTH']/2./Configuration['LIMIT_MODIFIER'])
+        #else:
+        #    not_to_smooth.append('SDIS')
+        #    fixed_errors.append(Configuration['CHANNEL_WIDTH']/3.)
 
         for key,min_err in zip(pars_to_smooth,min_error):
-            smoothed = regularise_profile(Configuration,Tirific_Template,key,min_error = min_err,debug = debug)
+            smoothed = regularise_profile(Configuration,Tirific_Template,key,min_error = Configuration['MIN_ERROR'][parameter],debug = debug)
 
         for key,min_err in zip(not_to_smooth,fixed_errors):
-            set_errors(Configuration,Tirific_Template,key,min_error = min_err,debug = debug)
+            set_errors(Configuration,Tirific_Template,key,min_error = Configuration['MIN_ERROR'][parameter],debug = debug)
     if stage == 'after_cc':
         smoothed_vrot = smooth_profile(Configuration,Tirific_Template,'VROT',min_error = Configuration['CHANNEL_WIDTH'],debug = debug)
     else:
@@ -682,7 +681,7 @@ def fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run, s
             Tirific_Template['INIMODE'] = "0"
             finish_current_run(Configuration,current_run,debug= debug)
     else:
-        Tirific_Template['LOOPS'] = 10.
+        Tirific_Template['LOOPS'] = f"{Configuration['LOOPS']}"
         xpos,ypos,vsys,pa,incl = rf.load_tirific(Configuration,f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def",Variables = ['XPOS','YPOS','VSYS','PA','INCL'])
         parameters = {'VSYS': [vsys[0], Configuration['CHANNEL_WIDTH']], \
                       'XPOS': [xpos[0], Configuration['PIXEL_SIZE']],
@@ -795,11 +794,11 @@ make_full_resolution.__doc__ =f'''
  NOTE:
 '''
 
-def one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run, debug = False,allowed_loops = 10.):
-    if debug:
-        print_log(f'''ONE_STEP_CONVERGENCE: Starting with loop {Configuration['LOOPS']} out of maximum {allowed_loops}.
-''',Configuration['OUTPUTLOG'],debug = True)
-    fit_type = 'One_Step_Convergence'
+def one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run, debug = False):
+
+    print_log(f'''ONE_STEP_CONVERGENCE: Starting with loop {Configuration['ITERATIONS']} out of maximum {Configuration['MAX_ITERATIONS']}.
+''',Configuration['OUTPUTLOG'],screen=True,debug = debug)
+    fit_type = 'Fit_Tirific_OSC'
     stage = 'run_os'
     #First we run tirific
     accepted,current_run = run_tirific(Configuration,current_run,stage = stage, fit_type = fit_type, debug= debug)
@@ -813,8 +812,8 @@ def one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run, de
         Configuration['ACCEPTED'] = True
     else:
         Configuration['ACCEPTED'] = False
-        if Configuration['LOOPS'] > allowed_loops:
-                print_log(f'''ONE_STEP_CONVERGENCE: We have ran the convergence more than {allowed_loops} times aborting the fit.
+        if Configuration['ITERATIONS'] > Configuration['MAX_ITERATIONS']:
+                print_log(f'''ONE_STEP_CONVERGENCE: We have ran the convergence more than {Configuration['MAX_ITERATIONS']} times aborting the fit.
     ''',Configuration['OUTPUTLOG'])
                 return current_run
         if not accepted:
@@ -833,7 +832,9 @@ def one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run, de
         fix_sbr(Configuration,Tirific_Template,debug = debug)    # Then we determine the inner rings that should remain fixed
 
         get_inner_fix(Configuration, Tirific_Template,debug=debug)
-        if all([Configuration['FIX_INCLINATION'][0],Configuration['FIX_PA'][0],Configuration['FIX_Z0'][0],Configuration['FIX_SDIS'][0]]):
+
+        if all([True if x  in Configuration['FIXED_PARAMETERS'][0] else False for x in ['PA','INCL','Z0','SDIS']] ):
+        #if all([Configuration['FIX_INCLINATION'][0],Configuration['FIX_PA'][0],Configuration['FIX_Z0'][0],Configuration['FIX_SDIS'][0]]):
             Configuration['WARP_SLOPE'] = [0.,0.]
         else:
             get_warp_slope(Configuration,Tirific_Template, debug=debug)
@@ -850,7 +851,7 @@ def one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run, de
         set_fitting_parameters(Configuration, Tirific_Template,stage = 'run_os',\
                              debug = debug)
 
-        wf.tirific(Configuration,Tirific_Template,name = 'One_Step_Convergence_In.def',debug = debug)
+        wf.tirific(Configuration,Tirific_Template,name = f"{Configuration['USED_FITTING']}_In.def",debug = debug)
     return current_run
 one_step_converge.__doc__ =f'''
  NAME:
@@ -870,10 +871,6 @@ one_step_converge.__doc__ =f'''
 
  OPTIONAL INPUTS:
     debug = False
-
-    allowed_loops = 10.
-    Maximum amount of calls to tirific  before the fit is broken of
-
 
  OUTPUTS:
     current_run = subprocess structure with the current tirific call.
@@ -896,14 +893,14 @@ def run_tirific(Configuration, current_run, stage = 'initial',fit_type = 'Undefi
     if Configuration['TIRIFIC_RUNNING']:
         print_log(f'''RUN_TIRIFIC: We are using an initialized tirific in {Configuration['FITTING_DIR']}
 ''',Configuration['OUTPUTLOG'], screen = True)
-        with open(f"{Configuration['FITTING_DIR']}Logs/restart_{fit_type}.txt",'a') as file:
+        with open(f"{Configuration['LOG_DIRECTORY']}restart_{fit_type}.txt",'a') as file:
             file.write("Restarting from previous run")
     else:
         print_log(f'''RUN_TIRIFIC: We are starting a new TiRiFiC in {Configuration['FITTING_DIR']}
 ''',Configuration['OUTPUTLOG'], screen = True)
-        with open(f"{Configuration['FITTING_DIR']}Logs/restart_{fit_type}.txt",'w') as file:
+        with open(f"{Configuration['LOG_DIRECTORY']}restart_{fit_type}.txt",'w') as file:
             file.write("Initialized a new run")
-        current_run = subprocess.Popen(["tirific",f"DEFFILE={fit_type}_In.def","ACTION = 1"], stdout = subprocess.PIPE, \
+        current_run = subprocess.Popen([Configuration['TIRIFIC'],f"DEFFILE={fit_type}_In.def","ACTION = 1"], stdout = subprocess.PIPE, \
                                     stderr = subprocess.PIPE,cwd=Configuration['FITTING_DIR'],universal_newlines = True)
         Configuration['TIRIFIC_RUNNING'] = True
         Configuration['TIRIFIC_PID'] = current_run.pid
@@ -912,7 +909,7 @@ def run_tirific(Configuration, current_run, stage = 'initial',fit_type = 'Undefi
     counter = 0
     if Configuration['TIMING']:
         time.sleep(0.1)
-        with open(f"{Configuration['FITTING_DIR']}Logs/Usage_Statistics.txt",'a') as file:
+        with open(f"{Configuration['LOG_DIRECTORY']}Usage_Statistics.txt",'a') as file:
             file.write(f"# Started Tirific at stage = {fit_type}\n")
             CPU,mem = get_usage_statistics(Configuration,current_run.pid)
             file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Mb \n")
@@ -925,7 +922,7 @@ def run_tirific(Configuration, current_run, stage = 'initial',fit_type = 'Undefi
         counter += 1
         if (counter % 50) == 0:
             if Configuration['TIMING']:
-                with open(f"{Configuration['FITTING_DIR']}Logs/Usage_Statistics.txt",'a') as file:
+                with open(f"{Configuration['LOG_DIRECTORY']}Usage_Statistics.txt",'a') as file:
                     if tmp[0] == 'L' and not triggered:
                         if tmp[1] == '1':
                             file.write("# Started the actual fitting \n")
@@ -949,7 +946,7 @@ def run_tirific(Configuration, current_run, stage = 'initial',fit_type = 'Undefi
             break
     print(f'\n')
     if Configuration['TIMING']:
-        with open(f"{Configuration['FITTING_DIR']}Logs/Usage_Statistics.txt",'a') as file:
+        with open(f"{Configuration['LOG_DIRECTORY']}Usage_Statistics.txt",'a') as file:
             file.write("# Finished this run \n")
             CPU,mem = get_usage_statistics(Configuration,current_run.pid)
             file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Gb\n")
@@ -999,13 +996,12 @@ run_tirific.__doc__ =f'''
  NOTE:
 '''
 
-def sofia(Configuration, Fits_Files,sofia_to_use = 'sofia', debug = False):
+def sofia(Configuration, Fits_Files, debug = False):
     if debug:
         print_log(f'''RUN_SOFIA: starting sofia run from the template.
 ''',Configuration['OUTPUTLOG'],debug = True)
     sofia_template = rf.sofia_template(debug=debug)
-    if not os.path.isdir(Configuration['FITTING_DIR']+'/Sofia_Output'):
-        os.mkdir(Configuration['FITTING_DIR']+'/Sofia_Output')
+    create_directory('Sofia_Output',Configuration['FITTING_DIR'])
     os.chdir(Configuration['FITTING_DIR'])
     threshold = 5.
     counter = 3
@@ -1031,7 +1027,7 @@ def sofia(Configuration, Fits_Files,sofia_to_use = 'sofia', debug = False):
         wf.sofia(sofia_template,'sofia_input.par')
         print_log("RUN_SOFIA: Running SoFiA. \n",Configuration['OUTPUTLOG'],screen = True)
         # Check which sofia to start
-        sfrun = subprocess.Popen([sofia_to_use,'sofia_input.par'], stdout = subprocess.PIPE, stderr = subprocess.PIPE)
+        sfrun = subprocess.Popen([Configuration['SOFIA2'],'sofia_input.par'], stdout = subprocess.PIPE, stderr = subprocess.PIPE)
         sofia_run, sofia_warnings_are_annoying = sfrun.communicate()
         print_log(sofia_run.decode("utf-8"), Configuration['OUTPUTLOG'])
 
@@ -1058,8 +1054,8 @@ def sofia(Configuration, Fits_Files,sofia_to_use = 'sofia', debug = False):
 
     #Move sofia output to the desired Directory
     clean_after_sofia(Configuration,debug=debug)
-
-    os.chdir(Configuration['START_DIR'])
+    Configuration['SOFIA_RAN'] = True
+    os.chdir(Configuration['START_DIRECTORY'])
 sofia.__doc__ =f'''
  NAME:
     sofia
@@ -1077,8 +1073,6 @@ sofia.__doc__ =f'''
  OPTIONAL INPUTS:
     debug = False
 
-    sofia_to_use = 'sofia'
-    The call that has been identified to respond in subprocess to sofia
 
  OUTPUTS:
 
