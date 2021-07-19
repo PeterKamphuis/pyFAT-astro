@@ -16,8 +16,8 @@ requirements = [
     'importlib_resources>=3.3.0',
 ]
 
-PACKAGE_NAME = 'pyFAT'
-__version__ = '0.0.0'
+PACKAGE_NAME = 'pyfat-astro'
+__version__ = '0.0.4'
 
 
 with open("README.md", "r") as fh:
@@ -26,7 +26,7 @@ with open("README.md", "r") as fh:
 
 setup(name=PACKAGE_NAME,
       version=__version__,
-      description="Development Status :: 5 - Production/Stable",
+      description="Development Status :: 4 - Beta",
       long_description=long_description,
       long_description_content_type="text/markdown",
       author="P. Kamphuis",
@@ -40,7 +40,7 @@ setup(name=PACKAGE_NAME,
       scripts=["bin/" + j for j in os.listdir("bin")],
       license=["GNU GPL v3"],
       classifiers=[
-          "Development Status :: 5 - Production/Stable",
+          "Development Status :: 4 - Beta",
           "Intended Audience :: Science/Research",
           "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
           "Operating System :: POSIX :: Linux",
