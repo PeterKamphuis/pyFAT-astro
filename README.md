@@ -34,7 +34,7 @@ Installation
 
 Download the source code from the Github. Once downloaded pyFAT can be installed with:
 
-  	pip install pyFAT
+  	pip install pyfat-astro
 
 This should also install all required python dependencies.
 We recommend the use of python virtual environments. If so desired a pyFAT installation would look like:

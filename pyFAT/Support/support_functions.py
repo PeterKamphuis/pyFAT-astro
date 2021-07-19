@@ -2882,8 +2882,8 @@ def sofia_output_exists(Configuration,Fits_Files, debug = False):
             print_log(log_statement, Configuration['OUTPUTLOG'],screen =True)
             raise FileNotFoundError(log_statement)
 
-    if not os.path.exists(Configuration['FITTING_DIR']+'Sofia_Output/'+Configuration['SOFIA_BASENAME']+'_cat.txt'):
-        log_statement = f"SOFIA_OUTPUT_EXISTS: The file {Configuration['FITTING_DIR']+'Sofia_Output/'+Configuration['SOFIA_BASENAME']+'_cat.txt'} is not found."
+    if not os.path.exists(Configuration['FITTING_DIR']+'Sofia_Output/'+Configuration['BASE_NAME']+'_cat.txt'):
+        log_statement = f"SOFIA_OUTPUT_EXISTS: The file {Configuration['FITTING_DIR']+'Sofia_Output/'+Configuration['BASE_NAME']+'_cat.txt'} is not found."
         print_log(log_statement, Configuration['OUTPUTLOG'],screen =True)
         raise FileNotFoundError(log_statement)
 

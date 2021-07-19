@@ -17,7 +17,7 @@ requirements = [
     'importlib_resources>=3.3.0',
 ]
 
-PACKAGE_NAME = 'pyFAT'
+PACKAGE_NAME = 'pyfat-astro'
 __version__ = 'v0.0.3'
 
 
