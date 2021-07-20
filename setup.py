@@ -17,8 +17,8 @@ requirements = [
     'importlib_resources>=3.3.0',
 ]
 
-PACKAGE_NAME = 'pyFAT-astro'
-__version__ = 'v0.0.3'
+PACKAGE_NAME = 'pyFAT_astro'
+__version__ = 'v0.0.4'
 
 
 with open("README.md", "r") as fh:

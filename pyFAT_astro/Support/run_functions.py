@@ -583,7 +583,7 @@ def fitting_osc(Configuration,Fits_Files,Tirific_Template,Initial_Parameters):
 ''',Configuration['OUTPUTLOG'],screen =True)
     else:
         Configuration['FINAL_COMMENT'] = 'We could not converge on the extent or centre of the galaxy'
-        Configuration['MAPS_OUTPUT'] = 5
+        Configuration['OUTPUT_QUANTITY'] = 5
     return current_run
 fitting_osc.__doc__ =f'''
  NAME:
