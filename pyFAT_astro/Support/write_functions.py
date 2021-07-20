@@ -63,10 +63,10 @@ def basicinfo(Configuration,initialize = False,stage='TiRiFiC', debug = False,
         INCL_c = f'{Inclination[0]:.2f}+/-{Inclination[1]:.2f}'
         MVROT_c = f'{Max_Vrot[0]:.2f}+/-{Max_Vrot[1]:.2f}'
         Vmask_c = f'{V_mask[0]/1000.:.2f}+/-{V_mask[1]/1000.:.2f}'
-        DHI_a = f'{DHI:.2f}'
+        DHI_a = f'{DHI[0]:.2f}+/-{DHI[1]:.2f}'
         Dist = f'{Distance:.2f}'
         HIMass  = f'{Tot_Flux[0]*2.36E5*Distance**2:.2e}'
-        DHI_k = f'{convertskyangle(Configuration,DHI,Distance):.2f}'
+        DHI_k = f'{convertskyangle(Configuration,DHI[0],Distance):.2f}'
         Flux_c = f'{Tot_Flux[0]:.2f}+/-{Tot_Flux[1]:.2f}'
         file.write(f'''  {RA_c:>25s} {DEC_c:>25s} {VSYS_c:>20s} {PA_c:>20s} {INCL_c:>20s} {MVROT_c:>20s} {Vmask_c:>20s} {Flux_c:>20s} {DHI_a:>20s} {Dist:>20s} {HIMass:>20s} {DHI_k:>20s}
 ''')
@@ -675,7 +675,7 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
             'weight':'normal',
             'size':10}
     ax_RC = plot_parameters(Configuration,Vars_to_plot,FAT_Model,gs[19:22,3:9],\
-                            Overview,'VROT',Input_Model = Input_Model,initial_extent= sof_basic_extent, \
+                            Overview,'VROT',Input_Model = Input_Model,initial_extent= sof_basic_extent[0], \
                             initial = sof_basic_maxrot[0],Extra_Model = Extra_Model,\
                             debug=debug)
     ymin =np.min([FAT_Model[1:,Vars_to_plot.index('VROT')],FAT_Model[1:,Vars_to_plot.index('VROT_2')]])
@@ -718,7 +718,7 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
 
 # ------------------------------Inclination------------------------------------
     ax_INCL = plot_parameters(Configuration,Vars_to_plot,FAT_Model,gs[22:25,3:9],\
-                              Overview,'INCL',Input_Model = Input_Model,initial_extent= sof_basic_extent, \
+                              Overview,'INCL',Input_Model = Input_Model,initial_extent= sof_basic_extent[0], \
                               initial =sof_basic_inclination[0],Extra_Model = Extra_Model ,debug=debug)
 
     plt.tick_params(
@@ -740,7 +740,7 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
 
 # ------------------------------PA------------------------------------
     ax_PA = plot_parameters(Configuration,Vars_to_plot,FAT_Model,gs[25:28,3:9],\
-                            Overview,'PA',Input_Model = Input_Model,initial_extent= sof_basic_extent,\
+                            Overview,'PA',Input_Model = Input_Model,initial_extent= sof_basic_extent[0],\
                             initial = sof_basic_pa[0],Extra_Model = Extra_Model,debug=debug)
 
     plt.tick_params(
@@ -763,7 +763,7 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
 
 # ------------------------------SDIS------------------------------------
     ax_SDIS = plot_parameters(Configuration,Vars_to_plot,FAT_Model,gs[19:22,12:18],\
-                              Overview,'SDIS',Input_Model = Input_Model,initial_extent= sof_basic_extent,\
+                              Overview,'SDIS',Input_Model = Input_Model,initial_extent= sof_basic_extent[0],\
                               Extra_Model = Extra_Model,initial = 8.,debug=debug)
     plt.tick_params(
         axis='x',          # changes apply to the x-axis
@@ -787,7 +787,7 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
 
 # ------------------------------Scale height------------------------------------
     ax_Z0 = plot_parameters(Configuration,Vars_to_plot,FAT_Model,gs[22:25,12:18],\
-                            Overview,'Z0',Input_Model = Input_Model,initial_extent= sof_basic_extent,\
+                            Overview,'Z0',Input_Model = Input_Model,initial_extent= sof_basic_extent[0],\
                             Extra_Model = Extra_Model,initial = convertskyangle(Configuration,0.2,Configuration['DISTANCE'],physical=True),debug=debug)
 
     plt.tick_params(
@@ -816,7 +816,7 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
 
 # ------------------------------SBR------------------------------------
     ax_SBR = plot_parameters(Configuration,Vars_to_plot,FAT_Model,gs[25:28,12:18],\
-                             Overview,'SBR',Input_Model = Input_Model,initial_extent= sof_basic_extent,\
+                             Overview,'SBR',Input_Model = Input_Model,initial_extent= sof_basic_extent[0],\
                              Extra_Model = Extra_Model,debug=debug)
 
     plt.tick_params(
@@ -925,7 +925,7 @@ make_overview_plot.__doc__ =f'''
 
 def plot_parameters(Configuration,Vars_to_plot,FAT_Model,location,Figure,parameter,\
                     Input_Model = [],legend = ['Empty','Empty','Empty','Empty'],
-                    initial = 'No Value', initial_extent= None, Extra_Model = [], debug = False):
+                    initial = None, initial_extent=  None, Extra_Model = [], debug = False):
     if debug:
         print_log(f'''PLOT_PARAMETERS: We are starting to plot {parameter}
 ''', Configuration['OUTPUTLOG'], debug = True)
@@ -978,10 +978,10 @@ def plot_parameters(Configuration,Vars_to_plot,FAT_Model,location,Figure,paramet
             if diff != 0.:
                 ax.plot(Extra_Model[:,Vars_to_plot.index('RADI')],Extra_Model[:,Vars_to_plot.index(f'{parameter}_2')],'r', alpha=0.2,zorder=1,marker ='o',linestyle='-' , ms = 3.)
     xmin,xmax = ax.get_xlim()
-    if initial != 'No Value':
+    if initial:
         ax.plot([xmin-5,xmax+5],[float(initial),float(initial)],c='k',alpha=0.4, linestyle ='--')
     if initial_extent:
-        ax.plot([float(initial_extent/2.),float(initial_extent/2.)],[ymin-5,ymax+5],c='k',alpha=0.4, linestyle ='--')
+        ax.plot([float(initial_extent)/2.,float(initial_extent)/2.],[ymin-5,ymax+5],c='k',alpha=0.4, linestyle ='--')
     ax.set_xlim(xmin,xmax)
     ax.set_ylim(ymin,ymax)
     return ax

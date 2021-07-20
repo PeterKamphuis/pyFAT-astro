@@ -380,7 +380,7 @@ configuration_file = ''')
             if Configuration['OUTPUT_QUANTITY'] != 5:
                 DHI = rf.get_DHI(Configuration,Model=Configuration['USED_FITTING'],debug=Configuration['DEBUG'])
                 Totflux = rf.get_totflux(Configuration,f"/Finalmodel/Finalmodel_mom0.fits", debug=Configuration['DEBUG'])
-                wf.basicinfo(Configuration, template=Tirific_Template,Tot_Flux = Totflux, DHI = DHI,debug=Configuration['DEBUG'] )
+                wf.basicinfo(Configuration, template=Tirific_Template,Tot_Flux = Totflux, DHI = [DHI,Configuration['BEAM'][0]*Configuration['RING_SIZE']],debug=Configuration['DEBUG'] )
                 if Configuration['INSTALLATION_CHECK']:
                     cf.installation_check(Configuration,debug=Configuration['DEBUG'])
     except Exception as e:

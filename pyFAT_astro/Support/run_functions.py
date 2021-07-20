@@ -491,7 +491,7 @@ def check_source(Configuration, Fits_Files, debug = False):
               DEC=[dec,abs(err_y*header['CDELT2'])],
               VSYS =[v_app,abs(err_z*header['CDELT3']/1000.)],
               PA=pa, Inclination = inclination, Max_Vrot = [max_vrot,max_vrot_dev], Tot_Flux = [f_sum,f_sum_err], V_mask = [VELboun[1]-VELboun[0],vres],
-              Distance = Configuration['DISTANCE'] , DHI = maj_extent*3600.,debug=debug)
+              Distance = Configuration['DISTANCE'] , DHI = [2*.maj_extent*3600.,Configuration['BEAM'][0]*Configuration['RING_SIZE']],debug=debug)
 
 
     # extract a PV-Diagram
