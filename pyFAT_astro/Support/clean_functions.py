@@ -8,7 +8,7 @@ import traceback
 from datetime import datetime
 from pyFAT_astro.Support.support_functions import print_log,finish_current_run,set_format,create_directory
 from pyFAT_astro.Support.fits_functions import make_moments
-from pyFAT_astro.Support.write_functions import make_overview_plot,plot_usage_stats,tirific
+from pyFAT_astro.Support.write_functions import make_overview_plot,plot_usage_stats,tirific,write_config
 from pyFAT_astro.Support.read_functions import tirific_template,load_tirific,load_template
 class SofiaMissingError(Exception):
     pass
@@ -487,6 +487,12 @@ installation_check.__doc__ =f'''
 
 def finish_galaxy(Configuration,maximum_directory_length,current_run = 'Not initialized', Fits_Files= None, debug = False,exiting = None):
     Configuration['END_TIME'] = datetime.now()
+    if debug:
+        print_log(f'''FINISH_GALAXY: These fits files are used:
+{'':8s} {Fits_Files}
+''',Configuration['OUTPUTLOG'])
+        write_config(f'{Configuration["LOG_DIRECTORY"]}CFG_At_Finish.txt',Configuration,debug = True)
+
     #make sure we are not leaving stuff
     finish_current_run(Configuration,current_run,debug=debug)
     # We need to check if the final output is legit

@@ -616,7 +616,7 @@ guess_orientation.__doc__ =f'''
 '''
 
 # load the basic info file to get the Sofia FAT Initial_Estimates
-def load_basicinfo(Configuration,filename, Variables = ['RA','DEC','VSYS','PA','Inclination','Max VRot','V_mask','Tot FLux','D_HI','Distance','HI_Mass' ,'D_HI' ], unpack = True, debug = False):
+def load_basicinfo(Configuration,filename, Variables = ['RA','DEC','VSYS','PA','Inclination','Max VRot','V_mask','Tot FLux','D_HI','Distance','HI_Mass' ,'D_HI_kpc' ], unpack = True, debug = False):
     outputarray = np.zeros((2,len(Variables)), dtype=float)
     try:
         with open(filename, 'r') as tmp:

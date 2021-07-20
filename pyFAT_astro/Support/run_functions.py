@@ -437,7 +437,7 @@ def check_source(Configuration, Fits_Files, debug = False):
     Configuration['SIZE_IN_BEAMS'] = set_limits(maj_extent/(Configuration['BEAM'][0]/3600.),1.0,Configuration['MAX_SIZE_IN_BEAMS'])
     if Configuration['SIZE_IN_BEAMS'] <= Configuration['TOO_SMALL_GALAXY']:
         print_log(f'''CHECK_SOURCE: This galaxy has an estimated size of  {2*Configuration['SIZE_IN_BEAMS']} beams in diameter.
-{'':8s}This is not large enough too fit. We will exit this fit.
+{'':8s}This is not large check_sizeenough too fit. We will exit this fit.
 ''',Configuration['OUTPUTLOG'])
         raise BadSourceError('The extracted source is too small')
     set_ring_size(Configuration, debug = debug)
