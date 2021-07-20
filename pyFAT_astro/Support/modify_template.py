@@ -4,7 +4,7 @@
 
 
 import copy
-from pyFAT.Support.support_functions import set_rings,convertskyangle,sbr_limits,set_limits,print_log,set_limit_modifier,\
+from pyFAT_astro.Support.support_functions import set_rings,convertskyangle,sbr_limits,set_limits,print_log,set_limit_modifier,\
                               set_ring_size,calc_rings,finish_current_run,set_format,get_from_template,gaussian_function,fit_gaussian,\
                               get_ring_weights
 
@@ -1943,7 +1943,7 @@ def set_fitting_parameters(Configuration, Tirific_Template, parameters_to_adjust
         if initial_estimates['INCL'][0] < 40.:
             if 'INCL' in modifiers:
                 modifiers['INCL'] = np.array(modifiers['INCL'],dtype=float)*(0.2)
-    
+
     for key in parameters_to_adjust:
         if key == 'VROT':
             fitting_settings['VROT'] = set_vrot_fitting(Configuration,stage = stage, rotation = initial_estimates['VROT'], debug = debug )

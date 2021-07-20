@@ -1,10 +1,10 @@
 # -*- coding: future_fstrings -*-
 # This module contains a set of functions and classes that are used in FAT to read input files
 
-from pyFAT.Support.support_functions import Proper_Dictionary,print_log,convertRADEC,set_limits, remove_inhomogeneities, \
+from pyFAT_astro.Support.support_functions import Proper_Dictionary,print_log,convertRADEC,set_limits, remove_inhomogeneities, \
                                 obtain_border_pix, get_inclination_pa,get_vel_pa,columndensity,get_profile, get_kinematical_center,\
                                 create_directory,copy_homemade_sofia,clean_header
-from pyFAT.Support.fits_functions import check_mask,clean_header
+from pyFAT_astro.Support.fits_functions import check_mask,clean_header
 
 from astropy.io import fits
 from astropy.wcs import WCS
@@ -32,7 +32,7 @@ import shutil
 import traceback
 
 
-from pyFAT import Templates as templates
+from pyFAT_astro import Templates as templates
 #Function to read a FAT input Catalogue
 class BadCatalogueError(Exception):
     pass
@@ -1226,7 +1226,7 @@ def tirific_template(filename = '', debug = False):
         with import_res.open_text(templates, 'template.def') as tmp:
             template = tmp.readlines()
     elif filename == 'Installation_Check':
-        from pyFAT import Installation_Check as IC
+        from pyFAT_astro import Installation_Check as IC
         with import_res.open_text(IC, 'ModelInput.def') as tmp:
             template = tmp.readlines()
     else:

@@ -6,10 +6,10 @@ import os,signal,sys
 import numpy as np
 import traceback
 from datetime import datetime
-from pyFAT.Support.support_functions import print_log,finish_current_run,set_format,create_directory
-from pyFAT.Support.fits_functions import make_moments
-from pyFAT.Support.write_functions import make_overview_plot,plot_usage_stats,tirific
-from pyFAT.Support.read_functions import tirific_template,load_tirific,load_template
+from pyFAT_astro.Support.support_functions import print_log,finish_current_run,set_format,create_directory
+from pyFAT_astro.Support.fits_functions import make_moments
+from pyFAT_astro.Support.write_functions import make_overview_plot,plot_usage_stats,tirific
+from pyFAT_astro.Support.read_functions import tirific_template,load_tirific,load_template
 class SofiaMissingError(Exception):
     pass
 def check_legitimacy(Configuration,debug=False):

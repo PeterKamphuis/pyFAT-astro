@@ -10,23 +10,23 @@ class InclinationRunError(Exception):
 class SofiaFaintError(Exception):
     pass
 
-from pyFAT.Support.support_functions import print_log, convert_type,set_limits,rename_fit_products,\
+from pyFAT_astro.Support.support_functions import print_log, convert_type,set_limits,rename_fit_products,\
                               set_ring_size,calc_rings,get_usage_statistics,get_inner_fix,convertskyangle,\
                               finish_current_run, remove_inhomogeneities,get_from_template,set_format, \
                               set_rings, convertRADEC,sbr_limits, create_directory
-from pyFAT.Support.clean_functions import clean_before_sofia,clean_after_sofia
-from pyFAT.Support.fits_functions import cut_cubes,extract_pv,make_moments
-from pyFAT.Support.read_functions import load_template
+from pyFAT_astro.Support.clean_functions import clean_before_sofia,clean_after_sofia
+from pyFAT_astro.Support.fits_functions import cut_cubes,extract_pv,make_moments
+from pyFAT_astro.Support.read_functions import load_template
 
-from pyFAT.Support.modify_template import write_new_to_template,smooth_profile,set_cflux,fix_sbr, \
+from pyFAT_astro.Support.modify_template import write_new_to_template,smooth_profile,set_cflux,fix_sbr, \
                                           regularise_profile,set_fitting_parameters,check_size, \
                                           no_declining_vrot, set_new_size,set_errors,get_warp_slope,check_angles
-from pyFAT.Support.constants import H_0
+from pyFAT_astro.Support.constants import H_0
 from astropy.wcs import WCS
 from astropy.io import fits
 
-import pyFAT.Support.read_functions as rf
-import pyFAT.Support.write_functions as wf
+import pyFAT_astro.Support.read_functions as rf
+import pyFAT_astro.Support.write_functions as wf
 import os
 import sys
 import time

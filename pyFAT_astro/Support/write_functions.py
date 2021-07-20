@@ -1,10 +1,10 @@
 # -*- coding: future_fstrings -*-
 # This module contains a set of functions and classes that are used to write text files to Disk
 
-from pyFAT.Support.support_functions import print_log,convertRADEC,convertskyangle,set_limit_modifier,columndensity,set_limits,get_inner_fix,linenumber
-from pyFAT.Support.modify_template import set_model_parameters, set_overall_parameters, set_fitting_parameters,get_warp_slope, update_disk_angles
-from pyFAT.Support.fits_functions import extract_pv
-from pyFAT.Support.read_functions import load_tirific,load_basicinfo, load_template
+from pyFAT_astro.Support.support_functions import print_log,convertRADEC,convertskyangle,set_limit_modifier,columndensity,set_limits,get_inner_fix,linenumber
+from pyFAT_astro.Support.modify_template import set_model_parameters, set_overall_parameters, set_fitting_parameters,get_warp_slope, update_disk_angles
+from pyFAT_astro.Support.fits_functions import extract_pv
+from pyFAT_astro.Support.read_functions import load_tirific,load_basicinfo, load_template
 import numpy as np
 import warnings
 import datetime

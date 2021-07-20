@@ -14,20 +14,20 @@ except ImportError:
     # Try backported to PY<37 `importlib_resources`.
     import importlib_resources as import_res
 from datetime import datetime
-import pyFAT
-import pyFAT.Support.read_functions as rf
-import pyFAT.Support.support_functions as sf
+import pyFAT_astro
+import pyFAT_astro.Support.read_functions as rf
+import pyFAT_astro.Support.support_functions as sf
 # Functions that run external programs such as tirific and sofia
-import pyFAT.Support.run_functions as runf
+import pyFAT_astro.Support.run_functions as runf
 # function that keep things orderly and nicely
-import pyFAT.Support.clean_functions as cf
+import pyFAT_astro.Support.clean_functions as cf
 # Functions that modify or produce fat fits file
-import pyFAT.Support.fits_functions as ff
+import pyFAT_astro.Support.fits_functions as ff
 #functions that write files
-import pyFAT.Support.write_functions as wf
+import pyFAT_astro.Support.write_functions as wf
 #from pyFAT.Support.constants import initialize
-from pyFAT.Support.modify_template import write_new_to_template
-from pyFAT.config.defaults import defaults
+from pyFAT_astro.Support.modify_template import write_new_to_template
+from pyFAT_astro.config.defaults import defaults
 class MissingProgramError(Exception):
     pass
 class CatalogError(Exception):
@@ -52,7 +52,7 @@ def main(argv):
         start_dir = os.getcwd()
         #Get default settings
         if '-v' in argv or '--version' in argv:
-            print(f"This is version {pyFAT.__version__} of the program.")
+            print(f"This is version {pyFAT_astro.__version__} of the program.")
             sys.exit()
 
         if '-h' in argv or '--help' in argv:
@@ -103,7 +103,7 @@ def main(argv):
             no_cube = OmegaConf.masked_copy(cfg, ['input','output','fitting'])
             with open('FAT_defaults.yml','w') as default_write:
                 default_write.write(OmegaConf.to_yaml(no_cube))
-            my_resources = import_res.files('pyFAT.config')
+            my_resources = import_res.files('pyFAT_astro.config')
             data = (my_resources / 'FAT_Input_Catalogue.txt').read_bytes()
             with open('FAT_Example_Catalogue.txt','w+b') as default_write:
                 default_write.write(data)
@@ -122,7 +122,7 @@ Exiting moments.''')
                     succes = True
                 except:
                     inputconf.configuration_file = input(f'''
-                            You have provided a config file (inputconf.configuration_file) but it can't be found.
+                            You have provided a config file ({inputconf.configuration_file}) but it can't be found.
                             If you want to provide a config file please give the correct name.
                             Else press CTRL-C to abort.
 configuration_file = ''')
@@ -224,7 +224,7 @@ configuration_file = ''')
 
             # If we have a fitting log we start writing
             log_statement = f'''This file is a log of the fitting process run at {Configuration ['START_TIME']}.
-{"":8s}This is version {pyFAT.__version__} of the program.
+{"":8s}This is version {pyFAT_astro.__version__} of the program.
 '''
 
 
@@ -408,5 +408,5 @@ main.__doc__ = '''
      See Readme or just run the code
 
  EXAMPLE:
-     pyFAT -t --cf /home/your_computer/FAT_dir/FAT_INPUT.config'
+     pyFAT  configuration_file=/home/your_computer/FAT_dir/FAT_INPUT.yml'
 '''

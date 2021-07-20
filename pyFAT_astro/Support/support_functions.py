@@ -2294,7 +2294,7 @@ def setup_configuration(cfg):
                     os.remove(test_dir+file)
                 except:
                     pass
-        my_resources = import_res.files('pyFAT.Installation_Check')
+        my_resources = import_res.files('pyFAT_astro.Installation_Check')
         for file in test_files:
             data = (my_resources / file).read_bytes()
             with open(cfg.input.main_directory+file,'w+b') as tmp:
