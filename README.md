@@ -43,7 +43,7 @@ We recommend the use of python virtual environments. If so desired a pyFAT insta
   	source FAT_venv/bin/activate
   	pip install pyFAT-astro
 
-You might have to restart the env: 
+You might have to restart the env:
 
   	deactivate
   	source FAT_venv/bin/activate
@@ -68,7 +68,7 @@ The Overview.png will contain a comparison with the fit performed by you. These 
 
 The plots should look like this:
 
-![Overview plot after running installation check.](Installation_Check/Overview.png)
+![Overview plot after running installation check.](pyFAT_astr/Installation_Check/Overview.png)
 
 Sometimes, due to updates in SoFiA2 or TiRiFiC, the check might show differences beyond the tolerance limits. If these are small and you have checked the individual installations of SoFiA2, TiRiFiC and the Installation Check files are older than the latest SoFiA2 or TiRiFiC update, then the installation is probably correct and you can continue. Please do post an issue about the outdated installation check.
 
