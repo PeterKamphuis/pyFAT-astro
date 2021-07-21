@@ -416,15 +416,15 @@ def installation_check(Configuration, debug =False):
     succes = False
 
     try:
-        diff = np.array(Model_values,dtype=float)-np.array(Fitted_values,dtype=float)
+        diff = np.abs(np.array(Model_values,dtype=float)-np.array(Fitted_values,dtype=float))
         if debug:
             print_log(f'''INSTALLATION_CHECK: the found differences
 {'':8s}{diff}
 ''',Configuration['OUTPUTLOG'])
-        too_much = np.array(np.where(diff > 1e-3),dtype=float)
+        too_much = np.array(np.where(diff > 1e-3),dtype=bool)
         if debug:
             print_log(f'''INSTALLATION_CHECK: at the locations
-{'':8s}{too_much}
+{'':8s}{too_much}{np.where(diff > 1e-3)}
 {'':8s}{too_much.size}
 ''',Configuration['OUTPUTLOG'])
 
@@ -446,16 +446,16 @@ def installation_check(Configuration, debug =False):
 !!!! FAT ran through the fitting process but the !!!!!
 !!!! fitted values differ too much from their    !!!!!
 !!!! expectations. Please update SoFiA and other !!!!!
-!!!! dependencies. If you are unable to resolve  !!!!!
-!!!! resolve the issue please file a bug report  !!!!!
-!!!! at:                                         !!!!!
+!!!! dependencies. I f you have done so and this !!!!!
+!!!! message remains, the check is likely out of !!!!!
+!!!! date. If you are unable to resolve the issue!!!!!
+!!!! please file a bug report at:                !!!!!
 !!!!                                             !!!!!
 !!!! https://github.com/PeterKamphuis/pyFAT/issues !!!!!
 !!!!                                             !!!!!
 !!!! Please add the Log.txt file in the directory!!!!!
-!!!! Installation_Check and the Finalmodel.def   !!!!!
-!!!! in the Installation_Check/Finalmodel/       !!!!!
-!!!! directory to your report.                   !!!!!
+!!!!{Configuration['LOG_DIRECTORY']}!!!!!
+!!!! and the Finalmodel.def.                     !!!!!
 !!!!---------------------------------------------!!!!!
 ''',Configuration['OUTPUTLOG'],screen =True)
 
