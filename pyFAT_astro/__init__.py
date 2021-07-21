@@ -7,7 +7,7 @@ import subprocess
 def report_version():
     # Distutils standard  way to do version numbering
     try:
-        __version__ = pkg_resources.require("pyFAT")[0].version
+        __version__ = pkg_resources.require("pyFAT-astro")[0].version
     except pkg_resources.DistributionNotFound:
         __version__ = "dev"
     # perhaps we are in a github with tags; in that case return describe
