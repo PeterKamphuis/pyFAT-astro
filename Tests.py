@@ -34,19 +34,19 @@ Configuration = {'INNER_FIX': 4}
 Configuration['FITTING_DIR']=f"{homedir}/FAT_Main/FAT_Testers/Database-09-10-2020/Mass2.5e+12-i20d14.0-7.5pa35.0w0.0-0.0-No_Flare-ba12SNR8bm20.0-20.0ch4.0-Arms-No_Bar-rm0.0/"
 #Configuration['FITTING_DIR']=f"{homedir}/FAT_Main/FAT_Testers/Database-09-10-2020/Mass5.0e+10-i42.0d15.0-12.0pa115w0.1-0.07-Flared-ba10SNR8.0bm10.0-10.0ch4.0-No_Arms-No_Bar-rm0.0/"
 #Configuration['FITTING_DIR']= f"{homedir}/FAT_Main/Test_Sets/From_Bochum/Mass2.5e+11-i48.0d13.0-7.5pa115w0.07-0.15-No_Flare-ba15SNR1bm10.0-10.0ch4.0-No_Arms-No_Bar-rm0.0/"
-Configuration['FITTING_DIR']= f"{homedir}/FAT_Main/FAT_Testers/Database-09-10-2020/M_83_6.0Beams_3.0SNR/"
+#Configuration['FITTING_DIR']= f"{homedir}/FAT_Main/FAT_Testers/Database-09-10-2020/M_83_6.0Beams_3.0SNR/"
 #Configuration['FITTING_DIR']= f"{homedir}/FAT_Main/FAT_Testers/Database-09-10-2020/Mass2.5e+12-i15d14.0-7.5pa35.0w0.0-0.0-No_Flare-ba12SNR8bm20.0-20.0ch4.0-Arms-No_Bar-rm0.0/"
 #Configuration['FITTING_DIR']= f"{homedir}/FAT_Main/FAT_Testers/Database-09-10-2020/NGC_3198_36.9Beams_1.0SNR/"
-Configuration['FITTING_DIR']= f"{homedir}/FAT_Main/FAT_Testers/LVHIS-26_3/HPASS00018/"
+#Configuration['FITTING_DIR']= f"{homedir}/FAT_Main/FAT_Testers/LVHIS-26_3/HPASS00018/"
 
-#Fits_Files = {'ORIGINAL_CUBE': "Convolved_Cube.fits"}
+Fits_Files = {'ORIGINAL_CUBE': "Convolved_Cube.fits"}
 
-#Configuration['CUBENAME']= 'Convolved_Cube'
-#Configuration['BASE_NAME']= 'Convolved_Cube_FAT'
-Fits_Files = {'ORIGINAL_CUBE': "Cube.fits"}
-Configuration['CUBENAME']= 'Cube'
-Configuration['BASE_NAME']= 'Cube_FAT'
-Configuration['SUB_DIR']= 'Mass2.5e+12-i30d14.0-7.5pa35.0w0.0-0.0-No_Flare-ba12SNR8bm20.0-20.0ch4.0-Arms-No_Bar-rm0.0'
+Configuration['CUBENAME']= 'Convolved_Cube'
+Configuration['BASE_NAME']= 'Convolved_Cube_FAT'
+#Fits_Files = {'ORIGINAL_CUBE': "Cube.fits"}
+#Configuration['CUBENAME']= 'Cube'
+#Configuration['BASE_NAME']= 'Cube_FAT'
+Configuration['SUB_DIR']= 'Mass2.5e+12-i20d14.0-7.5pa35.0w0.0-0.0-No_Flare-ba12SNR8bm20.0-20.0ch4.0-Arms-No_Bar-rm0.0/'
 
 #Configuration['CUBENAME']= 'Convolved_Cube'
 #Configuration['BASE_NAME']= 'Convolved_Cube_FAT'
@@ -106,6 +106,7 @@ for key in other_keys:
 Configuration['RING_SIZE'] = 1.
 Configuration['OPTIMIZED'] = False
 Configuration['NCPU'] = 1.
+Configuration['LOOPS'] = 3
 Configuration['HANNING'] = False
 Configuration['FIX_INCLINATION'] = [False,False]
 Configuration['FIX_SDIS'] = [False,False]
@@ -375,4 +376,4 @@ basic.__doc__ =f'''
 
 
 if __name__ == '__main__':
-    Test_Regularise()
+    Test_Overview()

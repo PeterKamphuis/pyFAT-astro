@@ -19,22 +19,38 @@ Requirements
 The code requires full installation of:
 
     python v3.6 or higher
-    astropy, matplotlib, numpy and scipy (Versions unknown for now)
+    numpy>=1.14, scipy, astropy, omegaconf, matplotlib, future-fstrings, importlib_resources>=3.3.0 (These should be managed through a pip install)
     TiRiFiC v2.2.3 or higher
     SoFiA2  
 
-[astropy](https://www.astropy.org/), [python](https://www.python.org/),[TiRiFiC](http://gigjozsa.github.io/tirific/download_and_installation.html), [SoFiA2](https://github.com/SoFiA-Admin/SoFiA-2)
+[python](https://www.python.org/),[TiRiFiC](http://gigjozsa.github.io/tirific/download_and_installation.html), [SoFiA2](https://github.com/SoFiA-Admin/SoFiA-2)
 
-TiRiFiC and SoFiA2 should be accessible for subproccess calls this normally means that it should be possible to invoke them propoerly from the command line.
+TiRiFiC and SoFiA2 should be accessible for subproccess calls. This normally means that it should be possible to invoke them properly from the command line.
+TiRiFiC should be installed as tirific (standard) and can be installed through the kern-suite (https://kernsuite.info)
+SoFiA2 should be installed as sofia2 or sofia, pyFAT will first check for the existence of the sofia2 command, if this does not exist it will look for the sofia command and assume it is SoFiA2 if it can run.
 
 Installation
 ------------
 
-Unpack the zip file in a desired directory and you are ready to run FAT from this directory.
+Download the source code from the Github or simply install with pip as:
+
+  	pip install pyFAT-astro
+
+This should also install all required python dependencies.
+We recommend the use of python virtual environments. If so desired a pyFAT installation would look like:
+
+  	python3 -m venv FAT_venv
+  	source FAT_venv/bin/activate
+  	pip install pyFAT-astro
+
+You might have to restart the env: 
+
+  	deactivate
+  	source FAT_venv/bin/activate
 
 Once you have installed FAT you can check that it has been installed properly by running FAT as.
 
-  FAT>python3 FAT.py --ic
+  	FAT>  pyFAT installation_check=True
 
 This should take typically 10 min and should finish with the message:
 
@@ -46,9 +62,9 @@ This should take typically 10 min and should finish with the message:
 The check consists of fitting a flat disk on NGC 2903. The data for this galaxy were take as part of the WHISP program.
 This survey is decribed in [van der Hulst et al. (2001)](http://adsabs.harvard.edu/abs/2001ASPC..240..451V) and the data can be found at [Westerbork on the Web](http://wow.astron.nl/) or the [WHISP page](https://www.astro.rug.nl/~whisp/).
 
-If you get any other message please do not hesitate to file an issue here. Do not however that if you perform this check on a unreleased version/branch it might not perform well. So always check with the master branch.
+If you get any other message please do not hesitate to file an issue on the GitHub (https://github.com/PeterKamphuis/pyFAT). Do note however that if you perform this check on a unreleased version/branch it might not perform well. So always check with the master branch.
 
-The Overview.png will contain a comparison with the fit performed by you. These should be the same (the correct fit is classified Input.)
+The Overview.png will contain a comparison with the fit performed by you. These should be the same (the correct fit is classified as Input.)
 
 The plots should look like this:
 
@@ -60,95 +76,65 @@ Sometimes, due to updates in SoFiA2 or TiRiFiC, the check might show differences
 
 Running FAT
 -----------
-FAT is currently run under python3 and simply run as a script.
+FAT is currently run under python and can be run from the command line
 
-    FAT> python3 FAT.py -h
+    FAT> pyFAT -h
 
 Will provide an overview of call options. For the most basic usage one can call FAT with a configuration file.
 
-    FAT> python3 FAT.py -c pathtodir/configfile.config
+    FAT> pyFAT configuration_file=FAT_Input.yml
 
-FAT is intended for batch fitting and as such it is recommended
+or a single Cube
 
+    FAT> pyFAT cube_name=Input_Cube.fits
 
-All information that the code needs about output directories fitting steps and input parameters are taken from the configfile.
-If a config file is not given it will look for the file 'FAT_INPUT.config' in the directory from which FAT is run.
-The default support directory is ./Support however you can specify an alternative directory with the keyword support.
+Where Input_Cube.fits is the observation to be fitted. In this mode configuration_file can still be used to specify fit settings but catalogue and location setting will be ignored. !! If cube_name is set in either the command line or the configuration file this always will always trigger the singular fitting instead of batch fitting.
+
+FAT is intended for batch fitting and as such it is recommended to have all source in separate directories
 
 Configuration File
 ------
 
-A configuration file will require the following parameters:
+pyFAT uses OmegaConf (https://github.com/omry/omegaconf) to handle the input settings. pyFAT can be ran with default settings or settings from a yml configuration file or with command line input. For batch fitting one needs to set an input catalogue with input for each galaxy.
 
-        catalogue=Path_to_catalog_dir/Catalog.txt
+A configuration file with all default values and an example catalogue file can be printed by
 
-The code requires a catalogue with input sources to know which cubes to fit and where they are (See Below) the catalogue keyword should provide the path to this catalogue. There is no default for this.
+  pyFAT print_examples=True
 
-        maindir=Path_to_dir_with_input/
+In a run pyFAT first checks the defaults, then configuration yaml and finally the command line input. This mean that if a value is set in all three input methods the one from the command line is used.
 
-maindir should contain the path where the directories for all galaxies are stored. FAT can produce large amounts of output if requested (e.g. Models for each step, xvdiagrams, Fitting logs, see maps_output parameter). In order to keep this managable each galaxy requires its own directory. There is no default for this parameter.
+The yaml file has three main sections input, output, fitting that contain several parameters that can adjust how pyFAT runs the specifics of each parameter is explained in read the docs.
 
-        outputcatalogue=Path/nameofresult.txt
+In the input section one need to set the catalogue that contains all the galaxies that need to be fitted.
 
-In these three variables `Path_to_catalog_dir`,`Path_to_dir_with_input` and `Path` should be replaced with the local path name to where your input catalog can be found, the path to the directory where the galaxy directories reside and the path to where you want the output catalog to be.
-The code will write a summary of the succes of the fit for each galaxy in this file.
+  catalogue = Path_to_catalog_dir/Your_Catalog.txt
 
-        new_output='y'
+How to arrange you catalogue is specified below. If you have already ran sofia 2 the resultsing output catalogue can be fed to pyFAT directly if you have produced cubelets and masks. If so pyFAT will automatically create a directory output_FAT_cubelets in the main directory and create directories for all sources in the sofia catalogue. To use this stage it is crucial that in the fitting section you add 'Sofia_Catalogue' to the fitting stages.
 
-new_ouput controls whether you want a new output catalogue with the summary of the fits done by FAT. If set to 'n'  the existing catalogue will be appendended. Typically you would want new output when starting a new batch fit and append if you are restarting a batch fit. Default ='y'
+If you are using hanning smoothed cube you should also set
 
-        startgalaxy=0
+  hanning_smoothing=True
 
-The catalogue number at which the code should start. The default is -1 which is the first line
+in the input section.
 
-        endgalaxy=-1
+In the fitting section of the configuration file one should set the stages that one want to fit.
 
-The catalogue number at which the code should stop. The default is -1 which means that it should run until the end of the catalog.
+  fitting_stages: ['']
 
-        outputlog=fitlog.txt
+The possible stages are
 
-The name of a log file that will trace the iterations and steps that the code is executing for each galaxy. This file is written into the galaxy directory. If left out no log file will be written and additional output will be printed to the terminal.
+  Create_FAT_Cube: Create a FAT compatible cube from the original cube. This will overwrite any previous FAT cube present. If omitted it is assumed the Cube is present in the fitting directory
 
-        new_log='y'
+  Sofia_Catalogue: The catalogue is assumed to be a sofia catalogue and all sources in the catalogue are to be fitted
 
-Do you want to write a new log file. If set to 'n'  the existing log file will be appendended. Default='y'
+  Run_Sofia: Run Sofia on the FAT cube and  process the output
 
-        velocity_resolution=1
+  Existing_Sofia: It is assumed the Sofia output exist and specified in the fitting catalogue, this means a catalogue exists for every cubelet
 
-The velocity resolution of the data cubes. If set to zero the code assume that the instrumental dispersion is equal to a (1.2 x channel)/(2 x SQRT(2ln2)) otherwise (1+vresolution) x channel/(2 x SQRT(2ln2)). That is, if set to 1 it assumes Hanning smoothing. Default=1.
+  Fit_Tirific_OSC: Run FAT using the Tirific program in multiple iterations and smooth
 
-        maps_output = 2
-
-Maps_output controls the amount of outpur created by FAT.  0.= all possible output (This is a lot), 1= all steps model + maps + def files, 2 = Final model + maps + def files for steps + logs, 3 = Only final model def + logs. Default = 2
-
-	warp_output = 0
-
-FAT provides the possibility to get information about the fitted warp (Tiltograms, Warp radius, Max angle) if this is required warp_output should be set to 1. 	
-
-# 1 = start from orginal cube (Default)
-# 2 = start from FAT cube if present
-# 3 =  use provided preprocessing from Sofia
-# 4 =  Skip Central Convergence
-    start_point=1        
-
-Parameter for setting the type of input for the initial guesses. possible setting are 1, 2, 3, 4
-1) Start from orginal cube.
-2) Start from the cube that has been made FAT compliant
-3) Start from pre-processed SoFiA2 output
-4) Start after the Central Convergence step. This assumes this step has been ran previously and its output is present.
-
-        finishafter=2.
-
-
-Parameter for finishing the fitting process early. if set to one the program finishes after fitting the flat disk. Default = 2
-
-        opt_pixelbeam=4.
-
-The amount of pixels in the FWHM of the minor axis. Default = 4.
-
-
-
-A default config file (FAT_INPUT.config) is included in the distribution.
+Note that if pre created sofia output is used several optimization routines are skipped as the sofia output is assumed to be reasonable.
+If you want to use these routines it is adviced to first run create_FAT_cube then run Sofia and then feed the output to pyFAT.
 
 Input Catalog
 -----------
@@ -163,4 +149,4 @@ the distance is the distance to the galaxy in Mpc. This is used to make some ini
 The directory name is the name of the directory of the galaxy to be fitted. This directory should be located in the specified maindir in the config file.
 cubename is the name of the cube to be fitted. This should be without the fits extension.
 
-An example catalog is included in the distribution. This also gives examples for how to set up a catalog when using pre-made sofia input, i.e. allnew=2
+An example catalog is included in the distribution. This also gives examples for how to set up a catalog when using pre-made sofia input.

@@ -1,0 +1,16 @@
+number|distance|directoryname|cubename
+0|27|TheSingleGalaxyDirectory|TheNameoftheCubetobefitted(without .fits extension)
+1|14|TheSecondGalaxyDirectory|TheNameoftheCubetobefitted(without .fits extension)
+
+Or for SofiA pre-processed input
+
+number|distance|directoryname|cubename|basename
+0|27|TheSingleGalaxyDirectory|TheNameoftheCubetobefitted(without .fits extension) |The basename and dir for Sofia products (Only important when start_point=3)
+1|14|TheSecondGalaxyDirectory|TheNameoftheCubetobefitted(without .fits extension) |The basename and dir for Sofia products (Only important when start_point=3)
+
+Preprocessed Sofia2 output can be anywhere the path is absolute or relative to directory name and will be copied to the directory Sofia_Output to avoid modifying the original products
+!!!!!!!!!!!!!!!!!!!!This means these products should not be in Sofia_Output with the basename+_FAT
+
+Please note that Fat will always fit the brightest source in the sofia catalogue. The best way to make sure that the right object is fitted is to present a catalogue with a single object.
+If the distance is -1 it will be inferred from the VSYS through a hubble flow. the minimum distance is 0.5 Mpc to avoid run away arguments
+The header lines are important for FAT to recognize the correct column. Only their order can be changed.

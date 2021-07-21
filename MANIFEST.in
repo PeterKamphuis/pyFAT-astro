@@ -1,9 +1,9 @@
-include pyFAT/bin/pyFAT
-recursive-include pyFAT/ *.py
-recursive-include pyFAT/Support *.py
-recursive-include pyFAT/Templates *.def
-recursive-include pyFAT/Templates *.par
-recursive-include pyFAT/Installation_Check *.fits
-recursive-include pyFAT/Installation_Check *.def
-recursive-include pyFAT/Installation_Check *.config
-recursive-include pyFAT/Installation_Check *.txt
+include pyFAT-astro/bin/pyFAT
+recursive-include pyFAT_astro/ *.py
+recursive-include pyFAT_astro/Support *.py
+recursive-include pyFAT_astro/Templates *.def
+recursive-include pyFAT_astro/Templates *.par
+recursive-include pyFAT_astro/Installation_Check *.fits
+recursive-include pyFAT_astro/Installation_Check *.def
+recursive-include pyFAT_astro/Installation_Check *.config
+recursive-include pyFAT_astro/Installation_Check *.txt

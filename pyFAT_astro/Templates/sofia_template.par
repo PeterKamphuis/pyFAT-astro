@@ -1,0 +1,153 @@
+### ____________________________________________________________________ ###
+###                                                                      ###
+### SoFiA 2.1.1 (default_parameters.par) - Source Finding Application    ###
+### Copyright (C) 2020 Tobias Westmeier                                  ###
+### ____________________________________________________________________ ###
+###                                                                      ###
+### Address:  Tobias Westmeier                                           ###
+###           ICRAR M468                                                 ###
+###           The University of Western Australia                        ###
+###           35 Stirling Highway                                        ###
+###           Crawley WA 6009                                            ###
+###           Australia                                                  ###
+###                                                                      ###
+### E-mail:   tobias.westmeier [at] uwa.edu.au                           ###
+### ____________________________________________________________________ ###
+###                                                                      ###
+### This program is free software: you can redistribute it and/or modify ###
+### it under the terms of the GNU General Public License as published by ###
+### the Free Software Foundation, either version 3 of the License, or    ###
+### (at your option) any later version.                                  ###
+###                                                                      ###
+### This program is distributed in the hope that it will be useful,      ###
+### but WITHOUT ANY WARRANTY; without even the implied warranty of       ###
+### MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the         ###
+### GNU General Public License for more details.                         ###
+###                                                                      ###
+### You should have received a copy of the GNU General Public License    ###
+### along with this program. If not, see http://www.gnu.org/licenses/.   ###
+### ____________________________________________________________________ ###
+###                                                                      ###
+
+
+# List of default parameter settings for SoFiA
+#
+# Note that SoFiA's default parameters are actually hard-coded in the
+# file Parameter.c, and any changes to this file will have no effect.
+# This file can instead be used as a template for setting up your own
+# parameter files.
+
+
+# Global settings
+
+pipeline.verbose           =  true
+pipeline.pedantic          =  true
+pipeline.threads           =  0
+
+
+# Input
+
+input.data                 =  Template.fits
+input.region               =
+input.gain                 =
+input.noise                =
+input.weights              =
+input.mask                 =
+input.invert               =  false
+
+
+# Flagging
+
+flag.region                =
+flag.auto                  =  false
+flag.threshold             =  5.0
+flag.radiusSpatial         =  0
+flag.log                   =  true
+
+
+# Noise scaling
+
+scaleNoise.enable          =  false
+scaleNoise.mode            =  spectral
+scaleNoise.statistic       =  mad
+scaleNoise.fluxRange       =  negative
+scaleNoise.windowXY        =  25
+scaleNoise.windowZ         =  15
+scaleNoise.gridXY          =  0
+scaleNoise.gridZ           =  0
+scaleNoise.interpolate     =  false
+scaleNoise.scfind          =  false
+
+
+# S+C finder
+
+scfind.enable              =  true
+scfind.kernelsXY           =  0, 4, 8
+scfind.kernelsZ            =  2, 4, 8, 16
+scfind.threshold           =  5.0
+scfind.replacement         =  2.0
+scfind.statistic           =  mad
+scfind.fluxRange           =  negative
+
+
+# Threshold finder
+
+threshold.enable           =  false
+threshold.threshold        =  5.0
+threshold.mode             =  relative
+threshold.statistic        =  mad
+threshold.fluxRange        =  negative
+
+
+# Linker
+
+linker.radiusXY            =  3
+linker.radiusZ             =  3
+linker.minSizeXY           =  6
+linker.minSizeZ            =  8
+linker.maxSizeXY           =  0
+linker.maxSizeZ            =  0
+linker.keepNegative        =  false
+
+
+# Reliability
+
+reliability.enable         =  false
+reliability.threshold      =  0.9
+reliability.scaleKernel    =  0.4
+reliability.fmin           =  15.0
+reliability.plot           =  true
+
+
+# Mask dilation
+
+dilation.enable            =  true
+dilation.iterations        =  100
+dilation.threshold         =  0.0005
+
+
+# Parameterisation
+
+parameter.enable           =  true
+parameter.wcs              =  true
+parameter.physical         =  false
+parameter.prefix           =  sofia
+parameter.offset           =  false
+
+
+# Output
+
+output.directory           =
+output.filename            =
+output.writeCatASCII       =  true
+output.writeCatXML         =  false
+output.writeCatSQL         =  false
+output.writeNoise          =  true
+output.writeFiltered       =  false
+output.writeMask           =  true
+output.writeMask2d         =  false
+output.writeRawMask        =  false
+output.writeMoments        =  false
+output.writeCubelets       =  false
+output.marginCubelets      =  0
+output.overwrite           =  true
