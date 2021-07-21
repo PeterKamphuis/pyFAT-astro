@@ -274,13 +274,16 @@ def check_size(Configuration,Tirific_Template, fit_type = 'Undefined', stage = '
         size_in_beams = (radii[new_rings-1]-1./5.*Configuration['BEAM'][0])/Configuration['BEAM'][0]
     else:
         size_in_beams = (radii[-1]-1./5.*Configuration['BEAM'][0])/Configuration['BEAM'][0]+Configuration['RING_SIZE']
+    if debug:
+        print_log(f'''CHECK_SIZE: Before checking against the minimum and maximum the size in beams = {size_in_beams}
+''', Configuration['OUTPUTLOG'],debug=True)
     size_in_beams = set_limits(size_in_beams, Configuration['MIN_SIZE_IN_BEAMS'], Configuration['MAX_SIZE_IN_BEAMS'])
     # limit between 3 and the maximum allowed from the sofia estimate
     size_in_beams,ring_size,number_of_rings = set_ring_size(Configuration, size_in_beams=size_in_beams,check_set_rings = True, debug=debug)
 
     print_log(f'''CHECK_SIZE: We find the following size in beams {size_in_beams:.1f} with size {ring_size:.1f}.
-{'':8s}CHECK_SIZE: The previous iteration had {Configuration['SIZE_IN_BEAMS']:.1f} rings with size  {Configuration['RING_SIZE']:.1f} .
-{'':8s}CHECK_SIZE: This results in {int(new_rings):.1f} rings in the model compared to {int(Configuration['NO_RINGS'])} previously.
+{'':8s}CHECK_SIZE: The previous iteration had a size of {Configuration['SIZE_IN_BEAMS']:.1f} with rings  {Configuration['RING_SIZE']:.1f} times the beam. .
+{'':8s}CHECK_SIZE: This results in {int(number_of_rings):.1f} rings in the model compared to {int(Configuration['NO_RINGS'])} previously.
 ''', Configuration['OUTPUTLOG'],screen=True)
     if f"{ring_size:.1f}" != f"{Configuration['RING_SIZE']:.1f}":
         Configuration['NEW_RING_SIZE'] = True

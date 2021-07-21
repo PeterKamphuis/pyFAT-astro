@@ -437,7 +437,7 @@ def check_source(Configuration, Fits_Files, debug = False):
     Configuration['SIZE_IN_BEAMS'] = set_limits(maj_extent/(Configuration['BEAM'][0]/3600.),1.0,Configuration['MAX_SIZE_IN_BEAMS'])
     if Configuration['SIZE_IN_BEAMS'] <= Configuration['TOO_SMALL_GALAXY']:
         print_log(f'''CHECK_SOURCE: This galaxy has an estimated size of  {2*Configuration['SIZE_IN_BEAMS']} beams in diameter.
-{'':8s}This is not large check_sizeenough too fit. We will exit this fit.
+{'':8s}This is not large enough too fit. We will exit this fit.
 ''',Configuration['OUTPUTLOG'])
         raise BadSourceError('The extracted source is too small')
     set_ring_size(Configuration, debug = debug)
@@ -456,13 +456,14 @@ def check_source(Configuration, Fits_Files, debug = False):
 
     # The extent is fairly well determined and the maximum should be no more than +3 beams and a minimum no less than 4
     # Swithcing here from doubled outer rings causes problems though
+    SNR_range=set_limits(Max_SNR,1.9, 2.6)
 
-    Configuration['MAX_SIZE_IN_BEAMS'] = set_limits(Configuration['SIZE_IN_BEAMS']*1.2,1.,Configuration['MAX_SIZE_IN_BEAMS'])
+    Configuration['MAX_SIZE_IN_BEAMS'] = set_limits(Configuration['SIZE_IN_BEAMS']*3.125/SNR_range+3.,1.,Configuration['MAX_SIZE_IN_BEAMS'])
     Configuration['MIN_SIZE_IN_BEAMS'] = set_limits(Configuration['SIZE_IN_BEAMS']-3.,Configuration['TOO_SMALL_GALAXY'],Configuration['SIZE_IN_BEAMS'])
     Configuration['NO_RINGS'] = calc_rings(Configuration,debug=debug)
     Configuration['LAST_RELIABLE_RINGS'] = [Configuration['NO_RINGS'],Configuration['NO_RINGS']]
     print_log(f'''CHECK_SOURCE: From the original Configuration and SoFiA we find:
-{"":8s}CHECK_SOURCE: The maximum diameter we will allow  is  {2.*Configuration['MAX_SIZE_IN_BEAMS']} beams.
+{"":8s}CHECK_SOURCE: The maximum diameter we will allow  is  {2.*Configuration['MAX_SIZE_IN_BEAMS']} beams. This is based on a SNR range of {SNR_range}
 {"":8s}CHECK_SOURCE: The minimum diameter we will allow  is  {2.*Configuration['MIN_SIZE_IN_BEAMS']} beams.
 {"":8s}CHECK_SOURCE: We start with a diameter of {2*Configuration['SIZE_IN_BEAMS']} beams in the model.
 {"":8s}CHECK_SOURCE: SoFiA found a PA of {kin_pa:.2f} and we use a PA = {pa[0]:.2f} +/- {pa[1]:.2f}
