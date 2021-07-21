@@ -18,7 +18,7 @@ requirements = [
 ]
 
 PACKAGE_NAME = 'pyFAT_astro'
-__version__ = 'v0.0.4'
+__version__ = 'v0.0.5'
 
 
 with open("README.md", "r") as fh:
@@ -41,7 +41,7 @@ setup(name=PACKAGE_NAME,
       scripts=["bin/" + j for j in os.listdir("bin")],
       license="GNU GPL v3",
       classifiers=[
-          "Development Status :: 4 - Beta",
+          "Development Status :: 1 - Beta",
           "Intended Audience :: Science/Research",
           "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
           "Operating System :: POSIX :: Linux",
