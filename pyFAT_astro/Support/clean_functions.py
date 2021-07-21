@@ -318,7 +318,8 @@ def cleanup_final(Configuration,Fits_Files, debug =False):
 ''',Configuration['OUTPUTLOG'],debug = True)
     clean_files = [Fits_Files['OPTIMIZED_CUBE'],f"{Configuration['USED_FITTING']}_In.def",\
                     "clean_map_0.fits","dep_map_0.fits","minimum_map_0.fits","rot_map_0.fits",\
-                    "clean_map_1.fits","dep_map_1.fits","minimum_map_1.fits","rot_map_1.fits"\
+                    "clean_map_1.fits","dep_map_1.fits","minimum_map_1.fits","rot_map_1.fits",
+                    'tmp_incl_check_In.def'\
                     ]
     for file in clean_files:
     # Not remove anything but cleanup all

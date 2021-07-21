@@ -457,8 +457,8 @@ def check_source(Configuration, Fits_Files, debug = False):
     # The extent is fairly well determined and the maximum should be no more than +3 beams and a minimum no less than 4
     # Swithcing here from doubled outer rings causes problems though
 
-    Configuration['MAX_SIZE_IN_BEAMS'] = set_limits(Configuration['SIZE_IN_BEAMS']+5.,1,Configuration['MAX_SIZE_IN_BEAMS'])
-    Configuration['MIN_SIZE_IN_BEAMS'] = set_limits(Configuration['SIZE_IN_BEAMS']-7.,Configuration['TOO_SMALL_GALAXY'],Configuration['SIZE_IN_BEAMS'])
+    Configuration['MAX_SIZE_IN_BEAMS'] = set_limits(Configuration['SIZE_IN_BEAMS']*1.2,1.,Configuration['MAX_SIZE_IN_BEAMS'])
+    Configuration['MIN_SIZE_IN_BEAMS'] = set_limits(Configuration['SIZE_IN_BEAMS']-3.,Configuration['TOO_SMALL_GALAXY'],Configuration['SIZE_IN_BEAMS'])
     Configuration['NO_RINGS'] = calc_rings(Configuration,debug=debug)
     Configuration['LAST_RELIABLE_RINGS'] = [Configuration['NO_RINGS'],Configuration['NO_RINGS']]
     print_log(f'''CHECK_SOURCE: From the original Configuration and SoFiA we find:
