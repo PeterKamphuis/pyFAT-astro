@@ -1,14 +1,7 @@
 # -*- coding: future_fstrings -*-
 # This module contains a set of functions and classes that are used to run external programs
 
-class BadSourceError(Exception):
-    pass
-class SofiaRunError(Exception):
-    pass
-class InclinationRunError(Exception):
-    pass
-class SofiaFaintError(Exception):
-    pass
+
 
 from pyFAT_astro.Support.support_functions import print_log, convert_type,set_limits,rename_fit_products,\
                               set_ring_size,calc_rings,get_usage_statistics,get_inner_fix,convertskyangle,\
@@ -22,6 +15,9 @@ from pyFAT_astro.Support.modify_template import write_new_to_template,smooth_pro
                                           regularise_profile,set_fitting_parameters,check_size, \
                                           no_declining_vrot, set_new_size,set_errors,get_warp_slope,check_angles
 from pyFAT_astro.Support.constants import H_0
+from pyFAT_astro.Support.fat_errors import SofiaFaintError,BadConfigurationError,\
+                                              InclinationRunError,SofiaRunError,BadSourceError
+
 from astropy.wcs import WCS
 from astropy.io import fits
 
@@ -475,10 +471,15 @@ def check_source(Configuration, Fits_Files, debug = False):
 
 
 
-    if Configuration['HANNING_SMOOTHED']:
+    if Configuration['CHANNEL_DEPENDENCY'].lower() == 'hanning':
         vres = (Configuration['CHANNEL_WIDTH']*2)/(2.*np.sqrt(2.*np.log(2)))
-    else:
+    elif Configuration['CHANNEL_DEPENDENCY'].lower() == 'sinusoidal' :
         vres = (Configuration['CHANNEL_WIDTH']*1.2)/(2.*np.sqrt(2.*np.log(2)))
+    elif Configuration['CHANNEL_DEPENDENCY'].lower() == 'independent':
+        vres = Configuration['CHANNEL_WIDTH']
+    else:
+        raise BadConfigurationError('Something went wrong in the Configuration setup')
+
     #if inclination[0] < 40:
     #    max_vrot=w50/2./np.sin(np.radians(abs(inclination[0]+5.)))
     #else:

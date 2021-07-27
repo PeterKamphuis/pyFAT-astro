@@ -120,12 +120,13 @@ Exiting moments.''')
             #merge yml file with defaults
                     cfg = OmegaConf.merge(cfg,yaml_config)
                     succes = True
-                except:
-                    inputconf.configuration_file = input(f'''
-                            You have provided a config file ({inputconf.configuration_file}) but it can't be found.
-                            If you want to provide a config file please give the correct name.
-                            Else press CTRL-C to abort.
-configuration_file = ''')
+                except FileNotFoundError:
+                    cfg_input.configuration_file = input(f'''
+    You have provided a config file ({cfg_input.configuration_file}) but it can't be found.
+    If you want to provide a config file please give the correct name.
+    Else press CTRL-C to abort.
+    configuration_file = ''')
+                
 
         cfg = OmegaConf.merge(cfg,inputconf)
         #Add none user mutable input

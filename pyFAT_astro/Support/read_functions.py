@@ -5,7 +5,7 @@ from pyFAT_astro.Support.support_functions import Proper_Dictionary,print_log,co
                                 obtain_border_pix, get_inclination_pa,get_vel_pa,columndensity,get_profile, get_kinematical_center,\
                                 create_directory,copy_homemade_sofia,clean_header
 from pyFAT_astro.Support.fits_functions import check_mask,clean_header
-
+from pyFAT_astro.Support.fat_errors import BadCatalogueError, NoConfigFile
 from astropy.io import fits
 from astropy.wcs import WCS
 from scipy import ndimage
@@ -34,12 +34,7 @@ import traceback
 
 from pyFAT_astro import Templates as templates
 #Function to read a FAT input Catalogue
-class BadCatalogueError(Exception):
-    pass
-class BadConfigurationError(Exception):
-    pass
-class NoConfigFile(Exception):
-    pass
+
 
 def catalogue(filename, debug = False):
     Catalogue = Proper_Dictionary({})
@@ -924,7 +919,7 @@ def sofia_catalogue(Configuration,Fits_Files, Variables =['id','x','x_min','x_ma
         if Configuration['SOFIA_RAN']:
             found = False
             beam_edge=2.
-            if Configuration['VEL_SMOOTH_EXTENDED'] or Configuration['HANNING_SMOOTHED'] :
+            if Configuration['VEL_SMOOTH_EXTENDED'] or Configuration['CHANNEL_DEPENDENCY'].lower() == 'hanning':
                 vel_edge = 1.
                 min_vel_edge = 0.
             else:

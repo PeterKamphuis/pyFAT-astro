@@ -1,7 +1,9 @@
 # -*- coding: future_fstrings -*-
 # This module contains a set of functions and classes that are used in several different Python scripts in the Database.
 
-
+from pyFAT_astro.Support.fat_errors import SupportRunError,SmallSourceError,\
+                                              FileNotFoundError,TirificKillError,\
+                                              InputError,ProgramError
 from collections import OrderedDict #used in Proper_Dictionary
 from inspect import getframeinfo,stack
 
@@ -27,18 +29,7 @@ import copy
 import warnings
 import re
 import subprocess
-class SupportRunError(Exception):
-    pass
-class SmallSourceError(Exception):
-    pass
-class FileNotFoundError(Exception):
-    pass
-class TirificKillError(Exception):
-    pass
-class InputError(Exception):
-    pass
-class ProgramError(Exception):
-    pass
+
 
 # A class of ordered dictionary where keys can be inserted in at specified locations or at the end.
 class Proper_Dictionary(OrderedDict):
@@ -2417,9 +2408,9 @@ Please provide the correct file name.
     for stage in Configuration['FITTING_STAGES']:
         while stage.lower() not in possible_stages_l:
             stage = input(f'''
-    The stage {stage} is not supported by FAT.
-    Please pick one of the following {', '.join(possible_stages)}.
-    : ''')
+The stage {stage} is not supported by FAT.
+Please pick one of the following {', '.join(possible_stages)}.
+: ''')
 
         if 'fit_' in stage.lower():
             fit_count += 1
@@ -2443,6 +2434,12 @@ Please provide the correct file name.
     if 'run_sofia' in Configuration['FITTING_STAGES'] and 'existing_sofia' in Configuration['FITTING_STAGES']:
         raise InputError(f"You are both providing existing sofia input and ask for sofia to be ran. This won't work exiting.")
 
+    #Check that the channel_dependency is acceptable
+    while Configuration['CHANNEL_DEPENDENCY'].lower() not in ['sinusoidal','independent','hanning']:
+        Configuration['CHANNEL_DEPENDENCY'] = input(f'''
+The channel dependency  {'CHANNEL_DEPENDENCY'} is not supported by FAT.
+Please pick one of the following {', '.join(['sinusoidal','independent','hanning'])}.
+: ''')
 
 
     #The output catalogue only needs to be in a valid directory as we create it

@@ -7,21 +7,11 @@ import copy
 from pyFAT_astro.Support.support_functions import set_rings,convertskyangle,sbr_limits,set_limits,print_log,set_limit_modifier,\
                               set_ring_size,calc_rings,finish_current_run,set_format,get_from_template,gaussian_function,fit_gaussian,\
                               get_ring_weights
-
+from pyFAT_astro.Support.fat_errors import InitializeError,CfluxError,FunctionCallError,BadConfigurationError
 import numpy as np
 from scipy.optimize import curve_fit
 from scipy.signal import savgol_filter
 from scipy.interpolate import CubicSpline,Akima1DInterpolator
-
-#Define some errors
-class InitializeError(Exception):
-    pass
-class CfluxError(Exception):
-    pass
-class FunctionCallError(Exception):
-    pass
-
-
 
 
 def arc_tan_function(axis,center,length,amplitude,mean):
@@ -2604,10 +2594,15 @@ def set_overall_parameters(Configuration, Fits_Files,Tirific_Template,stage = 'i
             Tirific_Template['BPA'] = f"{Configuration['BEAM'][2]:.2f}"
             Tirific_Template['RMS'] = f"{Configuration['NOISE']:.2e}"
 
-            if Configuration['HANNING_SMOOTHED']:
+            if Configuration['CHANNEL_DEPENDENCY'].lower() == 'hanning':
                 instrumental_vres = (Configuration['CHANNEL_WIDTH']*2)/(2.*np.sqrt(2.*np.log(2)))
-            else:
+            elif Configuration['CHANNEL_DEPENDENCY'].lower() == 'sinusoidal':
                 instrumental_vres = (Configuration['CHANNEL_WIDTH']*1.2)/(2.*np.sqrt(2.*np.log(2)))
+            elif Configuration['CHANNEL_DEPENDENCY'].lower() == 'independent':
+                instrumental_vres = 0.
+            else:
+                raise BadConfigurationError('Something went wrong in the Configuration setup')
+
             Tirific_Template['CONDISP'] = f"{instrumental_vres:.2f}"
             if flux:
                 Tirific_Template['CFLUX'] = f"{set_limits(flux/1.5e7,1e-6,1e-3):.2e}"

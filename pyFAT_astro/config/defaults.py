@@ -28,7 +28,7 @@ class Fitting:
 @dataclass
 class Input:
     main_directory: str =f'{os.getcwd()}'
-    hanning_smoothed: bool = False # is the input cube hanning smoothed
+    channel_dependency: str = 'sinusoidal' #'Options are independent, sinusoidal, hanning
     catalogue: Optional[str] = None
     tirific: str = "tirific" #Command to call tirific
     sofia2: str = "sofia2"   #Command to call sofia 2
@@ -55,7 +55,7 @@ class Advanced:
     minimum_warp_size: float = 3. # if the number of beams across the major axis/2. is less than this size we will only fit a flat disc,set here.
     minimum_rings: int = 3  # we need at least this amount of rings (Including 0 and 1/5 beam), set here
     too_small_galaxy: float = 1. # if the number of beams across the major axis/2 is less than this we will not fit the galaxy, set here
-
+    # Add the channel dependency, minimum inclination,
 @dataclass
 class defaults:
     print_examples: bool=False
