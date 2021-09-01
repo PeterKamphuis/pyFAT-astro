@@ -3,7 +3,7 @@
 
 from pyFAT_astro.Support.support_functions import Proper_Dictionary,print_log,convertRADEC,set_limits, remove_inhomogeneities, \
                                 obtain_border_pix, get_inclination_pa,get_vel_pa,columndensity,get_profile, get_kinematical_center,\
-                                create_directory,copy_homemade_sofia,clean_header
+                                create_directory,copy_homemade_sofia,clean_header,get_new_center
 from pyFAT_astro.Support.fits_functions import check_mask,clean_header
 from pyFAT_astro.Support.fat_errors import BadCatalogueError, NoConfigFile
 from astropy.io import fits
@@ -53,8 +53,8 @@ def catalogue(filename, debug = False):
                     Catalogue[key].append(float(input[i]))
                 else:
                     Catalogue[key].append(input[i])
-    if 'NUMBER' in Catalogue['ENTRIES']:
-        Catalogue['NUMBER'] = np.array(Catalogue['NUMBER'],dtype=int)
+    #if 'NUMBER' in Catalogue['ENTRIES']:
+    #    Catalogue['NUMBER'] = np.array(Catalogue['NUMBER'],dtype=int)
 
     return Catalogue
 catalogue.__doc__ =f'''
@@ -332,6 +332,9 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, debug
     map = Image[0].data
     hdr = Image[0].header
     mom0 = copy.deepcopy(Image)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        mom0_wcs = WCS(hdr)
     Image.close()
 
     if not center:
@@ -354,96 +357,125 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, debug
 {'':8s} minimum {minimum_noise_in_map}
 ''',Configuration['OUTPUTLOG'])
     beam_check=[Configuration['BEAM_IN_PIXELS'][0],Configuration['BEAM_IN_PIXELS'][0]/2.]
-    inclination_av, pa_av, maj_extent_av = get_inclination_pa(Configuration, mom0, center, cutoff = scale_factor* median_noise_in_map, debug = debug)
+    center_stable = False
+    center_counter = 0.
+    original_center = copy.deepcopy(center)
+    while not center_stable:
+        inclination_av, pa_av, maj_extent_av = get_inclination_pa(Configuration, mom0, center, cutoff = scale_factor* median_noise_in_map, debug = debug)
 
-    inclination_av = [inclination_av]
-    int_weight = [2.]
-    pa_av = [pa_av]
-    maj_extent_av = [maj_extent_av]
-    for mod in beam_check:
-        for i in [[-1,-1],[-1,1],[1,-1],[1,1]]:
-            center_tmp = [center[0]+mod*i[0],center[1]+mod*i[1]]
-            inclination_tmp, pa_tmp, maj_extent_tmp= get_inclination_pa(Configuration, mom0, center_tmp, cutoff = scale_factor* median_noise_in_map, debug = debug)
-            inclination_av.append(inclination_tmp)
-            pa_av.append(pa_tmp)
-            int_weight.append(mod/beam_check[0]*0.25)
-            maj_extent_av.append(maj_extent_tmp)
-    int_weight = np.array(int_weight)
-    weight = np.array([1./x[1] for x in inclination_av],dtype= float)*int_weight
-    inclination = np.array([np.nansum(np.array([x[0] for x in inclination_av],dtype=float)*weight)/np.nansum(weight),\
-                            np.nansum(np.array([x[1] for x in inclination_av],dtype=float)*weight)/np.nansum(weight)],dtype=float)
-    weight = np.array([1./x[1] for x in pa_av],dtype= float)
-    pa = np.array([np.nansum(np.array([x[0] for x in pa_av],dtype=float)*weight)/np.nansum(weight),\
-                            np.nansum(np.array([x[1] for x in pa_av],dtype=float)*weight)/np.nansum(weight)],dtype=float)
+        inclination_av = [inclination_av]
+        int_weight = [2.]
+        pa_av = [pa_av]
+        maj_extent_av = [maj_extent_av]
+        for mod in beam_check:
+            for i in [[-1,-1],[-1,1],[1,-1],[1,1]]:
+                center_tmp = [center[0]+mod*i[0],center[1]+mod*i[1]]
+                inclination_tmp, pa_tmp, maj_extent_tmp= get_inclination_pa(Configuration, mom0, center_tmp, cutoff = scale_factor* median_noise_in_map, debug = debug)
+                inclination_av.append(inclination_tmp)
+                pa_av.append(pa_tmp)
+                int_weight.append(mod/beam_check[0]*0.25)
+                maj_extent_av.append(maj_extent_tmp)
+        int_weight = np.array(int_weight)
+        weight = np.array([1./x[1] for x in inclination_av],dtype= float)*int_weight
+        inclination = np.array([np.nansum(np.array([x[0] for x in inclination_av],dtype=float)*weight)/np.nansum(weight),\
+                                np.nansum(np.array([x[1] for x in inclination_av],dtype=float)*weight)/np.nansum(weight)],dtype=float)
+        weight = np.array([1./x[1] for x in pa_av],dtype= float)
+        pa = np.array([np.nansum(np.array([x[0] for x in pa_av],dtype=float)*weight)/np.nansum(weight),\
+                                np.nansum(np.array([x[1] for x in pa_av],dtype=float)*weight)/np.nansum(weight)],dtype=float)
 
-    maj_extent= np.nansum(maj_extent_av*weight)/np.nansum(weight)
-    # For very small galaxies we do not want to correct the extend
-    if maj_extent/Configuration['BEAM'][0]/3600. > 3.:
-        maj_extent = maj_extent+(Configuration['BEAM'][0]/3600.*0.2/scale_factor)
+        maj_extent= np.nansum(maj_extent_av*weight)/np.nansum(weight)
+        if center_counter == 0:
+            original_pa = copy.deepcopy(pa)
+            original_maj_extent = copy.deepcopy(maj_extent)
+            original_inclination = copy.deepcopy(inclination)
 
-    if debug:
-        print_log(f'''GUESS_ORIENTATION: From the maps we find
+        if center_counter > 0 and not any([np.isfinite(maj_extent),np.isfinite(pa[0]),np.isfinite(inclination[0])]):
+            pa=original_pa
+            inclination=original_inclination
+            maj_extent= original_maj_extent
+            center =original_center
+            center_stable=True
+            break
+        # For very small galaxies we do not want to correct the extend
+        if maj_extent/Configuration['BEAM'][0]/3600. > 3.:
+            maj_extent = maj_extent+(Configuration['BEAM'][0]/3600.*0.2/scale_factor)
+
+        if debug:
+            print_log(f'''GUESS_ORIENTATION: From the maps we find
 {'':8s} inclination = {inclination}
 {'':8s} pa = {pa}
 {'':8s} size in beams = {maj_extent/(Configuration['BEAM'][0]/3600.)}
 ''',Configuration['OUTPUTLOG'])
-            #map[3*minimum_noise_in_map > noise_map] = 0.
-    # From these estimates we also get an initial SBR
-    maj_profile,maj_axis,maj_resolution = get_profile(Configuration,map, pa[0],center,debug=debug)
-    # let's get an intensity weighted center for the extracted profile.
+                #map[3*minimum_noise_in_map > noise_map] = 0.
+        # From these estimates we also get an initial SBR
+        maj_profile,maj_axis,maj_resolution = get_profile(Configuration,map, pa[0],center,debug=debug)
+        # let's get an intensity weighted center for the extracted profile.
 
-    center_of_profile = np.sum(maj_profile*maj_axis)/np.sum(maj_profile)
-    neg_index = np.where(maj_axis < 0.)[0]
-    pos_index = np.where(maj_axis > 0.)[0]
-    avg_profile = []
-    neg_profile = []
-    pos_profile = []
-    diff = 0.
-    for i in range(np.nanmin([neg_index.size,pos_index.size])):
-        avg_profile.append(np.nanmean([maj_profile[neg_index[neg_index.size-i-1]],maj_profile[pos_index[i]]]))
-        neg_profile.append(maj_profile[neg_index[neg_index.size-i-1]])
-        pos_profile.append(maj_profile[pos_index[i]])
-        #diff = diff+abs(avg_profile[i]-neg_profile[i])+abs(avg_profile[i]-pos_profile[i])
-        diff = diff+abs(pos_profile[-1]-neg_profile[-1])*abs(np.mean([pos_profile[-1],neg_profile[-1]]))
-    diff = diff/np.nanmin([neg_index.size,pos_index.size])
-    if debug:
-        print_log(f'''GUESS_ORIENTATION:'BMAJ in pixels, center of profile, center, difference between pos and neg
+        center_of_profile = np.sum(maj_profile*maj_axis)/np.sum(maj_profile)
+        neg_index = np.where(maj_axis < 0.)[0]
+        pos_index = np.where(maj_axis > 0.)[0]
+        avg_profile = []
+        neg_profile = []
+        pos_profile = []
+        diff = 0.
+        for i in range(np.nanmin([neg_index.size,pos_index.size])):
+            avg_profile.append(np.nanmean([maj_profile[neg_index[neg_index.size-i-1]],maj_profile[pos_index[i]]]))
+            neg_profile.append(maj_profile[neg_index[neg_index.size-i-1]])
+            pos_profile.append(maj_profile[pos_index[i]])
+            #diff = diff+abs(avg_profile[i]-neg_profile[i])+abs(avg_profile[i]-pos_profile[i])
+            diff = diff+abs(pos_profile[-1]-neg_profile[-1])*abs(np.mean([pos_profile[-1],neg_profile[-1]]))
+        diff = diff/np.nanmin([neg_index.size,pos_index.size])
+        if debug:
+            print_log(f'''GUESS_ORIENTATION:'BMAJ in pixels, center of profile, center, difference between pos and neg
 {'':8s}{Configuration['BEAM_IN_PIXELS'][0]*0.5} {center_of_profile} {center} {diff}
 ''',Configuration['OUTPUTLOG'],screen=True)
 
-    # if the center of the profile is more than half a beam off from the Sofia center let's see which on provides a more symmetric profile
-    if (abs(center_of_profile/(2.*np.sin(np.radians(pa[0])))*maj_resolution) > Configuration['BEAM_IN_PIXELS'][0]*0.5 \
-        or abs(center_of_profile/(2.*np.cos(np.radians(pa[0])))*maj_resolution) > Configuration['BEAM_IN_PIXELS'][0]*0.5) and SNR > 3.:
-        if debug:
+        # if the center of the profile is more than half a beam off from the Sofia center let's see which on provides a more symmetric profile
+        if (abs(center_of_profile/(2.*np.sin(np.radians(pa[0])))*maj_resolution) > Configuration['BEAM_IN_PIXELS'][0]*0.5 \
+            or abs(center_of_profile/(2.*np.cos(np.radians(pa[0])))*maj_resolution) > Configuration['BEAM_IN_PIXELS'][0]*0.5) and SNR > 3.:
+            if debug:
                 print_log(f'''GUESS_ORIENTATION: The SoFiA center and that of the SBR profile are separated by more than half a beam.
 {'':8s}GUESS_ORIENTATION: Determining the more symmetric profile.
 ''',Configuration['OUTPUTLOG'])
-        neg_index = np.where(maj_axis < center_of_profile)[0]
-        pos_index = np.where(maj_axis > center_of_profile)[0]
-        avg_profile_new = []
-        neg_profile_new = []
-        pos_profile_new = []
-        diff_new =0.
-        for i in range(np.nanmin([neg_index.size,pos_index.size])):
-            avg_profile_new.append(np.nanmean([maj_profile[neg_index[neg_index.size-i-1]],maj_profile[pos_index[i]]]))
-            neg_profile_new.append(maj_profile[neg_index[neg_index.size-i-1]])
-            pos_profile_new.append(maj_profile[pos_index[i]])
-            #diff_new = diff_new+abs(avg_profile_new[i]-neg_profile_new[i])+abs(avg_profile_new[i]-pos_profile_new[i])
-            diff_new = diff_new+abs(pos_profile_new[-1]-neg_profile_new[-1])*abs(np.mean([pos_profile_new[-1],neg_profile_new[-1]]))
-        diff_new = diff_new/np.nanmin([neg_index.size,pos_index.size])
-        if debug:
-            print_log(f'''GUESS_ORIENTATION: We have this old difference {diff} and this new difference {diff_new}
-''',Configuration['OUTPUTLOG'])
-        if diff_new < diff:
+            center,center_stable = get_new_center(map,center)
+            '''
+            neg_index = np.where(maj_axis < center_of_profile)[0]
+            pos_index = np.where(maj_axis > center_of_profile)[0]
+            avg_profile_new = []
+            neg_profile_new = []
+            pos_profile_new = []
+            diff_new =0.
+            for i in range(np.nanmin([neg_index.size,pos_index.size])):
+                avg_profile_new.append(np.nanmean([maj_profile[neg_index[neg_index.size-i-1]],maj_profile[pos_index[i]]]))
+                neg_profile_new.append(maj_profile[neg_index[neg_index.size-i-1]])
+                pos_profile_new.append(maj_profile[pos_index[i]])
+                #diff_new = diff_new+abs(avg_profile_new[i]-neg_profile_new[i])+abs(avg_profile_new[i]-pos_profile_new[i])
+                diff_new = diff_new+abs(pos_profile_new[-1]-neg_profile_new[-1])*abs(np.mean([pos_profile_new[-1],neg_profile_new[-1]]))
+            diff_new = diff_new/np.nanmin([neg_index.size,pos_index.size])
             if debug:
-                print_log(f'''GUESS_ORIENTATION: We are updating the center from {center[0]},{center[1]} to {center[0]-center_of_profile/(2.*np.sin(np.radians(pa[0])))*maj_resolution},{center[1]+center_of_profile/(2.*np.cos(np.radians(pa[0])))*maj_resolution}
+                print_log(f'''GUESS_ORIENTATION: We have this old difference {diff} and this new difference {diff_new}
 ''',Configuration['OUTPUTLOG'])
-            avg_profile = avg_profile_new
-            center[0] = center[0]-center_of_profile/(2.*np.sin(np.radians(pa[0])))*maj_resolution
-            center[1] = center[1]+center_of_profile/(2.*np.cos(np.radians(pa[0])))*maj_resolution
-            maj_axis =  np.linspace(0,1000*maj_resolution,1000)- (abs((abs(center[0]))*np.sin(np.radians(pa[0])))+abs(abs(center[1])*np.cos(np.radians(pa[0]))))
-
-
+            if diff_new < diff:
+                if debug:
+                    print_log(f'''GUESS_ORIENTATION: We are updating the center from {center[0]},{center[1]} to {center[0]-center_of_profile/(2.*np.sin(np.radians(pa[0])))*maj_resolution},{center[1]+center_of_profile/(2.*np.cos(np.radians(pa[0])))*maj_resolution}
+''',Configuration['OUTPUTLOG'])
+                avg_profile = avg_profile_new
+                center[0] = center[0]-center_of_profile/(2.*np.sin(np.radians(pa[0])))*maj_resolution
+                center[1] = center[1]+center_of_profile/(2.*np.cos(np.radians(pa[0])))*maj_resolution
+                center_counter += 1
+                maj_axis =  np.linspace(0,1000*maj_resolution,1000)- (abs((abs(center[0]))*np.sin(np.radians(pa[0])))+abs(abs(center[1])*np.cos(np.radians(pa[0]))))
+                if debug:
+                    ra_new,dec_new = mom0_wcs.wcs_pix2world(center[0],center[1],1.)
+                    print(ra_new,dec_new)
+                    ra_hr_new,dec_hr_new = convertRADEC(Configuration,ra_new,dec_new)
+                    print_log(f'GUESS_ORIENTATION: We are re-starting with the updated center
+{'':8s} RA = {ra_hr_new}, DEC={dec_hr_new}
+',Configuration['OUTPUTLOG'])
+            '''
+            else:
+                center_stable= True
+        else:
+            center_stable = True
     ring_size_req = Configuration['BEAM_IN_PIXELS'][0]/maj_resolution
     SBR_initial = avg_profile[0::int(ring_size_req)]/(np.pi*Configuration['BEAM'][0]*Configuration['BEAM'][1]/(4.*np.log(2.))) # Jy*km/s
     SBR_initial =np.hstack((SBR_initial[0],SBR_initial,SBR_initial[-1]))
@@ -1064,9 +1096,9 @@ sofia_catalogue.__doc__ =f'''
 def sofia_input_catalogue(Configuration,debug=False):
     Catalogue = Proper_Dictionary({})
 
-    Catalogue = {'ENTRIES':  ['ENTRIES','DISTANCE','NUMBER','DIRECTORYNAME','CUBENAME'],\
+    Catalogue = {'ENTRIES':  ['ENTRIES','DISTANCE','ID','DIRECTORYNAME','CUBENAME'],\
                 'DISTANCE': [],'DIRECTORYNAME': [],\
-                'NUMBER': [], 'CUBENAME': []}
+                'ID': [], 'CUBENAME': []}
     basename = Configuration['CATALOGUE'].split('_cat.txt')[0]
     Variables =['id','x','x_min','x_max','y','y_min','y_max','z','z_min','z_max','ra',\
                     'dec','v_app','f_sum','kin_pa','w50','err_f_sum','err_x','err_y','err_z']
@@ -1135,7 +1167,7 @@ def sofia_input_catalogue(Configuration,debug=False):
                 Configuration['BASE_NAME'] =  f"{basename}_{outlist[input_columns.index('id')]}_FAT"
                 copy_homemade_sofia(Configuration,no_cat=True,debug=False)
                 Catalogue['DISTANCE'].append(float(-1))
-                Catalogue['NUMBER'].append(f"{outlist[input_columns.index('id')]}")
+                Catalogue['ID'].append(f"{outlist[input_columns.index('id')]}")
                 Catalogue['DIRECTORYNAME'].append(f"{basename}_FAT_cubelets/{basename}_{outlist[input_columns.index('id')]}")
                 Catalogue['CUBENAME'].append(f"{basename}_{outlist[input_columns.index('id')]}")
                 with open(f"{Configuration['FITTING_DIR']}/Sofia_Output/{Configuration['BASE_NAME']}_cat.txt",'w') as cat:

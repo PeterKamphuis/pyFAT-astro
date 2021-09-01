@@ -29,15 +29,19 @@ def check_legitimacy(Configuration,debug=False):
         if any(fit_check):
             outfile = f"{Configuration['FITTING_DIR']}/{Configuration['USED_FITTING']}/{Configuration['USED_FITTING']}.def"
     inclination = load_tirific(Configuration,outfile,Variables=['INCL'],debug=debug)[0]
-    #!!!!!!!!!!!!These need to be adapted before release
-    low_incl_limit = 10.
-    low_beam_limit = 0.
-    if float(inclination[0]) < low_incl_limit or 2.*Configuration['SIZE_IN_BEAMS'] < low_beam_limit:
+
+    if float(inclination[0]) < Configuration['UNRELIABLE_INCLINATION']:
         Configuration['ACCEPTED'] = False
-        if float(inclination[0]) < low_incl_limit:
-            Configuration['FINAL_COMMENT'] = f'The final inclination is below {low_incl_limit}. FAT is not neccesarily reliable in this range.'
-        elif 2.*Configuration['SIZE_IN_BEAMS'] < low_beam_limit:
-            Configuration['FINAL_COMMENT'] = f'The final size is below {low_beam_limit}. FAT is not neccesarily reliable in this range.'
+        Configuration['FINAL_COMMENT'] = f"The final inclination is below {Configuration['UNRELIABLE_INCLINATION']}. FAT is not neccesarily reliable in this range."
+        if debug:
+            print_log(f'''CHECK_LEGITIMACY: The retrieved inclination {float(inclination[0])} is below {Configuration['UNRELIABLE_INCLINATION']} thus the fit is not accepted.
+''',Configuration['OUTPUTLOG'],debug =True)
+    if 2.*Configuration['SIZE_IN_BEAMS'] < Configuration['UNRELIABLE_SIZE']:
+        Configuration['ACCEPTED'] = False
+        Configuration['FINAL_COMMENT'] = f"The final size is below {Configuration['UNRELIABLE_SIZE']}. FAT is not neccesarily reliable in this range."
+        if debug:
+            print_log(f'''CHECK_LEGITIMACY: The retrieved size {2.*Configuration['SIZE_IN_BEAMS']} is below {Configuration['UNRELIABLE_SIZE']} thus the fit is not accepted.
+''',Configuration['OUTPUTLOG'],debug =True)
     return
 
 check_legitimacy.__doc__ =f'''
@@ -512,7 +516,7 @@ def finish_galaxy(Configuration,maximum_directory_length,current_run = 'Not init
 '''
         log_statement = f'''------------When filing a bug report please copy all output  below this line------------
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-{"":8s}FAT did not run the full fitting routines for catalog nr {Configuration['ID_NR']}.
+{"":8s}FAT did not run the full fitting routines for catalog entry {Configuration['ID']}.
 {"":8s}Which is the galaxy in directory {Configuration['FITTING_DIR']}.
 {"":8s}Please check this log and output_catalogue carefully for what went wrong.
 {"":8s}The detected exit reason is {Configuration['FINAL_COMMENT']}.

@@ -10,7 +10,9 @@ Welcome to pyFAT's documentation!
   :maxdepth: 3
   :caption: Contents:
 
-  Read Me <README.md>
+  Introduction <README.md>
+
+  Configuration File <INPUT.md>
 
   Copyright <copyright.rst>
 

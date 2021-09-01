@@ -165,6 +165,64 @@ check_sofia.__doc__ =f'''
 
  NOTE:
 '''
+
+def check_tiltogram(Configuration, tiltogram,inner_min=3,debug=False):
+    for i in [0,1]:
+        theta_inner = np.array([np.mean(tiltogram[i,0:x+1,0:x+1]) for x in range(tiltogram.shape[1])],dtype=float)
+        theta_mutual = np.array([np.mean(tiltogram[i,x:,0:x+1]) for x in range(tiltogram.shape[1])],dtype=float)
+        #theta_outer = np.array([np.mean(tiltogram[i,x+1:,x+1:]) for x in range(tiltogram.shape[1])],dtype=float)
+        #And then we want to apply the rules
+        # (i) the difference between theta_inner and theta_mutual is larger than the differences observed at other radii
+        # (ii) theta_inner < 5 deg
+        # (iii) thetamut > 15 deg
+        diff = np.array(abs(theta_inner-theta_mutual),dtype = float)
+        if debug:
+            print_log(f'''CHECK_TILTOGRAM: Checking the tiltogram in side {i}.
+{'':8s} Diff = {diff}
+''',Configuration['OUTPUTLOG'])
+        rings_found = False
+        while not rings_found:
+            ring_location = np.where(np.nanmax(diff) == diff)[0]
+            if ring_location.size > 1:
+                ring_location = ring_location[0]
+            if theta_inner[ring_location] < 5. and theta_mutual[ring_location] > 15.:
+                Configuration['INNER_FIX'][i] = int(set_limits(ring_location-1,inner_min,Configuration['NO_RINGS']*3./4.-1))
+                rings_found = True
+            else:
+                diff[ring_location] = 0.
+            if np.nansum(diff) == 0.:
+                Configuration['INNER_FIX'][i] = int(Configuration['NO_RINGS']*3./4.-1)
+                rings_found = True
+
+check_tiltogram.__doc__ =f'''
+NAME:
+    check_tiltogram
+
+PURPOSE:
+   Set the inner_fix values based on the tiltograms
+
+CATEGORY:
+   support_functions
+
+INPUTS:
+   Configuration = standard FAT Configuration
+   tiltogram = the array containing the tiltogram for both sides
+
+OPTIONAL INPUTS:
+   debug = False
+   inner_min = minimum set of inner rings that should be fixed
+
+OUTPUTS:
+   Updates Configuration['INNER_FIX']
+
+OPTIONAL OUTPUTS:
+
+PROCEDURES CALLED:
+   Unspecified
+
+NOTE:
+
+'''
 # clean the header
 def clean_header(Configuration,hdr_in,two_dim=False,mask_file=False, debug = False):
     hdr = copy.deepcopy(hdr_in)
@@ -1294,67 +1352,11 @@ get_inclination_pa.__doc__ =f'''
  NOTE:
 '''
 
+def get_new_center(Configuration, map, center, debug = False):
+    
 
 
 
-
-def check_tiltogram(Configuration, tiltogram,inner_min=3,debug=False):
-    for i in [0,1]:
-        theta_inner = np.array([np.mean(tiltogram[i,0:x+1,0:x+1]) for x in range(tiltogram.shape[1])],dtype=float)
-        theta_mutual = np.array([np.mean(tiltogram[i,x:,0:x+1]) for x in range(tiltogram.shape[1])],dtype=float)
-        #theta_outer = np.array([np.mean(tiltogram[i,x+1:,x+1:]) for x in range(tiltogram.shape[1])],dtype=float)
-        #And then we want to apply the rules
-        # (i) the difference between theta_inner and theta_mutual is larger than the differences observed at other radii
-        # (ii) theta_inner < 5 deg
-        # (iii) thetamut > 15 deg
-        diff = np.array(abs(theta_inner-theta_mutual),dtype = float)
-        if debug:
-            print_log(f'''CHECK_TILTOGRAM: Checking the tiltogram in side {i}.
-{'':8s} Diff = {diff}
-''',Configuration['OUTPUTLOG'])
-        rings_found = False
-        while not rings_found:
-            ring_location = np.where(np.nanmax(diff) == diff)[0]
-            if ring_location.size > 1:
-                ring_location = ring_location[0]
-            if theta_inner[ring_location] < 5. and theta_mutual[ring_location] > 15.:
-                Configuration['INNER_FIX'][i] = int(set_limits(ring_location-1,inner_min,Configuration['NO_RINGS']*3./4.-1))
-                rings_found = True
-            else:
-                diff[ring_location] = 0.
-            if np.nansum(diff) == 0.:
-                Configuration['INNER_FIX'][i] = int(Configuration['NO_RINGS']*3./4.-1)
-                rings_found = True
-
-check_tiltogram.__doc__ =f'''
-NAME:
-    check_tiltogram
-
-PURPOSE:
-   Set the inner_fix values based on the tiltograms
-
-CATEGORY:
-   support_functions
-
-INPUTS:
-   Configuration = standard FAT Configuration
-   tiltogram = the array containing the tiltogram for both sides
-
-OPTIONAL INPUTS:
-   debug = False
-   inner_min = minimum set of inner rings that should be fixed
-
-OUTPUTS:
-   Updates Configuration['INNER_FIX']
-
-OPTIONAL OUTPUTS:
-
-PROCEDURES CALLED:
-   Unspecified
-
-NOTE:
-
-'''
 def find_program(name,search):
     found = False
     while not found:
@@ -2292,6 +2294,8 @@ def setup_configuration(cfg):
                 tmp.write(data)
     if cfg.cube_name:
         cfg.input.catalogue = None
+        cfg.fitting.catalogue_start_id= '-1'
+        cfg.fitting.catalogue_end_id= '-1'
 
 
     Configuration = Proper_Dictionary({})
@@ -2329,7 +2333,7 @@ def setup_configuration(cfg):
     for key in boolean_keys:
         Configuration[key] = False
 
-    other_keys={'ID_NR': 'Unset', # ID of the galaxy in the catalogue , set from the catalogue at start of loop
+    other_keys={'ID': 'Unset', # ID of the galaxy in the catalogue , set from the catalogue at start of loop
                'SUB_DIR': 'Unset', # Name of the directory in which galaxy resides, set from the catalogue at start of loop
                'FITTING_DIR': 'Unset', # Full path of the directory in which the fitting takes place, set at start of loop
                'BASE_NAME': 'Unset', #Basename for FAT products, typically {input_cube}_FAT, set at start of loop
