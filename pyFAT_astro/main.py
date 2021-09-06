@@ -9,10 +9,11 @@ from omegaconf import OmegaConf,MissingMandatoryValue
 import traceback
 import warnings
 try:
-    import importlib.resources as import_res
+    from importlib.resources import files as import_pack_files
 except ImportError:
     # Try backported to PY<37 `importlib_resources`.
-    import importlib_resources as import_res
+    # For Py<3.9 files is not available
+    from importlib_resources import files as import_pack_files
 from datetime import datetime
 import pyFAT_astro
 import pyFAT_astro.Support.read_functions as rf
@@ -105,13 +106,13 @@ def main(argv):
             no_cube = OmegaConf.masked_copy(cfg, ['input','output','fitting'])
             with open('FAT_defaults.yml','w') as default_write:
                 default_write.write(OmegaConf.to_yaml(no_cube))
-            my_resources = import_res.files('pyFAT_astro.config')
+            my_resources = import_pack_files('pyFAT_astro.config')
             data = (my_resources / 'FAT_Input_Catalogue.txt').read_bytes()
             with open('FAT_Example_Catalogue.txt','w+b') as default_write:
                 default_write.write(data)
 
             print(f'''We have printed the file FAT_defaults.yml FAT_Input_Catalogue.txt in {os.getcwd()}.
-Exiting moments.''')
+''')
             sys.exit()
 
         if cfg_input.configuration_file:
@@ -224,6 +225,8 @@ Exiting moments.''')
                 Configuration['FITTING_DIR'] = f"{Configuration['MAIN_DIRECTORY']}{Full_Catalogue['DIRECTORYNAME'][current_galaxy_index]}/"
             if Configuration['FITTING_DIR'][-2:] == '//':
                 Configuration['FITTING_DIR'] = Configuration['FITTING_DIR'][:-2]+'/'
+
+        
             if not Configuration['SOFIA_DIR']:
                 Configuration['SOFIA_DIR'] = Configuration['FITTING_DIR']
             ini_mode_factor =25

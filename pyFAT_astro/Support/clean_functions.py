@@ -6,7 +6,7 @@ import os,signal,sys
 import numpy as np
 import traceback
 from datetime import datetime
-from pyFAT_astro.Support.support_functions import print_log,finish_current_run,set_format,create_directory
+from pyFAT_astro.Support.support_functions import print_log,finish_current_run,set_format,create_directory,get_system_string
 from pyFAT_astro.Support.fits_functions import make_moments
 from pyFAT_astro.Support.write_functions import make_overview_plot,plot_usage_stats,tirific,write_config
 from pyFAT_astro.Support.read_functions import tirific_template,load_tirific,load_template
@@ -266,7 +266,8 @@ def cleanup(Configuration,Fits_Files, debug = False):
                         except FileNotFoundError:
                             pass
                     elif dir == Configuration['USED_FITTING'] and fe in ['.def']:
-                        os.system(f'rm -f {Configuration["FITTING_DIR"]}{dir}/{dir}*{fe}')
+                        target = get_system_string(f"{Configuration['FITTING_DIR']}{dir}/{dir}*{fe}")
+                        os.system(f'rm -f {target}')
                     else:
                         try:
                             os.remove(f'{Configuration["FITTING_DIR"]}{dir}/{dir}{fe}')
@@ -371,9 +372,11 @@ def cleanup_final(Configuration,Fits_Files, debug =False):
             os.rmdir(f"{Configuration['FITTING_DIR']}tmp_incl_check")
         else:
             # else move this directory to the LOG
+            target = get_system_string(f"{Configuration['LOG_DIRECTORY']}tmp_incl_check")
             if  os.path.isdir(f"{Configuration['LOG_DIRECTORY']}tmp_incl_check"):
-                os.system(f"rm -Rf {Configuration['LOG_DIRECTORY']}tmp_incl_check")
-            os.system(f"mv {Configuration['FITTING_DIR']}tmp_incl_check {Configuration['LOG_DIRECTORY']}tmp_incl_check")
+                os.system(f"rm -Rf {target}")
+            source = get_system_string(f"{Configuration['FITTING_DIR']}tmp_incl_check")
+            os.system(f"mv {source} {target}")
 
 cleanup_final.__doc__ =f'''
  NAME:

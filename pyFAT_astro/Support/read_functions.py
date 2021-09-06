@@ -23,10 +23,11 @@ import time
 import copy
 import numpy as np
 try:
-    import importlib.resources as import_res
+    from importlib.resources import open_text as pack_open_txt
 except ImportError:
     # Try backported to PY<37 `importlib_resources`.
-    import importlib_resources as import_res
+    from importlib_resources import open_text as pack_open_txt
+
 
 import shutil
 import traceback
@@ -358,6 +359,7 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, debug
 ''',Configuration['OUTPUTLOG'])
     beam_check=[Configuration['BEAM_IN_PIXELS'][0],Configuration['BEAM_IN_PIXELS'][0]/2.]
     center_stable = False
+    checked_center = False
     center_counter = 0.
     original_center = copy.deepcopy(center)
     while not center_stable:
@@ -393,9 +395,9 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, debug
             pa=original_pa
             inclination=original_inclination
             maj_extent= original_maj_extent
-            center =original_center
-            center_stable=True
-            break
+        #    center =original_center
+        #    center_stable=True
+        #    break
         # For very small galaxies we do not want to correct the extend
         if maj_extent/Configuration['BEAM'][0]/3600. > 3.:
             maj_extent = maj_extent+(Configuration['BEAM'][0]/3600.*0.2/scale_factor)
@@ -432,12 +434,13 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, debug
 
         # if the center of the profile is more than half a beam off from the Sofia center let's see which on provides a more symmetric profile
         if (abs(center_of_profile/(2.*np.sin(np.radians(pa[0])))*maj_resolution) > Configuration['BEAM_IN_PIXELS'][0]*0.5 \
-            or abs(center_of_profile/(2.*np.cos(np.radians(pa[0])))*maj_resolution) > Configuration['BEAM_IN_PIXELS'][0]*0.5) and SNR > 3.:
+            or abs(center_of_profile/(2.*np.cos(np.radians(pa[0])))*maj_resolution) > Configuration['BEAM_IN_PIXELS'][0]*0.5) and SNR > 3. and not checked_center:
             if debug:
                 print_log(f'''GUESS_ORIENTATION: The SoFiA center and that of the SBR profile are separated by more than half a beam.
 {'':8s}GUESS_ORIENTATION: Determining the more symmetric profile.
 ''',Configuration['OUTPUTLOG'])
-            center,center_stable = get_new_center(map,center)
+            center,checked_center,center_stable = get_new_center(Configuration,map,center,maj_extent,noise=median_noise_in_map,debug=debug)
+            center_counter += 1
             '''
             neg_index = np.where(maj_axis < center_of_profile)[0]
             pos_index = np.where(maj_axis > center_of_profile)[0]
@@ -453,12 +456,12 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, debug
                 diff_new = diff_new+abs(pos_profile_new[-1]-neg_profile_new[-1])*abs(np.mean([pos_profile_new[-1],neg_profile_new[-1]]))
             diff_new = diff_new/np.nanmin([neg_index.size,pos_index.size])
             if debug:
-                print_log(f'''GUESS_ORIENTATION: We have this old difference {diff} and this new difference {diff_new}
-''',Configuration['OUTPUTLOG'])
+                print_log(f'GUESS_ORIENTATION: We have this old difference {diff} and this new difference {diff_new}
+',Configuration['OUTPUTLOG'])
             if diff_new < diff:
                 if debug:
-                    print_log(f'''GUESS_ORIENTATION: We are updating the center from {center[0]},{center[1]} to {center[0]-center_of_profile/(2.*np.sin(np.radians(pa[0])))*maj_resolution},{center[1]+center_of_profile/(2.*np.cos(np.radians(pa[0])))*maj_resolution}
-''',Configuration['OUTPUTLOG'])
+                    print_log(f'GUESS_ORIENTATION: We are updating the center from {center[0]},{center[1]} to {center[0]-center_of_profile/(2.*np.sin(np.radians(pa[0])))*maj_resolution},{center[1]+center_of_profile/(2.*np.cos(np.radians(pa[0])))*maj_resolution}
+',Configuration['OUTPUTLOG'])
                 avg_profile = avg_profile_new
                 center[0] = center[0]-center_of_profile/(2.*np.sin(np.radians(pa[0])))*maj_resolution
                 center[1] = center[1]+center_of_profile/(2.*np.cos(np.radians(pa[0])))*maj_resolution
@@ -472,8 +475,8 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, debug
 {'':8s} RA = {ra_hr_new}, DEC={dec_hr_new}
 ',Configuration['OUTPUTLOG'])
             '''
-            else:
-                center_stable= True
+            #else:
+            #    center_stable= True
         else:
             center_stable = True
     ring_size_req = Configuration['BEAM_IN_PIXELS'][0]/maj_resolution
@@ -565,10 +568,12 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, debug
         print_log(f'''GUESS_ORIENTATION: We start with vsys = {v_sys:.2f} km/s
 ''' , Configuration['OUTPUTLOG'])
 
-    if v_sys == -1:
+    if v_sys == -1 or center_counter > 0.:
         map_vsys = np.nanmean(map[int(round(center[1]-buffer)):int(round(center[1]+buffer)),int(round(center[0]-buffer)):int(round(center[0]+buffer))])
     else:
         map_vsys = v_sys
+
+
     if debug:
         print_log(f'''GUESS_ORIENTATION: We subtract {map_vsys:.2f} km/s from the moment 1 map to get the VROT
 ''' , Configuration['OUTPUTLOG'])
@@ -604,7 +609,7 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, debug
         print_log(f'''GUESS_ORIENTATION: We found the following initial rotation curve:
 {'':8s}GUESS_ORIENTATION: RC = {VROT_initial}
 ''',Configuration['OUTPUTLOG'])
-    return np.array(pa,dtype=float),np.array(inclination,dtype=float),SBR_initial,maj_extent,center[0],center[1],VROT_initial
+    return np.array(pa,dtype=float),np.array(inclination,dtype=float),SBR_initial,maj_extent,center[0],center[1],map_vsys,VROT_initial
 guess_orientation.__doc__ =f'''
  NAME:
     guess_orientation
@@ -1205,7 +1210,7 @@ NAME:
 '''
 
 def sofia_template(debug = False):
-    with import_res.open_text(templates, 'sofia_template.par') as tmp:
+    with pack_open_txt(templates, 'sofia_template.par') as tmp:
         template = tmp.readlines()
     result = {}
     counter = 0
@@ -1250,11 +1255,11 @@ sofia_template.__doc__ ='''
 
 def tirific_template(filename = '', debug = False):
     if filename == '':
-        with import_res.open_text(templates, 'template.def') as tmp:
+        with pack_open_txt(templates, 'template.def') as tmp:
             template = tmp.readlines()
     elif filename == 'Installation_Check':
         from pyFAT_astro import Installation_Check as IC
-        with import_res.open_text(IC, 'ModelInput.def') as tmp:
+        with pack_open_txt(IC, 'ModelInput.def') as tmp:
             template = tmp.readlines()
     else:
         with open(filename, 'r') as tmp:

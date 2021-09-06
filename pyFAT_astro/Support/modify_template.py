@@ -9,6 +9,7 @@ from pyFAT_astro.Support.support_functions import set_rings,convertskyangle,sbr_
                               get_ring_weights
 from pyFAT_astro.Support.fat_errors import InitializeError,CfluxError,FunctionCallError,BadConfigurationError
 import numpy as np
+import os
 from scipy.optimize import curve_fit
 from scipy.signal import savgol_filter
 from scipy.interpolate import CubicSpline,Akima1DInterpolator
@@ -2565,8 +2566,9 @@ def set_overall_parameters(Configuration, Fits_Files,Tirific_Template,stage = 'i
                 #preferably we'd use the akima spline but there is an issue with that where the final ring does not get modified
                 #Tirific_Template['INDINTY'] = 2
             Tirific_Template['NUR'] = f"{Configuration['NO_RINGS']}"
-
-            Tirific_Template['RESTARTNAME'] = f"{Configuration['LOG_DIRECTORY']}restart_{fit_type}.txt"
+            current_cwd = os.getcwd()
+            short_log = Configuration['LOG_DIRECTORY'].replace(current_cwd,'.')
+            Tirific_Template['RESTARTNAME'] = f"{short_log}restart_{fit_type}.txt"
             #this could be fancier
             '''
             if Configuration['NO_RINGS'] < 3:

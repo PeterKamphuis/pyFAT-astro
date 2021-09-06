@@ -40,114 +40,34 @@
 
 # Global settings
 
-pipeline.verbose           =  true
-pipeline.pedantic          =  true
-pipeline.threads           =  0
-
+pipeline.verbose = true
 
 # Input
 
-input.data                 =  Template.fits
-input.region               =
-input.gain                 =
-input.noise                =
-input.weights              =
-input.mask                 =
-input.invert               =  false
-
-
-# Flagging
-
-flag.region                =
-flag.auto                  =  false
-flag.threshold             =  5.0
-flag.radiusSpatial         =  0
-flag.log                   =  true
-
-
-# Noise scaling
-
-scaleNoise.enable          =  false
-scaleNoise.mode            =  spectral
-scaleNoise.statistic       =  mad
-scaleNoise.fluxRange       =  negative
-scaleNoise.windowXY        =  25
-scaleNoise.windowZ         =  15
-scaleNoise.gridXY          =  0
-scaleNoise.gridZ           =  0
-scaleNoise.interpolate     =  false
-scaleNoise.scfind          =  false
-
+input.data = Template.fits
 
 # S+C finder
 
-scfind.enable              =  true
-scfind.kernelsXY           =  0, 4, 8
-scfind.kernelsZ            =  2, 4, 8, 16
-scfind.threshold           =  5.0
-scfind.replacement         =  2.0
-scfind.statistic           =  mad
-scfind.fluxRange           =  negative
-
-
-# Threshold finder
-
-threshold.enable           =  false
-threshold.threshold        =  5.0
-threshold.mode             =  relative
-threshold.statistic        =  mad
-threshold.fluxRange        =  negative
-
+scfind.kernelsXY =  0, 4, 8
+scfind.kernelsZ =  2, 4, 8, 16
+scfind.threshold =  5.0
 
 # Linker
 
-linker.radiusXY            =  3
-linker.radiusZ             =  3
-linker.minSizeXY           =  6
-linker.minSizeZ            =  8
-linker.maxSizeXY           =  0
-linker.maxSizeZ            =  0
-linker.keepNegative        =  false
+linker.radiusXY = 3
+linker.radiusZ = 3
+linker.minSizeXY = 6
+linker.minSizeZ = 8
 
-
-# Reliability
-
-reliability.enable         =  false
-reliability.threshold      =  0.9
-reliability.scaleKernel    =  0.4
-reliability.fmin           =  15.0
-reliability.plot           =  true
-
-
-# Mask dilation
-
-dilation.enable            =  true
-dilation.iterations        =  100
-dilation.threshold         =  0.0005
 
 
 # Parameterisation
 
-parameter.enable           =  true
-parameter.wcs              =  true
-parameter.physical         =  false
-parameter.prefix           =  sofia
-parameter.offset           =  false
+parameter.prefix = sofia
 
 
 # Output
 
-output.directory           =
-output.filename            =
-output.writeCatASCII       =  true
-output.writeCatXML         =  false
-output.writeCatSQL         =  false
-output.writeNoise          =  true
-output.writeFiltered       =  false
-output.writeMask           =  true
-output.writeMask2d         =  false
-output.writeRawMask        =  false
-output.writeMoments        =  false
-output.writeCubelets       =  false
-output.marginCubelets      =  0
-output.overwrite           =  true
+output.writeCatXML = false
+output.writeNoise = true
+output.writeMask = true

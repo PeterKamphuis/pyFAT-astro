@@ -13,10 +13,12 @@ from astropy.wcs import WCS
 from astropy.io import fits
 from dataclasses import  asdict
 try:
-    import importlib.resources as import_res
+    from importlib.resources import files as import_pack_files
 except ImportError:
     # Try backported to PY<37 `importlib_resources`.
-    import importlib_resources as import_res
+    # For Py<3.9 files is not available
+    from importlib_resources import files as import_pack_files
+
 import matplotlib.pyplot as plt
 import os
 import sys
@@ -749,7 +751,9 @@ def copy_homemade_sofia(Configuration,no_cat=False,debug=False):
     if not no_cat:
         files.append('_cat.txt')
     for file in files:
-        os.system(f'''cp {Configuration['SOFIA_DIR']}{Configuration['SOFIA_BASENAME']}{file} {Configuration['FITTING_DIR']}Sofia_Output/{Configuration['BASE_NAME']}{file}''')
+        source = get_system_string(f"{Configuration['SOFIA_DIR']}{Configuration['SOFIA_BASENAME']}{file}")
+        target = get_system_string(f"{Configuration['FITTING_DIR']}Sofia_Output/{Configuration['BASE_NAME']}{file}")
+        os.system(f'''cp {source} {target}''')
         if not os.path.exists(f"{Configuration['FITTING_DIR']}Sofia_Output/{Configuration['BASE_NAME']+file}"):
             if file in ['_mask.fits','_cat.txt']:
                 print_log(f'''COPY_HOMEMADE_SOFIA: Something went wrong copying the file  {Configuration['SOFIA_DIR']}{Configuration['SOFIA_BASENAME']+file}
@@ -1352,9 +1356,56 @@ get_inclination_pa.__doc__ =f'''
  NOTE:
 '''
 
-def get_new_center(Configuration, map, center, debug = False):
-    
+def get_new_center(Configuration, map_in, center, maj_extent, noise= 0., debug = False):
 
+    map = copy.deepcopy(map_in)
+    map[map < noise]= 0.
+    size_in_beam = set_limits(2*maj_extent/(Configuration['BEAM'][0]/3600.),1.0,Configuration['MAX_SIZE_IN_BEAMS'])
+    if size_in_beam > 8.:
+        sigma = [Configuration['BEAM_IN_PIXELS'][1]*size_in_beam/8.,Configuration['BEAM_IN_PIXELS'][0]*size_in_beam/8.]
+        map = ndimage.gaussian_filter(map, sigma=(sigma[1], sigma[0]), order=0)
+    map[map < np.max(map)/2.] = 0.
+    x =  range(0,len(map[0,:]))
+    y =  range(0,len(map[:,0]))
+    M10 = np.sum((x-center[0])*np.sum(map,axis=0))
+    M01 = np.sum((y-center[1])*np.sum(map,axis=1))
+    M00=np.sum(map)
+    new_center=[center[0]+M10/M00, center[1]+M01/M00]
+
+    return new_center,True,False
+
+
+get_new_center.__doc__ =f'''
+ NAME:
+    get_new-center
+ PURPOSE:
+    Get the best fitting center for the galaxy.
+
+ CATEGORY:
+    support_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    map = the intensity map to be evaluated, this should be an astropy structure
+    center = center of the galaxy in pixels
+
+ OPTIONAL INPUTS:
+    debug = False
+
+    noise = 0.
+    Limit to trust the map to, below this values are not evaluated
+
+ OUTPUTS:
+    center = the newly determined center
+    center_stable = whether the center has shifted or now.
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
 
 
 def find_program(name,search):
@@ -1592,6 +1643,11 @@ get_ring_weights.__doc__=f'''
     Weight 1 is most important, weight 0. least important.
     Errors should be divided by these weights to reflect the importance
 '''
+
+def get_system_string(string):
+    if len(string.split()) > 1:
+        string = "\ ".join(string.split())
+    return string
 
 def get_usage_statistics(Configuration,process_id, debug = False):
     result = subprocess.check_output(['top',f'-p {process_id}','-d 1','-n 1'])
@@ -2180,10 +2236,13 @@ remove_inhomogeneities
 def rename_fit_products(Configuration,stage = 'initial', fit_type='Undefined',debug = False):
     extensions = ['def','log','ps','fits']
     for filetype in extensions:
+        source = get_system_string(f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.{filetype}")
         if filetype == 'log':
             if os.path.exists(f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.{filetype}"):
-                os.system(f"cp {Configuration['FITTING_DIR']}{fit_type}/{fit_type}.{filetype} {Configuration['FITTING_DIR']}{fit_type}/{fit_type}_Prev.{filetype} ")
+                target = get_system_string(f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}_Prev.{filetype}")
+                os.system(f"cp {source} {target}")
         else:
+
             if filetype == 'def':
                 if stage in ['run_ec','run_os','run_cc']:
                     Loopnr = f"Iteration_{Configuration['ITERATIONS']-1}"
@@ -2194,10 +2253,12 @@ def rename_fit_products(Configuration,stage = 'initial', fit_type='Undefined',de
                 else:
                     Loopnr = 'Output_before_'+stage
                 if os.path.exists(f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.{filetype}"):
-                    os.system(f"mv {Configuration['FITTING_DIR']}{fit_type}/{fit_type}.{filetype} {Configuration['FITTING_DIR']}{fit_type}/{fit_type}_{Loopnr}.{filetype}")
+                    target = get_system_string(f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}_{Loopnr}.{filetype}")
+                    os.system(f"mv {source} {target}")
 
             elif os.path.exists(f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.{filetype}"):
-                os.system(f"mv {Configuration['FITTING_DIR']}{fit_type}/{fit_type}.{filetype} {Configuration['FITTING_DIR']}{fit_type}/{fit_type}_Prev.{filetype}")
+                target = get_system_string(f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}_Prev.{filetype}")
+                os.system(f"mv {source} {target}")
 
 rename_fit_products.__doc__ =f'''
  NAME:
@@ -2287,7 +2348,8 @@ def setup_configuration(cfg):
                     os.remove(test_dir+file)
                 except:
                     pass
-        my_resources = import_res.files('pyFAT_astro.Installation_Check')
+
+        my_resources = import_pack_files('pyFAT_astro.Installation_Check')
         for file in test_files:
             data = (my_resources / file).read_bytes()
             with open(cfg.input.main_directory+file,'w+b') as tmp:
@@ -2302,7 +2364,10 @@ def setup_configuration(cfg):
 
     for key in cfg._content:
         input_key = getattr(cfg,key)
-        if str(type(input_key)) == 'omegaconf.dictconfig.DictConfig':
+        check_type=str(type(input_key))
+        if check_type[0] =='<':
+            check_type =  check_type.split('\'')[1]
+        if check_type == 'omegaconf.dictconfig.DictConfig':
             for sub_key in input_key._content:
                 if str(key) == 'output' and str(sub_key) == 'catalogue':
                     Configuration['OUTPUT_CATALOGUE'] =  getattr(input_key,sub_key)
@@ -2316,7 +2381,6 @@ def setup_configuration(cfg):
                     Configuration[str(sub_key).upper()] =  getattr(input_key,sub_key)
         else:
             Configuration[str(key).upper()] = input_key
-
     # None cfg additions, that is additions that should be reset for every galaxy
 
     boolean_keys = ['OPTIMIZED', # Are we fitting an optimized cube
@@ -2384,8 +2448,6 @@ def setup_configuration(cfg):
     boundary_limit_keys = ['PA','INCL', 'SDIS', 'Z0','VSYS','XPOS','YPOS']
     for key in boundary_limit_keys:
         Configuration[f"{key}_CURRENT_BOUNDARY"] = [[0.,0.],[0.,0.],[0.,0.]]
-
-
 
     #Make the input idiot safe
     if Configuration['MAIN_DIRECTORY'][-1] != '/':
