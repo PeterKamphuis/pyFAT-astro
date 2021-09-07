@@ -186,16 +186,16 @@ def main(argv):
         if Original_Configuration['CATALOGUE_START_ID'] in ['-1','-1.']:
             Original_Configuration['CATALOGUE_START_ID'] = int(0)
         else:
-            print(np.where(Original_Configuration['CATALOGUE_START_ID'] == Full_Catalogue['ID'])[0][0])
+            print(np.where(Original_Configuration['CATALOGUE_START_ID'] == Full_Catalogue['ID']))
             print(np.where(Original_Configuration['CATALOGUE_START_ID'] == Full_Catalogue['ID'])[0])
-            Original_Configuration['CATALOGUE_START_ID'] = int(np.where(Original_Configuration['CATALOGUE_START_ID'] == Full_Catalogue['ID'])[0][0])
+            Original_Configuration['CATALOGUE_START_ID'] = int(np.where(Original_Configuration['CATALOGUE_START_ID'] == Full_Catalogue['ID'])[0])
         # If the end galaxy is -1 fit the whole catalogue
         if Original_Configuration['CATALOGUE_END_ID'] in ['-1','-1.']:
             Original_Configuration['CATALOGUE_END_ID'] = int(len(Full_Catalogue['ID']))
             if Original_Configuration['CATALOGUE_END_ID'] == 0:
                 Original_Configuration['CATALOGUE_END_ID'] = 1
         else:
-            Original_Configuration['CATALOGUE_END_ID'] = int(np.where(Original_Configuration['CATALOGUE_END_ID'] == Full_Catalogue['ID'])[0][0])
+            Original_Configuration['CATALOGUE_END_ID'] = int(np.where(Original_Configuration['CATALOGUE_END_ID'] == Full_Catalogue['ID'])[0])
         # start the main fitting loop
 
         if float(Original_Configuration['CATALOGUE_START_ID']) > float(Original_Configuration['CATALOGUE_END_ID']):
