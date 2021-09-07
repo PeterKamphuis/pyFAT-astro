@@ -186,6 +186,8 @@ def main(argv):
         if Original_Configuration['CATALOGUE_START_ID'] in ['-1','-1.']:
             Original_Configuration['CATALOGUE_START_ID'] = int(0)
         else:
+            print(np.where(Original_Configuration['CATALOGUE_START_ID'] == Full_Catalogue['ID'])[0][0])
+            print(np.where(Original_Configuration['CATALOGUE_START_ID'] == Full_Catalogue['ID'])[0])
             Original_Configuration['CATALOGUE_START_ID'] = int(np.where(Original_Configuration['CATALOGUE_START_ID'] == Full_Catalogue['ID'])[0][0])
         # If the end galaxy is -1 fit the whole catalogue
         if Original_Configuration['CATALOGUE_END_ID'] in ['-1','-1.']:
@@ -226,7 +228,7 @@ def main(argv):
             if Configuration['FITTING_DIR'][-2:] == '//':
                 Configuration['FITTING_DIR'] = Configuration['FITTING_DIR'][:-2]+'/'
 
-        
+
             if not Configuration['SOFIA_DIR']:
                 Configuration['SOFIA_DIR'] = Configuration['FITTING_DIR']
             ini_mode_factor =25
