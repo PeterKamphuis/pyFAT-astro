@@ -182,20 +182,20 @@ def main(argv):
             timing_result.write("This file contains the system start and end times for the fitting of each galaxy")
             timing_result.close()
         #if start_galaxy not negative then it is catalogue ID
-        print(Full_Catalogue['ID'],Original_Configuration['CATALOGUE_START_ID'])
+        print(type(Full_Catalogue['ID']),type(Original_Configuration['CATALOGUE_START_ID']))
         if Original_Configuration['CATALOGUE_START_ID'] in ['-1','-1.']:
             Original_Configuration['CATALOGUE_START_ID'] = int(0)
         else:
             print(np.where(Original_Configuration['CATALOGUE_START_ID'] == Full_Catalogue['ID']))
-            print(np.where(Original_Configuration['CATALOGUE_START_ID'] == Full_Catalogue['ID'])[0])
-            Original_Configuration['CATALOGUE_START_ID'] = int(np.where(Original_Configuration['CATALOGUE_START_ID'] == Full_Catalogue['ID'])[0])
+            print(str(np.where(Original_Configuration['CATALOGUE_START_ID']) == Full_Catalogue['ID'])[0])
+            Original_Configuration['CATALOGUE_START_ID'] = int(np.where(str(Original_Configuration['CATALOGUE_START_ID']) == Full_Catalogue['ID'])[0][0])
         # If the end galaxy is -1 fit the whole catalogue
         if Original_Configuration['CATALOGUE_END_ID'] in ['-1','-1.']:
             Original_Configuration['CATALOGUE_END_ID'] = int(len(Full_Catalogue['ID']))
             if Original_Configuration['CATALOGUE_END_ID'] == 0:
                 Original_Configuration['CATALOGUE_END_ID'] = 1
         else:
-            Original_Configuration['CATALOGUE_END_ID'] = int(np.where(Original_Configuration['CATALOGUE_END_ID'] == Full_Catalogue['ID'])[0])
+            Original_Configuration['CATALOGUE_END_ID'] = int(np.where(Original_Configuration['CATALOGUE_END_ID'] == Full_Catalogue['ID'])[0][0])
         # start the main fitting loop
 
         if float(Original_Configuration['CATALOGUE_START_ID']) > float(Original_Configuration['CATALOGUE_END_ID']):
