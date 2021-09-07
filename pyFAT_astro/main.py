@@ -187,8 +187,8 @@ def main(argv):
             Original_Configuration['CATALOGUE_START_ID'] = int(0)
         else:
             print(np.where(Original_Configuration['CATALOGUE_START_ID'] == Full_Catalogue['ID']))
-            print(str(np.where(Original_Configuration['CATALOGUE_START_ID']) == Full_Catalogue['ID'])[0])
-            Original_Configuration['CATALOGUE_START_ID'] = int(np.where(str(Original_Configuration['CATALOGUE_START_ID']) == Full_Catalogue['ID'])[0][0])
+            print(str(np.where(Original_Configuration['CATALOGUE_START_ID']) ==  np.array(Full_Catalogue['ID'],dtype=str))[0][0])
+            Original_Configuration['CATALOGUE_START_ID'] = int(np.where(Original_Configuration['CATALOGUE_START_ID'] == np.array(Full_Catalogue['ID'],dtype=str))[0][0])
         # If the end galaxy is -1 fit the whole catalogue
         if Original_Configuration['CATALOGUE_END_ID'] in ['-1','-1.']:
             Original_Configuration['CATALOGUE_END_ID'] = int(len(Full_Catalogue['ID']))
