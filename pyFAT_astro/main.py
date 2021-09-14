@@ -9,10 +9,11 @@ from omegaconf import OmegaConf,MissingMandatoryValue
 import traceback
 import warnings
 try:
-    import importlib.resources as import_res
+    from importlib.resources import files as import_pack_files
 except ImportError:
     # Try backported to PY<37 `importlib_resources`.
-    import importlib_resources as import_res
+    # For Py<3.9 files is not available
+    from importlib_resources import files as import_pack_files
 from datetime import datetime
 import pyFAT_astro
 import pyFAT_astro.Support.read_functions as rf
@@ -55,8 +56,7 @@ def main(argv):
             print(f"This is version {pyFAT_astro.__version__} of the program.")
             sys.exit()
 
-        if '-h' in argv or '--help' in argv:
-            print('''
+        help_message = '''
         Use pyFAT in this way for batch fitting:
 
             pyFAT configuration_file=FAT_Input.yml
@@ -91,7 +91,10 @@ def main(argv):
 
             pyFAT installation_check=True
 
-        ''')
+        '''
+
+        if '-h' in argv or '--help' in argv:
+            print(help_message)
             sys.exit()
 
         cfg = OmegaConf.structured(defaults)
@@ -103,13 +106,13 @@ def main(argv):
             no_cube = OmegaConf.masked_copy(cfg, ['input','output','fitting'])
             with open('FAT_defaults.yml','w') as default_write:
                 default_write.write(OmegaConf.to_yaml(no_cube))
-            my_resources = import_res.files('pyFAT_astro.config')
+            my_resources = import_pack_files('pyFAT_astro.config')
             data = (my_resources / 'FAT_Input_Catalogue.txt').read_bytes()
             with open('FAT_Example_Catalogue.txt','w+b') as default_write:
                 default_write.write(data)
 
             print(f'''We have printed the file FAT_defaults.yml FAT_Input_Catalogue.txt in {os.getcwd()}.
-Exiting moments.''')
+''')
             sys.exit()
 
         if cfg_input.configuration_file:
@@ -120,14 +123,20 @@ Exiting moments.''')
             #merge yml file with defaults
                     cfg = OmegaConf.merge(cfg,yaml_config)
                     succes = True
-                except:
-                    inputconf.configuration_file = input(f'''
-                            You have provided a config file ({inputconf.configuration_file}) but it can't be found.
-                            If you want to provide a config file please give the correct name.
-                            Else press CTRL-C to abort.
-configuration_file = ''')
+                except FileNotFoundError:
+                    cfg_input.configuration_file = input(f'''
+    You have provided a config file ({cfg_input.configuration_file}) but it can't be found.
+    If you want to provide a config file please give the correct name.
+    Else press CTRL-C to abort.
+    configuration_file = ''')
+
 
         cfg = OmegaConf.merge(cfg,inputconf)
+
+        if not any([cfg.cube_name, cfg.configuration_file, cfg.installation_check\
+                    ,cfg.print_examples,cfg.input.catalogue]):
+            print(help_message)
+            sys.exit()
         #Add none user mutable input
         #OmegaConf.update(cfg, 'start_directory', f'{os.getcwd()}', force_add=True)
 
@@ -139,9 +148,9 @@ configuration_file = ''')
 
         if cfg.cube_name:
             Full_Catalogue = sf.Proper_Dictionary({})
-            Full_Catalogue['ENTRIES'] = ['ENTRIES','NUMBER','DISTANCE','DIRECTORYNAME','CUBENAME']
-            Full_Catalogue['NUMBER'] = ['0']
-            Full_Catalogue['DISTANCE'] = [-2.]
+            Full_Catalogue['ENTRIES'] = ['ENTRIES','ID','DISTANCE','DIRECTORYNAME','CUBENAME']
+            Full_Catalogue['ID'] = [f"{os.path.splitext(cfg.cube_name.split('/')[-1])[0]}"]
+            Full_Catalogue['DISTANCE'] = [-1.]
             Full_Catalogue['DIRECTORYNAME'] = ['./']
             Full_Catalogue['CUBENAME'] = [f"{os.path.splitext(cfg.cube_name.split('/')[-1])[0]}"]
         elif 'sofia_catalogue' in Original_Configuration['FITTING_STAGES']:
@@ -161,6 +170,8 @@ configuration_file = ''')
         # Create a file to write the results to if if required
         if Original_Configuration['OUTPUT_CATALOGUE']:
             if not os.path.exists(Original_Configuration['OUTPUT_CATALOGUE']) or Original_Configuration['NEW_OUTPUT']:
+                if os.path.exists(Original_Configuration['OUTPUT_CATALOGUE']) and Original_Configuration['NEW_OUTPUT']:
+                    os.rename(Original_Configuration['OUTPUT_CATALOGUE'],f"{os.path.splitext(Original_Configuration['OUTPUT_CATALOGUE'])[0]}_Prev.txt")
                 with open(Original_Configuration['OUTPUT_CATALOGUE'],'w') as output_catalogue:
                     comment = 'Comments on Fit Result'
                     AC1 = 'OS'
@@ -171,17 +182,18 @@ configuration_file = ''')
             timing_result.write("This file contains the system start and end times for the fitting of each galaxy")
             timing_result.close()
         #if start_galaxy not negative then it is catalogue ID
-        if -1 != Original_Configuration['CATALOGUE_START_ID']:
-            Original_Configuration['CATALOGUE_START_ID'] = np.where(Original_Configuration['CATALOGUE_START_ID'] == Full_Catalogue['NUMBER'])[0][0]
+
+        if Original_Configuration['CATALOGUE_START_ID'] in ['-1','-1.']:
+            Original_Configuration['CATALOGUE_START_ID'] = int(0)
         else:
-            Original_Configuration['CATALOGUE_START_ID'] = 0
+            Original_Configuration['CATALOGUE_START_ID'] = int(np.where(Original_Configuration['CATALOGUE_START_ID'] == np.array(Full_Catalogue['ID'],dtype=str))[0][0])
         # If the end galaxy is -1 fit the whole catalogue
-        if Original_Configuration['CATALOGUE_END_ID'] == -1:
-            Original_Configuration['CATALOGUE_END_ID'] = len(Full_Catalogue['NUMBER'])
+        if Original_Configuration['CATALOGUE_END_ID'] in ['-1','-1.']:
+            Original_Configuration['CATALOGUE_END_ID'] = int(len(Full_Catalogue['ID']))
             if Original_Configuration['CATALOGUE_END_ID'] == 0:
                 Original_Configuration['CATALOGUE_END_ID'] = 1
         else:
-            Original_Configuration['CATALOGUE_END_ID'] = np.where(Original_Configuration['CATALOGUE_END_ID'] == Full_Catalogue['NUMBER'])[0][0]
+            Original_Configuration['CATALOGUE_END_ID'] = int(np.where(Original_Configuration['CATALOGUE_END_ID'] == np.array(Full_Catalogue['ID'],dtype=str))[0][0])
         # start the main fitting loop
 
         if float(Original_Configuration['CATALOGUE_START_ID']) > float(Original_Configuration['CATALOGUE_END_ID']):
@@ -195,8 +207,8 @@ configuration_file = ''')
             Configuration = copy.deepcopy(Original_Configuration)
             Configuration['START_TIME'] = datetime.now()
             # First check the starttime
-            Configuration['ID_NR'] = Full_Catalogue['NUMBER'][current_galaxy_index]
-            if  Full_Catalogue['DISTANCE'][current_galaxy_index] != 2.:
+            Configuration['ID'] = Full_Catalogue['ID'][current_galaxy_index]
+            if  Full_Catalogue['DISTANCE'][current_galaxy_index] != -1.:
                 Configuration['DISTANCE'] = Full_Catalogue['DISTANCE'][current_galaxy_index]
             Configuration['SUB_DIR'] = Full_Catalogue['DIRECTORYNAME'][current_galaxy_index]
             Configuration['BASE_NAME'] = Full_Catalogue['CUBENAME'][current_galaxy_index]+'_FAT'
@@ -213,6 +225,8 @@ configuration_file = ''')
                 Configuration['FITTING_DIR'] = f"{Configuration['MAIN_DIRECTORY']}{Full_Catalogue['DIRECTORYNAME'][current_galaxy_index]}/"
             if Configuration['FITTING_DIR'][-2:] == '//':
                 Configuration['FITTING_DIR'] = Configuration['FITTING_DIR'][:-2]+'/'
+
+
             if not Configuration['SOFIA_DIR']:
                 Configuration['SOFIA_DIR'] = Configuration['FITTING_DIR']
             ini_mode_factor =25
@@ -236,7 +250,7 @@ configuration_file = ''')
 
                 #If it exists move the previous Log
             if os.path.exists(Configuration['OUTPUTLOG']):
-                os.rename(Configuration['OUTPUTLOG'],f"{Configuration['LOG_DIRECTORY']}Previous_Log.txt")
+                os.rename(Configuration['OUTPUTLOG'],f"{os.path.splitext(Configuration['OUTPUTLOG'])[0]}_Prev.txt")
 
             with open(Configuration['OUTPUTLOG'],'w') as log:
                 log.write(log_statement)
@@ -292,7 +306,7 @@ configuration_file = ''')
 
 
 
-            log_statement = f'''We are in loop {current_galaxy_index}. This is catalogue number {Configuration['ID_NR']} and the directory {Configuration['SUB_DIR']}.\n'''
+            log_statement = f'''We are in loop {current_galaxy_index}. This is catalogue entry {Configuration['ID']} and the directory {Configuration['SUB_DIR']}.\n'''
             sf.print_log(log_statement,Configuration['OUTPUTLOG'], screen =True)
 
 

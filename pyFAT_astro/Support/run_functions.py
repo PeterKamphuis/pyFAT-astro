@@ -1,27 +1,23 @@
 # -*- coding: future_fstrings -*-
 # This module contains a set of functions and classes that are used to run external programs
 
-class BadSourceError(Exception):
-    pass
-class SofiaRunError(Exception):
-    pass
-class InclinationRunError(Exception):
-    pass
-class SofiaFaintError(Exception):
-    pass
+
 
 from pyFAT_astro.Support.support_functions import print_log, convert_type,set_limits,rename_fit_products,\
                               set_ring_size,calc_rings,get_usage_statistics,get_inner_fix,convertskyangle,\
                               finish_current_run, remove_inhomogeneities,get_from_template,set_format, \
-                              set_rings, convertRADEC,sbr_limits, create_directory
+                              set_rings, convertRADEC,sbr_limits, create_directory,get_system_string
 from pyFAT_astro.Support.clean_functions import clean_before_sofia,clean_after_sofia
 from pyFAT_astro.Support.fits_functions import cut_cubes,extract_pv,make_moments
 from pyFAT_astro.Support.read_functions import load_template
 
 from pyFAT_astro.Support.modify_template import write_new_to_template,smooth_profile,set_cflux,fix_sbr, \
                                           regularise_profile,set_fitting_parameters,check_size, \
-                                          no_declining_vrot, set_new_size,set_errors,get_warp_slope,check_angles
+                                          no_declining_vrot,set_errors,get_warp_slope,check_angles
 from pyFAT_astro.Support.constants import H_0
+from pyFAT_astro.Support.fat_errors import SofiaFaintError,BadConfigurationError,\
+                                              InclinationRunError,SofiaRunError,BadSourceError
+
 from astropy.wcs import WCS
 from astropy.io import fits
 
@@ -155,7 +151,7 @@ def check_inclination(Configuration,Tirific_Template,Fits_Files, fit_type = 'Und
         Configuration['TIRIFIC_RUNNING'] = False
         #and a copy of the tirific template
         if debug:
-                print_log(f'''CHECK_INCLINATION: pytho is so stupif
+                print_log(f'''CHECK_INCLINATION: python is so stupid
     {'':8s}PA = {Tirific_Template['PA']}
     ''',Configuration['OUTPUTLOG'])
         Check_Template = copy.deepcopy(Tirific_Template)
@@ -163,7 +159,12 @@ def check_inclination(Configuration,Tirific_Template,Fits_Files, fit_type = 'Und
         Check_Template['LOOPS'] = '0'
         Check_Template['INIMODE'] = '0'
         Check_Template['INSET'] = f"{Fits_Files['FITTING_CUBE']}"
-        Check_Template['RESTARTNAME'] = f"{Configuration['LOG_DIRECTORY']}restart_{tmp_stage}.txt"
+        current_cwd = os.getcwd()
+        short_log = Configuration['LOG_DIRECTORY'].replace(current_cwd,'.')
+        Check_Template['RESTARTNAME'] = f"{short_log}restart_{tmp_stage}.txt"
+        #Check_Template['RESTARTNAME'] = get_system_string(f"{Configuration['LOG_DIRECTORY']}restart_{tmp_stage}.txt")
+        #Check_Template['RESTARTNAME'] = f"./Logs/06-09-2021/restart_tmp_incl_check.txt"
+
         #These are small galaxies make sure the VARINDX is not meesing things up
         Check_Template['VARINDX'] = ''
 
@@ -376,11 +377,14 @@ def check_source(Configuration, Fits_Files, debug = False):
                 /(Configuration['BEAM_IN_PIXELS'][0])+5.))
 
 
-    pa, inclination, SBR_initial, maj_extent,x_new,y_new,VROT_initial = rf.guess_orientation(Configuration,Fits_Files, center = [x,y],debug=debug)
+    pa, inclination, SBR_initial, maj_extent,x_new,y_new,new_vsys,VROT_initial = rf.guess_orientation(Configuration,Fits_Files, center = [x,y],debug=debug)
 
-    if x_new != x or y_new != y:
-        x=x_new
-        y=y_new
+    if x_new != x or y_new != y or new_vsys != v_app:
+
+        x,y,z_new=cube_wcs.wcs_world2pix(ra,dec,new_vsys*1000.,1)
+        x=float(x_new)
+        y=float(y_new)
+        z=float(z_new)
         ra,dec,v_app = cube_wcs.wcs_pix2world(x,y,z,1)
         v_app = v_app/1000.
         print_log(f'''CHECK_SOURCE: The center is updated to.
@@ -475,10 +479,15 @@ def check_source(Configuration, Fits_Files, debug = False):
 
 
 
-    if Configuration['HANNING_SMOOTHED']:
+    if Configuration['CHANNEL_DEPENDENCY'].lower() == 'hanning':
         vres = (Configuration['CHANNEL_WIDTH']*2)/(2.*np.sqrt(2.*np.log(2)))
-    else:
+    elif Configuration['CHANNEL_DEPENDENCY'].lower() == 'sinusoidal' :
         vres = (Configuration['CHANNEL_WIDTH']*1.2)/(2.*np.sqrt(2.*np.log(2)))
+    elif Configuration['CHANNEL_DEPENDENCY'].lower() == 'independent':
+        vres = Configuration['CHANNEL_WIDTH']
+    else:
+        raise BadConfigurationError('Something went wrong in the Configuration setup')
+
     #if inclination[0] < 40:
     #    max_vrot=w50/2./np.sin(np.radians(abs(inclination[0]+5.)))
     #else:
@@ -698,7 +707,12 @@ def fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run, s
 
         set_fitting_parameters(Configuration, Tirific_Template,stage = stage,\
                           initial_estimates = parameters,parameters_to_adjust = parameters_to_adjust, debug = debug)
-    os.system(f"cp {Configuration['FITTING_DIR']}{fit_type}_In.def {Configuration['FITTING_DIR']}{fit_type}/{fit_type}_Last_Unsmoothed_Input.def")
+
+
+    target = f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}_Last_Unsmoothed_Input.def"
+    source = get_system_string(f"{Configuration['FITTING_DIR']}{fit_type}_In.def")
+    target = get_system_string(f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}_Last_Unsmoothed_Input.def")
+    os.system(f"cp {source} {target}")
     wf.tirific(Configuration,Tirific_Template,name = f'{fit_type}_In.def',debug=debug)
     accepted,current_run = run_tirific(Configuration,current_run, stage = stage, fit_type=fit_type,debug=debug)
 
@@ -708,8 +722,9 @@ def fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run, s
         smoothed_vrot = regularise_profile(Configuration,Tirific_Template,'VROT',min_error = Configuration['CHANNEL_WIDTH'],debug = debug)
         set_fitting_parameters(Configuration, Tirific_Template,stage = 'final_os',\
                           initial_estimates = parameters,parameters_to_adjust  = ['VROT'], debug = debug)
-
-        os.system(f"cp {Configuration['FITTING_DIR']}{fit_type}_In.def {Configuration['FITTING_DIR']}{fit_type}/{fit_type}_First_Smoothed_Input.def")
+        source = get_system_string(f"{Configuration['FITTING_DIR']}{fit_type}_In.def")
+        target = get_system_string(f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}_First_Smoothed_Input.def")
+        os.system(f"cp {source} {target}")
         wf.tirific(Configuration,Tirific_Template,name = f'{fit_type}_In.def',debug=debug)
         accepted,current_run = run_tirific(Configuration,current_run, stage = 'final_os', fit_type=fit_type,debug=debug)
 

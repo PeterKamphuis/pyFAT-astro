@@ -883,7 +883,7 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
         plt.scatter(float(Input_Model[0,Vars_to_plot.index('XPOS')]),float(Input_Model[0,Vars_to_plot.index('YPOS')]),c='b',zorder =2,label='Input')
     plt.scatter(sof_basic_ra[0],sof_basic_dec[0],marker='x',alpha=0.5, c = 'k',label='Initial')
     mod_ell = Ellipse(xy=[float(FAT_Model[0,Vars_to_plot.index('XPOS')]),float(FAT_Model[0,Vars_to_plot.index('YPOS')])], width=cube[0].header['BMAJ'] , height=cube[0].header['BMAJ'], angle=0,
-               edgecolor='none', alpha=0.4, lw=4, facecolor='k', hatch=' ',zorder=-1)
+               edgecolor='none', alpha=0.4, lw=4, facecolor='k', hatch = None, zorder=-1)
     ax_RAD.add_patch(mod_ell)
     ax_RAD.legend(loc='upper left', bbox_to_anchor=(0.0, -0.3), shadow=True, ncol=1)
     plt.xlabel('RA ($^{\circ}$)',**labelfont)

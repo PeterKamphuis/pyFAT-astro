@@ -9,8 +9,8 @@ from datetime import datetime
 
 @dataclass
 class Fitting:
-    catalogue_start_id: int = -1 #Catalogue ID of the first galaxy to be fitted. -1 Means start at the beginning
-    catalogue_end_id: int= -1 #the last galaxy to be fitted, if set to -1 the whole catalogue will be fitted
+    catalogue_start_id: str = '-1' #Catalogue ID of the first galaxy to be fitted. -1 Means start at the beginning
+    catalogue_end_id: str = '-1' #the last galaxy to be fitted, if set to -1 the whole catalogue will be fitted
     fitting_stages: List = field(default_factory=lambda: ['Create_FAT_Cube','Run_Sofia','Fit_Tirific_OSC'])
     # Possible stages are
     # Create_FAT_Cube: Create a FAT compatible cube from the original cube. This will overwrite any previous FAT cube present. If omitted it is assumed the Cube is present in the fitting directory
@@ -28,7 +28,7 @@ class Fitting:
 @dataclass
 class Input:
     main_directory: str =f'{os.getcwd()}'
-    hanning_smoothed: bool = False # is the input cube hanning smoothed
+    channel_dependency: str = 'independent' #'Options are independent, sinusoidal, hanning
     catalogue: Optional[str] = None
     tirific: str = "tirific" #Command to call tirific
     sofia2: str = "sofia2"   #Command to call sofia 2
@@ -55,7 +55,10 @@ class Advanced:
     minimum_warp_size: float = 3. # if the number of beams across the major axis/2. is less than this size we will only fit a flat disc,set here.
     minimum_rings: int = 3  # we need at least this amount of rings (Including 0 and 1/5 beam), set here
     too_small_galaxy: float = 1. # if the number of beams across the major axis/2 is less than this we will not fit the galaxy, set here
+    unreliable_size: float = 2. #If the final diameter is smaller than this the fit is considered unreliable
+    unreliable_inclination: float = 10. #If the final inclination is below this the fit is considered unreliable
 
+    # Add the channel dependency, minimum inclination,
 @dataclass
 class defaults:
     print_examples: bool=False

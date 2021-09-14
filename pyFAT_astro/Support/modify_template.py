@@ -7,21 +7,12 @@ import copy
 from pyFAT_astro.Support.support_functions import set_rings,convertskyangle,sbr_limits,set_limits,print_log,set_limit_modifier,\
                               set_ring_size,calc_rings,finish_current_run,set_format,get_from_template,gaussian_function,fit_gaussian,\
                               get_ring_weights
-
+from pyFAT_astro.Support.fat_errors import InitializeError,CfluxError,FunctionCallError,BadConfigurationError
 import numpy as np
+import os
 from scipy.optimize import curve_fit
 from scipy.signal import savgol_filter
 from scipy.interpolate import CubicSpline,Akima1DInterpolator
-
-#Define some errors
-class InitializeError(Exception):
-    pass
-class CfluxError(Exception):
-    pass
-class FunctionCallError(Exception):
-    pass
-
-
 
 
 def arc_tan_function(axis,center,length,amplitude,mean):
@@ -2575,8 +2566,9 @@ def set_overall_parameters(Configuration, Fits_Files,Tirific_Template,stage = 'i
                 #preferably we'd use the akima spline but there is an issue with that where the final ring does not get modified
                 #Tirific_Template['INDINTY'] = 2
             Tirific_Template['NUR'] = f"{Configuration['NO_RINGS']}"
-
-            Tirific_Template['RESTARTNAME'] = f"{Configuration['LOG_DIRECTORY']}restart_{fit_type}.txt"
+            current_cwd = os.getcwd()
+            short_log = Configuration['LOG_DIRECTORY'].replace(current_cwd,'.')
+            Tirific_Template['RESTARTNAME'] = f"{short_log}restart_{fit_type}.txt"
             #this could be fancier
             '''
             if Configuration['NO_RINGS'] < 3:
@@ -2604,10 +2596,15 @@ def set_overall_parameters(Configuration, Fits_Files,Tirific_Template,stage = 'i
             Tirific_Template['BPA'] = f"{Configuration['BEAM'][2]:.2f}"
             Tirific_Template['RMS'] = f"{Configuration['NOISE']:.2e}"
 
-            if Configuration['HANNING_SMOOTHED']:
+            if Configuration['CHANNEL_DEPENDENCY'].lower() == 'hanning':
                 instrumental_vres = (Configuration['CHANNEL_WIDTH']*2)/(2.*np.sqrt(2.*np.log(2)))
-            else:
+            elif Configuration['CHANNEL_DEPENDENCY'].lower() == 'sinusoidal':
                 instrumental_vres = (Configuration['CHANNEL_WIDTH']*1.2)/(2.*np.sqrt(2.*np.log(2)))
+            elif Configuration['CHANNEL_DEPENDENCY'].lower() == 'independent':
+                instrumental_vres = 0.
+            else:
+                raise BadConfigurationError('Something went wrong in the Configuration setup')
+
             Tirific_Template['CONDISP'] = f"{instrumental_vres:.2f}"
             if flux:
                 Tirific_Template['CFLUX'] = f"{set_limits(flux/1.5e7,1e-6,1e-3):.2e}"
