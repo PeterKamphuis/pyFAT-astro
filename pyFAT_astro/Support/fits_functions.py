@@ -2,8 +2,8 @@
 # This module contains a set of functions and classes that are used in several different Python scripts in the Database.
 from astropy.io import fits
 from astropy.wcs import WCS
-from pyFAT_astro.Support.support_functions import linenumber,print_log,set_limits,clean_header
-from pyFAT_astro.Support.read_functions import obtain_border_pix
+from pyFAT_astro.Support.support_functions import linenumber,print_log,set_limits,clean_header,obtain_border_pix
+#from pyFAT_astro.Support.read_functions import obtain_border_pix
 from scipy import ndimage
 import numpy as np
 import copy

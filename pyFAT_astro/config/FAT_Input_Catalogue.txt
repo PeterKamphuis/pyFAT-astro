@@ -1,10 +1,10 @@
-number|distance|directoryname|cubename
+id|distance|directoryname|cubename
 0|27|TheSingleGalaxyDirectory|TheNameoftheCubetobefitted(without .fits extension)
 1|14|TheSecondGalaxyDirectory|TheNameoftheCubetobefitted(without .fits extension)
 
 Or for SofiA pre-processed input
 
-number|distance|directoryname|cubename|basename
+id|distance|directoryname|cubename|basename
 0|27|TheSingleGalaxyDirectory|TheNameoftheCubetobefitted(without .fits extension) |The basename and dir for Sofia products (Only important when start_point=3)
 1|14|TheSecondGalaxyDirectory|TheNameoftheCubetobefitted(without .fits extension) |The basename and dir for Sofia products (Only important when start_point=3)
 
