@@ -28,8 +28,8 @@ import pyFAT_astro.Support.support_functions as sf
 import pyFAT_astro.Support.fits_functions as ff
 #import pyFAT_astro.Support.development_functions as df
 
-#homedir = '/home/peter/'
-homedir = '/Users/peter/'
+homedir = '/home/peter/'
+#homedir = '/Users/peter/'
 
 Configuration = {'INNER_FIX': 4}
 #Configuration['FITTING_DIR']=f"{homedir}/FAT_Main/FAT_Testers/Database-09-10-2020/Mass2.5e+12-i20d14.0-7.5pa35.0w0.0-0.0-No_Flare-ba12SNR8bm20.0-20.0ch4.0-Arms-No_Bar-rm0.0/"
@@ -39,7 +39,8 @@ Configuration = {'INNER_FIX': 4}
 #Configuration['FITTING_DIR']= f"{homedir}/FAT_Main/FAT_Testers/Database-09-10-2020/Mass2.5e+12-i15d14.0-7.5pa35.0w0.0-0.0-No_Flare-ba12SNR8bm20.0-20.0ch4.0-Arms-No_Bar-rm0.0/"
 #Configuration['FITTING_DIR']= f"{homedir}/FAT_Main/FAT_Testers/Database-09-10-2020/NGC_3198_36.9Beams_1.0SNR/"
 #Configuration['FITTING_DIR']= f"{homedir}/FAT_Main/FAT_Testers/LVHIS-26_3/HPASS00018/"
-Configuration['FITTING_DIR']=f"{homedir}FAT_Main/Database/M_83_6.0Beams_3.0SNR/"
+Configuration['FITTING_DIR']='/home/peter/FAT_Main/FAT_Testers/Database-09-10-2020/M_83_6.0Beams_3.0SNR/'
+#Configuration['FITTING_DIR']=f"{homedir}FAT_Main/Database/M_83_6.0Beams_3.0SNR/"
 Fits_Files = {'ORIGINAL_CUBE': "Convolved_Cube.fits"}
 Configuration['START_DIRECTORY']= f'{os.getcwd()}'
 Configuration['CUBENAME']= 'Convolved_Cube'
