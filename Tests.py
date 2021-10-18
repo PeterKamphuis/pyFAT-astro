@@ -222,7 +222,7 @@ def Test_psutil_stats():
             cpu_duration,CPU,mem= get_usage_stats(Configuration,current_proc,debug=True)
             print(f'Attempting psutil statistics')
             print(f'clock_time = {cpu_duration} CPU%= {CPU} memory = {mem}')
-            CPU,mem= sf.get_usage_statistics(Configuration,current_run.pid,debug=False)
+            CPU,mem= sf.get_usage_statistics(Configuration,current_run.pid,debug=True)
             print(f'Attempting old statistics')
             print(CPU,mem)
             print(f'!!!!!!!!!!!yeah!!!!!!!')
@@ -232,6 +232,8 @@ def get_usage_stats(Configuration,process, debug = False):
 
     Cpuduration=(process.cpu_times()[0]+process.cpu_times()[1])/60.
     memory_in_mb = (process.memory_info()[0]+process.memory_info()[1])/2**20. #psutilreturns bytes
+    print(f'The memory info')
+    print(process.memory_info())
     cpu_percent = process.cpu_percent(interval=1)
     return Cpuduration,cpu_percent,memory_in_mb
 
