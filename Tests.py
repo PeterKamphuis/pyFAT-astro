@@ -223,7 +223,7 @@ def Test_psutil_stats():
             print(f'Attempting psutil statistics')
             print(f'clock_time = {cpu_duration} CPU%= {CPU} memory = {mem}')
             CPU,mem= sf.get_usage_statistics(Configuration,current_run.pid,debug=False)
-            print(f'Attempting psutil statistics')
+            print(f'Attempting old statistics')
             print(CPU,mem)
             print(f'!!!!!!!!!!!yeah!!!!!!!'')
         time.sleep(1)
