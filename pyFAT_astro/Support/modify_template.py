@@ -1615,7 +1615,7 @@ def set_boundary_limits(Configuration,Tirific_Template,key, tolerance = 0.01, va
         print_log(f'''SET_BOUNDARY_LIMITS: checking limits for {key},
 ''',Configuration['OUTPUTLOG'],debug = True)
     profile = np.array(get_from_template(Configuration,Tirific_Template, [key,f"{key}_2"]),dtype = float)
-
+    print(Configuration[f"{key}_CURRENT_BOUNDARY"],key)
     current_boundaries = Configuration[f"{key}_CURRENT_BOUNDARY"]
     if debug:
         print_log(f'''SET_BOUNDARY_LIMITS: We have found the following limits,
@@ -2656,7 +2656,7 @@ def set_sbr_fitting(Configuration,systemic = 100., stage = 'no_stage',debug = Fa
     if stage in ['initial','run_cc','initialize_ec','run_ec','initialize_os','run_os']:
         radii,sbr_ring_limits = sbr_limits(Configuration,systemic = systemic, debug = debug)
         if stage in ['run_ec','run_os']:
-            sbr_ring_limits[-4:]=[x/5 for x in sbr_ring_limits]
+            sbr_ring_limits[-4:]=[x/5 for x in sbr_ring_limits[-4:]]
         if debug:
             print_log(f'''SET_SBR_FITTING: Using these SBR limits.
 {'':8s} limits = {sbr_ring_limits}

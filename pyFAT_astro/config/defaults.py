@@ -18,11 +18,11 @@ class Fitting:
     # Run_Sofia: Run Sofia on the FAT cube and  process the output
     # Existing_Sofia: It is assumed the Sofia output exist and specified in the fitting catalogue, this means a catalogue exists for every cubelet
     # Fit_Tirific_OSC: Run FAT using the Tirific program in multiple iterations and smooth
+    # Tirshaker: Bootstrap errors for the final model. This can take a long time
     ring_size: float = 1.1 # The size of the rings in number of beams
     fixed_parameters:  List = field(default_factory=lambda: ['Z0','XPOS','YPOS','VSYS']) #Options are INCL, PA, SDIS, SBR
     opt_pixel_beam: int=4
     ncpu: int = 6
-    max_iterations: int=15
     distance: float = -1. # Distance to the galaxy, set from the catalogue at start of loop in case of batch fitting
 
 @dataclass
@@ -57,7 +57,7 @@ class Advanced:
     too_small_galaxy: float = 1. # if the number of beams across the major axis/2 is less than this we will not fit the galaxy, set here
     unreliable_size: float = 2. #If the final diameter is smaller than this the fit is considered unreliable
     unreliable_inclination: float = 10. #If the final inclination is below this the fit is considered unreliable
-
+    shaker_iterations: int = 20
     # Add the channel dependency, minimum inclination,
 @dataclass
 class defaults:

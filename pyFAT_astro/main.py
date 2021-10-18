@@ -49,8 +49,7 @@ def main(argv):
 
 
 
-        #Get the directory we are running from, This is for the Installation Check
-        start_dir = os.getcwd()
+
         #Get default settings
         if '-v' in argv or '--version' in argv:
             print(f"This is version {pyFAT_astro.__version__} of the program.")
@@ -137,9 +136,7 @@ def main(argv):
                     ,cfg.print_examples,cfg.input.catalogue]):
             print(help_message)
             sys.exit()
-        #Add none user mutable input
-        #OmegaConf.update(cfg, 'start_directory', f'{os.getcwd()}', force_add=True)
-
+        #Transform all to a Configuration dictionary
         Original_Configuration = sf.setup_configuration(cfg)
 
         #First we check for sofia and TiRiFiC
@@ -370,7 +367,7 @@ def main(argv):
                 if 'fit_tirific_osc' in Configuration['FITTING_STAGES']:
                     current_run = runf.fitting_osc(Configuration,Fits_Files,Tirific_Template,Initial_Parameters)
                 elif 'fit_make_your_own' in Configuration['FITTING_STAGES']:
-                    print_log(f'If you add any fiiting routine make sure that the fit stage  starts with Fit_')
+                    print_log(f'If you add any fitting routine make sure that the fit stage  starts with Fit_')
                     Configuration['FINAL_COMMENT'] = 'This example does not work'
                     cf.finish_galaxy(Configuration,maximum_directory_length,debug=Configuration['DEBUG'])
                     continue
@@ -380,6 +377,9 @@ def main(argv):
                     continue
                 #cf.finish_galaxy(Configuration,maximum_directory_length, Fits_Files =Fits_Files,current_run =current_run,debug=Configuration['DEBUG'])
                 #continue
+                #if all the fitting has gone properly we create nice errors
+                if 'tirshaker' in Configuration['FITTING_STAGES']:
+                    runf.tirshaker_call(Configuration,debug=Configuration['DEBUG'])
                 Configuration['FINAL_COMMENT'] = 'The fit has converged succesfully'
 
 
@@ -390,6 +390,7 @@ def main(argv):
                     Configuration['OUTPUT_QUANTITY'] = 5
                 else:
                     Configuration['OUTPUT_QUANTITY'] = 'error'
+            #Only
             cf.finish_galaxy(Configuration,maximum_directory_length,current_run =current_run, Fits_Files =Fits_Files,debug = Configuration['DEBUG'],exiting=registered_exception)
             if Configuration['OUTPUT_QUANTITY'] != 5:
                 DHI = rf.get_DHI(Configuration,Model=Configuration['USED_FITTING'],debug=Configuration['DEBUG'])

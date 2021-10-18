@@ -6,10 +6,11 @@
 from pyFAT_astro.Support.support_functions import print_log, convert_type,set_limits,rename_fit_products,\
                               set_ring_size,calc_rings,get_usage_statistics,get_inner_fix,convertskyangle,\
                               finish_current_run, remove_inhomogeneities,get_from_template,set_format, \
-                              set_rings, convertRADEC,sbr_limits, create_directory,get_system_string
+                              set_rings, convertRADEC,sbr_limits, create_directory,get_system_string,\
+                              get_fit_groups,run_tirific
 from pyFAT_astro.Support.clean_functions import clean_before_sofia,clean_after_sofia
 from pyFAT_astro.Support.fits_functions import cut_cubes,extract_pv,make_moments
-from pyFAT_astro.Support.read_functions import load_template
+from pyFAT_astro.Support.read_functions import load_template,tirific_template
 
 from pyFAT_astro.Support.modify_template import write_new_to_template,smooth_profile,set_cflux,fix_sbr, \
                                           regularise_profile,set_fitting_parameters,check_size, \
@@ -17,6 +18,7 @@ from pyFAT_astro.Support.modify_template import write_new_to_template,smooth_pro
 from pyFAT_astro.Support.constants import H_0
 from pyFAT_astro.Support.fat_errors import SofiaFaintError,BadConfigurationError,\
                                               InclinationRunError,SofiaRunError,BadSourceError
+from pyFAT_astro.Support.tirshaker import tirshaker
 
 from astropy.wcs import WCS
 from astropy.io import fits
@@ -27,6 +29,7 @@ import os
 import sys
 import time
 import copy
+
 import subprocess
 import numpy as np
 import traceback
@@ -898,119 +901,6 @@ one_step_converge.__doc__ =f'''
 
  NOTE: This routine sets the Configuration['ACCEPTED']
 '''
-def run_tirific(Configuration, current_run, stage = 'initial',fit_type = 'Undefined', debug = False):
-    if debug:
-        print_log(f'''RUN_TIRIFIC: Starting a new run in stage {stage} and fit_type {fit_type}
-''',Configuration['OUTPUTLOG'], screen = True,debug = debug)
-
-    # First move the previous fits
-    rename_fit_products(Configuration,fit_type = fit_type, stage=stage, debug = debug)
-    # Then if already running change restart file
-    if Configuration['TIRIFIC_RUNNING']:
-        print_log(f'''RUN_TIRIFIC: We are using an initialized tirific in {Configuration['FITTING_DIR']}
-''',Configuration['OUTPUTLOG'], screen = True)
-        with open(f"{Configuration['LOG_DIRECTORY']}restart_{fit_type}.txt",'a') as file:
-            file.write("Restarting from previous run")
-    else:
-        print_log(f'''RUN_TIRIFIC: We are starting a new TiRiFiC in {Configuration['FITTING_DIR']}
-''',Configuration['OUTPUTLOG'], screen = True)
-        with open(f"{Configuration['LOG_DIRECTORY']}restart_{fit_type}.txt",'w') as file:
-            file.write("Initialized a new run")
-        current_run = subprocess.Popen([Configuration['TIRIFIC'],f"DEFFILE={fit_type}_In.def","ACTION = 1"], stdout = subprocess.PIPE, \
-                                    stderr = subprocess.PIPE,cwd=Configuration['FITTING_DIR'],universal_newlines = True)
-        Configuration['TIRIFIC_RUNNING'] = True
-        Configuration['TIRIFIC_PID'] = current_run.pid
-    currentloop =1
-    max_loop = 0
-    counter = 0
-    if Configuration['TIMING']:
-        time.sleep(0.1)
-        with open(f"{Configuration['LOG_DIRECTORY']}Usage_Statistics.txt",'a') as file:
-            file.write(f"# Started Tirific at stage = {fit_type}\n")
-            CPU,mem = get_usage_statistics(Configuration,current_run.pid)
-            file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Mb \n")
-    else:
-        time.sleep(0.1)
-    print(f"\r{'':8s}RUN_TIRIFIC: 0 % Completed", end =" ",flush = True)
-    triggered = False
-    for tir_out_line in current_run.stdout:
-        tmp = re.split(r"[/: ]+",tir_out_line.strip())
-        counter += 1
-        if (counter % 50) == 0:
-            if Configuration['TIMING']:
-                with open(f"{Configuration['LOG_DIRECTORY']}Usage_Statistics.txt",'a') as file:
-                    if tmp[0] == 'L' and not triggered:
-                        if tmp[1] == '1':
-                            file.write("# Started the actual fitting \n")
-                            triggered = True
-                    CPU,mem = get_usage_statistics(Configuration,current_run.pid)
-                    file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Mb \n")
-        if tmp[0] == 'L':
-            if int(tmp[1]) != currentloop:
-                print(f"\r{'':8s}RUN_TIRIFIC: {float(tmp[1])/float(max_loop)*100.:.1f} % Completed", end =" ",flush = True)
-            currentloop  = int(tmp[1])
-            if max_loop == 0:
-                max_loop = int(tmp[2])
-            try:
-                Configuration['NO_POINTSOURCES'] = np.array([tmp[18],tmp[19]],dtype=float)
-            except:
-                #If this fails for some reason an old number suffices, if the code really crashed problems will occur elsewhere.
-                pass
-        if tmp[0].strip() == 'Finished':
-            break
-        if tmp[0].strip() == 'Abort':
-            break
-    print(f'\n')
-    if Configuration['TIMING']:
-        with open(f"{Configuration['LOG_DIRECTORY']}Usage_Statistics.txt",'a') as file:
-            file.write("# Finished this run \n")
-            CPU,mem = get_usage_statistics(Configuration,current_run.pid)
-            file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Gb\n")
-    print(f"{'':8s}RUN_TIRIFIC: Finished the current tirific run.")
-    #The break off goes faster sometimes than the writing of the file so let's make sure it is present
-    time.sleep(1.0)
-    wait_counter = 0
-    while not os.path.exists(f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.fits") and wait_counter < 1000.:
-        print(f"\r Waiting ", end = "", flush = True)
-        time.sleep(0.5)
-        wait_counter += 1
-
-    if currentloop != max_loop:
-        return 1,current_run
-    else:
-        return 0,current_run
-run_tirific.__doc__ =f'''
- NAME:
-    run_tirific
-
- PURPOSE:
-    Check whether we have an initialized tirific if not initialize and run else restart the initialized run.
-
- CATEGORY:
-    run_functions
-
- INPUTS:
-    Configuration = Standard FAT configuration
-    current_run = subprocess structure of tirific
-
- OPTIONAL INPUTS:
-    debug = False
-
-    fit_type = 'Undefined'
-    type of fitting
-
-    stage = 'initial'
-    stage of the fitting process
-
- OUTPUTS:
-
- OPTIONAL OUTPUTS:
-
- PROCEDURES CALLED:
-    Unspecified
-
- NOTE:
-'''
 
 def sofia(Configuration, Fits_Files, debug = False):
     if debug:
@@ -1098,4 +988,118 @@ sofia.__doc__ =f'''
     Unspecified
 
  NOTE:
+'''
+
+def tirshaker_call(Configuration,debug = False):
+    # First we make a directory to keep all contained
+
+    if not os.path.isdir(f"{Configuration['FITTING_DIR']}/Error_Shaker/"):
+        os.mkdir(f"{Configuration['FITTING_DIR']}/Error_Shaker/")
+
+
+    # Then we open the final file
+    filename = f"{Configuration['FITTING_DIR']}Error_Shaker/Error_Shaker_In.def"
+
+    final_FAT_file= f"{Configuration['FITTING_DIR']}{Configuration['USED_FITTING']}/{Configuration['USED_FITTING']}.def"
+
+    Tirific_Template = tirific_template(filename = final_FAT_file \
+                    , debug = debug)
+    #Change the name and run only 2 LOOPS
+    Tirific_Template['RESTARTNAME']= ''
+    Tirific_Template['INSET'] = f"../{Tirific_Template['INSET']}"
+    Tirific_Template['TIRDEF']= f"Error_Shaker_Out.def"
+    Tirific_Template['LOOPS'] = '1'
+    #Write it back to the file
+    wf.tirific(Configuration,Tirific_Template, name =f"Error_Shaker/Error_Shaker_In.def" , debug = debug)
+
+    outfilename = 'Error_Shaker.def'
+    outfileprefix = 'Error_Shaker'
+
+    #This we need to remove from the actual run
+    Configuration['NO_RINGS'] = int(Tirific_Template['NUR'])
+    Configuration['RING_SIZE'] = 1.
+    Configuration['SIZE_IN_BEAMS'] = Configuration['NO_RINGS']-2
+    set_fitting_parameters(Configuration, Tirific_Template,stage = 'run_os',\
+                         debug = debug)
+
+
+    #Determine the error block from the last fit settings.
+    parameter_groups,rings,block,variation,variation_type = get_fit_groups(Configuration,Tirific_Template,debug = debug)
+
+    iterations = Configuration['SHAKER_ITERATIONS']
+    random_seed = 2
+    os.chdir(f"{Configuration['FITTING_DIR']}/Error_Shaker/")
+    tirshaker(Configuration,filename = filename, outfilename = outfilename,\
+                outfileprefix = outfileprefix, parameter_groups = parameter_groups, \
+                rings = rings, block = block, variation = variation,\
+                 variation_type = variation_type, iterations = iterations,
+                 random_seed = random_seed, mode = 'mad',debug=debug)
+    os.chdir(f"{Configuration['START_DIRECTORY']}")
+    try:
+        os.remove(f"{Configuration['FITTING_DIR']}Error_Shaker/blatirshin")
+    except:
+        pass
+    try:
+        os.remove(f"{Configuration['FITTING_DIR']}Error_Shaker/blatirlog")
+    except:
+        pass
+    #remove the duplicate line in the shaker output
+    # make sure all duplicate are removed
+
+    outshaker = open(f"{Configuration['FITTING_DIR']}Error_Shaker/{outfilename}", 'r').readlines()
+    lines_set = set(outshaker)
+
+    with open(f"{Configuration['FITTING_DIR']}Error_Shaker/{outfilename}", 'w') as out:
+        for line in lines_set:
+            out.write(line)
+
+    #Let's load the   the tirshaker output
+    err_var =[]
+    for group in parameter_groups:
+        for par in group:
+            if f'ERR_{par[:-1]}' not in err_var:
+                err_var.append(f'ERR_{par[:-1]}')
+    errors = rf.load_tirific(Configuration,f"{Configuration['FITTING_DIR']}Error_Shaker/{outfilename}",Variables = err_var,
+                     unpack = False , debug = debug )
+    print(errors)
+    for para in err_var:
+        key=para[4:]
+        FAT_err = f'# {key}_ERR'
+        format = set_format(key)
+        print(key,FAT_err,err_var.index(para),para)
+        print(errors[:int(Configuration['NO_RINGS']),err_var.index(para)])
+        if FAT_err in Tirific_Template:
+            Tirific_Template[FAT_err]= f"{' '.join([f'{x:{format}}' for x in errors[:int(Configuration['NO_RINGS']),err_var.index(para)]])}"
+        else:
+            Tirific_Template.insert(key,f"# {key}_ERR",f"{' '.join([f'{x:{format}}' for x in errors[:int(Configuration['NO_RINGS']),err_var.index(para)]])}")
+    print(final_FAT_file)
+    wf.tirific(Configuration,Tirific_Template,name=f"{Configuration['USED_FITTING']}/{Configuration['USED_FITTING']}.def", debug = debug)
+
+tirshaker_call.__doc__ =f'''
+ NAME:
+    tirshaker
+
+ PURPOSE:
+    function to setup the right input for tirshaker and call it and afterwards process the results
+
+ CATEGORY:
+    run_functions
+
+ INPUTS:
+    Configuration
+
+ OPTIONAL INPUTS:
+    debug = False
+
+
+ OUTPUTS:
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+
+
 '''

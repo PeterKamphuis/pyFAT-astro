@@ -3,7 +3,7 @@
 
 from pyFAT_astro.Support.fat_errors import SupportRunError,SmallSourceError,\
                                               FileNotFoundError,TirificKillError,\
-                                              InputError,ProgramError
+                                              InputError,ProgramError,DefFileError
 from collections import OrderedDict #used in Proper_Dictionary
 from inspect import getframeinfo,stack
 
@@ -1144,6 +1144,112 @@ gaussian_function.__doc__ =f'''
 
  NOTE:
 '''
+def get_fit_groups(Configuration,Tirific_Template,debug = False):
+    parameter_groups = []
+    block = []
+    rings = []
+    groups = Tirific_Template['VARY'].split(',')
+    variation_type = []
+    variation = []
+    paramater_standard_variation = {'PA': [10.,'a'],
+                                   'INCL': [10.,'a'],
+                                   'VROT': [Configuration['CHANNEL_WIDTH']*3.,'a'],
+                                   'VSYS': [Configuration['CHANNEL_WIDTH'],'a'],
+                                   'XPOS': [Configuration['BEAM'][0]/3600.,'a'],
+                                   'YPOS': [Configuration['BEAM'][0]/3600.,'a'],
+                                   'SBR': [0.2,'r'],
+                                   'Z0': [Configuration['BEAM'][0]/1800.,'a'],
+                                   'SDIS': [Configuration['CHANNEL_WIDTH']*1.5,'a'],
+                                   }
+    for group in groups:
+        parts = group.split()
+        if parts[0][0] == '!':
+            block.append(False)
+            parts[0] = parts[0][1:]
+        else:
+            block.append(True)
+        found_rings = []
+        preliminary_group = []
+        for part in parts:
+            if part[0].isnumeric():
+                if ':' in part:
+                    in_rings = [int(x) for x in part.split(':')]
+                    if in_rings.sort():
+                        in_rings.sort()
+                    in_rings[1] += 1
+                    current = [int(x) for x in range(*in_rings)]
+                else:
+                    current = [int(part)]
+                if len(found_rings) == 0:
+                    found_rings = current
+                else:
+                    if np.array_equal(np.array(found_rings),np.array(found_rings)):
+                        pass
+                    else:
+                        raise DefFileError("The VARY settings in this deffile are not acceptable you have different ring for one block.")
+            else:
+                preliminary_group.append(f'{part}=')
+
+        parameter_groups.append(preliminary_group)
+        rings.append(found_rings)
+        # Then get current errors that are present
+        per_par_variation  = []
+        current_par = ''
+        for par in parameter_groups[-1]:
+            if current_par == '':
+                current_par = par.split("=")[0]
+                if current_par[-1] == '2':
+                    current_par=current_par[:-2]
+            par = [f'# {par.split("=")[0]}_ERR']
+            all_errors = np.array(get_from_template(Configuration,Tirific_Template, par,debug=debug)[0],dtype=float)
+            if len(all_errors) == 0.:
+                continue
+            else:
+                current_rings = np.array(rings[-1],dtype=int)-1
+                if block[-1]:
+                    per_par_variation.append(np.mean(all_errors[current_rings])*3.)
+                else:
+                    per_par_variation.append(np.max(all_errors[current_rings]))
+        if block[-1]:
+            tmp_variation = np.mean(per_par_variation)*3.
+        else:
+            tmp_variation = np.max(per_par_variation)
+        if tmp_variation > paramater_standard_variation[current_par][0]:
+            variation.append(tmp_variation)
+            variation_type.append('a')
+        else:
+            variation.append(paramater_standard_variation[current_par][0])
+            variation_type.append(paramater_standard_variation[current_par][1])
+
+
+    return parameter_groups,rings,block,variation,variation_type
+
+get_fit_groups.__doc__ =f'''
+ NAME:
+    get_fit_groups
+ PURPOSE:
+    get the groups that are fitting, whether they are a block or not and their expected errors
+
+ CATEGORY:
+    support_functions
+
+ INPUTS:
+    Tirific_Template =  the def file to get errors.
+ OPTIONAL INPUTS:
+
+ KEYWORD PARAMETERS:
+
+ OUTPUTS:
+     tirshaker settings
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ EXAMPLE:
+
+ NOTE:
+'''
 
 def get_from_template(Configuration,Tirific_Template,Variables, debug = False):
     out = []
@@ -1151,7 +1257,10 @@ def get_from_template(Configuration,Tirific_Template,Variables, debug = False):
         print_log(f'''GET_FROM_TEMPLATE: Trying to get the following profiles {Variables}
 ''',Configuration['OUTPUTLOG'] ,debug= True)
     for key in Variables:
-        out.append([float(x) for x  in Tirific_Template[key].split()])
+        try:
+            out.append([float(x) for x  in Tirific_Template[key].split()])
+        except KeyError:
+            out.append([])
     #Because lists are stupid i.e. sbr[0][0] = SBR[0], sbr[1][0] = SBR_2[0] but  sbr[:][0] = SBR[:] not SBR[0],SBR_2[0] as logic would demand
     if debug:
         print_log(f'''GET_FROM_TEMPLATE: We extracted the following profiles from the Template.
@@ -2329,6 +2438,134 @@ rotateImage.__doc__ =f'''
  NOTE:
 '''
 
+
+def run_tirific(Configuration, current_run, stage = 'initial',fit_type = 'Undefined',deffile='Undefined', debug = False):
+    if debug:
+        print_log(f'''RUN_TIRIFIC: Starting a new run in stage {stage} and fit_type {fit_type}
+''',Configuration['OUTPUTLOG'], screen = True,debug = debug)
+    if deffile == 'Undefined':
+        deffile=f"{fit_type}_In.def"
+
+    # First move the previous fits
+    rename_fit_products(Configuration,fit_type = fit_type, stage=stage, debug = debug)
+    # Then if already running change restart file
+    if fit_type == 'Error_Shaker':
+        work_dir = os.getcwd()
+    else:
+        work_dir = Configuration['FITTING_DIR']
+    if Configuration['TIRIFIC_RUNNING']:
+        print_log(f'''RUN_TIRIFIC: We are using an initialized tirific in {Configuration['FITTING_DIR']}
+''',Configuration['OUTPUTLOG'], screen = True)
+        with open(f"{Configuration['LOG_DIRECTORY']}restart_{fit_type}.txt",'a') as file:
+            file.write("Restarting from previous run")
+    else:
+        print_log(f'''RUN_TIRIFIC: We are starting a new TiRiFiC in {Configuration['FITTING_DIR']}
+''',Configuration['OUTPUTLOG'], screen = True)
+        with open(f"{Configuration['LOG_DIRECTORY']}restart_{fit_type}.txt",'w') as file:
+            file.write("Initialized a new run")
+        current_run = subprocess.Popen([Configuration['TIRIFIC'],f"DEFFILE={deffile}","ACTION= 1"],\
+                                       stdout = subprocess.PIPE, stderr = subprocess.PIPE,\
+                                       cwd=work_dir,universal_newlines = True)
+
+
+        Configuration['TIRIFIC_RUNNING'] = True
+        Configuration['TIRIFIC_PID'] = current_run.pid
+    currentloop =1
+    max_loop = 0
+    counter = 0
+    if Configuration['TIMING']:
+        time.sleep(0.1)
+        with open(f"{Configuration['LOG_DIRECTORY']}Usage_Statistics.txt",'a') as file:
+            file.write(f"# Started Tirific at stage = {fit_type}\n")
+            CPU,mem = get_usage_statistics(Configuration,current_run.pid)
+            file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Mb \n")
+    else:
+        time.sleep(0.1)
+    print(f"\r{'':8s}RUN_TIRIFIC: 0 % Completed", end =" ",flush = True)
+    triggered = False
+    for tir_out_line in current_run.stdout:
+        tmp = re.split(r"[/: ]+",tir_out_line.strip())
+        counter += 1
+        if (counter % 50) == 0:
+            if Configuration['TIMING']:
+                with open(f"{Configuration['LOG_DIRECTORY']}Usage_Statistics.txt",'a') as file:
+                    if tmp[0] == 'L' and not triggered:
+                        if tmp[1] == '1':
+                            file.write("# Started the actual fitting \n")
+                            triggered = True
+                    CPU,mem = get_usage_statistics(Configuration,current_run.pid)
+                    file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Mb \n")
+        if tmp[0] == 'L':
+            if int(tmp[1]) != currentloop:
+                print(f"\r{'':8s}RUN_TIRIFIC: {float(tmp[1])/float(max_loop)*100.:.1f} % Completed", end =" ",flush = True)
+            currentloop  = int(tmp[1])
+            if max_loop == 0:
+                max_loop = int(tmp[2])
+            try:
+                Configuration['NO_POINTSOURCES'] = np.array([tmp[18],tmp[19]],dtype=float)
+            except:
+                #If this fails for some reason an old number suffices, if the code really crashed problems will occur elsewhere.
+                pass
+        if tmp[0].strip() == 'Finished':
+            break
+        if tmp[0].strip() == 'Abort':
+            break
+    print(f'\n')
+    if Configuration['TIMING']:
+        with open(f"{Configuration['LOG_DIRECTORY']}Usage_Statistics.txt",'a') as file:
+            file.write("# Finished this run \n")
+            CPU,mem = get_usage_statistics(Configuration,current_run.pid)
+            file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Gb\n")
+    print(f"{'':8s}RUN_TIRIFIC: Finished the current tirific run.")
+
+    #The break off goes faster sometimes than the writing of the file so let's make sure it is present
+    time.sleep(1.0)
+    wait_counter = 0
+    if fit_type != 'Error_Shaker':
+        while not os.path.exists(f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.fits") and wait_counter < 1000.:
+            print(f"\r Waiting ", end = "", flush = True)
+            time.sleep(0.5)
+            wait_counter += 1
+    else:
+        Configuration['TIRIFIC_RUNNING'] =False
+    if currentloop != max_loop:
+        return 1,current_run
+    else:
+        return 0,current_run
+run_tirific.__doc__ =f'''
+ NAME:
+    run_tirific
+
+ PURPOSE:
+    Check whether we have an initialized tirific if not initialize and run else restart the initialized run.
+
+ CATEGORY:
+    support_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    current_run = subprocess structure of tirific
+
+ OPTIONAL INPUTS:
+    debug = False
+
+    fit_type = 'Undefined'
+    type of fitting
+
+    stage = 'initial'
+    stage of the fitting process
+
+ OUTPUTS:
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
+
+
 #Function to read FAT configuration file into a dictionary
 def setup_configuration(cfg):
     if cfg.installation_check:
@@ -2467,7 +2704,7 @@ Please provide the correct file name.
     #Make sure there is only one Fit_ stage
 
     # Make sure all selected stages exist
-    possible_stages = ['Fit_Tirific_OSC','Create_FAT_Cube','Run_Sofia','Existing_Sofia','Sofia_Catalogue']
+    possible_stages = ['Fit_Tirific_OSC','Create_FAT_Cube','Run_Sofia','Existing_Sofia','Sofia_Catalogue','Tirshaker']
     possible_stages_l = [x.lower() for x in possible_stages]
     approved_stages = []
     fit_count = 0
@@ -2525,6 +2762,8 @@ Please pick one of the following {', '.join(['sinusoidal','independent','hanning
         Configuration['RING_SIZE'] = 0.5
     if Configuration['OUTPUT_QUANTITY'] == 5:
         Configuration['OUTPUT_QUANTITY'] = 4
+    if Configuration['SHAKER_ITERATIONS'] < 2:
+        Configuration['SHAKER_ITERATIONS'] = 2
 
     return Configuration
 setup_configuration.__doc__ =f'''

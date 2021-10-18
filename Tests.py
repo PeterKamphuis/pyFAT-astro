@@ -18,31 +18,35 @@ with warnings.catch_warnings():
     import matplotlib.axes as maxes
 from astropy.io import fits
 from astropy.wcs import WCS
-import pyFAT
+import pyFAT_astro
 
-import pyFAT.Support.modify_template as mt
-import pyFAT.Support.read_functions as rf
-import pyFAT.Support.run_functions as runf
-import pyFAT.Support.write_functions as wf
-import pyFAT.Support.support_functions as sf
-import pyFAT.Support.fits_functions as ff
-import pyFAT.Support.development_functions as df
+import pyFAT_astro.Support.modify_template as mt
+import pyFAT_astro.Support.read_functions as rf
+import pyFAT_astro.Support.run_functions as runf
+import pyFAT_astro.Support.write_functions as wf
+import pyFAT_astro.Support.support_functions as sf
+import pyFAT_astro.Support.fits_functions as ff
+#import pyFAT_astro.Support.development_functions as df
 
-homedir = '/home/peter/'
+#homedir = '/home/peter/'
+homedir = '/Users/peter/'
 
 Configuration = {'INNER_FIX': 4}
-Configuration['FITTING_DIR']=f"{homedir}/FAT_Main/FAT_Testers/Database-09-10-2020/Mass2.5e+12-i20d14.0-7.5pa35.0w0.0-0.0-No_Flare-ba12SNR8bm20.0-20.0ch4.0-Arms-No_Bar-rm0.0/"
+#Configuration['FITTING_DIR']=f"{homedir}/FAT_Main/FAT_Testers/Database-09-10-2020/Mass2.5e+12-i20d14.0-7.5pa35.0w0.0-0.0-No_Flare-ba12SNR8bm20.0-20.0ch4.0-Arms-No_Bar-rm0.0/"
 #Configuration['FITTING_DIR']=f"{homedir}/FAT_Main/FAT_Testers/Database-09-10-2020/Mass5.0e+10-i42.0d15.0-12.0pa115w0.1-0.07-Flared-ba10SNR8.0bm10.0-10.0ch4.0-No_Arms-No_Bar-rm0.0/"
 #Configuration['FITTING_DIR']= f"{homedir}/FAT_Main/Test_Sets/From_Bochum/Mass2.5e+11-i48.0d13.0-7.5pa115w0.07-0.15-No_Flare-ba15SNR1bm10.0-10.0ch4.0-No_Arms-No_Bar-rm0.0/"
 #Configuration['FITTING_DIR']= f"{homedir}/FAT_Main/FAT_Testers/Database-09-10-2020/M_83_6.0Beams_3.0SNR/"
 #Configuration['FITTING_DIR']= f"{homedir}/FAT_Main/FAT_Testers/Database-09-10-2020/Mass2.5e+12-i15d14.0-7.5pa35.0w0.0-0.0-No_Flare-ba12SNR8bm20.0-20.0ch4.0-Arms-No_Bar-rm0.0/"
 #Configuration['FITTING_DIR']= f"{homedir}/FAT_Main/FAT_Testers/Database-09-10-2020/NGC_3198_36.9Beams_1.0SNR/"
 #Configuration['FITTING_DIR']= f"{homedir}/FAT_Main/FAT_Testers/LVHIS-26_3/HPASS00018/"
-
+Configuration['FITTING_DIR']=f"{homedir}FAT_Main/Database/M_83_6.0Beams_3.0SNR/"
 Fits_Files = {'ORIGINAL_CUBE': "Convolved_Cube.fits"}
-
+Configuration['START_DIRECTORY']= f'{os.getcwd()}'
 Configuration['CUBENAME']= 'Convolved_Cube'
 Configuration['BASE_NAME']= 'Convolved_Cube_FAT'
+Configuration['LOG_DIRECTORY']= f"{Configuration['FITTING_DIR']}Logs/"
+Configuration['TIRIFIC'] = 'tirific'
+Configuration['SHAKER_ITERATIONS'] = 2
 #Fits_Files = {'ORIGINAL_CUBE': "Cube.fits"}
 #Configuration['CUBENAME']= 'Cube'
 #Configuration['BASE_NAME']= 'Cube_FAT'
@@ -63,17 +67,17 @@ Configuration['OUTPUTLOG'] = None
 other_keys =  {'MINIMUM_WARP_SIZE': 3., # if the number of beams across the major axis/2. is less than this size we will only fit a flat disc,set here.
                'MINIMUM_RINGS': 3,  # we need at least this amount of rings (Including 0 and 1/5 beam), set here
                'TOO_SMALL_GALAXY': 1., # if the number of beams across the major axis/2 is less than this we will not fit the galaxy, set here
-
+               'DEBUG': True,
                'DISTANCE': 'Unset', # Distance to the galaxy, set from the catalogue at start of loop
                'ID_NR': 'Unset', # ID of the galaxy in the catalogue , set from the catalogue at start of loop
                'SOFIA_BASENAME': 'Unset', #Basename of pre-processed sofia products, only set when provided in catalogue at start of loop
                'BASENAME': 'Unset', #Basename for FAT products, typically {input_cube}_FAT, set at start of loop
                'LOG_DIR': 'Unset', #Directory to put log files from run, set at start of loop
-
+               'USED_FITTING':'Fit_Tirific_OSC',
                'CURRENT_STAGE': 'initial', #Current stage of the fitting process, set at switiching stages
                'TIRIFIC_PID': 'Not Initialized', #Process ID of tirific that is running
                'ACCEPTED': False, #Whether a fit is accepted or not
-
+               'FIXED_PARAMETERS': [['Z0','XPOS','YPOS','VSYS']],
                'MAX_SIZE_IN_BEAMS': 30, # The galaxy is not allowed to extend beyond this number of beams in radius, set in check_source
                'MIN_SIZE_IN_BEAMS': 0., # Minimum allowed radius in number of beams of the galaxy, set in check_source
                'SIZE_IN_BEAMS': 0, # The radius of the galaxy in number of beams, adapted after running Sofia
@@ -81,7 +85,7 @@ other_keys =  {'MINIMUM_WARP_SIZE': 3., # if the number of beams across the majo
                'LAST_RELIABLE_RINGS': [0.,0.], # Location of the rings where the SBR drops below the cutoff limits, adapted after every run. Should only be modified in check_size
                'LIMIT_MODIFIER': [1.], #Modifier for the cutoff limits based on the inclination , adapted after every run.
                'OLD_RINGS': [1.], # List to keep track of the ring sizes that have been fitted.
-
+               'EXCLUDE_CENTRAL': False,
                'NO_POINTSOURCES': 0. , # Number of point sources, set in run_tirific
 
                'INNER_FIX': [4,4], #Number of rings that are fixed in the inner part for the INCL and PA, , adapted after every run in get_inner_fix in support_functions
@@ -103,6 +107,11 @@ other_keys =  {'MINIMUM_WARP_SIZE': 3., # if the number of beams across the majo
 
 for key in other_keys:
     Configuration[key] = other_keys[key]
+
+boundary_limit_keys = ['PA','INCL', 'SDIS', 'Z0','VSYS','XPOS','YPOS']
+for key in boundary_limit_keys:
+    Configuration[f"{key}_CURRENT_BOUNDARY"] = [[0.,0.],[0.,0.],[0.,0.]]
+
 Configuration['RING_SIZE'] = 1.
 Configuration['OPTIMIZED'] = False
 Configuration['NCPU'] = 1.
@@ -117,7 +126,7 @@ Configuration['OUTER_RINGS_DOUBLED'] = False
 Configuration['DISTANCE'] = 5.
 Configuration['TIRIFIC_RUNNING'] = False
 Configuration['TIMING'] = False
-Configuration['PA_CURRENT_BOUNDARY'] = [120.,280.]
+#Configuration['PA_CURRENT_BOUNDARY'] = [120.,280.]
 cube_hdr = fits.getheader(f"{Configuration['FITTING_DIR']}{Fits_Files['FITTING_CUBE']}")
 
 beamarea=(np.pi*abs(cube_hdr['BMAJ']*cube_hdr['BMIN']))/(4.*np.log(2.))
@@ -190,6 +199,39 @@ def Test_write_temp():
     Tirific_Template.insert(key,f"# {key}_ERR",f"{' '.join([f'{x}' for x in error[0,:int(Configuration['NO_RINGS'])]])}")
     Tirific_Template.insert(f"{key}_2",f"# {key}_2_ERR",f"{' '.join([f'{x}' for x in error[1,:int(Configuration['NO_RINGS'])]])}")
     wf.tirific(Configuration,Tirific_Template, name = 'test.def', debug = False)
+
+def Test_psutil_stats():
+    import psutil as psu
+    import subprocess
+    import time
+    startdir= os.getcwd()
+    work_dir = '/Users/peter/FAT_Main/Database/M_83_6.0Beams_3.0SNR'
+
+    deffile = 'Test.def'
+    current_run = subprocess.Popen(['tirific',f"DEFFILE={deffile}","ACTION= 1"],\
+                                   stdout = subprocess.PIPE, stderr = subprocess.PIPE,\
+                                   cwd=work_dir,universal_newlines = True)
+
+    Configuration['TIMING']=True
+    time.sleep(0.1)
+    current_proc = psu.Process(current_run.pid)
+    for tir_out_line in current_run.stdout:
+        if Configuration['TIMING']:
+
+            cpu_duration,CPU,mem= get_usage_stats(Configuration,current_proc,debug=True)
+            print(f'Attempting psutil statistics')
+            print(f'clock_time = {cpu_duration} CPU%= {CPU} memory = {mem}')
+            #CPU,mem= sf.get_usage_stats(Configuration,current_run.pid=True)
+            #print(f'Attempting psutil statistics')
+            #print(cpu_duration,CPU,mem)
+        time.sleep(1)
+
+def get_usage_stats(Configuration,process, debug = False):
+    
+    Cpuduration=(process.cpu_times()[0]+process.cpu_times()[1])/60.
+    memory_in_mb = (process.memory_info()[0]+process.memory_info()[1])/2**20. #psutilreturns bytes
+    cpu_percent = process.cpu_percent(interval=1)
+    return Cpuduration,cpu_percent,memory_in_mb
 
 def Test_Ram():
     Configuration = {'FITTING_DIR': '/home/peter/FAT_Main/FAT_Source_Dev/Installation_Check/'}
@@ -335,6 +377,8 @@ def Test_Tilts():
 
     sf.check_tiltogram(Configuration,tiltogram)
     print(Configuration['INNER_FIX'])
+def TestTir_Shaker():
+    runf.tirshaker_call(Configuration,debug=Configuration['DEBUG'])
 
 def Test_Check_Inclination():
     Tirific_Template = rf.tirific_template(filename = f"{Configuration['FITTING_DIR']}Finalmodel/Finalmodel.def", debug = True)
@@ -376,4 +420,4 @@ basic.__doc__ =f'''
 
 
 if __name__ == '__main__':
-    Test_Overview()
+    Test_psutil_stats()
