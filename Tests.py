@@ -205,7 +205,7 @@ def Test_psutil_stats():
     import subprocess
     import time
     startdir= os.getcwd()
-    work_dir = '/Users/peter/FAT_Main/Database/M_83_6.0Beams_3.0SNR'
+    work_dir = '/home/peter/FAT_Main/FAT_Testers/Database-09-10-2020/M_83_6.0Beams_3.0SNR'
 
     deffile = 'Test.def'
     current_run = subprocess.Popen(['tirific',f"DEFFILE={deffile}","ACTION= 1"],\
@@ -221,13 +221,13 @@ def Test_psutil_stats():
             cpu_duration,CPU,mem= get_usage_stats(Configuration,current_proc,debug=True)
             print(f'Attempting psutil statistics')
             print(f'clock_time = {cpu_duration} CPU%= {CPU} memory = {mem}')
-            #CPU,mem= sf.get_usage_stats(Configuration,current_run.pid=True)
-            #print(f'Attempting psutil statistics')
-            #print(cpu_duration,CPU,mem)
+            CPU,mem= sf.get_usage_statistics(Configuration,current_run.pid=True)
+            print(f'Attempting psutil statistics')
+            print(cpu_duration,CPU,mem)
         time.sleep(1)
 
 def get_usage_stats(Configuration,process, debug = False):
-    
+
     Cpuduration=(process.cpu_times()[0]+process.cpu_times()[1])/60.
     memory_in_mb = (process.memory_info()[0]+process.memory_info()[1])/2**20. #psutilreturns bytes
     cpu_percent = process.cpu_percent(interval=1)
