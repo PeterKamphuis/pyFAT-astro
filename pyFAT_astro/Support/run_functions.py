@@ -1009,8 +1009,6 @@ def tirshaker_call(Configuration,debug = False):
     Tirific_Template['INSET'] = f"../{Tirific_Template['INSET']}"
     Tirific_Template['TIRDEF']= f"Error_Shaker_Out.def"
     Tirific_Template['LOOPS'] = '3'
-    #Write it back to the file
-    wf.tirific(Configuration,Tirific_Template, name =f"Error_Shaker/Error_Shaker_In.def" , debug = debug)
 
     outfilename = 'Error_Shaker.def'
     outfileprefix = 'Error_Shaker'
@@ -1022,9 +1020,19 @@ def tirshaker_call(Configuration,debug = False):
     set_fitting_parameters(Configuration, Tirific_Template,stage = 'run_os',\
                          debug = debug)
 
+    #Write it back to the file
+    wf.tirific(Configuration,Tirific_Template, name =f"Error_Shaker/Error_Shaker_In.def" , debug = debug)
 
     #Determine the error block from the last fit settings.
     parameter_groups,rings,block,variation,variation_type = get_fit_groups(Configuration,Tirific_Template,debug = debug)
+    if debug:
+        print_log(f'''TIRSHAKER_CALL: We are shaking with the following parameters:
+{'':8s}groups = {parameter_groups}
+{'':8s}rings = {rings}
+{'':8s}block = {block}
+{'':8s}variation = {variation}
+{'':8s}variation_type = {variation_type}
+''',Configuration['OUTPUTLOG'])
 
     iterations = Configuration['SHAKER_ITERATIONS']
     random_seed = 2

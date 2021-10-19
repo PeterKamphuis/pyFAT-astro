@@ -273,7 +273,7 @@ def tirshaker(Configuration, filename = 'test.def', outfilename = 'test_out.def'
                     allnumbers_final_err[j][k].append(stats.tstd(np.array(allparamsturned[j][k][l]), (median-3*madsigma, median+3*madsigma)))
                     #allnumbers_final[j][k].append(stats.tmean(np.array(allparamsturned[j][k][l])))
                     #allnumbers_final_err[j][k].append(stats.tstd(np.array(allparamsturned[j][k][l])))
-                    print_log('TIRSHAKER: Parameter: {:s} Ring: {:d} Pure average+-std: {:.3e}+-{:.3e} Median+-madsigma: {:.3e}+-{:.3e} Average+-sigma filtered: {:.3e}+-{:.3e}'.format(\
+                    print_log('TIRSHAKER: Parameter: {:s} Ring: {:d} Pure average+-std: {:.3e}+-{:.3e} Median+-madsigma: {:.3e}+-{:.3e} Average+-sigma filtered: {:.3e}+-{:.3e} \n'.format(\
                                 parameter_groups[j][k], l+1, average, std, median, madsigma, allnumbers_final[j][k][-1], allnumbers_final_err[j][k][-1])\
                                 ,Configuration['OUTPUTLOG'],screen=False)
                 else:

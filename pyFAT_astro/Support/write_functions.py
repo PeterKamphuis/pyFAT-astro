@@ -1120,12 +1120,11 @@ def plot_usage_stats(Configuration,debug = False):
                 linest = '-'
             elif linest == '-':
                 linest = '--'
-            print(f'these are the labels we get {label}, {prev_label}')
-            if (prev_label == 'Initializing tmp_incl_check' or prev_label == 'Ended tmp_incl_check'):
+            if (prev_label == 'Initializing tmp_incl_check' or prev_label == 'Ended tmp_incl_check') or\
+                (prev_label == 'Initializing Error_Shaker' or prev_label == 'Ended Error_Shaker'):
                 if (label != 'Initializing tmp_incl_check' and label != 'Ended tmp_incl_check') or \
+                    (label != 'Initializing Error_Shaker' and label != 'Ended Error_Shaker') or\
                         time == label_times[-1]    :
-                    print(f'This we get for sure')
-                    print(f'With the labels {label} and prev = {prev_label} and {time}')
                     if time != label_times[-1]:
                         ax2.axvline(x=prev_time, linestyle=linest, color=color, linewidth=0.05)
                         last_label = max(prev_time,last_label+label_sep)
@@ -1139,24 +1138,21 @@ def plot_usage_stats(Configuration,debug = False):
                     ax2.plot([time,last_label+0.1],[ax2maxy,ax2maxy+20.],linest,color=color,linewidth=0.05,clip_on=False)
                 else:
                     prev_time = time
-            elif (prev_label == 'Initializing Error_Shaker' or prev_label == 'Ended Error_Shaker'):
-                if (label != 'Initializing Error_Shaker' and label != 'Ended Error_Shaker') or \
-                        time == label_times[-1]:
-                    print(f'Do we get to this stage?')
-                    print(f'With the labels {label} and prev = {prev_label}')
-                    if time != label_times[-1]:
-                        ax2.axvline(x=prev_time, linestyle=linest, color=color, linewidth=0.05)
-                        last_label = max(prev_time,last_label+label_sep)
-                        ax2.text(last_label,ax2maxy+20.,prev_label, va='bottom',ha='left',rotation= 60, color='black',
-                              bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7,fontdict = labelfont)
-                        ax2.plot([prev_time,last_label+0.1],[ax2maxy,ax2maxy+20.],linest,color=color,linewidth=0.05,clip_on=False)
-                    ax2.axvline(x=time, linestyle=linest, color=color, linewidth=0.05)
-                    last_label = max(time,last_label+label_sep)
-                    ax2.text(last_label,ax2maxy+20.,label, va='bottom',ha='left',rotation= 60, color='black',
-                          bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7,fontdict = labelfont)
-                    ax2.plot([time,last_label+0.1],[ax2maxy,ax2maxy+20.],linest,color=color,linewidth=0.05,clip_on=False)
-                else:
-                    prev_time = time
+            #elif (prev_label == 'Initializing Error_Shaker' or prev_label == 'Ended Error_Shaker'):
+            #    if (label != 'Initializing Error_Shaker' and label != 'Ended Error_Shaker') or \
+            #            time == label_times[-1]:
+            ##            ax2.axvline(x=prev_time, linestyle=linest, color=color, linewidth=0.05)
+            #            last_label = max(prev_time,last_label+label_sep)
+            #            ax2.text(last_label,ax2maxy+20.,prev_label, va='bottom',ha='left',rotation= 60, color='black',
+            #                  bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7,fontdict = labelfont)
+            #            ax2.plot([prev_time,last_label+0.1],[ax2maxy,ax2maxy+20.],linest,color=color,linewidth=0.05,clip_on=False)
+            #        ax2.axvline(x=time, linestyle=linest, color=color, linewidth=0.05)
+            #        last_label = max(time,last_label+label_sep)
+            #        ax2.text(last_label,ax2maxy+20.,label, va='bottom',ha='left',rotation= 60, color='black',
+            #              bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7,fontdict = labelfont)
+            #        ax2.plot([time,last_label+0.1],[ax2maxy,ax2maxy+20.],linest,color=color,linewidth=0.05,clip_on=False)
+            #    else:
+            #        prev_time = time
 
             else:
                 ax2.axvline(x=time, linestyle=linest, color=color, linewidth=0.05)

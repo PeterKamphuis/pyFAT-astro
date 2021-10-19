@@ -1203,9 +1203,9 @@ def get_fit_groups(Configuration,Tirific_Template,debug = False):
             block[-1] = False
         parameter_groups.append(preliminary_group)
         rings.append(found_rings)
-        block_str = 'individually.'
+        block_str = 'as a block.'
         if not block[-1]:
-            block_str = 'as a block.'
+            block_str = 'individually.'
         if debug:
             print_log(f'''GET_FIT_GROUPS: We determined the group {parameter_groups[-1]}
 {'':8s}with rings {rings[-1]}
@@ -1224,14 +1224,17 @@ def get_fit_groups(Configuration,Tirific_Template,debug = False):
             current_rings = np.array(rings[-1],dtype=int)-1
             if current_rings.size == 1:
                 current_rings = int(current_rings)
-            print(current_rings)
-
             if len(all_errors) ==0. and current_par != 'SBR':
                 if block[-1]:
                     per_par_variation.append(paramater_standard_variation[current_par][0]/3.)
                 else:
                     per_par_variation.append(paramater_standard_variation[current_par][0])
             elif current_par == 'SBR':
+                if debug:
+                    print_log(f'''GET_FIT_GROUPS: For SBR we are setting
+{'':8s}the cut_off_limits {cut_off_limits}
+{'':8s} in ring {current_rings}  == {cut_off_limits[current_rings]}
+''',Configuration['OUTPUTLOG'])
                 if block[-1]:
                     per_par_variation.append(np.mean(cut_off_limits[current_rings])*3.)
                 else:
@@ -1791,8 +1794,12 @@ def get_system_string(string):
     return string
 
 def get_usage_statistics(Configuration,process, debug = False):
-    memory_in_mb = (process.memory_info()[0])/2**20. #psutilreturns bytes
-    cpu_percent = process.cpu_percent(interval=1)
+    try:
+        memory_in_mb = (process.memory_info()[0])/2**20. #psutilreturns bytes
+        cpu_percent = process.cpu_percent(interval=1)
+    except AccessDenied:
+        cpu_percent= 0.
+        memory_in_mb=0.
     return cpu_percent,memory_in_mb
 
 def get_usage_statistics_old(Configuration,process_id, debug = False):
@@ -2553,11 +2560,7 @@ def run_tirific(Configuration, current_run, stage = 'initial',fit_type = 'Undefi
     if Configuration['TIMING']:
         with open(f"{Configuration['LOG_DIRECTORY']}Usage_Statistics.txt",'a') as file:
             file.write("# Finished this run \n")
-            try:
-                CPU,mem = get_usage_statistics(Configuration,current_process)
-            except:
-                CPU = 0.
-                mem = 0.
+            CPU,mem = get_usage_statistics(Configuration,current_process)
             file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Mb\n")
     print(f"{'':8s}RUN_TIRIFIC: Finished the current tirific run.")
 

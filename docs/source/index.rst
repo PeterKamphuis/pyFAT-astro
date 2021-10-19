@@ -1,26 +1,12 @@
-.. pyFAT documentation master file, created by
-   sphinx-quickstart on Tue Jul 27 14:28:20 2021.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
-
 Welcome to pyFAT's documentation!
 =================================
+**pyFAT** is a python implementation of the fully automated TiRiFiC and here you can find extensive documentation.
 
+
+Contents
+--------
 .. toctree::
-  :maxdepth: 3
-  :caption: Contents:
 
   Introduction <README.md>
 
-  Configuration File <INPUT.md>
-
   Copyright <copyright.rst>
-
-
-
-Indices and tables
-==================
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
