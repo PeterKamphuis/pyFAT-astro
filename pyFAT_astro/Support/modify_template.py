@@ -1615,7 +1615,6 @@ def set_boundary_limits(Configuration,Tirific_Template,key, tolerance = 0.01, va
         print_log(f'''SET_BOUNDARY_LIMITS: checking limits for {key},
 ''',Configuration['OUTPUTLOG'],debug = True)
     profile = np.array(get_from_template(Configuration,Tirific_Template, [key,f"{key}_2"]),dtype = float)
-    print(Configuration[f"{key}_CURRENT_BOUNDARY"],key)
     current_boundaries = Configuration[f"{key}_CURRENT_BOUNDARY"]
     if debug:
         print_log(f'''SET_BOUNDARY_LIMITS: We have found the following limits,

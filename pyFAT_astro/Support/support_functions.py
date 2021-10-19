@@ -23,6 +23,7 @@ import matplotlib.pyplot as plt
 import os
 import sys
 import inspect
+import psutil as psu
 import signal
 import time
 import traceback
@@ -31,7 +32,7 @@ import copy
 import warnings
 import re
 import subprocess
-
+from datetime import datetime
 
 # A class of ordered dictionary where keys can be inserted in at specified locations or at the end.
 class Proper_Dictionary(OrderedDict):
@@ -45,7 +46,7 @@ class Proper_Dictionary(OrderedDict):
                 if function != 'setup_configuration':
                     raise ProgramError("FAT does not allow additional values to the Configuration outside the setup_configuration in support_functions.")
         OrderedDict.__setitem__(self,key, value)
-    #    print("what habbens now")
+    #    "what habbens now")
     def insert(self, existing_key, new_key, key_value):
         done = False
         if new_key in self:
@@ -1151,17 +1152,26 @@ def get_fit_groups(Configuration,Tirific_Template,debug = False):
     groups = Tirific_Template['VARY'].split(',')
     variation_type = []
     variation = []
+    radii,cut_off_limits = sbr_limits(Configuration, systemic= float(Tirific_Template['VSYS'].split(' ')[0]) , debug = debug)
+    sbr_standard = np.mean(cut_off_limits) * 5.
     paramater_standard_variation = {'PA': [10.,'a'],
                                    'INCL': [10.,'a'],
                                    'VROT': [Configuration['CHANNEL_WIDTH']*3.,'a'],
                                    'VSYS': [Configuration['CHANNEL_WIDTH'],'a'],
                                    'XPOS': [Configuration['BEAM'][0]/3600.,'a'],
                                    'YPOS': [Configuration['BEAM'][0]/3600.,'a'],
-                                   'SBR': [0.2,'r'],
-                                   'Z0': [Configuration['BEAM'][0]/1800.,'a'],
+                                   'SBR': [sbr_standard,'a'],
+                                   'Z0': [Configuration['BEAM'][0]*2.,'a'],
                                    'SDIS': [Configuration['CHANNEL_WIDTH']*1.5,'a'],
                                    }
+    if debug:
+        print_log(f'''GET_FIT_GROUPS: We have found the following unformatted groups from VARY:
+{'':8s}{groups}
+''',Configuration['OUTPUTLOG'])
     for group in groups:
+        if debug:
+            print_log(f'''GET_FIT_GROUPS: We are processing {group}
+''',Configuration['OUTPUTLOG'])
         parts = group.split()
         if parts[0][0] == '!':
             block.append(False)
@@ -1189,9 +1199,18 @@ def get_fit_groups(Configuration,Tirific_Template,debug = False):
                         raise DefFileError("The VARY settings in this deffile are not acceptable you have different ring for one block.")
             else:
                 preliminary_group.append(f'{part}=')
-
+        if len(found_rings) == 1:
+            block[-1] = False
         parameter_groups.append(preliminary_group)
         rings.append(found_rings)
+        block_str = 'individually.'
+        if not block[-1]:
+            block_str = 'as a block.'
+        if debug:
+            print_log(f'''GET_FIT_GROUPS: We determined the group {parameter_groups[-1]}
+{'':8s}with rings {rings[-1]}
+{'':8s} which are varied {block_str}
+''',Configuration['OUTPUTLOG'])
         # Then get current errors that are present
         per_par_variation  = []
         current_par = ''
@@ -1202,10 +1221,23 @@ def get_fit_groups(Configuration,Tirific_Template,debug = False):
                     current_par=current_par[:-2]
             par = [f'# {par.split("=")[0]}_ERR']
             all_errors = np.array(get_from_template(Configuration,Tirific_Template, par,debug=debug)[0],dtype=float)
-            if len(all_errors) == 0.:
-                continue
+            current_rings = np.array(rings[-1],dtype=int)-1
+            if current_rings.size == 1:
+                current_rings = int(current_rings)
+            print(current_rings)
+
+            if len(all_errors) ==0. and current_par != 'SBR':
+                if block[-1]:
+                    per_par_variation.append(paramater_standard_variation[current_par][0]/3.)
+                else:
+                    per_par_variation.append(paramater_standard_variation[current_par][0])
+            elif current_par == 'SBR':
+                if block[-1]:
+                    per_par_variation.append(np.mean(cut_off_limits[current_rings])*3.)
+                else:
+                    per_par_variation.append(np.max(cut_off_limits[current_rings])*3.)
             else:
-                current_rings = np.array(rings[-1],dtype=int)-1
+
                 if block[-1]:
                     per_par_variation.append(np.mean(all_errors[current_rings])*3.)
                 else:
@@ -1758,7 +1790,12 @@ def get_system_string(string):
         string = "\ ".join(string.split())
     return string
 
-def get_usage_statistics(Configuration,process_id, debug = False):
+def get_usage_statistics(Configuration,process, debug = False):
+    memory_in_mb = (process.memory_info()[0])/2**20. #psutilreturns bytes
+    cpu_percent = process.cpu_percent(interval=1)
+    return cpu_percent,memory_in_mb
+
+def get_usage_statistics_old(Configuration,process_id, debug = False):
     result = subprocess.check_output(['top',f'-p {process_id}','-d 1','-n 1'])
     #result = subprocess.check_output(['ps','u'])
     lines = result.decode('utf8').split('\n')
@@ -1790,7 +1827,7 @@ get_usage_statistics.__doc__ =f'''
  NAME:
     get_usage_statistics
  PURPOSE:
-    use top to get the current CPU and memory usage of tirific
+    use psutil to get the current CPU and memory usage of tirific
 
  CATEGORY:
     support_functions
@@ -1812,6 +1849,7 @@ get_usage_statistics.__doc__ =f'''
     Unspecified
 
  NOTE:
+    pyFAT version < 1.0.0 uses top which only works on unix and has an error in the MB calculation
 '''
 
 def get_vel_pa(Configuration,velocity_field,center= [0.,0.], debug =False):
@@ -2473,11 +2511,12 @@ def run_tirific(Configuration, current_run, stage = 'initial',fit_type = 'Undefi
     currentloop =1
     max_loop = 0
     counter = 0
+    current_process= psu.Process(current_run.pid)
     if Configuration['TIMING']:
         time.sleep(0.1)
         with open(f"{Configuration['LOG_DIRECTORY']}Usage_Statistics.txt",'a') as file:
             file.write(f"# Started Tirific at stage = {fit_type}\n")
-            CPU,mem = get_usage_statistics(Configuration,current_run.pid)
+            CPU,mem = get_usage_statistics(Configuration,current_process)
             file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Mb \n")
     else:
         time.sleep(0.1)
@@ -2493,7 +2532,7 @@ def run_tirific(Configuration, current_run, stage = 'initial',fit_type = 'Undefi
                         if tmp[1] == '1':
                             file.write("# Started the actual fitting \n")
                             triggered = True
-                    CPU,mem = get_usage_statistics(Configuration,current_run.pid)
+                    CPU,mem = get_usage_statistics(Configuration,current_process)
                     file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Mb \n")
         if tmp[0] == 'L':
             if int(tmp[1]) != currentloop:
@@ -2514,8 +2553,12 @@ def run_tirific(Configuration, current_run, stage = 'initial',fit_type = 'Undefi
     if Configuration['TIMING']:
         with open(f"{Configuration['LOG_DIRECTORY']}Usage_Statistics.txt",'a') as file:
             file.write("# Finished this run \n")
-            CPU,mem = get_usage_statistics(Configuration,current_run.pid)
-            file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Gb\n")
+            try:
+                CPU,mem = get_usage_statistics(Configuration,current_process)
+            except:
+                CPU = 0.
+                mem = 0.
+            file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Mb\n")
     print(f"{'':8s}RUN_TIRIFIC: Finished the current tirific run.")
 
     #The break off goes faster sometimes than the writing of the file so let's make sure it is present

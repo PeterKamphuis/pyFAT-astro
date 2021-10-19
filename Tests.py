@@ -28,8 +28,8 @@ import pyFAT_astro.Support.support_functions as sf
 import pyFAT_astro.Support.fits_functions as ff
 #import pyFAT_astro.Support.development_functions as df
 
-homedir = '/home/peter/'
-#homedir = '/Users/peter/'
+#homedir = '/home/peter/'
+homedir = '/Users/peter/'
 
 Configuration = {'INNER_FIX': 4}
 #Configuration['FITTING_DIR']=f"{homedir}/FAT_Main/FAT_Testers/Database-09-10-2020/Mass2.5e+12-i20d14.0-7.5pa35.0w0.0-0.0-No_Flare-ba12SNR8bm20.0-20.0ch4.0-Arms-No_Bar-rm0.0/"
@@ -39,8 +39,8 @@ Configuration = {'INNER_FIX': 4}
 #Configuration['FITTING_DIR']= f"{homedir}/FAT_Main/FAT_Testers/Database-09-10-2020/Mass2.5e+12-i15d14.0-7.5pa35.0w0.0-0.0-No_Flare-ba12SNR8bm20.0-20.0ch4.0-Arms-No_Bar-rm0.0/"
 #Configuration['FITTING_DIR']= f"{homedir}/FAT_Main/FAT_Testers/Database-09-10-2020/NGC_3198_36.9Beams_1.0SNR/"
 #Configuration['FITTING_DIR']= f"{homedir}/FAT_Main/FAT_Testers/LVHIS-26_3/HPASS00018/"
-Configuration['FITTING_DIR']='/home/peter/FAT_Main/FAT_Testers/Database-09-10-2020/M_83_6.0Beams_3.0SNR/'
-#Configuration['FITTING_DIR']=f"{homedir}FAT_Main/Database/M_83_6.0Beams_3.0SNR/"
+#Configuration['FITTING_DIR']='/home/peter/FAT_Main/FAT_Testers/Database-09-10-2020/M_83_6.0Beams_3.0SNR/'
+Configuration['FITTING_DIR']=f"{homedir}FAT_Main/Database/M_83_6.0Beams_3.0SNR/"
 Fits_Files = {'ORIGINAL_CUBE': "Convolved_Cube.fits"}
 Configuration['START_DIRECTORY']= f'{os.getcwd()}'
 Configuration['CUBENAME']= 'Convolved_Cube'
@@ -231,15 +231,16 @@ def Test_psutil_stats():
 def get_usage_stats(Configuration,process, debug = False):
 
     Cpuduration=(process.cpu_times()[0]+process.cpu_times()[1])/60.
-    memory_in_mb = (process.memory_info()[0]+process.memory_info()[1])/2**20. #psutilreturns bytes
+    memory_in_mb = (process.memory_info()[0])/2**20. #psutilreturns bytes
     print(f'The memory info')
     print(process.memory_info())
     cpu_percent = process.cpu_percent(interval=1)
     return Cpuduration,cpu_percent,memory_in_mb
 
 def Test_Ram():
-    Configuration = {'FITTING_DIR': '/home/peter/FAT_Main/FAT_Source_Dev/Installation_Check/'}
+    Configuration = {'FITTING_DIR': '/Users/peter/FAT_Main/Database/M_83_6.0Beams_3.0SNR/'}
     Configuration['OUTPUTLOG'] = None
+    Configuration['LOG_DIRECTORY'] = '/Users/peter/FAT_Main/Database/M_83_6.0Beams_3.0SNR/Logs/18-10-2021/'
     wf.plot_usage_stats(Configuration,debug = True)
 def Test_One_Orientation():
     pa, inclination, SBR_initial, maj_extent,x_new,y_new,VROT_initial = rf.guess_orientation(Configuration,Fits_Files,debug=True)
@@ -424,4 +425,4 @@ basic.__doc__ =f'''
 
 
 if __name__ == '__main__':
-    Test_psutil_stats()
+    Test_Ram()

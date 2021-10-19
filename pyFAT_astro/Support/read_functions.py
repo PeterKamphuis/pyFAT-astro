@@ -100,10 +100,10 @@ def check_edge_limits(xmin,xmax,ymin,ymax,zmin,zmax,Configuration,debug=False ,b
 {'':8s} diff  = {diff}
 ''',Configuration['OUTPUTLOG'])
     if np.where(diff < vel_edge)[0].size:
-        print(f"On the edge")
+        print_log(f"On the edge",Configuration['OUTPUTLOG'])
         return True
     else:
-        print(f"Off the edge")
+        print_log(f"Off the edge",Configuration['OUTPUTLOG'])
         return False
 check_edge_limits.__doc__ =f'''
  NAME:
@@ -441,42 +441,8 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, debug
 ''',Configuration['OUTPUTLOG'])
             center,checked_center,center_stable = get_new_center(Configuration,map,center,maj_extent,noise=median_noise_in_map,debug=debug)
             center_counter += 1
-            '''
-            neg_index = np.where(maj_axis < center_of_profile)[0]
-            pos_index = np.where(maj_axis > center_of_profile)[0]
-            avg_profile_new = []
-            neg_profile_new = []
-            pos_profile_new = []
-            diff_new =0.
-            for i in range(np.nanmin([neg_index.size,pos_index.size])):
-                avg_profile_new.append(np.nanmean([maj_profile[neg_index[neg_index.size-i-1]],maj_profile[pos_index[i]]]))
-                neg_profile_new.append(maj_profile[neg_index[neg_index.size-i-1]])
-                pos_profile_new.append(maj_profile[pos_index[i]])
-                #diff_new = diff_new+abs(avg_profile_new[i]-neg_profile_new[i])+abs(avg_profile_new[i]-pos_profile_new[i])
-                diff_new = diff_new+abs(pos_profile_new[-1]-neg_profile_new[-1])*abs(np.mean([pos_profile_new[-1],neg_profile_new[-1]]))
-            diff_new = diff_new/np.nanmin([neg_index.size,pos_index.size])
-            if debug:
-                print_log(f'GUESS_ORIENTATION: We have this old difference {diff} and this new difference {diff_new}
-',Configuration['OUTPUTLOG'])
-            if diff_new < diff:
-                if debug:
-                    print_log(f'GUESS_ORIENTATION: We are updating the center from {center[0]},{center[1]} to {center[0]-center_of_profile/(2.*np.sin(np.radians(pa[0])))*maj_resolution},{center[1]+center_of_profile/(2.*np.cos(np.radians(pa[0])))*maj_resolution}
-',Configuration['OUTPUTLOG'])
-                avg_profile = avg_profile_new
-                center[0] = center[0]-center_of_profile/(2.*np.sin(np.radians(pa[0])))*maj_resolution
-                center[1] = center[1]+center_of_profile/(2.*np.cos(np.radians(pa[0])))*maj_resolution
-                center_counter += 1
-                maj_axis =  np.linspace(0,1000*maj_resolution,1000)- (abs((abs(center[0]))*np.sin(np.radians(pa[0])))+abs(abs(center[1])*np.cos(np.radians(pa[0]))))
-                if debug:
-                    ra_new,dec_new = mom0_wcs.wcs_pix2world(center[0],center[1],1.)
-                    print(ra_new,dec_new)
-                    ra_hr_new,dec_hr_new = convertRADEC(Configuration,ra_new,dec_new)
-                    print_log(f'GUESS_ORIENTATION: We are re-starting with the updated center
-{'':8s} RA = {ra_hr_new}, DEC={dec_hr_new}
-',Configuration['OUTPUTLOG'])
-            '''
-            #else:
-            #    center_stable= True
+
+
         else:
             center_stable = True
     ring_size_req = Configuration['BEAM_IN_PIXELS'][0]/maj_resolution
@@ -992,13 +958,7 @@ def sofia_catalogue(Configuration,Fits_Files, Variables =['id','x','x_min','x_ma
                             source_size=(float(many_sources[Variables.index('z_max')][i])-float(many_sources[Variables.index('z_min')][i]))* \
                                         (float(many_sources[Variables.index('y_max')][i])-float(many_sources[Variables.index('y_min')][i]))* \
                                         (float(many_sources[Variables.index('x_max')][i])-float(many_sources[Variables.index('x_min')][i]))
-                            #print(source_size,cube)
-                            #cube= np.array([float(Configuration['NAXES'][0]),float(Configuration['NAXES'][1]), \
-                            #        (float(many_sources[Variables.index('z_max')][i])-float(many_sources[Variables.index('z_min')][i]))])
-                            #source_size=np.array([(float(many_sources[Variables.index('z_max')][i])-float(many_sources[Variables.index('z_min')][i])), \
-                            #            (float(many_sources[Variables.index('y_max')][i])-float(many_sources[Variables.index('y_min')][i])), \
-                            #            (float(many_sources[Variables.index('x_max')][i])-float(many_sources[Variables.index('x_min')][i]))])
-                            #print(source_size,cube)
+
                             if source_size/cube > 0.5:
                                 print_log(f'''SOFIA_CATALOGUE: We discarded a very large source, so we will restore is and try for that.
     !!!!!!!!!!!!!!!!!!!!!!!!! This means your original cube is in principle too small!!!!!!!!!!!!!!!!!!!!!!!!

@@ -4,7 +4,7 @@
 
 
 from pyFAT_astro.Support.support_functions import print_log, convert_type,set_limits,rename_fit_products,\
-                              set_ring_size,calc_rings,get_usage_statistics,get_inner_fix,convertskyangle,\
+                              set_ring_size,calc_rings,get_inner_fix,convertskyangle,\
                               finish_current_run, remove_inhomogeneities,get_from_template,set_format, \
                               set_rings, convertRADEC,sbr_limits, create_directory,get_system_string,\
                               get_fit_groups,run_tirific
@@ -1008,7 +1008,7 @@ def tirshaker_call(Configuration,debug = False):
     Tirific_Template['RESTARTNAME']= ''
     Tirific_Template['INSET'] = f"../{Tirific_Template['INSET']}"
     Tirific_Template['TIRDEF']= f"Error_Shaker_Out.def"
-    Tirific_Template['LOOPS'] = '1'
+    Tirific_Template['LOOPS'] = '3'
     #Write it back to the file
     wf.tirific(Configuration,Tirific_Template, name =f"Error_Shaker/Error_Shaker_In.def" , debug = debug)
 
@@ -1016,9 +1016,9 @@ def tirshaker_call(Configuration,debug = False):
     outfileprefix = 'Error_Shaker'
 
     #This we need to remove from the actual run
-    Configuration['NO_RINGS'] = int(Tirific_Template['NUR'])
-    Configuration['RING_SIZE'] = 1.
-    Configuration['SIZE_IN_BEAMS'] = Configuration['NO_RINGS']-2
+    #Configuration['NO_RINGS'] = int(Tirific_Template['NUR'])
+    #Configuration['RING_SIZE'] = 1.
+    #Configuration['SIZE_IN_BEAMS'] = Configuration['NO_RINGS']-2
     set_fitting_parameters(Configuration, Tirific_Template,stage = 'run_os',\
                          debug = debug)
 
@@ -1061,18 +1061,15 @@ def tirshaker_call(Configuration,debug = False):
                 err_var.append(f'ERR_{par[:-1]}')
     errors = rf.load_tirific(Configuration,f"{Configuration['FITTING_DIR']}Error_Shaker/{outfilename}",Variables = err_var,
                      unpack = False , debug = debug )
-    print(errors)
+
     for para in err_var:
         key=para[4:]
         FAT_err = f'# {key}_ERR'
         format = set_format(key)
-        print(key,FAT_err,err_var.index(para),para)
-        print(errors[:int(Configuration['NO_RINGS']),err_var.index(para)])
         if FAT_err in Tirific_Template:
             Tirific_Template[FAT_err]= f"{' '.join([f'{x:{format}}' for x in errors[:int(Configuration['NO_RINGS']),err_var.index(para)]])}"
         else:
             Tirific_Template.insert(key,f"# {key}_ERR",f"{' '.join([f'{x:{format}}' for x in errors[:int(Configuration['NO_RINGS']),err_var.index(para)]])}")
-    print(final_FAT_file)
     wf.tirific(Configuration,Tirific_Template,name=f"{Configuration['USED_FITTING']}/{Configuration['USED_FITTING']}.def", debug = debug)
 
 tirshaker_call.__doc__ =f'''
