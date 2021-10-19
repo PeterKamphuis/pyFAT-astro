@@ -7,6 +7,7 @@ Contents
 --------
 .. toctree::
 
-  Introduction <README.md>
 
+
+  Introduction <README.rst>
   Copyright <copyright.rst>
