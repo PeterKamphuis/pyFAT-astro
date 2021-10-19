@@ -1797,7 +1797,7 @@ def get_usage_statistics(Configuration,process, debug = False):
     try:
         memory_in_mb = (process.memory_info()[0])/2**20. #psutilreturns bytes
         cpu_percent = process.cpu_percent(interval=1)
-    except AccessDenied:
+    except:
         cpu_percent= 0.
         memory_in_mb=0.
     return cpu_percent,memory_in_mb

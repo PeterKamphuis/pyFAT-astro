@@ -21,13 +21,13 @@ The code requires full installation of:
     python v3.6 or higher
     numpy>=1.14, scipy, astropy, omegaconf, matplotlib, future-fstrings, psutil, importlib_resources>=3.3.0 (These should be managed through a pip install)
     TiRiFiC v2.2.3 or higher
-    SoFiA2  
+    SoFiA2
 
 [python](https://www.python.org/),[TiRiFiC](http://gigjozsa.github.io/tirific/download_and_installation.html), [SoFiA2](https://github.com/SoFiA-Admin/SoFiA-2)
 
 TiRiFiC and SoFiA2 should be accessible for subproccess calls. This normally means that it should be possible to invoke them properly from the command line.
 the command names for TiRiFiC and SoFiA2 can be changed through the yaml input file. pyFAT assumes 'tirific' and 'sofia2' or 'sofia' as the respective defaults.
-TiRiFiC can be installed through the kern-suite (https://kernsuite.info) on linux. If you have trouble installing tirific due to the requirement of pg-plot there is now a pg-plotless version on the tirific github (https://github.com/gigjozsa/tirific/tree/no_pgp) that can be installed and that will run under pyFAT. It is not recommended to use this version without FAT and you will do so at your own risk.  
+TiRiFiC can be installed through the kern-suite (https://kernsuite.info) on linux. If you have trouble installing tirific due to the requirement of pg-plot there is now a pg-plotless version on the tirific github (https://github.com/gigjozsa/tirific/tree/no_pgp) that can be installed and that will run under pyFAT. It is not recommended to use this version without FAT and you will do so at your own risk.
 If you have SoFiA1 installed as sofia and no SoFiA2 installation pyFAT will crash.
 
 Installation
@@ -94,7 +94,7 @@ or a single Cube
 
     FAT> pyFAT cube_name=Input_Cube.fits
 
-Where Input_Cube.fits is the observation to be fitted. In this mode configuration_file can still be used to specify fit settings but catalogue and location setting will be ignored. !! If cube_name is set in either the command line or the configuration file this always will always trigger the singular fitting instead of batch fitting.
+Where Input_Cube.fits is the observation to be fitted. In this mode a configuration_file can still be used to specify fit settings but catalogue and location settings will be ignored. !! If cube_name is set in either the command line or the configuration file this always will always trigger the singular fitting instead of batch fitting.
 
 FAT is intended for batch fitting and as such it is recommended to have all source in separate directories
 
@@ -124,4 +124,4 @@ the distance is the distance to the galaxy in Mpc. This is used to make some ini
 The directory name is the name of the directory of the galaxy to be fitted. This directory should be located in the specified maindir in the config file.
 cubename is the name of the cube to be fitted. This should be without the fits extension.
 
-An example catalog is included in the distribution. If SoFiA 2 is already ran then the output catalogue can immediately be used for fitting with FAT. Please see the read the docs on how. 
+An example catalog is included in the distribution. If SoFiA 2 is already ran then the output catalogue can immediately be used for fitting with FAT. Please see the read the docs on how.
