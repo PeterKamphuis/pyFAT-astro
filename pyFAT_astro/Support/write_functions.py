@@ -1111,6 +1111,7 @@ def plot_usage_stats(Configuration,debug = False):
                  'weight': 'normal',
                  'size': 6.5}
         prev_label = ''
+        prev_time = 0.
         for label,time in zip(labels,label_times):
             if color == '0.5':
                 color = 'k'

@@ -104,7 +104,7 @@ def tirshaker(Configuration, filename = 'test.def', outfilename = 'test_out.def'
         *** Tirshaker iteration {i:02d} ***
         ******************************
         ******************************
-''',Configuration['OUTPUTLOG'])
+''',Configuration['OUTPUTLOG'],screen=True)
 
     #fortestin
     #    break

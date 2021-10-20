@@ -13,14 +13,25 @@ All these options can also be called directly from the command line when calling
 
 input keywords
 --------
-  **main_directory**:
+**main_directory**:
+  *str, optional, default = os.getcwd()*
+
   The directory from where the input catalogue paths start. This normally is set to the directory from where pyFAT is called from.
-  **channel_dependency**:
+
+**channel_dependency**:
+
+  *str, optional, default = independent*
+
   How the channels of the input cubes overlap. Possible options are independent (default), sinusoidal, hanning.
+
   catalogue: null
+
   tirific: tirific
+
   sofia2: sofia2
+
   sofia_basename: null
+
   sofia_dir: null
 output:
   log_directory: Logs/19-10-2021
