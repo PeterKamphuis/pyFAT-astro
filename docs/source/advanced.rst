@@ -16,6 +16,7 @@ Input Keywords
 *Specified with input:*
 
 **main_directory**:
+
   *str, optional, default = os.getcwd()*
 
   The directory from where the input catalogue paths start. This normally is set to the directory from where pyFAT is called from.
@@ -40,7 +41,7 @@ Input Keywords
 
 **sofia2**:
 
-  *str, optional, default = sofia2
+  *str, optional, default = sofia2*
 
   Command to call sofia 2 from the python subprocess
 
@@ -89,22 +90,15 @@ Output Keywords
   *int, optional, default = 3*
 
   A numerical indicator, in the range 0 - 5, of how much output you would like to maintain for each galaxy:
+    0: just organize the output and keep all (This will also happen when a fit is unsuccesful, this can be a lot of files).
+    1: remove optimized files, log files and input files.
+    2: remove optimized files, log files, input files, ps files and unsmoothed files.
+    3: remove optimized files, log files, input files, ps files, unsmoothed files and all model fits files except the final model.
+    4: keep only the def files and remove all other output.
+    5: indicates a failed fit clean up.
+    >6 is the same as 0.
 
-    - 0: just organize the output and keep all (This will also happen when a fit is unsuccesful, this can be a lot of files).
-
-    - 1: remove optimized files, log files and input files.
-
-    - 2: remove optimized files, log files, input files, ps files and unsmoothed files.
-
-    - 3: remove optimized files, log files, input files, ps files, unsmoothed files and all model fits files except the final model.
-
-    - 4: keep only the def files and remove all other output.
-
-    - 5: indicates a failed fit clean up.
-
-    - >6 is the same as 0.
-
-    Residuals are created for all cases where the fits files are maintained.
+  Residuals are created for all cases where the fits files are maintained.
 
 **warp_output**:
 
