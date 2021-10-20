@@ -161,9 +161,12 @@ def tirshaker(Configuration, filename = 'test.def', outfilename = 'test_out.def'
                         # outstring = outstring+blankhere+'#'+lines[linenum][len(blankhere):]+'\n'
 
                         # Replace the first line
+                        print(outstring)
+                        print(allblanks[j][k],parameter_groups[j][k],replacement[j][k])
                         if firstfound[j][k]:
                             outstring = outstring+allblanks[j][k]+parameter_groups[j][k]+' '+tirshaker_convertostring(replacement[j][k],parameter_groups[j][k])+'\n'
                             firstfound[j][k] = False
+                        print(outstring)
                         anysearch = False
                         break
             if anysearch:
@@ -198,7 +201,8 @@ def tirshaker(Configuration, filename = 'test.def', outfilename = 'test_out.def'
         thething = io.open(inname,'w')
         thething.write(outstring)
         thething.close()
-
+        print(inname)
+        exit()
         accepted,current_run = run_tirific(Configuration, 'Not_ZEd',deffile=inname, stage = 'shaker',fit_type = 'Error_Shaker', debug = debug)
         #os.system('tirific deffile= '+inname)
 

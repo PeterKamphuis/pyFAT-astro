@@ -1008,7 +1008,7 @@ def tirshaker_call(Configuration,debug = False):
     Tirific_Template['RESTARTNAME']= ''
     Tirific_Template['INSET'] = f"../{Tirific_Template['INSET']}"
     Tirific_Template['TIRDEF']= f"Error_Shaker_Out.def"
-    Tirific_Template['LOOPS'] = '3'
+    Tirific_Template['LOOPS'] = '1'
 
     outfilename = 'Error_Shaker.def'
     outfileprefix = 'Error_Shaker'
