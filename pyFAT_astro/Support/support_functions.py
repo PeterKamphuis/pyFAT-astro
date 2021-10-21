@@ -48,6 +48,7 @@ class Proper_Dictionary(OrderedDict):
         OrderedDict.__setitem__(self,key, value)
     #    "what habbens now")
     def insert(self, existing_key, new_key, key_value):
+        time.sleep(0.05)
         done = False
         if new_key in self:
             self[new_key] = key_value
@@ -1198,7 +1199,7 @@ def get_fit_groups(Configuration,Tirific_Template,debug = False):
                     else:
                         raise DefFileError("The VARY settings in this deffile are not acceptable you have different ring for one block.")
             else:
-                preliminary_group.append(f'{part}=')
+                preliminary_group.append(f'{part}')
         if len(found_rings) == 1:
             block[-1] = False
         parameter_groups.append(preliminary_group)
@@ -1216,10 +1217,10 @@ def get_fit_groups(Configuration,Tirific_Template,debug = False):
         current_par = ''
         for par in parameter_groups[-1]:
             if current_par == '':
-                current_par = par.split("=")[0]
+                current_par = par
                 if current_par[-1] == '2':
                     current_par=current_par[:-2]
-            par = [f'# {par.split("=")[0]}_ERR']
+            par = [f'# {par}_ERR']
             all_errors = np.array(get_from_template(Configuration,Tirific_Template, par,debug=debug)[0],dtype=float)
             current_rings = np.array(rings[-1],dtype=int)-1
             if current_rings.size == 1:
@@ -2572,8 +2573,7 @@ def run_tirific(Configuration, current_run, stage = 'initial',fit_type = 'Undefi
             print(f"\r Waiting ", end = "", flush = True)
             time.sleep(0.5)
             wait_counter += 1
-    else:
-        Configuration['TIRIFIC_RUNNING'] =False
+    
     if currentloop != max_loop:
         return 1,current_run
     else:

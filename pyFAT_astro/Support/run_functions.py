@@ -1005,10 +1005,10 @@ def tirshaker_call(Configuration,debug = False):
     Tirific_Template = tirific_template(filename = final_FAT_file \
                     , debug = debug)
     #Change the name and run only 2 LOOPS
-    Tirific_Template['RESTARTNAME']= ''
+    Tirific_Template['RESTARTNAME']= f"{Configuration['LOG_DIRECTORY']}restart_Error_Shaker.txt"
     Tirific_Template['INSET'] = f"../{Tirific_Template['INSET']}"
     Tirific_Template['TIRDEF']= f"Error_Shaker_Out.def"
-    Tirific_Template['LOOPS'] = '1'
+    Tirific_Template['LOOPS'] = '2'
 
     outfilename = 'Error_Shaker.def'
     outfileprefix = 'Error_Shaker'
@@ -1037,12 +1037,13 @@ def tirshaker_call(Configuration,debug = False):
     iterations = Configuration['SHAKER_ITERATIONS']
     random_seed = 2
     os.chdir(f"{Configuration['FITTING_DIR']}/Error_Shaker/")
-    tirshaker(Configuration,filename = filename, outfilename = outfilename,\
+    tirshaker(Configuration,Tirific_Template, outfilename = outfilename,\
                 outfileprefix = outfileprefix, parameter_groups = parameter_groups, \
                 rings = rings, block = block, variation = variation,\
                  variation_type = variation_type, iterations = iterations,
                  random_seed = random_seed, mode = 'mad',debug=debug)
     os.chdir(f"{Configuration['START_DIRECTORY']}")
+    '''
     try:
         os.remove(f"{Configuration['FITTING_DIR']}Error_Shaker/blatirshin")
     except:
@@ -1078,6 +1079,7 @@ def tirshaker_call(Configuration,debug = False):
             Tirific_Template[FAT_err]= f"{' '.join([f'{x:{format}}' for x in errors[:int(Configuration['NO_RINGS']),err_var.index(para)]])}"
         else:
             Tirific_Template.insert(key,f"# {key}_ERR",f"{' '.join([f'{x:{format}}' for x in errors[:int(Configuration['NO_RINGS']),err_var.index(para)]])}")
+'''
     wf.tirific(Configuration,Tirific_Template,name=f"{Configuration['USED_FITTING']}/{Configuration['USED_FITTING']}.def", debug = debug)
 
 tirshaker_call.__doc__ =f'''

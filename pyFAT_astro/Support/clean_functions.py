@@ -236,7 +236,8 @@ def cleanup(Configuration,Fits_Files, debug = False):
             os.remove(f'{dir}sofia_input.par')
         except:
             pass
-
+    if 'tirshaker' in Configuration['FITTING_STAGES']:
+        directories.append('Error_Shaker')
     # Existing_Sofia
 
 

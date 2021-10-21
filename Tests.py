@@ -425,4 +425,4 @@ basic.__doc__ =f'''
 
 
 if __name__ == '__main__':
-    Test_Ram()
+    TestTir_Shaker()

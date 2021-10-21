@@ -18,85 +18,59 @@ import scipy.special as spec
 from scipy.optimize import least_squares
 from matplotlib import colors as mplcolors
 from scipy import stats
-from pyFAT_astro.Support.support_functions import run_tirific,print_log
-# A cm in inch
-cm_in_inch = 0.3937008
+from pyFAT_astro.Support.support_functions import run_tirific,print_log,set_format,finish_current_run
+from pyFAT_astro.Support.write_functions import tirific as write_tirific
+from pyFAT_astro.Support.read_functions import load_tirific
 
-# A4widht_in_inch
-A4widht_in_inch = 21.0*cm_in_inch
-
-# A4height_in_inch
-A4height_in_inch = 29.7*cm_in_inch
-
+#
 #tirshaker
-def tirshaker_returnblanksatstart(string):
-    """
-    Helper to tirshaker
-    """
-    j = ''
-    for i in string:
-        if i != ' ':
-            break
-        j += ' '
-    return j
-#tirshaker
-def tirshaker_convertostring(floatlist, parametername):
-    """
-    Helper to tirshaker
-    """
-#    print floatlist
-    if 'XPOS' in parametername:
-        return ' '.join(['{:+.7E}'.format(thing) for thing in floatlist])
-    else:
-        if 'YPOS' in parametername:
-            return ' '.join(['{:+.7E}'.format(thing) for thing in floatlist])
-        else:
-            return ' '.join(['{:+.5E}'.format(thing) for thing in floatlist])
-#tirshaker
-def tirshaker(Configuration, filename = 'test.def', outfilename = 'test_out.def', \
+def tirshaker(Configuration, Tirific_Template, outfilename = 'test_out.def', \
               outfileprefix = 'tirsh_', parameter_groups = [], rings = [], block = []\
               , variation = [], variation_type = [], iterations = 0, random_seed = 0,\
-               mode = 'mad',debug=False):
+               mode = 'mad',debug=False,fit_type='Error_Shaker'):
     # Initiate rng
     random.seed(random_seed)
 
-    # Open the file
-    lines = io.open(filename).read().split('\n')
-
     # Find the number of lines
-    for line in lines:
-        blankhere = tirshaker_returnblanksatstart(line)
-        if line.find('NUR=',len(blankhere)) == len(blankhere):
-            nur = int(line.split()[1])
+    nur = int(Tirific_Template['NUR'])
+
 
     # Here we collect all parameter_groups as listed above and convert the lists into numbers
     # Then through the parameter groups and collect the parameter_groups
     allnumbers_in = []
-    allblanks = []
     for j in range(len(parameter_groups)):
         numbers = []
-        blanks = []
         # Then go through the parameter_groups
         for k in range(len(parameter_groups[j])):
-            for line in lines:
-                blankhere = tirshaker_returnblanksatstart(line)
-                if line.find(parameter_groups[j][k],len(blankhere)) == len(blankhere):
-                    blanks.append(blankhere)
-                    numbers.append([float(l) for l in line.split()[1:]])
+            #Once we checked all we can replace para with parameter_groups and use the input without =
+            numbers.append([float(l) for l in Tirific_Template[parameter_groups[j][k]].split()])
+            if parameter_groups[j][k] == 'CONDISP':
+                pass
+            else:
+                while len(numbers[-1]) < nur:
+                    numbers[-1].append(numbers[-1][-1])
 
-                    # Expand to number of rings by extrapolation unless CONDISP
-                    if parameter_groups[j][k] == 'CONDISP=':
-                       pass
-                    else:
-                        while len(numbers[-1]) < nur:
-                            numbers[-1].append(numbers[-1][-1])
-                    break
         allnumbers_in.append(numbers)
-        allblanks.append(blanks)
 
     allnumbers_out = []
+#Make sure some settings are blank
+    Tirific_Template['OUTSET'] = ''
+    Tirific_Template['PROGRESSLOG'] = ''
+    Tirific_Template['TEXTLOG'] = ''
+    Tirific_Template['TIRSMO'] = ''
+    Tirific_Template['COOLGAL'] = ''
+    Tirific_Template['TILT'] = ''
+    Tirific_Template['BIGTILT'] = ''
+    if nur < 15:
+        Tirific_Template['INIMODE'] = '2'
+    else:
+        Tirific_Template['INIMODE'] = '3'
+    Tirific_Template['RESTARTID'] = '0'
+    Tirific_Template['LOGNAME'] = 'Error_Shaker.log'
+    Tirific_Template['TIRDEF'] = 'Error_Shaker_Out.def'
+    current_run='not set'
     for i in range(iterations):
-
+        Current_Template = copy.deepcopy(Tirific_Template)
         # Provide some info where we are
         print_log(f'''
         ******************************
@@ -110,20 +84,20 @@ def tirshaker(Configuration, filename = 'test.def', outfilename = 'test_out.def'
     #    break
 
         # Find a name for a logfile and an output.def file
-        inname = 'blatirshin'
-        while os.path.exists(inname):
-            inname = 'blatirshin_'+''.join(random.choice('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWxyz') for i in range(6))
+        #inname = 'blatirshin'
+        #while os.path.exists(inname):
+        #    inname = 'blatirshin_'+''.join(random.choice('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWxyz') for i in range(6))
 
-        logname = 'blatirshlog'
-        while os.path.exists(logname):
-            logname = 'blatirshlog_'+''.join(random.choice('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWxyz') for i in range(6))
+        #logname = 'blatirshlog'
+        #while os.path.exists(logname):
+        #    logname = 'blatirshlog_'+''.join(random.choice('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWxyz') for i in range(6))
 
-        defname = 'blatirshdef'
-        while os.path.exists(defname):
-            defname = 'blatirshdef_'+''.join(random.choice('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWxyz') for i in range(6))
+        #defname = 'blatirshdef'
+        #while os.path.exists(defname):
+        #    defname = 'blatirshdef_'+''.join(random.choice('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWxyz') for i in range(6))
 
-        replacement = copy.deepcopy(allnumbers_in)
         # Now random-generate the replacement for the numbers
+
         for j in range(len(parameter_groups)):
             if block[j]:
                 variations = [variation[j]*random.uniform(-1.,1.)]*len(rings[j])
@@ -131,102 +105,47 @@ def tirshaker(Configuration, filename = 'test.def', outfilename = 'test_out.def'
                 variations = [variation[j]*random.uniform(-1.,1.) for klo in rings[j]]
 
             for k in range(len(parameter_groups[j])):
+                current_list = [float(x) for x in Current_Template[parameter_groups[j][k]].split()]
+                while len(current_list) < nur:
+                    current_list.append(current_list[-1])
                 for l in range(len(rings[j])):
-                    #print(j,k,l,len(parameter_groups),len(parameter_groups[j]),len(rings[j]),len(variations))
                     if variation_type[j] == 'a':
-                        replacement[j][k][rings[j][l]-1] = replacement[j][k][rings[j][l]-1]+variations[l]
+                        current_list[rings[j][l]-1] = current_list[rings[j][l]-1]+variations[l]
                     else:
-                        replacement[j][k][rings[j][l]-1] = replacement[j][k][rings[j][l]-1]*(1.+variations[l])
+                        current_list[rings[j][l]-1] = current_list[rings[j][l]-1]*(1.+variations[l])
+                format = set_format(parameter_groups[j][k])
+                Current_Template[parameter_groups[j][k]] = ' '.join([f'{x:{format}}' for x in current_list])
 
-        # Write it to a copy of the file replacing the parameters
-        #outstring = 'ACTION= 1\nPROMPT= 1\n'
-        outstring = 'PROMPT= 1\n'
-        #outstring=''
-        # Create a firstfound array, all True
-        firstfound = []
-        for j in range(len(parameter_groups)):
-            firstfound.append([])
-            for k in parameter_groups[j]:
-                firstfound[j].append(True)
 
-        for linenum in range(len(lines)):
-            anysearch = True
-            for j in range(len(parameter_groups)):
-                for k in range(len(parameter_groups[j])):
-    #                print('pragr: {}'.format(parameter_groups[j][k]))
-                    blankhere = tirshaker_returnblanksatstart(lines[linenum])
-                    if lines[linenum].find(parameter_groups[j][k],len(blankhere)) == len(blankhere):
-                        # Comment the line (not necessary, so we pass)
-                        pass
-                        # outstring = outstring+blankhere+'#'+lines[linenum][len(blankhere):]+'\n'
 
-                        # Replace the first line
-                        print(outstring)
-                        print(allblanks[j][k],parameter_groups[j][k],replacement[j][k])
-                        if firstfound[j][k]:
-                            outstring = outstring+allblanks[j][k]+parameter_groups[j][k]+' '+tirshaker_convertostring(replacement[j][k],parameter_groups[j][k])+'\n'
-                            firstfound[j][k] = False
-                        print(outstring)
-                        anysearch = False
-                        break
-            if anysearch:
+        #Current_Template['LOGNAME'] = logname
+        #Current_Template['TIRDEF'] = defname
 
-                # No output but the output.def file and the log
-                blankhere = tirshaker_returnblanksatstart(lines[linenum])
-                lbl = len(blankhere)
-                if lines[linenum].find('LOGNAME=',lbl) == lbl:
-                    outstring = outstring+'LOGNAME= '+logname+'\n'
-                elif lines[linenum].find('OUTSET=',lbl) == lbl:
-                    outstring = outstring+'OUTSET= '+'\n'
-                elif lines[linenum].find('PROGRESSLOG=',lbl) == lbl:
-                    outstring = outstring+'PROGRESSLOG= '+'\n'
-                elif lines[linenum].find('TEXTLOG=',lbl) == lbl:
-                    outstring = outstring+'TEXTLOG= '+'\n'
-                elif lines[linenum].find('TIRDEF=',lbl) == lbl:
-                    outstring = outstring+'TIRDEF= '+defname+'\n'
-                elif lines[linenum].find('TIRSMO=',lbl) == lbl:
-                    outstring = outstring+'TIRSMO= '+'\n'
-                elif lines[linenum].find('COOLGAL=',lbl) == lbl:
-                    outstring = outstring+'COOLGAL= '+'\n'
-                elif lines[linenum].find('TILT=',lbl) == lbl:
-                    outstring = outstring+'TILT= '+'\n'
-                elif lines[linenum].find('BIGTILT=',lbl) == lbl:
-                    outstring = outstring+'BIGTILT= '+'\n'
-                elif lines[linenum].find('GR_DEVICE=',lbl) == lbl:
-                    outstring = outstring+'GR_DEVICE= '+'\n'
-                else:
-                    outstring = outstring+lines[linenum]+'\n'
-
-        # Dump it into a file and then run tirific
-        thething = io.open(inname,'w')
-        thething.write(outstring)
-        thething.close()
-        print(inname)
-        exit()
-        accepted,current_run = run_tirific(Configuration, 'Not_ZEd',deffile=inname, stage = 'shaker',fit_type = 'Error_Shaker', debug = debug)
+        write_tirific(Configuration,Current_Template, name =f'Error_Shaker/{fit_type}_In.def' , debug = debug)
+        accepted,current_run = run_tirific(Configuration, current_run, stage = 'shaker',fit_type = fit_type, debug = debug)
         #os.system('tirific deffile= '+inname)
 
         # Read the values of the parameters requested
-        thething = io.open(defname,'r')
-        outlines = thething.read().split('\n')
-        thething.close()
+
         allnumbers_out_part = []
         for j in range(len(parameter_groups)):
             numbers = []
             # Then go through the parameter_groups
             for k in range(len(parameter_groups[j])):
-                for line in outlines:
-                    blankhere = tirshaker_returnblanksatstart(line)
-                    if line.find(parameter_groups[j][k],len(blankhere)) == len(blankhere):
-                        blanks.append(blankhere)
-                        numbers.append([float(l) for l in line.split()[1:]])
+                numbers.append([float(x) for x in load_tirific(Configuration,f"{Configuration['FITTING_DIR']}Error_Shaker/Error_Shaker_Out.def",Variables = [parameter_groups[j][k]],debug=debug)[0]])
+                if parameter_groups[j][k] == 'CONDISP':
+                    pass
+                else:
+                    while len(numbers[-1]) < nur:
+                        numbers[-1].append(numbers[-1][-1])
+
             allnumbers_out_part.append(numbers)
         allnumbers_out.append(allnumbers_out_part)
 
         # Now remove the files
-        os.remove(inname)
-        os.remove(logname)
-        os.remove(defname)
+        #os.remove(inname)
+        #os.remove(logname)
+        #os.remove(defname)
 
     #allnumbers_out = [[[[8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0], [36.0, 37.0, 38.0, 39.0, 40.0, 41.0, 42.0]], [[2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0], [22.0, 23.0, 24.0, 25.0, 26.0, 27.0, 28.0]], [[1e-05, 1e-05, 1e-05, 1e-05, 1e-05, 1e-05, 1e-05], [1e-05, 1e-05, 1e-05, 1e-05, 1e-05, 1e-05, 1e-05]]],
     #                 [[[9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0], [36.0, 37.0, 38.0, 39.0, 40.0, 41.0, 42.0]], [[2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0], [22.0, 23.0, 24.0, 25.0, 26.0, 27.0, 28.0]], [[1e-05, 1e-05, 1e-05, 1e-05, 1e-05, 1e-05, 1e-05], [1e-05, 1e-05, 1e-05, 1e-05, 1e-05, 1e-05, 1e-05]]]]
@@ -288,66 +207,26 @@ def tirshaker(Configuration, filename = 'test.def', outfilename = 'test_out.def'
     #print 'allnumbers_final_err'
     #print allnumbers_final_err
 
+
+    for j in range(len(parameter_groups)):
+        for k in range(len(parameter_groups[j])):
+            format = set_format(parameter_groups[j][k])
+            #Tirific_Template[parameter_groups[j][k]] = ' '.join([f'{x:{format}}' for x in allnumbers_final[j][k]])
+            Tirific_Template.insert(f'{parameter_groups[j][k]}',f'# {parameter_groups[j][k]}_ERR',f"{' '.join([f'{x:{format}}' for x in allnumbers_final_err[j][k]])}")
+
+            #Tirific_Template.insert(f'{parameter_groups[j][k]}',f'# {parameter_groups[j][k]}_ERR',' '.join([f'{x:{format}}' for x in allnumbers_final_err[j][k]]))
+
     # Put them into the output file
     # Write it to a copy of the file replacing the parameters
-    outstring = ''
+    finish_current_run(Configuration, current_run)
+    write_tirific(Configuration,Tirific_Template, name =f'Error_Shaker/{outfilename}' , debug = debug)
 
-    # Create a firstfound array, all True
-    firstfound = []
-    for j in range(len(parameter_groups)):
-        firstfound.append([])
-        for k in parameter_groups[j]:
-            firstfound[j].append(True)
-
-    for linenum in range(len(lines)):
-        anysearch = True
-        for j in range(len(parameter_groups)):
-            for k in range(len(parameter_groups[j])):
-    #                print('pragr: {}'.format(parameter_groups[j][k]))
-                blankhere = tirshaker_returnblanksatstart(lines[linenum])
-                if lines[linenum].find(parameter_groups[j][k],len(blankhere)) == len(blankhere):
-                    # Comment the line (not necessary, so we pass)
-                    outstring = outstring+blankhere+'#'+lines[linenum][len(blankhere):]+'\n'
-
-                    # Replace the first line
-                    if firstfound[j][k]:
-                        outstring = outstring+allblanks[j][k]+parameter_groups[j][k]+' '+tirshaker_convertostring(allnumbers_final[j][k],parameter_groups[j][k])+'\n'
-                        outstring = outstring+allblanks[j][k]+'ERR_'+parameter_groups[j][k]+' '+tirshaker_convertostring(allnumbers_final_err[j][k],parameter_groups[j][k])+'\n'
-                        firstfound[j][k] = False
-                    anysearch = False
-                    break
-
-        if anysearch:
-
-            # No output but the output.def file and the log
-            blankhere = tirshaker_returnblanksatstart(lines[linenum])
-            lbl = len(blankhere)
-            notfound = True
-            for parametername in ['LOGNAME=', 'OUTSET=', 'PROGRESSLOG=', 'TEXTLOG=', 'TIRDEF=', 'TIRSMO=', 'COOLGAL=', 'TILT=', 'BIGTILT=', 'GR_DEVICE=']:
-                if lines[linenum].find(parametername,lbl) == lbl:
-                    try:
-                        parameter = outfileprefix+lines[linenum].split()[1]
-                        outstring = outstring+blankhere+parametername+' '+parameter+'\n'
-                    except:
-                        outstring = outstring+blankhere+parametername+'\n'
-                    notfound = False
-            if lines[linenum].find('LOOPS=',lbl) == lbl:
-                outstring = outstring+'LOOPS= 0\n'
-                notfound = False
-            if notfound:
-                outstring = outstring+lines[linenum]+'\n'
-
-    # Dump it into a file
-
-    thething = io.open(outfilename,'w')
-    thething.write(outstring)
-    thething.close()
 tirshaker.__doc__ =f'''
  NAME:
     tirshaker
 
  PURPOSE:
-    obtain mcmc errors through a FAT implemention of tirshaker developed by G.I.G. Jozsa.
+    obtain errors through a FAT implemention of tirshaker developed by G.I.G. Jozsa.
 
  CATEGORY:
     run_functions

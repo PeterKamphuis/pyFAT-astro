@@ -1120,7 +1120,7 @@ def plot_usage_stats(Configuration,debug = False):
                 linest = '-'
             elif linest == '-':
                 linest = '--'
-        
+
             if (prev_label == 'Initializing tmp_incl_check' or prev_label == 'Ended tmp_incl_check'):
                 if (label != 'Initializing tmp_incl_check' and label != 'Ended tmp_incl_check') or \
                         time == label_times[-1]    :
@@ -1138,8 +1138,8 @@ def plot_usage_stats(Configuration,debug = False):
                     ax2.plot([time,last_label+0.1],[ax2maxy,ax2maxy+20.],linest,color=color,linewidth=0.05,clip_on=False)
                 else:
                     prev_time = time
-            elif (prev_label == 'Initializing Error_Shaker' or prev_label == 'Ended Error_Shaker'):
-                if (label != 'Initializing Error_Shaker' and label != 'Ended Error_Shaker') or \
+            elif (prev_label == 'Initializing Error_Shaker' or prev_label == 'Ended Error_Shaker' or prev_label == 'Started Error_Shaker'):
+                if (label != 'Initializing Error_Shaker' and label != 'Ended Error_Shaker' and  label != 'Started Error_Shaker') or \
                         time == label_times[-1]:
                     if time != label_times[-1]:
                         ax2.axvline(x=prev_time, linestyle=linest, color=color, linewidth=0.05)

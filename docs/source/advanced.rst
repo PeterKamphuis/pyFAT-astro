@@ -75,7 +75,7 @@ Output Keywords
 
 **catalogue**:
 
-  *str, optional, default = pyFAT_results.txt
+  *str, optional, default = pyFAT_results.txt*
 
   The output catalogue with the results per galaxy indicating a success or failure with possible failure reason.
 
@@ -114,34 +114,155 @@ Output Keywords
 
 **timing**:
 
- *bool, optional, default = False
+ *bool, optional, default = False*
 
  Switch for tracking fitting time, CPU usage and RAM usage. This helps a lot to keep track on which stages are taking resources.
 
 
-fitting:
-  catalogue_start_id: '-1'
-  catalogue_end_id: '-1'
-  fitting_stages:
-  - Create_FAT_Cube
-  - Run_Sofia
-  - Fit_Tirific_OSC
-  ring_size: 1.1
-  fixed_parameters:
-  - Z0
-  - XPOS
-  - YPOS
-  - VSYS
-  opt_pixel_beam: 4
-  ncpu: 6
-  distance: -1.0
-advanced:
-    start_directory: str =f'{os.getcwd()}'
-    max_iterations: int=15 #The maximum number of iterations that FAT tries to calls trific bfeore it call it quits
-    loops: int =10 #The number of full loops set for tirific in a  single iteration
-    minimum_warp_size: float = 3. # if the number of beams across the major axis/2. is less than this size we will only fit a flat disc,set here.
-    minimum_rings: int = 3  # we need at least this amount of rings (Including 0 and 1/5 beam), set here
-    too_small_galaxy: float = 1. # if the number of beams across the major axis/2 is less than this we will not fit the galaxy, set here
-    unreliable_size: float = 2. #If the final diameter is smaller than this the fit is considered unreliable
-    unreliable_inclination: float = 10. #If the final inclination is below this the fit is considered unreliable
-    shaker_iterations: int = 20
+Fitting Keywords
+--------
+ *Specified with fitting:*
+
+**catalogue_start_id**:
+
+  *str, optional, default = '-1'*
+
+  Catalogue ID of the first galaxy to be fitted. -1 Means start at the beginning. Note that this is a string so it does not ae to be numerical.
+
+**catalogue_end_id**:
+
+  *str, optional, default = '-1'*
+
+  Catalogue ID the last galaxy to be fitted, if set to -1 the whole catalogue will be fitted.
+
+**fitting_stages**:
+
+  *List, optional, default = ['Create_FAT_Cube','Run_Sofia','Fit_Tirific_OSC']*
+
+  Possible stages are:
+    Create_FAT_Cube: Create a FAT compatible cube from the original cube. This will overwrite any previous FAT cube present. If omitted it is assumed the Cube is present in the fitting directory.
+    Catalogue_Sofia: The catalogue is assumed to be a sofia catalogue and all sources in the catalogue are to be fitted.
+    Run_Sofia: Run Sofia on the FAT cube and  process the output
+    Existing_Sofia: It is assumed the Sofia output exist and specified in the fitting catalogue, this means a catalogue exists for every cubelet.
+    Fit_Tirific_OSC: Run FAT using the Tirific program in multiple iterations and smooth.
+    Tirshaker: Bootstrap errors for the final model by running Tirific multiple times with scrambled input. This can take a long time
+
+**ring_size**:
+
+  *float, optional, default = 1.1*
+
+  The size of the rings in number of beams
+
+**fixed_parameters**:
+
+ *List, optional, default = ['Z0','XPOS','YPOS','VSYS']
+
+ A list of the parameters that should stay fixed, i.e. all rings fitted as a single value, in the fitting. The rotation curve (VROT) can not be fixed at the moment. If the surface brightness is fixed it is fitted with a Gaussian after every iterations.
+
+**opt_pixel_beam**:
+
+  *int, optional, default=4*
+
+  FAT can regrid the input cubes to have lesser pixels per FWHM of the gaussian clean beam. This can be useful to speed up the fitting process (See Kamphuis et al. 2015). If you want to prevent this set a high number of pixels. FAT will never increase the amount of pixels per FWHM.
+
+**ncpu**:
+
+  *int, optional, default = 6*
+
+  Number CPUs used for tirific fitting. A high number of cores can be beneficial for speeding up the fitting of larger galaxies however, for smaller galaxies less so.
+
+ **distance**:
+
+    *float, optional, default = -1.*
+
+    Distance to the galaxy. Normally for batch fitting this is taken from the input catalogue. Howeever for individual galaxies this can be set through the yaml.
+    -1 means that the distance is derived from the sofia extracted vsys and the hublle flow.
+
+
+
+Advanced Keywords
+--------
+*Specified with advanced:*
+
+**start_directory**:
+
+  *str, optional, default =f'{os.getcwd()}'*
+
+  Vary rarely FAT will change the working directory. This keyword ensures that upon exiting one is back in the directory where started.
+
+**max_iterations**:
+
+  *int, optional, default=15*
+
+  The maximum number of iterations that FAT assumes before it determines a galaxy to be unfittable. call it quits
+
+**loops**:
+
+  *int, optional,  int=10*
+
+  The number of big loops set in tirific in a  single iteration. For small or irregular galaxies a smaller number can be beneficial as the FAT stabelizing routines will be called more often.
+
+**minimum_warp_size**:
+
+  *float, optinal, default = 3.*
+
+  The minimum number of beams in radius that is required to allow the PA and INCL to vary. If the the extend of the model is less than this the PA and INCL will e fitted as a single value, i.e a flat disk.
+
+**minimum_rings**:
+
+  *int, optional, default = 3*
+
+  The minimum amount of rings in the model (including 0 and 1/5 beam). If the galaxy is smaller than this the ring size will be reduced.
+  If the ring size is <0.5*FWHM and there are still not enough rings the fit is failed, i.e. models with diameter < 1.4* FWHM wil fail.
+
+**too_small_galaxy**:
+
+  *float, optional, default = 1.*
+
+  If the radius of the becomes less than this in FWHM we will not continue to fit the galaxy.
+
+**unreliable_size**:
+
+  *float, optional, default = 2.*
+
+  If the final diameter of the model is smaller than this number x FWHM the fit will be flagged as unreliable.
+
+**unreliable_inclination**:
+
+  *float, optional, default = 10.*
+
+  If the final inclinaion of the model is smaller than this the fit will be flagged as unreliable.
+
+**shaker_iterations**:
+
+  *int, optional, default = 20*
+
+  If the Tirshaker model is set this keyword controls the amount of iterations.
+
+Individual Keywords
+ --------
+*No specifier*
+
+**print_examples**:
+
+  *bool, optional, default = False*
+
+  Print an example input yaml file and an example catalogue.
+
+**installation_check**:
+
+  *bool, optional , default=False*
+
+  Run the installation check
+
+**cube_name**:
+
+  *str, optional, default = None*
+
+  individual cube name when not batch fitting
+
+**configuration_file**:
+
+  *str, optional, default = None*
+
+  configuration input file
