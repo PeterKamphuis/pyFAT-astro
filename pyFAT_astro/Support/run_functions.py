@@ -834,6 +834,8 @@ def one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run, de
         if Configuration['ITERATIONS'] > Configuration['MAX_ITERATIONS']:
                 print_log(f'''ONE_STEP_CONVERGENCE: We have ran the convergence more than {Configuration['MAX_ITERATIONS']} times aborting the fit.
     ''',Configuration['OUTPUTLOG'])
+                if debug:
+                    Configuration['ACCEPTED'] = True
                 return current_run
         if not accepted:
             print_log(f'''ONE_STEP_CONVERGENCE: Tirific ran the maximum amount of loops hence we do not accept and we smooth and retry.
@@ -1008,7 +1010,7 @@ def tirshaker_call(Configuration,debug = False):
     Tirific_Template['RESTARTNAME']= f"{Configuration['LOG_DIRECTORY']}restart_Error_Shaker.txt"
     Tirific_Template['INSET'] = f"../{Tirific_Template['INSET']}"
     Tirific_Template['TIRDEF']= f"Error_Shaker_Out.def"
-    Tirific_Template['LOOPS'] = '2'
+    Tirific_Template['LOOPS'] = '1'
 
     outfilename = 'Error_Shaker.def'
     outfileprefix = 'Error_Shaker'

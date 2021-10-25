@@ -90,12 +90,19 @@ Output Keywords
   *int, optional, default = 3*
 
   A numerical indicator, in the range 0 - 5, of how much output you would like to maintain for each galaxy:
+
     0: just organize the output and keep all (This will also happen when a fit is unsuccesful, this can be a lot of files).
+
     1: remove optimized files, log files and input files.
+
     2: remove optimized files, log files, input files, ps files and unsmoothed files.
+
     3: remove optimized files, log files, input files, ps files, unsmoothed files and all model fits files except the final model.
+
     4: keep only the def files and remove all other output.
+
     5: indicates a failed fit clean up.
+
     >6 is the same as 0.
 
   Residuals are created for all cases where the fits files are maintained.
@@ -140,11 +147,17 @@ Fitting Keywords
   *List, optional, default = ['Create_FAT_Cube','Run_Sofia','Fit_Tirific_OSC']*
 
   Possible stages are:
+
     Create_FAT_Cube: Create a FAT compatible cube from the original cube. This will overwrite any previous FAT cube present. If omitted it is assumed the Cube is present in the fitting directory.
+
     Catalogue_Sofia: The catalogue is assumed to be a sofia catalogue and all sources in the catalogue are to be fitted.
+
     Run_Sofia: Run Sofia on the FAT cube and  process the output
+
     Existing_Sofia: It is assumed the Sofia output exist and specified in the fitting catalogue, this means a catalogue exists for every cubelet.
+
     Fit_Tirific_OSC: Run FAT using the Tirific program in multiple iterations and smooth.
+
     Tirshaker: Bootstrap errors for the final model by running Tirific multiple times with scrambled input. This can take a long time
 
 **ring_size**:
@@ -158,7 +171,7 @@ Fitting Keywords
  *List, optional, default = ['Z0','XPOS','YPOS','VSYS']
 
  A list of the parameters that should stay fixed, i.e. all rings fitted as a single value, in the fitting. The rotation curve (VROT) can not be fixed at the moment. If the surface brightness is fixed it is fitted with a Gaussian after every iterations.
-
+ XPOS, YPOS, and VSYS are always fitted as singular.
 **opt_pixel_beam**:
 
   *int, optional, default=4*
@@ -171,12 +184,12 @@ Fitting Keywords
 
   Number CPUs used for tirific fitting. A high number of cores can be beneficial for speeding up the fitting of larger galaxies however, for smaller galaxies less so.
 
- **distance**:
+**distance**:
 
-    *float, optional, default = -1.*
+  *float, optional, default = -1.*
 
-    Distance to the galaxy. Normally for batch fitting this is taken from the input catalogue. Howeever for individual galaxies this can be set through the yaml.
-    -1 means that the distance is derived from the sofia extracted vsys and the hublle flow.
+  Distance to the galaxy. Normally for batch fitting this is taken from the input catalogue. Howeever for individual galaxies this can be set through the yaml.
+  -1 means that the distance is derived from the sofia extracted vsys and the hublle flow.
 
 
 

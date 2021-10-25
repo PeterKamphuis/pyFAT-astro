@@ -362,22 +362,29 @@ def cleanup_final(Configuration,Fits_Files, debug =False):
                         os.remove(f"{Configuration['FITTING_DIR']}{dir}/{file}")
                     except FileNotFoundError:
                         pass
+    stage_dirs = []
     if os.path.isdir(f"{Configuration['FITTING_DIR']}tmp_incl_check"):
+        stage_dirs.append('tmp_incl_check')
+    if 'tirshaker' in Configuration['FITTING_STAGES']:
+        stage_dirs.append('Error_Shaker')
+
+    for dirs in stage_dirs:
         if 5 > Configuration['OUTPUT_QUANTITY'] >= 1:
-            files_in_dir = os.listdir(f"{Configuration['FITTING_DIR']}tmp_incl_check")
+            files_in_dir = os.listdir(f"{Configuration['FITTING_DIR']}{dirs}")
             for file in files_in_dir:
                 try:
-                    os.remove(f"{Configuration['FITTING_DIR']}tmp_incl_check/{file}")
+                    os.remove(f"{Configuration['FITTING_DIR']}{dirs}/{file}")
                 except FileNotFoundError:
                     pass
-            os.rmdir(f"{Configuration['FITTING_DIR']}tmp_incl_check")
+            os.rmdir(f"{Configuration['FITTING_DIR']}{dirs}")
         else:
             # else move this directory to the LOG
-            target = get_system_string(f"{Configuration['LOG_DIRECTORY']}tmp_incl_check")
-            if  os.path.isdir(f"{Configuration['LOG_DIRECTORY']}tmp_incl_check"):
+            target = get_system_string(f"{Configuration['LOG_DIRECTORY']}{dirs}")
+            if  os.path.isdir(f"{Configuration['LOG_DIRECTORY']}{dirs}"):
                 os.system(f"rm -Rf {target}")
-            source = get_system_string(f"{Configuration['FITTING_DIR']}tmp_incl_check")
+            source = get_system_string(f"{Configuration['FITTING_DIR']}{dirs}")
             os.system(f"mv {source} {target}")
+        
 
 cleanup_final.__doc__ =f'''
  NAME:

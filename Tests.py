@@ -117,6 +117,7 @@ Configuration['RING_SIZE'] = 1.
 Configuration['OPTIMIZED'] = False
 Configuration['NCPU'] = 1.
 Configuration['LOOPS'] = 3
+Configuration['ITERATIONS'] = 6
 Configuration['HANNING'] = False
 Configuration['FIX_INCLINATION'] = [False,False]
 Configuration['FIX_SDIS'] = [False,False]
@@ -187,6 +188,7 @@ def Test_Regularise():
         plt.close()
 
 def Test_Overview():
+
     wf.make_overview_plot(Configuration,Fits_Files, debug = True)
 
 def Test_write_temp():
@@ -425,4 +427,4 @@ basic.__doc__ =f'''
 
 
 if __name__ == '__main__':
-    TestTir_Shaker()
+    Test_Overview()

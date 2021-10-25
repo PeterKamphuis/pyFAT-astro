@@ -378,9 +378,12 @@ def main(argv):
                 #cf.finish_galaxy(Configuration,maximum_directory_length, Fits_Files =Fits_Files,current_run =current_run,debug=Configuration['DEBUG'])
                 #continue
                 #if all the fitting has gone properly we create nice errors
-                if 'tirshaker' in Configuration['FITTING_STAGES']:
-                    runf.tirshaker_call(Configuration,debug=Configuration['DEBUG'])
-                Configuration['FINAL_COMMENT'] = 'The fit has converged succesfully'
+                
+                if Configuration['OUTPUT_QUANTITY'] != 5:
+                    if 'tirshaker' in Configuration['FITTING_STAGES']:
+                        runf.tirshaker_call(Configuration,debug=Configuration['DEBUG'])
+
+                    Configuration['FINAL_COMMENT'] = 'The fit has converged succesfully'
 
 
             except Exception as e:

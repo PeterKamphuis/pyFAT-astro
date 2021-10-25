@@ -62,15 +62,16 @@ def tirshaker(Configuration, Tirific_Template, outfilename = 'test_out.def', \
     Tirific_Template['TILT'] = ''
     Tirific_Template['BIGTILT'] = ''
     if nur < 15:
-        Tirific_Template['INIMODE'] = '2'
+        Tirific_Template['INIMODE'] = 2
     else:
-        Tirific_Template['INIMODE'] = '3'
-    Tirific_Template['RESTARTID'] = '0'
+        Tirific_Template['INIMODE'] = 3
+
     Tirific_Template['LOGNAME'] = 'Error_Shaker.log'
     Tirific_Template['TIRDEF'] = 'Error_Shaker_Out.def'
     current_run='not set'
     for i in range(iterations):
         Current_Template = copy.deepcopy(Tirific_Template)
+        Current_Template['RESTARTID']= i
         # Provide some info where we are
         print_log(f'''
         ******************************

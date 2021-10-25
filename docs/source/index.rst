@@ -12,6 +12,7 @@ Contents
 
 
   Introduction, Installation & Easy use <README.rst>
-  Advanced Settings <advanced.rst>
   Catalogue Setup  <catalogue.rst>
+  The Different Stages <stage.rst>
+  Advanced Settings <advanced.rst>
   Copyright <copyright.rst>
