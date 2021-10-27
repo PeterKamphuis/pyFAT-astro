@@ -4,7 +4,7 @@
 from pyFAT_astro.Support.support_functions import Proper_Dictionary,print_log,convertRADEC,set_limits, remove_inhomogeneities, \
                                 obtain_border_pix, get_inclination_pa,get_vel_pa,columndensity,get_profile, get_kinematical_center,\
                                 create_directory,copy_homemade_sofia,clean_header,get_new_center
-from pyFAT_astro.Support.fits_functions import check_mask,clean_header
+from pyFAT_astro.Support.fits_functions import check_mask,clean_header,create_fat_cube
 from pyFAT_astro.Support.fat_errors import BadCatalogueError, NoConfigFile
 from astropy.io import fits
 from astropy.wcs import WCS
@@ -1070,7 +1070,7 @@ def sofia_input_catalogue(Configuration,debug=False):
     headerlines=[]
     if not Configuration['SOFIA_DIR']:
         Configuration['SOFIA_DIR']=f"{Configuration['MAIN_DIRECTORY']}{basename}_cubelets/"
-    
+
     #Read the sofia catalogue
     with open(Configuration['CATALOGUE']) as sof_cat:
         for line in sof_cat.readlines():
@@ -1114,19 +1114,35 @@ def sofia_input_catalogue(Configuration,debug=False):
 
                 if not os.path.exists(f"{Configuration['MAIN_DIRECTORY']}{basename}_FAT_cubelets/{basename}_{outlist[input_columns.index('id')]}"):
                     create_directory(f"{Configuration['MAIN_DIRECTORY']}{basename}_FAT_cubelets/{basename}_{outlist[input_columns.index('id')]}",f"{Configuration['MAIN_DIRECTORY']}")
-                Cube = fits.open(f"{Configuration['SOFIA_DIR']}{basename}_{outlist[input_columns.index('id')]}_cube.fits",uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
-                data = Cube[0].data
-                hdr = Cube[0].header
-                if hdr['NAXIS'] == 4:
-                    data = data[0,:,:,:]
-                    del hdr['NAXIS4']
-                    hdr['NAXIS'] = 3
-                # clean the header
-                hdr = clean_header(Configuration,hdr,debug=debug)
-                hdr['FATNOISE'] = np.mean([np.nanstd(data[0,:,:]),np.nanstd(data[-1,:,:])])
-                if hdr['CDELT3'] < -1:
-                    raise InputError(f"Your velocity axis is declining this won't work. exiting")
-                fits.writeto(f"{Configuration['MAIN_DIRECTORY']}{basename}_FAT_cubelets/{basename}_{outlist[input_columns.index('id')]}/{basename}_{outlist[input_columns.index('id')]}_FAT.fits",data,hdr,overwrite=True)
+
+                if 'create_fat_cube' in Configuration['FITTING_STAGES']:
+                    create_fat_cube(Configuration, Fits_Files,sofia_catalogue=True,name=basename,id = outlist[input_columns.index('id')],debug=debug)
+                else:
+                    Cube = fits.open(f"{Configuration['SOFIA_DIR']}{basename}_{outlist[input_columns.index('id')]}_cube.fits",uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
+                    data = Cube[0].data
+                    hdr = Cube[0].header
+                    if hdr['NAXIS'] == 4:
+                        data = data[0,:,:,:]
+                        del hdr['NAXIS4']
+                        hdr['NAXIS'] = 3
+                    # clean the header
+                    hdr = clean_header(Configuration,hdr,debug=debug)
+                    low_chan = float('NAN')
+                    channel=int(0)
+                    while np.isnan(low_chan):
+                        low_chan = np.nanstd(data[channel,:,:])
+                        channel+=1
+                    high_chan = float('NAN')
+                    channel=int(-1)
+                    while np.isnan(high_chan):
+                        high_chan = np.nanstd(data[channel,:,:])
+                        channel-=1
+
+                    hdr['FATNOISE'] = np.mean([low_chan,high_chan])
+
+                    if hdr['CDELT3'] < -1:
+                        raise InputError(f"Your velocity axis is declining this won't work. exiting")
+                    fits.writeto(f"{Configuration['MAIN_DIRECTORY']}{basename}_FAT_cubelets/{basename}_{outlist[input_columns.index('id')]}/{basename}_{outlist[input_columns.index('id')]}_FAT.fits",data,hdr,overwrite=True)
                 create_directory(f"{Configuration['MAIN_DIRECTORY']}{basename}_FAT_cubelets/{basename}_{outlist[input_columns.index('id')]}/Sofia_Output",f"{Configuration['MAIN_DIRECTORY']}")
 
                 Configuration['FITTING_DIR']=f"{Configuration['MAIN_DIRECTORY']}{basename}_FAT_cubelets/{basename}_{outlist[input_columns.index('id')]}/"

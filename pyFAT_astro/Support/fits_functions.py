@@ -84,9 +84,12 @@ check_mask.__doc__ =f'''
 
 
 # Create a cube suitable for FAT
-def create_fat_cube(Configuration, Fits_Files, debug = False):
+def create_fat_cube(Configuration, Fits_Files,sofia_catalogue=False,id='No default',name='No default', debug = False):
     #First get the cubes
-    Cube = fits.open(Configuration['FITTING_DIR']+Fits_Files['ORIGINAL_CUBE'],uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
+    if sofia_catalogue:
+        Cube = fits.open(f"{Configuration['SOFIA_DIR']}{name}_{id}_cube.fits",uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
+    else:
+        Cube = fits.open(Configuration['FITTING_DIR']+Fits_Files['ORIGINAL_CUBE'],uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
     data = Cube[0].data
     hdr = Cube[0].header
     if hdr['NAXIS'] == 4:
@@ -100,7 +103,10 @@ def create_fat_cube(Configuration, Fits_Files, debug = False):
     log_statement = f'''CREATE_FAT_CUBE: We are writing a FAT modfied cube to be used for the fitting. This cube is called {Configuration['FITTING_DIR']+Fits_Files['FITTING_CUBE']}
 '''
     print_log(log_statement,Configuration["OUTPUTLOG"])
-    fits.writeto(Configuration['FITTING_DIR']+Fits_Files['FITTING_CUBE'],data,hdr)
+    if sofia_catalogue:
+        fits.writeto(f"{Configuration['MAIN_DIRECTORY']}{name}_FAT_cubelets/{name}_{id}/{name}_{id}_FAT.fits",data,hdr)
+    else:
+        fits.writeto(Configuration['FITTING_DIR']+Fits_Files['FITTING_CUBE'],data,hdr)
     # Release the arrays
 
     Cube.close()
@@ -174,6 +180,9 @@ def cut_cubes(Configuration, Fits_Files, galaxy_box, debug = False):
 ''', Configuration['OUTPUTLOG'])
 
         for file in files_to_cut:
+            if debug:
+                print_log(f'''CUT_CUBES: We are cutting the file {file}
+''', Configuration['OUTPUTLOG'],screen=True)
             cutout_cube(Configuration,file,new_cube,debug=debug)
 
     #We want to check if the cube has a decent number of pixels per beam.

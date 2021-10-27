@@ -33,7 +33,8 @@ import warnings
 import re
 import subprocess
 from datetime import datetime
-
+class BadHeaderError(Exception):
+    pass
 # A class of ordered dictionary where keys can be inserted in at specified locations or at the end.
 class Proper_Dictionary(OrderedDict):
     def __setitem__(self, key, value):
@@ -769,14 +770,15 @@ def copy_homemade_sofia(Configuration,no_cat=False,debug=False):
             #make sure the header is decent
             two_dim = True
             mask_file=False
+
             if file == '_mask.fits':
                 two_dim = False
                 mask_file = True
+
             initial = fits.open(f"{Configuration['FITTING_DIR']}Sofia_Output/{Configuration['BASE_NAME']}{file}")
             hdr_in = initial[0].header
             data=initial[0].data
             initial.close()
-            two_dim = True
             hdr = clean_header(Configuration,hdr_in,two_dim=two_dim,mask_file=mask_file,debug=debug)
             update = False
             for key in hdr:
@@ -795,6 +797,7 @@ def copy_homemade_sofia(Configuration,no_cat=False,debug=False):
                     update = True
                     hdr['BUNIT'] = 'km/s'
                     data = data/1000.
+        
             if update:
                  fits.writeto(f"{Configuration['FITTING_DIR']}Sofia_Output/{Configuration['BASE_NAME']}{file}",data,hdr,overwrite=True)
 
@@ -2573,7 +2576,7 @@ def run_tirific(Configuration, current_run, stage = 'initial',fit_type = 'Undefi
             print(f"\r Waiting ", end = "", flush = True)
             time.sleep(0.5)
             wait_counter += 1
-    
+
     if currentloop != max_loop:
         return 1,current_run
     else:

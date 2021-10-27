@@ -18,8 +18,11 @@ PyFAT uses four individual keywords  that are not under any section and can be c
 These globals and their defaults are:
 
   print_examples: False
+
   installation_check: False
+
   cube_name: None
+
   configuration_file: None
 
 A configuration file with all default values and an example catalogue file can be printed by
