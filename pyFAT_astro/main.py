@@ -4,6 +4,7 @@
 import sys
 import os
 import copy
+import psutil as psu
 import numpy as np
 from omegaconf import OmegaConf,MissingMandatoryValue
 import traceback
@@ -309,8 +310,9 @@ def main(argv):
 
 
             if Configuration['TIMING']:
-                with open(f"{Configuration['LOG_DIRECTORY']}Usage_Statistics.txt",'w') as file:
-                    file.write("Creating a CPU RAM Log for analysis. \n")
+                Configuration['FAT_PSUPROCESS'] = psu.Process(Configuration['FAT_PID'])
+                sf.update_statistic(Configuration, message= "Creating a CPU RAM Log for analysis.")
+
             # Check if the input cube exists
 
 
@@ -378,7 +380,7 @@ def main(argv):
                 #cf.finish_galaxy(Configuration,maximum_directory_length, Fits_Files =Fits_Files,current_run =current_run,debug=Configuration['DEBUG'])
                 #continue
                 #if all the fitting has gone properly we create nice errors
-                
+
                 if Configuration['OUTPUT_QUANTITY'] != 5:
                     if 'tirshaker' in Configuration['FITTING_STAGES']:
                         runf.tirshaker_call(Configuration,debug=Configuration['DEBUG'])

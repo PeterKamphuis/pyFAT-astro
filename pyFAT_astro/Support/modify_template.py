@@ -583,6 +583,12 @@ def fix_outer_rotation(Configuration,profile, debug = False):
 ''',Configuration['OUTPUTLOG'],debug = True)
     profile = np.array(profile,dtype=float)
     inner_slope = Configuration['RC_UNRELIABLE']
+    # if the outer parts are less then 5 channels there is something wrong And we just take a flat curve from max
+    if np.mean(profile[inner_slope:]) < 5.*Configuration['CHANNEL_WIDTH']:
+        inner_slope = int(np.where(np.max(profile) == profile)[0])
+        if debug:
+            print_log(f'''FIX_OUTER_ROTATION: we adjusted the unreliable part.
+''',Configuration['OUTPUTLOG'],debug = True)
     if debug:
         print_log(f'''FIX_OUTER_ROTATION: this is the inner slope {inner_slope}
 ''',Configuration['OUTPUTLOG'])
@@ -1496,7 +1502,7 @@ def regularise_profile(Configuration,Tirific_Template, key,min_error= [0.],debug
         print_log(f'''REGULARISE_PROFILE: profile of {key} before regularistion
 {'':8s}{profile[0]}
 {'':8s}{profile[1]}
-{'':8s}The minmal error is
+{'':8s}The minimal error is
 {'':8s}{min_error}
 ''',Configuration['OUTPUTLOG'],debug = True)
     # get a smoothed profiles
@@ -3028,6 +3034,45 @@ update_disk_angles.__doc__ =f'''
 
  NOTE:
 '''
+
+def write_center(Configuration,Tirific_Template,center,debug=False):
+    extension = ['','_2']
+    variables = ['XPOS','YPOS','VSYS']
+    for i,var in enumerate(variables):
+        values= [center[i]]*int(Tirific_Template['NUR'])
+        format= set_format(var)
+        for ext in extension:
+            Tirific_Template[f"{var}{ext}"] = f"{' '.join([f'{x:{format}}' for x in values])}"
+
+write_center.__doc__ =f'''
+ NAME:
+    write_center
+
+ PURPOSE:
+    Update the center in the template
+
+ CATEGORY:
+    modify_template
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    Tirific_Template = Standard FAT Tirific Template
+    center = [xpos,ypos,vsys]
+
+ OPTIONAL INPUTS:
+    debug = False
+
+ OUTPUTS:
+    Updated template
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
+
 
 def write_new_to_template(Configuration, filename,Tirific_Template, Variables = ['VROT',
                  'Z0', 'SBR', 'INCL','PA','XPOS','YPOS','VSYS','SDIS','VROT_2',  'Z0_2','SBR_2',

@@ -1,15 +1,21 @@
 # -*- coding: future_fstrings -*-
 # This module contains a set of functions and classes that are used to write text files to Disk
 
-from pyFAT_astro.Support.support_functions import print_log,convertRADEC,convertskyangle,set_limit_modifier,columndensity,set_limits,get_inner_fix,linenumber
-from pyFAT_astro.Support.modify_template import set_model_parameters, set_overall_parameters, set_fitting_parameters,get_warp_slope, update_disk_angles
+from pyFAT_astro.Support.support_functions import print_log,convertRADEC,convertskyangle,\
+                                set_limit_modifier,columndensity,set_limits,\
+                                get_inner_fix,linenumber
+from pyFAT_astro.Support.modify_template import set_model_parameters, set_overall_parameters,\
+                                set_fitting_parameters,get_warp_slope, update_disk_angles
 from pyFAT_astro.Support.fits_functions import extract_pv
 from pyFAT_astro.Support.read_functions import load_tirific,load_basicinfo, load_template
+from pyFAT_astro.Support.fat_errors import ProgramError
 import copy
 import numpy as np
 import warnings
-import datetime
+from datetime import datetime
+import traceback
 import os
+from datetime import datetime
 with warnings.catch_warnings():
     warnings.simplefilter("ignore")
     import matplotlib
@@ -1040,66 +1046,65 @@ plot_parameters.__doc__ =f'''
 def plot_usage_stats(Configuration,debug = False):
     with open(f"{Configuration['LOG_DIRECTORY']}Usage_Statistics.txt") as file:
         lines = file.readlines()
-    labels = []
-    label_times = []
-    times = []
-    CPU = []
-    mem = []
+
+    labels = {'FAT': {'label':[], 'Time':[]}, 'Tirific':{'label':[], 'Time':[]}}
+    loads = {'FAT':{'CPU':[],'MEM':[],'Time':[]},'Tirific':{'CPU':[],'MEM':[],'Time': []}}
     labelfont = {'family': 'Times New Roman',
              'weight': 'normal',
              'size': 4}
     current_stage = 'Not_Found'
+    current_module = 'Unknown'
     startdate = 0
     for line in lines:
         line = line.strip()
+        tmp = line.split(' ')
         if line[0] == '#':
-            tmp = line.split('=')
-            if len(tmp) == 2:
-                current_stage = tmp[1].strip()
-                labels.append(f'Initializing {current_stage}')
-                label_times.append('No Time')
-            else:
-                tmp = line.split(' ')
-                if tmp[1].lower() == 'finished':
-                    labels.append(f'Ended {current_stage}')
-                    label_times.append('No Time')
-                elif tmp[3].lower() == 'actual':
-                    labels.append(f'Started {current_stage}')
-                    label_times.append('No Time')
-                    times.append('No Time')
-                    CPU.append(CPU[-1])
-                    mem.append(mem[-1])
+            date = extract_date(f"{tmp[-2]} {tmp[-1]}")
         else:
-            tmp = line.split(' ')
-            tmp2 = tmp[0].split('-')
-            if len(tmp2) == 3:
-                try:
-                    date =  datetime.datetime.strptime(f"{tmp[0]} {tmp[1]}", '%Y-%m-%d %H:%M:%S.%f')
-                except ValueError:
-                    date =  datetime.datetime.strptime(f"{tmp[0]} {tmp[1]}", '%Y-%m-%d %H:%M:%S')
+            date = extract_date(f"{tmp[1]} {tmp[2]}")
+        if startdate == 0:
+            startdate = date
+        diff = date - startdate
+        time = diff.total_seconds()/60.
+        if line[0] == '#':
+            if tmp[1] == 'TIRIFIC:':
 
-                if startdate == 0:
-                    try:
-                        startdate  =  datetime.datetime.strptime(f"{tmp[0]} {tmp[1]}", '%Y-%m-%d %H:%M:%S.%f')
-                    except ValueError:
-                        startdate  =  datetime.datetime.strptime(f"{tmp[0]} {tmp[1]}", '%Y-%m-%d %H:%M:%S')
-                diff = date - startdate
-                if len(times) > 0 :
-                    if times[-1] == 'No Time':
-                        times[-1] = diff.total_seconds()/60.
-                times.append(diff.total_seconds()/60.)
-                if label_times[-1] == 'No Time':
-                    label_times[-1] = diff.total_seconds()/60.
-                CPU.append(tmp[4])
-                mem.append(tmp[8])
+                if tmp[2].lower() == 'initizializing':
+                    tmp2 = line.split('=')[1].split()
+                    current_stage = tmp2[0].strip()
+                    labels['Tirific']['label'].append(f'Initializing {current_stage}')
+                    labels['Tirific']['Time'].append(time)
+                elif tmp[2].lower() == 'finished':
+                    labels['Tirific']['label'].append(f'Ended {current_stage}')
+                    labels['Tirific']['Time'].append(time)
+                    current_stage = 'No Tirific'
+                elif tmp[2].lower() == 'started':
+                    labels['Tirific']['label'].append(f'Started {current_stage}')
+                    labels['Tirific']['Time'].append(time)
+            else:
+                labels['FAT']['label'].append(f'Starting {tmp[1]}')
+                labels['FAT']['Time'].append(time)
+        else:
+            if tmp[-1].lower() == 'tirific':
+                loads['Tirific']['Time'].append(time)
+                loads['Tirific']['CPU'].append(tmp[4])
+                loads['Tirific']['MEM'].append(tmp[8])
+            else:
+                loads['FAT']['Time'].append(time)
+                loads['FAT']['CPU'].append(tmp[4])
+                loads['FAT']['MEM'].append(tmp[8])
+
     # Below thanks to P. Serra
     # Make single-PID figures and total figure
     if len(mem) > 0.:
         fig, ax1 = plt.subplots(figsize = (8,4))
         fig.subplots_adjust(left = 0.1, right = 0.9, bottom = 0.15, top = 0.7)
-        times = np.array(times, dtype = float)
-        mem = np.array(mem, dtype = float)
-        CPU = np.array(CPU, dtype = float)
+        times = np.array(loads['Tirific']['Time'], dtype = float)
+        mem = np.array(loads['Tirific']['Time'], dtype = float)
+        CPU = np.array(loads['Tirific']['Time'], dtype = float)
+        FATtimes = np.array(loads['FAT']['MEM'], dtype = float)
+        FATmem = np.array(loads['FAT']['MEM'], dtype = float)
+        FATCPU = np.array(loads['FAT']['MEM'], dtype = float)
 
         ax1.plot(times,mem,'b-',lw=0.5)
         ax1.set_ylim(0,np.max(mem)+np.max(mem)/10.)
@@ -1112,7 +1117,7 @@ def plot_usage_stats(Configuration,debug = False):
         ax2miny,ax2maxy = ax2.get_ylim()
         ax2.tick_params(axis='y', labelcolor='r')
         last_label = -100
-        label_sep = label_times[-1]/40.
+        label_sep = labels['FAT']['Time'][-1]/40.
         color, linest = '0.5', '--'
         labelfont = {'family': 'Times New Roman',
                  'weight': 'normal',
@@ -1201,7 +1206,17 @@ plot_usage_stats.__doc__ =f'''
  NOTE:
 '''
 
-
+def extract_date(string):
+    tmp = string.split(' ')
+    tmp2 = tmp[0].split('-')
+    if len(tmp2) == 3:
+        try:
+            date =  datetime.strptime(f"{tmp[0]} {tmp[1]}", '%Y-%m-%d %H:%M:%S.%f')
+        except ValueError:
+            date =  datetime.strptime(f"{tmp[0]} {tmp[1]}", '%Y-%m-%d %H:%M:%S')
+    else:
+        raise ProgramError("There is no date in the provided string.")
+    return date
 
 def sofia(template,name):
     with open(name,'w') as file:
@@ -1278,6 +1293,7 @@ tirific.__doc__ =f'''
 
  NOTE:
  '''
+
 
 def write_config(file,Configuration,debug = False):
     if debug:

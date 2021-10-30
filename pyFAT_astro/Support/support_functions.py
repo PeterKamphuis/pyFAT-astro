@@ -797,7 +797,7 @@ def copy_homemade_sofia(Configuration,no_cat=False,debug=False):
                     update = True
                     hdr['BUNIT'] = 'km/s'
                     data = data/1000.
-        
+
             if update:
                  fits.writeto(f"{Configuration['FITTING_DIR']}Sofia_Output/{Configuration['BASE_NAME']}{file}",data,hdr,overwrite=True)
 
@@ -1340,7 +1340,7 @@ get_from_template.__doc__ =f'''
     the latter can thus can include zeros
 '''
 
-def get_inclination_pa(Configuration, Image, center, cutoff = 0., debug = False):
+def get_inclination_pa(Configuration, Image, center, cutoff = 0., debug = False,figure_name = 'test'):
     map = copy.deepcopy(Image[0].data)
     for i in [0,1]:
         if debug:
@@ -1356,14 +1356,17 @@ def get_inclination_pa(Configuration, Image, center, cutoff = 0., debug = False)
         if np.any(np.isnan(sin_parameters)):
             return [float('NaN'),float('NaN')],  [float('NaN'),float('NaN')],float('NaN')
 
-        '''
-        import matplotlib
-        matplotlib.use('TkAgg')
-        fig = plt.figure()
-        plt.plot(angles,ratios)
-        plt.plot(angles,sin_ratios)
-        plt.show()
-        '''
+
+
+        #matplotlib.use('MacOSX')
+        if debug:
+            name= f'{figure_name}_{i}.pdf'
+            fig = plt.figure()
+            plt.plot(angles,ratios)
+            plt.plot(angles,sin_ratios,'k--')
+            plt.savefig(name, bbox_inches='tight')
+            plt.close()
+
         ratios=sin_ratios
         if debug:
             if i == 0:
@@ -1798,12 +1801,12 @@ def get_system_string(string):
     return string
 
 def get_usage_statistics(Configuration,process, debug = False):
-    try:
-        memory_in_mb = (process.memory_info()[0])/2**20. #psutilreturns bytes
-        cpu_percent = process.cpu_percent(interval=1)
-    except:
-        cpu_percent= 0.
-        memory_in_mb=0.
+    #try:
+    memory_in_mb = (process.memory_info()[0])/2**20. #psutilreturns bytes
+    cpu_percent = process.cpu_percent(interval=1)
+    #except:
+    #    cpu_percent= 0.
+    #    memory_in_mb=0.
     return cpu_percent,memory_in_mb
 
 def get_usage_statistics_old(Configuration,process_id, debug = False):
@@ -1942,12 +1945,18 @@ def get_vel_pa(Configuration,velocity_field,center= [0.,0.], debug =False):
                 pa = abs(pa)
             else:
                 pa = np.radians(180.) - pa
-
+    if debug:
+        print_log(f'''GET_VEL_PA: This is the PA
+{'':8s} pa = {pa} pa_from_max = {pa_from_max} pa_from_min = {pa_from_min}
+''',Configuration['OUTPUTLOG'])
     if np.degrees(abs(pa-pa_from_max)) > 170. or   np.degrees(abs(pa-pa_from_min)) > 170:
         pa = pa
     else:
         pa = np.nanmean([pa,pa_from_max,pa_from_min])
     center.reverse()
+    if debug:
+        print_log(f'''GET_VEL_PA: This is the PA we extract from the velpa {np.degrees(pa)}
+''',Configuration['OUTPUTLOG'])
     return np.degrees([pa, np.nanstd([pa,pa_from_max,pa_from_min])])
 
 get_vel_pa.__doc__ =f'''
@@ -2526,9 +2535,9 @@ def run_tirific(Configuration, current_run, stage = 'initial',fit_type = 'Undefi
     if Configuration['TIMING']:
         time.sleep(0.1)
         with open(f"{Configuration['LOG_DIRECTORY']}Usage_Statistics.txt",'a') as file:
-            file.write(f"# Started Tirific at stage = {fit_type}\n")
+            file.write(f"# TIRIFIC: Initializing Tirific at stage = {fit_type} {datetime.now()} \n")
             CPU,mem = get_usage_statistics(Configuration,current_process)
-            file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Mb \n")
+            file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Mb for TiRiFiC \n")
     else:
         time.sleep(0.1)
     print(f"\r{'':8s}RUN_TIRIFIC: 0 % Completed", end =" ",flush = True)
@@ -2541,10 +2550,10 @@ def run_tirific(Configuration, current_run, stage = 'initial',fit_type = 'Undefi
                 with open(f"{Configuration['LOG_DIRECTORY']}Usage_Statistics.txt",'a') as file:
                     if tmp[0] == 'L' and not triggered:
                         if tmp[1] == '1':
-                            file.write("# Started the actual fitting \n")
+                            file.write(f"# TIRIFIC: Started the actual fitting {datetime.now()} \n")
                             triggered = True
                     CPU,mem = get_usage_statistics(Configuration,current_process)
-                    file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Mb \n")
+                    file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Mb for TiRiFiC \n")
         if tmp[0] == 'L':
             if int(tmp[1]) != currentloop:
                 print(f"\r{'':8s}RUN_TIRIFIC: {float(tmp[1])/float(max_loop)*100.:.1f} % Completed", end =" ",flush = True)
@@ -2563,9 +2572,9 @@ def run_tirific(Configuration, current_run, stage = 'initial',fit_type = 'Undefi
     print(f'\n')
     if Configuration['TIMING']:
         with open(f"{Configuration['LOG_DIRECTORY']}Usage_Statistics.txt",'a') as file:
-            file.write("# Finished this run \n")
+            file.write(f"# TIRIFIC: Finished this run {datetime.now()} \n")
             CPU,mem = get_usage_statistics(Configuration,current_process)
-            file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Mb\n")
+            file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Mb for TiRiFiC \n")
     print(f"{'':8s}RUN_TIRIFIC: Finished the current tirific run.")
 
     #The break off goes faster sometimes than the writing of the file so let's make sure it is present
@@ -2698,6 +2707,8 @@ def setup_configuration(cfg):
                'CURRENT_STAGE': 'initial', #Current stage of the fitting process, set at switiching stages
                'USED_FITTING': None,
                'TIRIFIC_PID': 'Not Initialized', #Process ID of tirific that is running
+               'FAT_PID': os.getpid(), #Process ID of FAT that is running
+               'FAT_PSUPROCESS': 'cant copy',
                'FINAL_COMMENT': "This fitting stopped with an unregistered exit.",
 
                'MAX_SIZE_IN_BEAMS': 30, # The galaxy is not allowed to extend beyond this number of beams in radius, set in check_source
@@ -3263,3 +3274,20 @@ sofia_output_exists.__doc__ =f'''
 
  NOTE:
 '''
+
+def update_statistic(Configuration,process= None,message = None ,debug=False):
+    if Configuration['TIMING']:
+        function,variable,empty = traceback.format_stack()[-2].split('\n')
+        function = function.split()[-1].strip()
+        if not process:
+            process = Configuration['FAT_PSUPROCESS']
+            program = 'pyFAT'
+        else:
+            program = 'TiRiFiC'
+
+        CPU,mem = get_usage_statistics(Configuration,process)
+        with open(f"{Configuration['LOG_DIRECTORY']}Usage_Statistics.txt",'a') as file:
+            if message:
+                file.write(f"# {function.upper()}: {message} at {datetime.now()} \n")
+            # We cannot copy the process so initialize in the configuration
+            file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Mb for {program} \n")

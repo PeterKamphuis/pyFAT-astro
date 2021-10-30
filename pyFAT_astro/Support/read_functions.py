@@ -3,9 +3,10 @@
 
 from pyFAT_astro.Support.support_functions import Proper_Dictionary,print_log,convertRADEC,set_limits, remove_inhomogeneities, \
                                 obtain_border_pix, get_inclination_pa,get_vel_pa,columndensity,get_profile, get_kinematical_center,\
-                                create_directory,copy_homemade_sofia,clean_header,get_new_center
+                                create_directory,copy_homemade_sofia,clean_header,get_new_center,update_statistic
 from pyFAT_astro.Support.fits_functions import check_mask,clean_header,create_fat_cube
 from pyFAT_astro.Support.fat_errors import BadCatalogueError, NoConfigFile
+
 from astropy.io import fits
 from astropy.wcs import WCS
 from scipy import ndimage
@@ -205,6 +206,7 @@ def extract_vrot(Configuration,map ,angle,center, debug= False):
 
     if len(profile) < 1 and len(avg_profile) > 0.:
         profile = [np.max(avg_profile)]
+    profile[profile > 300.] = 300.
     return profile
 extract_vrot.__doc__ =f'''
  NAME:
@@ -325,9 +327,11 @@ get_totflux.__doc__ =f'''
 # Function to get the PA and inclination from the moment 0 for initial estimates
 def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, debug = False):
     #open the moment 0
-    if debug:
-        print_log(f'''GUESS_ORIENTATION: starting extraction of initial parameters.
-''',Configuration['OUTPUTLOG'], debug = True)
+
+    print_log(f'''GUESS_ORIENTATION: starting extraction of initial parameters.
+''',Configuration['OUTPUTLOG'], debug = debug, screen =True)
+    update_statistic(Configuration, message= "Starting the guess orientation run", debug=debug)
+
     Image = fits.open(f"{Configuration['FITTING_DIR']}Sofia_Output/{Fits_Files['MOMENT0']}",\
             uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
     map = Image[0].data
@@ -349,8 +353,10 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, debug
     Image.close()
     median_noise_in_map = np.nanmedian(noise_map[noise_map > 0.])
     minimum_noise_in_map = np.nanmin(noise_map[noise_map > 0.])
-
+    noise_map [0. > map ] =0.
     map[0.5*minimum_noise_in_map > noise_map] = 0.
+    #Also remove negative values
+    #map[0. > map ] =0
     mom0[0].data= map
     scale_factor = set_limits(SNR/3.*minimum_noise_in_map/median_noise_in_map, 0.05, 1.)
     if debug:
@@ -363,7 +369,7 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, debug
     center_counter = 0.
     original_center = copy.deepcopy(center)
     while not center_stable:
-        inclination_av, pa_av, maj_extent_av = get_inclination_pa(Configuration, mom0, center, cutoff = scale_factor* median_noise_in_map, debug = debug)
+        inclination_av, pa_av, maj_extent_av = get_inclination_pa(Configuration, mom0, center, cutoff = scale_factor* median_noise_in_map, figure_name=f'{Configuration["LOG_DIRECTORY"]}loc_{center[0]:.2f}_{center[1]:.2f}',debug = debug)
 
         inclination_av = [inclination_av]
         int_weight = [2.]
@@ -372,7 +378,7 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, debug
         for mod in beam_check:
             for i in [[-1,-1],[-1,1],[1,-1],[1,1]]:
                 center_tmp = [center[0]+mod*i[0],center[1]+mod*i[1]]
-                inclination_tmp, pa_tmp, maj_extent_tmp= get_inclination_pa(Configuration, mom0, center_tmp, cutoff = scale_factor* median_noise_in_map, debug = debug)
+                inclination_tmp, pa_tmp, maj_extent_tmp= get_inclination_pa(Configuration, mom0, center_tmp, cutoff = scale_factor* median_noise_in_map, figure_name=f'{Configuration["LOG_DIRECTORY"]}loc_{center_tmp[0]:.2f}_{center_tmp[1]:.2f}',debug = debug)
                 inclination_av.append(inclination_tmp)
                 pa_av.append(pa_tmp)
                 int_weight.append(mod/beam_check[0]*0.25)
@@ -382,6 +388,12 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, debug
         inclination = np.array([np.nansum(np.array([x[0] for x in inclination_av],dtype=float)*weight)/np.nansum(weight),\
                                 np.nansum(np.array([x[1] for x in inclination_av],dtype=float)*weight)/np.nansum(weight)],dtype=float)
         weight = np.array([1./x[1] for x in pa_av],dtype= float)
+        if debug:
+            print_log(f'''GUESS_ORIENTATION: We find these pa_av
+{'':8s} pa = {' '.join([f'{float(x[0]):.2f}' for x in pa_av])}
+{'':8s} int_weights = {' '.join([f'{float(x):.2f}' for x in int_weight])}
+{'':8s} weights = {' '.join([f'{float(x):.2f}' for x in weight])}
+''',Configuration['OUTPUTLOG'])
         pa = np.array([np.nansum(np.array([x[0] for x in pa_av],dtype=float)*weight)/np.nansum(weight),\
                                 np.nansum(np.array([x[1] for x in pa_av],dtype=float)*weight)/np.nansum(weight)],dtype=float)
 
@@ -523,11 +535,21 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, debug
         pa[0] = pa[0]+180
         print_log(f'''GUESS_ORIENTATION: We have modified the pa by 180 deg as we found the maximum velocity west of the center.
 ''' , Configuration['OUTPUTLOG'])
-    if abs(pa[0]-vel_pa[0]) > 25. and ~np.isnan(vel_pa[0]):
-        pa=vel_pa
+
+    if debug:
+        print_log(f'''GUESS_ORIENTATION: this is the pa {pa} and the vel_pa {vel_pa}
+''' , Configuration['OUTPUTLOG'])
+    if abs(pa[0]-vel_pa[0]) > 25. and ~np.isnan(vel_pa[0])  :
+        # if the vel pa has a ridiculous error we use the normal pa
+        if vel_pa[1] < 60.:
+            pa=vel_pa
     else:
         if ~np.isnan(vel_pa[0]):
             pa = [np.nansum([vel_pa[0]/vel_pa[1],pa[0]/pa[1]])/np.nansum([1./vel_pa[1],1./pa[1]]),2.*1./np.sqrt(np.nansum([1./vel_pa[1],1./pa[1]]))]
+
+    if debug:
+        print_log(f'''GUESS_ORIENTATION: this is the final pa {pa}
+''' , Configuration['OUTPUTLOG'])
     #As python is utterly moronic the center goes in back wards to the map
     buffer = int(round(np.mean(Configuration['BEAM_IN_PIXELS'][:2])/2.))
     if debug:
