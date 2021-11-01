@@ -35,26 +35,26 @@ Installation
 
 Download the source code from the Github or simply install with pip as:
 
-  	pip install pyFAT-astro
+|  	pip install pyFAT-astro
 
 This should also install all required python dependencies.
 We recommend the use of python virtual environments. If so desired a pyFAT installation would look like:
 
-  	python3 -m venv FAT_venv
-  	source FAT_venv/bin/activate.csh
-  	pip install pyFAT-astro
+|  	python3 -m venv FAT_venv
+|  	source FAT_venv/bin/activate.csh
+|  	pip install pyFAT-astro
 
 (In case of bash the correct middle line is 	source FAT_venv/bin/activate)
 You might have to restart the env:
 
-  	deactivate
-  	source FAT_venv/bin/activate.csh
+|  	deactivate
+|  	source FAT_venv/bin/activate.csh
 
 Once you have installed FAT you can check that it has been installed properly by running FAT as.
 
   	FAT>  pyFAT installation_check=True
 
-This should take typically 10 min and should finish with the message:
+This should take typically a few minutes and should finish with the message:
 
 	!!!!--------------------------------------------!!!!!
 	!!!! As far as we can tell FAT is installed     !!!!!
@@ -70,7 +70,7 @@ The Overview.png will contain a comparison with the fit performed by you. These 
 
 The plots should look like this:
 
-![Overview plot after running installation check.](pyFAT_astro/Installation_Check/Overview.png)
+![Overview plot after running installation check.](https://github.com/PeterKamphuis/pyFAT-astro/pyFAT_astro/Installation_Check/Overview.png)
 
 Sometimes, due to updates in SoFiA2 or TiRiFiC, the check might show differences beyond the tolerance limits. If these are small and you have checked the individual installations of SoFiA2, TiRiFiC and the Installation Check files are older than the latest SoFiA2 or TiRiFiC update, then the installation is probably correct and you can continue. Please do post an issue about the outdated installation check.
 
