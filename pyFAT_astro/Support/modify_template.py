@@ -2571,8 +2571,8 @@ def set_overall_parameters(Configuration, Fits_Files,Tirific_Template,stage = 'i
                 #preferably we'd use the akima spline but there is an issue with that where the final ring does not get modified
                 #Tirific_Template['INDINTY'] = 2
             Tirific_Template['NUR'] = f"{Configuration['NO_RINGS']}"
-            current_cwd = os.getcwd()
-            short_log = Configuration['LOG_DIRECTORY'].replace(current_cwd,'.')
+            #current_cwd = os.getcwd()
+            short_log = Configuration['LOG_DIRECTORY'].replace(Configuration['FITTING_DIR'],'')
             Tirific_Template['RESTARTNAME'] = f"{short_log}restart_{fit_type}.txt"
             #this could be fancier
             '''

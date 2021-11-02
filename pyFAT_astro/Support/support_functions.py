@@ -2515,12 +2515,12 @@ def run_tirific(Configuration, current_run, stage = 'initial',fit_type = 'Undefi
         print_log(f'''RUN_TIRIFIC: We are using an initialized tirific in {Configuration['FITTING_DIR']}
 ''',Configuration['OUTPUTLOG'], screen = True)
         with open(f"{Configuration['LOG_DIRECTORY']}restart_{fit_type}.txt",'a') as file:
-            file.write("Restarting from previous run")
+            file.write("Restarting from previous run \n")
     else:
         print_log(f'''RUN_TIRIFIC: We are starting a new TiRiFiC in {Configuration['FITTING_DIR']}
 ''',Configuration['OUTPUTLOG'], screen = True)
         with open(f"{Configuration['LOG_DIRECTORY']}restart_{fit_type}.txt",'w') as file:
-            file.write("Initialized a new run")
+            file.write("Initialized a new run \n")
         current_run = subprocess.Popen([Configuration['TIRIFIC'],f"DEFFILE={deffile}","ACTION= 1"],\
                                        stdout = subprocess.PIPE, stderr = subprocess.PIPE,\
                                        cwd=work_dir,universal_newlines = True)
