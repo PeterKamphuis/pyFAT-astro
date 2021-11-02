@@ -1359,13 +1359,13 @@ def get_inclination_pa(Configuration, Image, center, cutoff = 0., debug = False,
 
 
         #matplotlib.use('MacOSX')
-        if debug:
-            name= f'{figure_name}_{i}.pdf'
-            fig = plt.figure()
-            plt.plot(angles,ratios)
-            plt.plot(angles,sin_ratios,'k--')
-            plt.savefig(name, bbox_inches='tight')
-            plt.close()
+        #if debug:
+        #    name= f'{figure_name}_{i}.pdf'
+        #    fig = plt.figure()
+        #    plt.plot(angles,ratios)
+        #    plt.plot(angles,sin_ratios,'k--')
+        #    plt.savefig(name, bbox_inches='tight')
+        #    plt.close()
 
         ratios=sin_ratios
         if debug:
