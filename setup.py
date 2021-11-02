@@ -14,7 +14,7 @@ requirements = [
     'omegaconf',
     'matplotlib',
     'future-fstrings',
-    'psutil'
+    'psutil',
     'importlib_resources>=3.3.0',
 ]
 

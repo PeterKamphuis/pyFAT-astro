@@ -1058,7 +1058,6 @@ def plot_usage_stats(Configuration,debug = False):
     for line in lines:
         line = line.strip()
         tmp = line.split(' ')
-        print(tmp)
         if line[0] == '#':
             date = extract_date(f"{tmp[-2]} {tmp[-1]}")
         else:
@@ -1228,10 +1227,8 @@ plot_usage_stats.__doc__ =f'''
 '''
 
 def extract_date(string):
-    print(string)
     tmp = string.split(' ')
     tmp2 = tmp[0].split('-')
-    print(len(tmp2))
     if len(tmp2) == 3:
         try:
             date =  datetime.strptime(f"{tmp[0]} {tmp[1]}", '%Y-%m-%d %H:%M:%S.%f')
