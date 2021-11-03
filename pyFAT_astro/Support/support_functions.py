@@ -2509,17 +2509,20 @@ def run_tirific(Configuration, current_run, stage = 'initial',fit_type = 'Undefi
     # Then if already running change restart file
     if fit_type == 'Error_Shaker':
         work_dir = os.getcwd()
+        restart_file = f"restart_Error_Shaker.txt"
     else:
+        restart_file = f"{Configuration['LOG_DIRECTORY']}restart_{fit_type}.txt"
         work_dir = Configuration['FITTING_DIR']
     if Configuration['TIRIFIC_RUNNING']:
         print_log(f'''RUN_TIRIFIC: We are using an initialized tirific in {Configuration['FITTING_DIR']}
 ''',Configuration['OUTPUTLOG'], screen = True)
-        with open(f"{Configuration['LOG_DIRECTORY']}restart_{fit_type}.txt",'a') as file:
+
+        with open(restart_file,'a') as file:
             file.write("Restarting from previous run \n")
     else:
         print_log(f'''RUN_TIRIFIC: We are starting a new TiRiFiC in {Configuration['FITTING_DIR']}
 ''',Configuration['OUTPUTLOG'], screen = True)
-        with open(f"{Configuration['LOG_DIRECTORY']}restart_{fit_type}.txt",'w') as file:
+        with open(restart_file,'w') as file:
             file.write("Initialized a new run \n")
         current_run = subprocess.Popen([Configuration['TIRIFIC'],f"DEFFILE={deffile}","ACTION= 1"],\
                                        stdout = subprocess.PIPE, stderr = subprocess.PIPE,\

@@ -585,7 +585,7 @@ def fix_outer_rotation(Configuration,profile, debug = False):
     inner_slope = Configuration['RC_UNRELIABLE']
     # if the outer parts are less then 5 channels there is something wrong And we just take a flat curve from max
     if np.mean(profile[inner_slope:]) < 5.*Configuration['CHANNEL_WIDTH']:
-        inner_slope = int(np.where(np.max(profile) == profile)[0])
+        inner_slope = int(np.where(np.max(profile) == profile)[0][0])
         if debug:
             print_log(f'''FIX_OUTER_ROTATION: we adjusted the unreliable part.
 ''',Configuration['OUTPUTLOG'],debug = True)

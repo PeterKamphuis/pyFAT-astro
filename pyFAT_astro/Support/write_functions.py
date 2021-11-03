@@ -1097,20 +1097,21 @@ def plot_usage_stats(Configuration,debug = False):
     # Below thanks to P. Serra
     # Make single-PID figures and total figure
     #print(loads['Tirific']['Time'],loads['FAT']['Time'])
-    combined_time =  np.sort(np.array(loads['Tirific']['Time']+loads['FAT']['Time'],dtype=float))
-
-    combined_loads ={'Tirific':{'CPU':np.interp(combined_time,np.array(loads['Tirific']['Time'],dtype=float),np.array(loads['Tirific']['CPU'],dtype=float)),\
-                                'MEM':np.interp(combined_time,np.array(loads['Tirific']['Time'],dtype=float),np.array(loads['Tirific']['MEM'],dtype=float))},\
-                    'FAT':{'CPU':np.interp(combined_time,np.array(loads['FAT']['Time'],dtype=float),np.array(loads['FAT']['CPU'],dtype=float)),\
-                                                'MEM':np.interp(combined_time,np.array(loads['FAT']['Time'],dtype=float),np.array(loads['FAT']['MEM'],dtype=float))}
-
-    }
-    comb_list= labels['Tirific']['Time']+labels['FAT']['Time']
-    comb_label = labels['Tirific']['label']+labels['FAT']['label']
-
-    labels_times=np.array([x for x, _ in sorted(zip(comb_list, comb_label))],dtype=float)
-    labels_comb = [x for _, x in sorted(zip(comb_list, comb_label))]
     if len(loads['Tirific']['Time']) > 0.:
+        combined_time =  np.sort(np.array(loads['Tirific']['Time']+loads['FAT']['Time'],dtype=float))
+
+        combined_loads ={'Tirific':{'CPU':np.interp(combined_time,np.array(loads['Tirific']['Time'],dtype=float),np.array(loads['Tirific']['CPU'],dtype=float)),\
+                                    'MEM':np.interp(combined_time,np.array(loads['Tirific']['Time'],dtype=float),np.array(loads['Tirific']['MEM'],dtype=float))},\
+                        'FAT':{'CPU':np.interp(combined_time,np.array(loads['FAT']['Time'],dtype=float),np.array(loads['FAT']['CPU'],dtype=float)),\
+                                                    'MEM':np.interp(combined_time,np.array(loads['FAT']['Time'],dtype=float),np.array(loads['FAT']['MEM'],dtype=float))}
+
+        }
+        comb_list= labels['Tirific']['Time']+labels['FAT']['Time']
+        comb_label = labels['Tirific']['label']+labels['FAT']['label']
+
+        labels_times=np.array([x for x, _ in sorted(zip(comb_list, comb_label))],dtype=float)
+        labels_comb = [x for _, x in sorted(zip(comb_list, comb_label))]
+
         fig, ax1 = plt.subplots(figsize = (8,4))
         fig.subplots_adjust(left = 0.1, right = 0.9, bottom = 0.15, top = 0.7)
 
@@ -1153,9 +1154,9 @@ def plot_usage_stats(Configuration,debug = False):
 
             if (prev_label == 'Initializing tmp_incl_check' or prev_label == 'Ended tmp_incl_check'):
                 if (label != 'Initializing tmp_incl_check' and label != 'Ended tmp_incl_check') or \
-                        time == label_times[-1]    :
+                        time == labels_times[-1]    :
 
-                    if time != label_times[-1]:
+                    if time != labels_times[-1]:
                         ax2.axvline(x=prev_time, linestyle=linest, color=color, linewidth=0.05)
                         last_label = max(prev_time,last_label+label_sep)
                         ax2.text(last_label,ax2maxy+offset,prev_label, va='bottom',ha='left',rotation= 60, color='black',
@@ -1170,7 +1171,7 @@ def plot_usage_stats(Configuration,debug = False):
                     prev_time = time
             elif (prev_label == 'Initializing Error_Shaker' or prev_label == 'Ended Error_Shaker' or prev_label == 'Started Error_Shaker'):
                 if (label != 'Initializing Error_Shaker' and label != 'Ended Error_Shaker' and  label != 'Started Error_Shaker') or \
-                        time == label_times[-1]:
+                        time == labels_times[-1]:
 
                     #ax2.axvline(x=prev_time, linestyle=linest, color=color, linewidth=0.05)
                     #last_label = max(prev_time,last_label+label_sep)

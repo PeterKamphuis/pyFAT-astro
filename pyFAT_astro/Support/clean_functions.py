@@ -322,11 +322,15 @@ def cleanup_final(Configuration,Fits_Files, debug =False):
     if debug:
          print_log(f'''Starting the final cleanup of the directory.
 ''',Configuration['OUTPUTLOG'],debug = True)
-    clean_files = [Fits_Files['OPTIMIZED_CUBE'],f"{Configuration['USED_FITTING']}_In.def",\
-                    "clean_map_0.fits","dep_map_0.fits","minimum_map_0.fits","rot_map_0.fits",\
-                    "clean_map_1.fits","dep_map_1.fits","minimum_map_1.fits","rot_map_1.fits",
-                    'tmp_incl_check_In.def'\
-                    ]
+
+    if Configuration['USED_FITTING'] == 'fit_tirific_osc':
+        clean_files = [Fits_Files['OPTIMIZED_CUBE'],f"{Configuration['USED_FITTING']}_In.def",\
+                        "clean_map_0.fits","dep_map_0.fits","minimum_map_0.fits","rot_map_0.fits",\
+                        "clean_map_1.fits","dep_map_1.fits","minimum_map_1.fits","rot_map_1.fits",
+                        'tmp_incl_check_In.def'\
+                        ]
+    else:
+        clean_files = []
     for file in clean_files:
     # Not remove anything but cleanup all
         try:
@@ -384,7 +388,7 @@ def cleanup_final(Configuration,Fits_Files, debug =False):
                 os.system(f"rm -Rf {target}")
             source = get_system_string(f"{Configuration['FITTING_DIR']}{dirs}")
             os.system(f"mv {source} {target}")
-        
+
 
 cleanup_final.__doc__ =f'''
  NAME:
@@ -512,7 +516,8 @@ def finish_galaxy(Configuration,maximum_directory_length,current_run = 'Not init
     #make sure we are not leaving stuff
     finish_current_run(Configuration,current_run,debug=debug)
     # We need to check if the final output is legit
-    check_legitimacy(Configuration,debug=debug)
+    if Configuration['USED_FITTING']:
+        check_legitimacy(Configuration,debug=debug)
 
     # Need to write to results catalog
     if Configuration['OUTPUT_CATALOGUE']:

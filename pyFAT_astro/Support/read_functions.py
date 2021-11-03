@@ -194,11 +194,7 @@ def extract_vrot(Configuration,map ,angle,center, debug= False):
 {'':8s} because bmaj in pixels  ={Configuration['BEAM_IN_PIXELS'][0]}  and the resolution of the profile = {maj_resolution} pixels
 ''',Configuration['OUTPUTLOG'])
     profile = np.array(avg_profile[0::int(ring_size_req)],dtype=float)
-    if debug:
-        print_log(f'''EXTRACT_VROT: Constructing the final RC
-{'':8s} initial RC= {profile}
-{'':8s} at step width= {ring_size_req}
-''',Configuration['OUTPUTLOG'])
+
     try:
         profile[np.isnan(profile)] = profile[~np.isnan(profile)][-1]
     except IndexError:
@@ -207,6 +203,13 @@ def extract_vrot(Configuration,map ,angle,center, debug= False):
     if len(profile) < 1 and len(avg_profile) > 0.:
         profile = [np.max(avg_profile)]
     profile[profile > 300.] = 300.
+    profile[profile < Configuration['CHANNEL_WIDTH']*2.] = Configuration['CHANNEL_WIDTH']*2.
+    #profile[0] = 0.
+    if debug:
+        print_log(f'''EXTRACT_VROT: Constructing the final RC
+{'':8s} initial RC= {profile}
+{'':8s} at step width= {ring_size_req}
+''',Configuration['OUTPUTLOG'])
     return profile
 extract_vrot.__doc__ =f'''
  NAME:
@@ -593,6 +596,8 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, debug
         VROT_initial[0] = 0
 
     VROT_initial = np.abs(VROT_initial/np.sin(np.radians(inclination[0])))
+
+
     if debug:
         print_log(f'''GUESS_ORIENTATION: We found the following initial rotation curve:
 {'':8s}GUESS_ORIENTATION: RC = {VROT_initial}

@@ -3,6 +3,7 @@
 from astropy.io import fits
 from astropy.wcs import WCS
 from pyFAT_astro.Support.support_functions import linenumber,print_log,set_limits,clean_header,obtain_border_pix
+from pyFAT_astro.Support.fat_errors import FunctionCallError
 #from pyFAT_astro.Support.read_functions import obtain_border_pix
 from scipy import ndimage
 import numpy as np
@@ -183,7 +184,14 @@ def cut_cubes(Configuration, Fits_Files, galaxy_box, debug = False):
             if debug:
                 print_log(f'''CUT_CUBES: We are cutting the file {file}
 ''', Configuration['OUTPUTLOG'],screen=True)
-            cutout_cube(Configuration,file,new_cube,debug=debug)
+            if os.path.exists(f"{Configuration['FITTING_DIR']}{file}"):
+                cutout_cube(Configuration,file,new_cube,debug=debug)
+            else:
+                if file == 'Sofia_Output/'+Fits_Files['CHANNEL_MAP']:
+                    pass
+                else:
+                    raise FunctionCallError(f'We are trying to cut {file} but it does not exist')
+
 
     #We want to check if the cube has a decent number of pixels per beam.
     if not os.path.exists(f"{Configuration['FITTING_DIR']}/{Fits_Files['OPTIMIZED_CUBE']}"):
@@ -801,7 +809,6 @@ def regrid_cube(data,hdr,ratio):
     new_shape = [int(x/ratio) for x in shape]
     # Which means our real ratio is
     real_ratio = shape/new_shape
-
     #* np.ceil(shape / ratio).astype(int)
     new_shape[0] = shape[0]
     # Create the zero-padded array and assign it with the old density

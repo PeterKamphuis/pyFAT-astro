@@ -170,7 +170,7 @@ def check_inclination(Configuration,Tirific_Template,Fits_Files, fit_type = 'Und
         Check_Template['INIMODE'] = '0'
         Check_Template['INSET'] = f"{Fits_Files['FITTING_CUBE']}"
         current_cwd = os.getcwd()
-        short_log = Configuration['LOG_DIRECTORY'].replace(current_cwd,'.')
+        short_log = Configuration['LOG_DIRECTORY'].replace(Configuration['FITTING_DIR'],'')
         Check_Template['RESTARTNAME'] = f"{short_log}restart_{tmp_stage}.txt"
         #Check_Template['RESTARTNAME'] = get_system_string(f"{Configuration['LOG_DIRECTORY']}restart_{tmp_stage}.txt")
         #Check_Template['RESTARTNAME'] = f"./Logs/06-09-2021/restart_tmp_incl_check.txt"
@@ -1012,7 +1012,7 @@ def tirshaker_call(Configuration,debug = False):
     Tirific_Template = tirific_template(filename = final_FAT_file \
                     , debug = debug)
     #Change the name and run only 2 LOOPS
-    Tirific_Template['RESTARTNAME']= f"{Configuration['LOG_DIRECTORY']}restart_Error_Shaker.txt"
+    Tirific_Template['RESTARTNAME']= f"restart_Error_Shaker.txt"
     Tirific_Template['INSET'] = f"../{Tirific_Template['INSET']}"
     Tirific_Template['TIRDEF']= f"Error_Shaker_Out.def"
     Tirific_Template['LOOPS'] = '1'
