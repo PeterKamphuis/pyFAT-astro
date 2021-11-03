@@ -323,11 +323,11 @@ def cleanup_final(Configuration,Fits_Files, debug =False):
          print_log(f'''Starting the final cleanup of the directory.
 ''',Configuration['OUTPUTLOG'],debug = True)
 
-    if Configuration['USED_FITTING'] == 'fit_tirific_osc':
+    if Configuration['USED_FITTING'] == 'Fit_Tirific_OSC':
         clean_files = [Fits_Files['OPTIMIZED_CUBE'],f"{Configuration['USED_FITTING']}_In.def",\
                         "clean_map_0.fits","dep_map_0.fits","minimum_map_0.fits","rot_map_0.fits",\
                         "clean_map_1.fits","dep_map_1.fits","minimum_map_1.fits","rot_map_1.fits",
-                        'tmp_incl_check_In.def'\
+                        "tmp_incl_check_In.def"\
                         ]
     else:
         clean_files = []
