@@ -812,13 +812,15 @@ def one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run, de
     #Then we load the produced output into our template
     write_new_to_template(Configuration,f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def" , Tirific_Template, debug = debug)
     #Check that the centre does not deviate too much
-    print_log(f'''CHECK THAT WE CAHANGE !!!!!!
+    if debug:
+        print_log(f'''CHECK THAT WE CAHANGE !!!!!!
 {Tirific_Template['VROT']}
 {Tirific_Template['PA']}
 {Tirific_Template['XPOS']}
 ''',Configuration['OUTPUTLOG'])
     accepted_central = check_central_convergence(Configuration,Tirific_Template, fit_type = fit_type,debug=debug)
-    print_log(f'''CHECK THAT WE CAHANGE !!!!!!
+    if debug:
+        print_log(f'''CHECK THAT WE CAHANGE !!!!!!
 {Tirific_Template['VROT']}
 {Tirific_Template['PA']}
 {Tirific_Template['XPOS']}
@@ -833,8 +835,6 @@ def one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run, de
         if Configuration['ITERATIONS'] > Configuration['MAX_ITERATIONS']:
                 print_log(f'''ONE_STEP_CONVERGENCE: We have ran the convergence more than {Configuration['MAX_ITERATIONS']} times aborting the fit.
     ''',Configuration['OUTPUTLOG'])
-                if debug:
-                    Configuration['ACCEPTED'] = True
                 return current_run
         if not accepted:
             print_log(f'''ONE_STEP_CONVERGENCE: Tirific ran the maximum amount of loops hence we do not accept and we smooth and retry.
