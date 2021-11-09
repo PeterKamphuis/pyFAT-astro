@@ -135,7 +135,6 @@ calc_rings.__doc__ =f'''
  NOTE:
 '''
 
-
 def check_sofia(Configuration,Fits_Files,debug=False):
     files =['_mask.fits','_mom0.fits','_mom1.fits','_chan.fits','_mom2.fits','_cat.txt']
     for file in files:
@@ -2627,6 +2626,69 @@ run_tirific.__doc__ =f'''
 '''
 
 
+def set_boundaries(Configuration,key,lower,upper,input=False,debug=False):
+    check=False
+    key = key.upper()
+    if np.sum(Configuration[f'{key}_INPUT_BOUNDARY']) != 0.:
+        check = True
+    if input:
+        boundary = f'{key}_INPUT_BOUNDARY'
+    else:
+        boundary = f'{key}_CURRENT_BOUNDARY'
+    try:
+        _ = (e for e in lower)
+    except TypeError:
+        lower= [lower]
+    try:
+        _ = (e for e in upper)
+    except TypeError:
+        upper= [upper]
+
+    if len(lower) == 1:
+        lower = lower*3
+    if len(upper) == 1:
+        upper = upper*3
+    for i in range(len(Configuration[boundary])):
+        if check:
+            if lower[i] < Configuration[f'{key}_INPUT_BOUNDARY'][i][0]:
+                lower[i] = Configuration[f'{key}_INPUT_BOUNDARY'][i][0]
+            if upper[i] < Configuration[f'{key}_INPUT_BOUNDARY'][i][1]:
+                upper[i] = Configuration[f'{key}_INPUT_BOUNDARY'][i][1]
+        Configuration[boundary][i][0] = float(lower[i])
+        Configuration[boundary][i][1] = float(upper[i])
+set_boundaries.__doc__ =f'''
+ NAME:
+    set_boundaries
+
+ PURPOSE:
+    set the bopundaries for a current parameter
+
+ CATEGORY:
+    support_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    key = name of the parameter
+    lower = the lower boundary
+    upper = upper boundary
+
+ OPTIONAL INPUTS:
+    debug = False
+    input = False
+    if set to true the user input parameters are updated. this should only be used
+    when reading the cube to set the input VSYS, XPOS and YPOS limits.
+
+ OUTPUTS:
+    updated boundary limits. When user input is set these can never be loewer/higher than those limits.
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
+
 #Function to read FAT configuration file into a dictionary
 def setup_configuration(cfg):
     if cfg.installation_check:
@@ -2734,7 +2796,6 @@ def setup_configuration(cfg):
                'BEAM': [0.,0.,0.], #  FWHM BMAJ, BMIN in arcsec and BPA, set in main
                'BEAM_AREA': 0., #BEAM_AREA in arcsec set in main
                'NAXES': [0.,0.,0.], #  Size of the cube in pixels x,y,z arranged like sane people not python, set in main
-               'NAXES_LIMITS': [[0.,0.],[0.,0.],[0.,0.]], #  Size of the cube in degree and km/s,  x,y,z arranged like sane people not python, set in main updated in cut_cubes
                'MAX_ERROR': {}, #The maximum allowed errors for the parameters, set in main derived from cube
                'MIN_ERROR': {}, #The minumum allowed errors for the parameters, initially set in check_source but can be modified through out INCL,PA,SDSIS,Z0 errors change when the parameters is fixed or release
                'CHANNEL_WIDTH': 0., #Width of the channel in the cube in km/s, set in main derived from cube
@@ -2744,9 +2805,21 @@ def setup_configuration(cfg):
     for key in other_keys:
         Configuration[key] = other_keys[key]
 
+    #If the input boundaries are unset we will set some reasonable limits
+
+
 # The parameters that need boundary limits are set here
-    boundary_limit_keys = ['PA','INCL', 'SDIS', 'Z0','VSYS','XPOS','YPOS']
+    boundary_limit_keys = ['PA','INCL', 'SDIS', 'Z0','VSYS','XPOS','YPOS','VROT']
     for key in boundary_limit_keys:
+        if np.sum(Configuration[f"{key}_INPUT_BOUNDARY"]) == 0.:
+            if key == 'INCL':
+                Configuration[f"{key}_INPUT_BOUNDARY"] = [[5.,90.] for x in range(3)]
+            elif key == 'PA':
+                Configuration[f"{key}_INPUT_BOUNDARY"] = [[-10.,370.] for x in range(3)]
+            else:
+                #These are set when we have read the cube as they depend on it or the distance (Z0)
+                pass
+
         Configuration[f"{key}_CURRENT_BOUNDARY"] = [[0.,0.],[0.,0.],[0.,0.]]
 
     #Make the input idiot safe

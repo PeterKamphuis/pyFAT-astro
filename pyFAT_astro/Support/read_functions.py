@@ -3,7 +3,7 @@
 
 from pyFAT_astro.Support.support_functions import Proper_Dictionary,print_log,convertRADEC,set_limits, remove_inhomogeneities, \
                                 obtain_border_pix, get_inclination_pa,get_vel_pa,columndensity,get_profile, get_kinematical_center,\
-                                create_directory,copy_homemade_sofia,clean_header,get_new_center,update_statistic
+                                create_directory,copy_homemade_sofia,clean_header,get_new_center,update_statistic,set_boundaries
 from pyFAT_astro.Support.fits_functions import check_mask,clean_header,create_fat_cube
 from pyFAT_astro.Support.fat_errors import BadCatalogueError, NoConfigFile
 
@@ -371,6 +371,11 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, debug
     checked_center = False
     center_counter = 0.
     original_center = copy.deepcopy(center)
+    print_log(f'''GUESS_ORIENTATION: Looking for the center, pa and inclination
+''',Configuration['OUTPUTLOG'], debug = debug, screen =True)
+
+    update_statistic(Configuration, message= "Starting the initial search for the pa, inclination and center.", debug=debug)
+
     while not center_stable:
         inclination_av, pa_av, maj_extent_av = get_inclination_pa(Configuration, mom0, center, cutoff = scale_factor* median_noise_in_map, figure_name=f'{Configuration["LOG_DIRECTORY"]}loc_{center[0]:.2f}_{center[1]:.2f}',debug = debug)
 
@@ -460,6 +465,10 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, debug
 
         else:
             center_stable = True
+    print_log(f'''GUESS_ORIENTATION: Looking for the Initial surface brightness profile.
+''',Configuration['OUTPUTLOG'], debug = debug, screen =True)
+    update_statistic(Configuration, message= "Starting the initial search for the SBR and VROT.", debug=debug)
+
     ring_size_req = Configuration['BEAM_IN_PIXELS'][0]/maj_resolution
     SBR_initial = avg_profile[0::int(ring_size_req)]/(np.pi*Configuration['BEAM'][0]*Configuration['BEAM'][1]/(4.*np.log(2.))) # Jy*km/s
     SBR_initial =np.hstack((SBR_initial[0],SBR_initial,SBR_initial[-1]))
@@ -470,7 +479,8 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, debug
     #We need to know which is the approaching side and which is receding
 
 
-
+    print_log(f'''GUESS_ORIENTATION: Looking for the Initial Rotation Curve.
+''',Configuration['OUTPUTLOG'], debug = debug, screen =True)
     Image = fits.open(f"{Configuration['FITTING_DIR']}Sofia_Output/{Fits_Files['MOMENT1']}",\
             uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
     map = copy.deepcopy(Image[0].data)
@@ -855,7 +865,17 @@ def read_cube(Configuration,cube,debug=False):
         coordinate_frame = WCS(cube_hdr)
         xlow,ylow,zlow = coordinate_frame.wcs_pix2world(1,1,1., 1.)
         xhigh,yhigh,zhigh = coordinate_frame.wcs_pix2world(*Configuration['NAXES'], 1.)
-        Configuration['NAXES_LIMITS'] = [np.sort([xlow,xhigh]),np.sort([ylow,yhigh]),np.sort([zlow,zhigh])/1000.]
+        xlim = np.sort([xlow,xhigh])
+        ylim = np.sort([ylow,yhigh])
+        zlim =np.sort([zlow,zhigh])/1000.
+        set_boundaries(Configuration,'VSYS',*zlim,input=True,debug=debug)
+        set_boundaries(Configuration,'XPOS',*xlim,input=True,debug=debug)
+        set_boundaries(Configuration,'YPOS',*ylim,input=True,debug=debug)
+    if np.sum(Configuration['VROT_INPUT_BOUNDARY']) == 0.:
+        set_boundaries(Configuration,'VROT',Configuration['CHANNEL_WIDTH'],600.,input=True,debug=debug)
+    if np.sum(Configuration['SDIS_INPUT_BOUNDARY']) == 0.:
+        set_boundaries(Configuration,'SDIS',Configuration['CHANNEL_WIDTH'],25.,input=True,debug=debug)
+
     # We write the pixels per beam info to Configuration such that it is easily accesible
     beamarea=(np.pi*abs(cube_hdr['BMAJ']*cube_hdr['BMIN']))/(4.*np.log(2.))
     Configuration['BEAM_AREA'] = beamarea*3600.**2 # beamarea in arcsec
@@ -885,6 +905,8 @@ def read_cube(Configuration,cube,debug=False):
                                   'XPOS': [cube_hdr['BMAJ']*0.1],\
                                   'YPOS': [cube_hdr['BMAJ']*0.1],\
                                 }
+
+
 # function to read the sofia catalogue
 def sofia_catalogue(Configuration,Fits_Files, Variables =['id','x','x_min','x_max','y','y_min','y_max','z','z_min','z_max','ra',\
                     'dec','v_app','f_sum','kin_pa','w50','err_f_sum','err_x','err_y','err_z'], debug = False):

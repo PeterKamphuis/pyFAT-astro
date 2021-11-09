@@ -2,7 +2,8 @@
 # This module contains a set of functions and classes that are used in several different Python scripts in the Database.
 from astropy.io import fits
 from astropy.wcs import WCS
-from pyFAT_astro.Support.support_functions import linenumber,print_log,set_limits,clean_header,obtain_border_pix
+from pyFAT_astro.Support.support_functions import linenumber,print_log,set_limits,\
+                                                clean_header,obtain_border_pix,set_boundaries
 from pyFAT_astro.Support.fat_errors import FunctionCallError
 #from pyFAT_astro.Support.read_functions import obtain_border_pix
 from scipy import ndimage
@@ -249,7 +250,13 @@ def cutout_cube(Configuration,filename,sub_cube, debug = False):
             coordinate_frame = WCS(hdr)
             xlow,ylow,zlow = coordinate_frame.wcs_pix2world(1,1,1., 1.)
             xhigh,yhigh,zhigh = coordinate_frame.wcs_pix2world(*Configuration['NAXES'], 1.)
-            Configuration['NAXES_LIMITS'] = [np.sort([xlow,xhigh]),np.sort([ylow,yhigh]),np.sort([zlow,zhigh])/1000.]
+            xlim = np.sort([xlow,xhigh])
+            ylim = np.sort([ylow,yhigh])
+            zlim =np.sort([zlow,zhigh])/1000.
+            set_boundaries(Configuration,'VSYS',*zlim,input=True,debug=debug)
+            set_boundaries(Configuration,'XPOS',*xlim,input=True,debug=debug)
+            set_boundaries(Configuration,'YPOS',*ylim,input=True,debug=debug)
+
     elif hdr['NAXIS'] == 2:
         data = Cube[0].data[sub_cube[1,0]:sub_cube[1,1],sub_cube[2,0]:sub_cube[2,1]]
         hdr['NAXIS1'] = sub_cube[2,1]-sub_cube[2,0]

@@ -138,6 +138,8 @@ def main(argv):
             print(help_message)
             sys.exit()
         #Transform all to a Configuration dictionary
+
+
         Original_Configuration = sf.setup_configuration(cfg)
 
         #First we check for sofia and TiRiFiC
@@ -338,6 +340,7 @@ def main(argv):
             #If we have Sofia Preprocessed Output request make sure it all exists
             if Configuration['DEBUG']:
                 wf.write_config(f'{Configuration["LOG_DIRECTORY"]}CFG_Before_Sofia.txt',Configuration,debug = True)
+            
             if 'existing_sofia' in  Configuration['FITTING_STAGES']:
                 sf.copy_homemade_sofia(Configuration,debug=Configuration['DEBUG'])
             elif 'run_sofia' in Configuration['FITTING_STAGES']:

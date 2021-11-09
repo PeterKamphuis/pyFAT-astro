@@ -7,7 +7,7 @@ from pyFAT_astro.Support.support_functions import print_log, convert_type,set_li
                               set_ring_size,calc_rings,get_inner_fix,convertskyangle,\
                               finish_current_run, remove_inhomogeneities,get_from_template,set_format, \
                               set_rings, convertRADEC,sbr_limits, create_directory,get_system_string,\
-                              get_fit_groups,run_tirific,update_statistic
+                              get_fit_groups,run_tirific,update_statistic,set_boundaries
 from pyFAT_astro.Support.clean_functions import clean_before_sofia,clean_after_sofia
 from pyFAT_astro.Support.fits_functions import cut_cubes,extract_pv,make_moments
 from pyFAT_astro.Support.read_functions import load_template,tirific_template
@@ -344,6 +344,9 @@ def check_source(Configuration, Fits_Files, debug = False):
     if debug:
         print_log(f'''CHECK_SOURCE: We use a distance of {Configuration['DISTANCE']}.
 ''',Configuration['OUTPUTLOG'])
+    if np.sum(Configuration['Z0_INPUT_BOUNDARY']) == 0.:
+        set_boundaries(Configuration,'Z0',*convertskyangle(Configuration,[0.05,2.5],Configuration['DISTANCE'], physical = True),input=True,debug=debug)
+
     #Check whether the cube is very large, if so cut it down
 
     new_box = cut_cubes(Configuration, Fits_Files, galaxy_box,debug=debug)

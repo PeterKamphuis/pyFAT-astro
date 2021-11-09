@@ -9,6 +9,8 @@ from datetime import datetime
 
 @dataclass
 class Fitting:
+
+
     catalogue_start_id: str = '-1' #Catalogue ID of the first galaxy to be fitted. -1 Means start at the beginning
     catalogue_end_id: str = '-1' #the last galaxy to be fitted, if set to -1 the whole catalogue will be fitted
     fitting_stages: List = field(default_factory=lambda: ['Create_FAT_Cube','Run_Sofia','Fit_Tirific_OSC'])
@@ -58,6 +60,16 @@ class Advanced:
     unreliable_size: float = 2. #If the final diameter is smaller than this the fit is considered unreliable
     unreliable_inclination: float = 10. #If the final inclination is below this the fit is considered unreliable
     shaker_iterations: int = 20
+    # Allow for the user to set the boundaries in the fitting
+    pa_input_boundary:  List[float] = field(default_factory=lambda: [[0.,0.],[0.,0.],[0.,0.]])
+    incl_input_boundary:  List[float] = field(default_factory=lambda: [[0.,0.],[0.,0.],[0.,0.]])
+    sdis_input_boundary:  List[float] = field(default_factory=lambda: [[0.,0.],[0.,0.],[0.,0.]])
+    z0_input_boundary:  List[float] = field(default_factory=lambda: [[0.,0.],[0.,0.],[0.,0.]])
+    vsys_input_boundary:  List[float] = field(default_factory=lambda: [[0.,0.],[0.,0.],[0.,0.]])
+    xpos_input_boundary:  List[float] = field(default_factory=lambda: [[0.,0.],[0.,0.],[0.,0.]])
+    ypos_input_boundary:  List[float] = field(default_factory=lambda: [[0.,0.],[0.,0.],[0.,0.]])
+    vrot_input_boundary: List[float] = field(default_factory=lambda: [[0.,0.],[0.,0.],[0.,0.]])
+
     # Add the channel dependency, minimum inclination,
 @dataclass
 class defaults:
