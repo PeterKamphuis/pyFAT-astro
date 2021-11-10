@@ -386,10 +386,11 @@ def fit_arc(Configuration,radii,sm_profile,error, debug = False ):
         absolute_sigma = False
     else:
         absolute_sigma = True
-
-    arc_par,arc_cov  =  curve_fit(arc_tan_function, radii, sm_profile,p0=[est_center,est_length,est_amp,est_mean]\
-                                ,sigma=error,absolute_sigma=absolute_sigma)
-
+    try:
+        arc_par,arc_cov  =  curve_fit(arc_tan_function, radii, sm_profile,p0=[est_center,est_length,est_amp,est_mean]\
+                                    ,sigma=error,absolute_sigma=absolute_sigma)
+    except OptimizeWarning:
+        pass
     new_profile = arc_tan_function(radii,*arc_par)
 
     new_profile[:3] = np.mean(new_profile[:3])
