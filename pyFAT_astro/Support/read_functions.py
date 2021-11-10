@@ -200,10 +200,16 @@ def extract_vrot(Configuration,map ,angle,center, debug= False):
     except IndexError:
         profile = []
 
-    if len(profile) < 1 and len(avg_profile) > 0.:
-        profile = [np.max(avg_profile)]
+    if len(profile) < 1:
+        if len(avg_profile) > 0.:
+            profile = [np.max(avg_profile)]
+        else:
+            profile = [Configuration['CHANNEL_WIDTH']*2.]
+
     profile[profile > 300.] = 300.
     profile[profile < Configuration['CHANNEL_WIDTH']*2.] = Configuration['CHANNEL_WIDTH']*2.
+
+
     #profile[0] = 0.
     if debug:
         print_log(f'''EXTRACT_VROT: Constructing the final RC
@@ -354,9 +360,10 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, debug
     SNR = np.nanmean(map[noise_map > 0.]/noise_map[noise_map > 0.])
     noise_hdr = Image[0].header
     Image.close()
+    noise_map [0. > map ] =0.
     median_noise_in_map = np.nanmedian(noise_map[noise_map > 0.])
     minimum_noise_in_map = np.nanmin(noise_map[noise_map > 0.])
-    noise_map [0. > map ] =0.
+
     map[0.5*minimum_noise_in_map > noise_map] = 0.
     #Also remove negative values
     #map[0. > map ] =0
@@ -490,7 +497,7 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, debug
 ''',Configuration['OUTPUTLOG'])
     #Image.close()
     #map[3*minimum_noise_in_map > noise_map] = float('NaN')
-    map[3*minimum_noise_in_map > noise_map] = float('NaN')
+    map[3.*minimum_noise_in_map > noise_map] = float('NaN')
     if debug:
         print_log(f'''GUESS_ORIENTATION: This is the amount of values we find after blanking low SNR {len(map[~np.isnan(map)])}
 ''',Configuration['OUTPUTLOG'])

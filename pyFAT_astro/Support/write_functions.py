@@ -187,7 +187,7 @@ def initialize_def_file(Configuration, Fits_Files,Tirific_Template,Initial_Param
                                initial_estimates=parameters, debug=debug)
 
     tirific(Configuration,Tirific_Template,name = f'{fit_type}_In.def', debug=debug)
-
+    
 initialize_def_file.__doc__ =f'''
  NAME:
     initialize_def_file

@@ -2652,7 +2652,7 @@ def set_boundaries(Configuration,key,lower,upper,input=False,debug=False):
         if check:
             if lower[i] < Configuration[f'{key}_INPUT_BOUNDARY'][i][0]:
                 lower[i] = Configuration[f'{key}_INPUT_BOUNDARY'][i][0]
-            if upper[i] < Configuration[f'{key}_INPUT_BOUNDARY'][i][1]:
+            if upper[i] > Configuration[f'{key}_INPUT_BOUNDARY'][i][1]:
                 upper[i] = Configuration[f'{key}_INPUT_BOUNDARY'][i][1]
         Configuration[boundary][i][0] = float(lower[i])
         Configuration[boundary][i][1] = float(upper[i])

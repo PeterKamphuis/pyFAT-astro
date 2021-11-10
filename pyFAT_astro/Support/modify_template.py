@@ -1615,13 +1615,16 @@ regularise_profile.__doc__ =f'''
 def set_boundary_limits(Configuration,Tirific_Template,key,values = [0.,0.],  tolerance = 0.01, fixed = False, debug = False):
     if debug:
         print_log(f'''SET_BOUNDARY_LIMITS: checking limits for {key},
+{'':8s} current Boundaries = {Configuration[f"{key}_CURRENT_BOUNDARY"]}
+{'':8s} values = {values}
 ''',Configuration['OUTPUTLOG'],debug = True)
     profile = np.array(get_from_template(Configuration,Tirific_Template, [key,f"{key}_2"]),dtype = float)
     current_boundaries = Configuration[f"{key}_CURRENT_BOUNDARY"]
 
-
+    if key == 'VROT':
+        current_boundaries =[[values[0]-values[1]*5.,values[0]+values[1]*5.] for x in range(3)]
     if np.sum(current_boundaries) == 0. and np.sum(values) != 0.:
-        current_boundaries =[[values[0]-values[1]*5.,values[0]+values[1]] for x in range(3)]
+        current_boundaries =[[values[0]-values[1],values[0]+values[1]] for x in range(3)]
         if debug:
                 print_log(f'''SET_BOUNDARY_LIMITS: set boundaries from values
 {'':8s} current Boundaries = {current_boundaries}
@@ -1674,7 +1677,6 @@ def set_boundary_limits(Configuration,Tirific_Template,key,values = [0.,0.],  to
     if key == 'Z0':
         inc = np.array(get_from_template(Configuration,Tirific_Template, ['INCL'])[0],dtype = float)
          # Linear increase of the maximum from 30-70 inc
-        print(inc[0])
         min,max = convertskyangle(Configuration,[0.2,set_limits(float(inc[0])/20.-1,0.5,2.5)],Configuration['DISTANCE'], physical = True)
         high = [set_limits(x,min,max) for x in high]
         max,min = convertskyangle(Configuration,[0.05,0.2],Configuration['DISTANCE'], physical = True)
