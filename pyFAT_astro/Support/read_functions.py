@@ -202,10 +202,13 @@ def extract_vrot(Configuration,map ,angle,center, debug= False):
 
     if len(profile) < 1:
         if len(avg_profile) > 0.:
-            profile = [np.max(avg_profile)]
+            profile = np.array([np.max(avg_profile)],dtype=float)
         else:
-            profile = [Configuration['CHANNEL_WIDTH']*2.]
-
+            profile = np.array([Configuration['CHANNEL_WIDTH']*2.],dtype=float)
+    if debug:
+        print_log(f'''EXTRACT_VROT: Unlimited profile
+{'':8s} unlimited  RC= {profile}
+''',Configuration['OUTPUTLOG'])
     profile[profile > 300.] = 300.
     profile[profile < Configuration['CHANNEL_WIDTH']*2.] = Configuration['CHANNEL_WIDTH']*2.
 
