@@ -6,7 +6,7 @@
 import copy
 from pyFAT_astro.Support.support_functions import set_rings,convertskyangle,sbr_limits,set_limits,print_log,set_limit_modifier,\
                               set_ring_size,calc_rings,finish_current_run,set_format,get_from_template,gaussian_function,fit_gaussian,\
-                              get_ring_weights
+                              get_ring_weights,set_boundaries
 from pyFAT_astro.Support.fat_errors import InitializeError,CfluxError,FunctionCallError,BadConfigurationError
 import numpy as np
 import os
@@ -386,10 +386,11 @@ def fit_arc(Configuration,radii,sm_profile,error, debug = False ):
         absolute_sigma = False
     else:
         absolute_sigma = True
-
-    arc_par,arc_cov  =  curve_fit(arc_tan_function, radii, sm_profile,p0=[est_center,est_length,est_amp,est_mean]\
-                                ,sigma=error,absolute_sigma=absolute_sigma)
-
+    try:
+        arc_par,arc_cov  =  curve_fit(arc_tan_function, radii, sm_profile,p0=[est_center,est_length,est_amp,est_mean]\
+                                    ,sigma=error,absolute_sigma=absolute_sigma)
+    except OptimizeWarning:
+        pass
     new_profile = arc_tan_function(radii,*arc_par)
 
     new_profile[:3] = np.mean(new_profile[:3])
@@ -583,6 +584,12 @@ def fix_outer_rotation(Configuration,profile, debug = False):
 ''',Configuration['OUTPUTLOG'],debug = True)
     profile = np.array(profile,dtype=float)
     inner_slope = Configuration['RC_UNRELIABLE']
+    # if the outer parts are less then 5 channels there is something wrong And we just take a flat curve from max
+    if np.mean(profile[inner_slope:]) < 5.*Configuration['CHANNEL_WIDTH']:
+        inner_slope = int(np.where(np.max(profile) == profile)[0][0])
+        if debug:
+            print_log(f'''FIX_OUTER_ROTATION: we adjusted the unreliable part.
+''',Configuration['OUTPUTLOG'],debug = True)
     if debug:
         print_log(f'''FIX_OUTER_ROTATION: this is the inner slope {inner_slope}
 ''',Configuration['OUTPUTLOG'])
@@ -1496,7 +1503,7 @@ def regularise_profile(Configuration,Tirific_Template, key,min_error= [0.],debug
         print_log(f'''REGULARISE_PROFILE: profile of {key} before regularistion
 {'':8s}{profile[0]}
 {'':8s}{profile[1]}
-{'':8s}The minmal error is
+{'':8s}The minimal error is
 {'':8s}{min_error}
 ''',Configuration['OUTPUTLOG'],debug = True)
     # get a smoothed profiles
@@ -1531,13 +1538,10 @@ def regularise_profile(Configuration,Tirific_Template, key,min_error= [0.],debug
 
 
         else:
-            if f"{key}_CURRENT_BOUNDARY" in Configuration:
-                boundary = Configuration[f"{key}_CURRENT_BOUNDARY"][i+1]
-            else:
-                boundary = [0.,0.]
+
             fit_profile = fit_polynomial(Configuration,radii,profile[i],sm_profile[i],error[i],key, Tirific_Template,\
                                          inner_fix = Configuration['INNER_FIX'][i],min_error=min_error,\
-                                         boundary_limits= boundary,debug= debug)
+                                         boundary_limits= Configuration[f"{key}_CURRENT_BOUNDARY"][i+1],debug= debug)
         profile[i] = fit_profile
 
     if not diff:
@@ -1609,61 +1613,85 @@ regularise_profile.__doc__ =f'''
  NOTE: Errors are not returned but they are written to the template
 '''
 
-
-def set_boundary_limits(Configuration,Tirific_Template,key, tolerance = 0.01, values = [10,1],upper_bracket = [10.,100.], lower_bracket=[0., 50.], fixed = False,increase=10., debug = False):
+def set_boundary_limits(Configuration,Tirific_Template,key,values = [0.,0.],  tolerance = 0.01, fixed = False, debug = False):
     if debug:
         print_log(f'''SET_BOUNDARY_LIMITS: checking limits for {key},
+{'':8s} current Boundaries = {Configuration[f"{key}_CURRENT_BOUNDARY"]}
+{'':8s} values = {values}
 ''',Configuration['OUTPUTLOG'],debug = True)
     profile = np.array(get_from_template(Configuration,Tirific_Template, [key,f"{key}_2"]),dtype = float)
-
     current_boundaries = Configuration[f"{key}_CURRENT_BOUNDARY"]
-    if debug:
-        print_log(f'''SET_BOUNDARY_LIMITS: We have found the following limits,
+
+    if key == 'VROT':
+        current_boundaries =[[values[0]-values[1]*5.,values[0]+values[1]*5.] for x in range(3)]
+    if np.sum(current_boundaries) == 0. and np.sum(values) != 0.:
+        current_boundaries =[[values[0]-values[1],values[0]+values[1]] for x in range(3)]
+        if debug:
+                print_log(f'''SET_BOUNDARY_LIMITS: set boundaries from values
+{'':8s} current Boundaries = {current_boundaries}
+''',Configuration['OUTPUTLOG'])
+    elif np.sum(current_boundaries) == 0. and np.sum(values) == 0.:
+        raise FunctionCallError(f'SET_BOUNDARY_LIMITS: if boundaries are not set in the Configuration call set_boundarylimits with values')
+    else:
+        if debug:
+                print_log(f'''SET_BOUNDARY_LIMITS: Checking
 {'':8s} current Boundaries = {current_boundaries}
 {'':8s} Applying to the profiles {profile}
 ''',Configuration['OUTPUTLOG'])
 
-    if np.sum(current_boundaries) == 0.:
-        current_boundaries =[[set_limits(values[0]-values[1]*5.,*lower_bracket),\
-                    set_limits(values[0]+values[1]*5.,*upper_bracket)] for x in range(3)]
-        if debug:
-            print_log(f'''SET_BOUNDARY_LIMITS: We have set the boundaries to the following as all were 0.
-{'':8s} current Boundaries = {current_boundaries}
-''',Configuration['OUTPUTLOG'])
-
-    if fixed:
-        range_to_check = [0]
-    else:
-        range_to_check = [0,1,2]
-    for i in range_to_check:
-        buffer = float(current_boundaries[i][1]-current_boundaries[i][0]) * tolerance
-        if debug:
-            print_log(f'''SET_BOUNDARY_LIMITS: Using a buffer of {buffer}.
-''',Configuration['OUTPUTLOG'])
-        if i == 0:
-            profile_part = profile[0,:int(np.mean(Configuration['INNER_FIX']))+1]
+        if fixed:
+            range_to_check = [0]
         else:
-            profile_part = profile[i-1,Configuration['INNER_FIX'][i-1]:]
-        if debug:
-            print_log(f'''SET_BOUNDARY_LIMITS: Checking {profile_part}.
-''',Configuration['OUTPUTLOG'])
-        #check the upper bounderies
-        on_boundary = np.where(profile_part > float(current_boundaries[i][1])-buffer)[0]
-        if debug:
-            print_log(f'''SET_BOUNDARY_LIMITS: Found the following on the upper {on_boundary}.
-''',Configuration['OUTPUTLOG'])
-        if len(on_boundary) > 0:
-            if on_boundary[0] != len(profile[0])-1:
-                current_boundaries[i][1] = set_limits(current_boundaries[i][1] + buffer*increase,*upper_bracket)
-        #check the lower boundaries.
-        on_boundary = np.where(profile_part < float(current_boundaries[i][0])+buffer)[0]
-        if debug:
-            print_log(f'''SET_BOUNDARY_LIMITS: Found the following on the lower {on_boundary}.
-''',Configuration['OUTPUTLOG'])
-        if len(on_boundary) > 0:
-            if on_boundary[0] != len(profile[0])-1:
-                current_boundaries[i][0] = set_limits(current_boundaries[i][0] - buffer*increase,*lower_bracket)
-    Configuration[f"{key}_CURRENT_BOUNDARY"] = current_boundaries
+            range_to_check = [0,1,2]
+        for i in range_to_check:
+
+            buffer = np.array(float(current_boundaries[i][1]-current_boundaries[i][0])*2,dtype=float)\
+                    *np.array([tolerance,0.1],dtype=float)
+            if debug:
+                print_log(f'''SET_BOUNDARY_LIMITS: Using a buffer of {buffer[0]}.
+    ''',Configuration['OUTPUTLOG'])
+            if i == 0:
+                profile_part = profile[0,:int(np.mean(Configuration['INNER_FIX']))+1]
+            else:
+                profile_part = profile[i-1,Configuration['INNER_FIX'][i-1]:]
+            if debug:
+                print_log(f'''SET_BOUNDARY_LIMITS: Checking {profile_part}.
+    ''',Configuration['OUTPUTLOG'])
+            #check the upper bounderies
+            on_boundary = np.where(profile_part > float(current_boundaries[i][1])-buffer[0])[0]
+            if debug:
+                print_log(f'''SET_BOUNDARY_LIMITS: Found the following on the upper {on_boundary}.
+    ''',Configuration['OUTPUTLOG'])
+            if len(on_boundary) > 0:
+                if on_boundary[0] != len(profile[0])-1:
+                    current_boundaries[i][1] = current_boundaries[i][1] + np.prod(buffer)
+            #check the lower boundaries.
+            on_boundary = np.where(profile_part < float(current_boundaries[i][0])+buffer[0])[0]
+            if debug:
+                print_log(f'''SET_BOUNDARY_LIMITS: Found the following on the lower {on_boundary}.
+    ''',Configuration['OUTPUTLOG'])
+            if len(on_boundary) > 0:
+                if on_boundary[0] != len(profile[0])-1:
+                    current_boundaries[i][0] = current_boundaries[i][0] - np.prod(buffer)
+    low = [x[0] for x in current_boundaries]
+    high= [x[1] for x in current_boundaries]
+    if key == 'Z0':
+        inc = np.array(get_from_template(Configuration,Tirific_Template, ['INCL'])[0],dtype = float)
+         # Linear increase of the maximum from 30-70 inc
+        min,max = convertskyangle(Configuration,[0.2,set_limits(float(inc[0])/20.-1,0.5,2.5)],Configuration['DISTANCE'], physical = True)
+        high = [set_limits(x,min,max) for x in high]
+        max,min = convertskyangle(Configuration,[0.05,0.2],Configuration['DISTANCE'], physical = True)
+        low = [set_limits(x,min,max) for x in low]
+    elif key == 'INCL':
+        # for inclination the other boundaries are bracketed by the input boundary
+        high = [x if x > 50. else 50. for x in high]
+        low = [x if x < 60. else 60. for x in low]
+    elif key == 'PA':
+        # for inclination the other boundaries are bracketed by the input boundary
+        high = [x if x > 170. else 170. for x in high]
+        low = [x if x < 190. else 190. for x in low]
+    set_boundaries(Configuration,key,low,high,debug=debug)
+    #Configuration[f"{key}_CURRENT_BOUNDARY"] = current_boundaries
     if debug:
         print_log(f'''SET_BOUNDARY_LIMITS: We have adjusted the boundaries to  {Configuration[f"{key}_CURRENT_BOUNDARY"]}.
 ''',Configuration['OUTPUTLOG'])
@@ -1689,14 +1717,9 @@ set_boundary_limits.__doc__ =f'''
     tolerance = 0.01,
     The minimum difference with the boundary
 
-    values = [10,1],upper_bracket = [10.,100.], lower_bracket=[0., 50.]
-    Initial definition of the boundary limits
-
     fixed = False
     If true it is assumed there is only one boundary value to check else three
 
-    increase=10.
-    how much to widen the boundary by
 
  OUTPUTS:
     The new Boundaries, they are also updated in Configuration
@@ -1939,36 +1962,20 @@ def set_fitting_parameters(Configuration, Tirific_Template, parameters_to_adjust
                 modifiers['INCL'] = np.array(modifiers['INCL'],dtype=float)*(0.2)
 
     for key in parameters_to_adjust:
+        if key in Configuration['FIXED_PARAMETERS'][0]:
+            fixed=True
+        else:
+            fixed =False
+        if key != 'SBR':
+            set_boundary_limits(Configuration,Tirific_Template,key, values=initial_estimates[key], tolerance = 0.1\
+                            ,fixed = fixed,debug=debug)
         if key == 'VROT':
             fitting_settings['VROT'] = set_vrot_fitting(Configuration,stage = stage, rotation = initial_estimates['VROT'], debug = debug )
         elif key == 'SBR':
             fitting_settings['SBR'] = set_sbr_fitting(Configuration,stage = stage, systemic = initial_estimates['VSYS'][0], debug = debug)
         else:
-            if key in Configuration['FIXED_PARAMETERS'][0]:
-                fixed=True
-            else:
-                fixed =False
-            if key == 'INCL':
-                brackets = [[60.,90.],[5.,50.]]
-            elif key == 'PA':
-                brackets = [[190.,370.],[-10,170]]
-            elif key == 'Z0':
-                brackets = [convertskyangle(Configuration,[0.2,2.5],Configuration['DISTANCE'], physical = True), \
-                            convertskyangle(Configuration,[0.05,0.2],Configuration['DISTANCE'], physical = True)]
-            elif key in ['XPOS','YPOS','VSYS']:
-                if key == 'XPOS': i = 0
-                elif key == 'YPOS': i = 1
-                elif key == 'VSYS': i = 2
-                brackets = [Configuration['NAXES_LIMITS'][i],Configuration['NAXES_LIMITS'][i]]
-            elif key == 'SDIS':
-                if stage in ['initial','run_cc','after_cc','after_ec','after_os']:
-                    limits = [[Configuration['CHANNEL_WIDTH'], 16.],\
-                              [Configuration['CHANNEL_WIDTH']/4., 16.], \
-                              [Configuration['CHANNEL_WIDTH']/4., 16.]]
-                else:
-                    limits = [[Configuration['CHANNEL_WIDTH'], set_limits(initial_estimates['SDIS'][0]*2.,Configuration['CHANNEL_WIDTH'],25.)], \
-                             [Configuration['CHANNEL_WIDTH']/4., set_limits(initial_estimates['SDIS'][0]*2.,Configuration['CHANNEL_WIDTH']/2.,25.)],\
-                             [Configuration['CHANNEL_WIDTH']/4., set_limits(initial_estimates['SDIS'][0]*2.,Configuration['CHANNEL_WIDTH']/2.,25.)]]
+            flat_slope = False
+            symmetric = False
             if key in ['PA','INCL','Z0']:
                 slope = Configuration['WARP_SLOPE']
                 if stage in ['initialize_os']:
@@ -1977,7 +1984,7 @@ def set_fitting_parameters(Configuration, Tirific_Template, parameters_to_adjust
                     inner =  Configuration['INNER_FIX']
             elif key in ['SDIS']:
                 flat_slope = True
-
+                symmetric = True
                 inner = int(set_limits(Configuration['NO_RINGS']*0.33,4,Configuration['NO_RINGS']*0.5))
                 slope = [int(Configuration['NO_RINGS']*0.66),int(Configuration['NO_RINGS']*0.66)]
             else:
@@ -1992,17 +1999,8 @@ def set_fitting_parameters(Configuration, Tirific_Template, parameters_to_adjust
                 except:
                     inner = int(set_limits(inner*fact,4,Configuration['NO_RINGS']/2.))
 
-            if key != 'SDIS':
-                limits = set_boundary_limits(Configuration,Tirific_Template,key, tolerance = 0.1, values = initial_estimates[key],\
-                                upper_bracket = brackets[0],lower_bracket = brackets[1],fixed = fixed,debug=debug)
-                flat_slope = False
-                symmetric = False
-            else:
-                symmetric = True
-
-
             fitting_settings[key] =  set_generic_fitting(Configuration,key,stage = stage, values = initial_estimates[key],\
-                                                        debug = debug, limits=limits,slope= slope, flat_slope = flat_slope,\
+                                                        debug = debug,slope= slope, flat_slope = flat_slope,\
                                                          fixed =fixed, flat_inner = inner, step_modifier = modifiers[key], \
                                                          symmetric = symmetric)
 
@@ -2079,8 +2077,8 @@ set_fitting_parameters.__doc__ = '''
 '''
 
 def set_generic_fitting(Configuration, key , stage = 'initial', values = [60,5.], \
-                        limits = [[0.,0.],[0.,0.],[0.,0.]],debug = False, slope = [0, 0], flat_slope = False , symmetric = False,\
-                        upper_bracket = [10.,100.], lower_bracket=[0., 50.], fixed = True, moderate = 3, step_modifier = [1.,1.,1.],\
+                        debug = False, slope = [0, 0], flat_slope = False , symmetric = False,\
+                        fixed = True, moderate = 3, step_modifier = [1.,1.,1.],\
                         flat_inner = 3):
     if debug:
         print_log(f'''SET_GENERIC_FITTING: We are processing {key}.
@@ -2090,13 +2088,6 @@ def set_generic_fitting(Configuration, key , stage = 'initial', values = [60,5.]
     NUR = Configuration['NO_RINGS']
     if all(x == 0. for x in np.array(slope,dtype=float)):
         slope = [NUR,NUR]
-    if all(x == 0. for x in np.array(limits,dtype=float).reshape(6)):
-        if debug:
-            print_log(f'''SET_GENERIC_FITTING: Implementing limits
-''', Configuration['OUTPUTLOG'])
-
-        limits = [[set_limits(values[0]-values[1]*5.,*lower_bracket),\
-                    set_limits(values[0]+values[1]*5.,*upper_bracket)] for x in limits]
 
 
 
@@ -2109,8 +2100,8 @@ def set_generic_fitting(Configuration, key , stage = 'initial', values = [60,5.]
             print_log(f'''SET_GENERIC_FITTING: Fitting all as 1.
 ''', Configuration['OUTPUTLOG'])
         input['VARY'] =  np.array([f"{key} 1:{NUR} {key}_2 1:{NUR}"],dtype=str)
-        input['PARMAX'] = np.array([limits[0][1]],dtype=float)
-        input['PARMIN'] = np.array([limits[0][0]],dtype=float)
+        input['PARMAX'] = np.array([Configuration[f'{key}_CURRENT_BOUNDARY'][0][1]],dtype=float)
+        input['PARMIN'] = np.array([Configuration[f'{key}_CURRENT_BOUNDARY'][0][0]],dtype=float)
         input['MODERATE'] = np.array([moderate],dtype=int) #How many steps from del start to del end
         input['DELSTART'] = np.array([values[1]*step_modifier[0]],dtype=float) # Starting step
         input['DELEND'] = np.array([0.1*values[1]*step_modifier[1]],dtype=float) #Ending step
@@ -2121,7 +2112,7 @@ def set_generic_fitting(Configuration, key , stage = 'initial', values = [60,5.]
                 print_log(f'''SET_GENERIC_FITTING: implementing a varying non-symmetric profile.
 {'':8s} step_modifier = {step_modifier}
 {'':8s} values = {values}
-{'':8s} limits = {limits}
+{'':8s} limits = {Configuration[f'{key}_CURRENT_BOUNDARY']}
 ''', Configuration['OUTPUTLOG'])
             input['VARY'] = []
             end = []
@@ -2137,12 +2128,13 @@ def set_generic_fitting(Configuration, key , stage = 'initial', values = [60,5.]
 
             input['VARY'].append(f"{key} 1:{end[0]} {key}_2 1:{end[1]}")
             input['VARY'] = np.array(input['VARY'],dtype=str)
-            input['PARMAX'] = np.concatenate((np.array([limits[1][1]],dtype=float),\
-                                              np.array([limits[2][1]],dtype=float),\
-                                              np.array([limits[0][1]],dtype=float)))
-            input['PARMIN'] = np.concatenate((np.array([limits[1][0]],dtype=float),\
-                                              np.array([limits[2][0]],dtype=float),\
-                                              np.array([limits[0][0]],dtype=float)))
+            input['PARMAX'] = np.array([Configuration[f'{key}_CURRENT_BOUNDARY'][1][1],\
+                                        Configuration[f'{key}_CURRENT_BOUNDARY'][2][1],\
+                                        Configuration[f'{key}_CURRENT_BOUNDARY'][0][1]],dtype=float)
+
+            input['PARMIN'] = np.array([Configuration[f'{key}_CURRENT_BOUNDARY'][1][0],\
+                                        Configuration[f'{key}_CURRENT_BOUNDARY'][2][0],\
+                                        Configuration[f'{key}_CURRENT_BOUNDARY'][0][0]],dtype=float)
             input['MODERATE'] =np.array([moderate,moderate,moderate],dtype=float) #How many steps from del start to del end
             input['DELSTART'] =np.array([2.,2.,0.5],dtype=float)*step_modifier[0]*values[1]# Starting step
             input['DELEND'] = np.array([0.1,0.1,0.05],dtype=float)*step_modifier[1]*values[1] #Ending step
@@ -2152,7 +2144,7 @@ def set_generic_fitting(Configuration, key , stage = 'initial', values = [60,5.]
                 print_log(f'''SET_GENERIC_FITTING: implementing a varying symmetric profile
 {'':8s} step_modifier = {step_modifier}
 {'':8s} values = {values}
-{'':8s} limits = {limits}
+{'':8s} limits = {Configuration[f'{key}_CURRENT_BOUNDARY']}
 ''', Configuration['OUTPUTLOG'])
             flat_inner = int(np.min(flat_inner))
             if flat_inner+1 >= NUR:
@@ -2161,10 +2153,10 @@ def set_generic_fitting(Configuration, key , stage = 'initial', values = [60,5.]
             else:
                 input['VARY'] =  np.concatenate((np.array([f"!{key} {NUR}:{flat_inner+1} {key}_2 {NUR}:{flat_inner+1}"],dtype=str),\
                                                  np.array([f"{key} 1:{flat_inner} {key}_2 1:{flat_inner}"],dtype=str)))
-            input['PARMAX'] = np.concatenate((np.array([limits[1][1]],dtype=float),\
-                                              np.array([limits[0][1]],dtype=float)))
-            input['PARMIN'] = np.concatenate((np.array([limits[1][0]],dtype=float),\
-                                              np.array([limits[0][0]],dtype=float)))
+            input['PARMAX'] = np.array([Configuration[f'{key}_CURRENT_BOUNDARY'][1][1],\
+                                        Configuration[f'{key}_CURRENT_BOUNDARY'][0][1]],dtype=float)
+            input['PARMIN'] = np.array([Configuration[f'{key}_CURRENT_BOUNDARY'][1][0],\
+                                        Configuration[f'{key}_CURRENT_BOUNDARY'][0][0]],dtype=float)
             input['MODERATE'] =np.array([moderate,moderate],dtype=float) #How many steps from del start to del end
             input['DELSTART'] =np.array([2.,0.5],dtype=float)*step_modifier[0]*values[1] # Starting step
             input['DELEND'] = np.array([0.1,0.05],dtype=float)*step_modifier[1]*values[1] #Ending step
@@ -2213,9 +2205,6 @@ set_generic_fitting.__doc__ =f'''
 
     values = [60,5.]
     mean values of the parameter
-
-    limits = [[0.,0.],[0.,0.],[0.,0.]]
-    fitting limits
 
     slope = [0, 0]
     outer rings to be fitted as slope
@@ -2566,8 +2555,8 @@ def set_overall_parameters(Configuration, Fits_Files,Tirific_Template,stage = 'i
                 #preferably we'd use the akima spline but there is an issue with that where the final ring does not get modified
                 #Tirific_Template['INDINTY'] = 2
             Tirific_Template['NUR'] = f"{Configuration['NO_RINGS']}"
-            current_cwd = os.getcwd()
-            short_log = Configuration['LOG_DIRECTORY'].replace(current_cwd,'.')
+            #current_cwd = os.getcwd()
+            short_log = Configuration['LOG_DIRECTORY'].replace(Configuration['FITTING_DIR'],'')
             Tirific_Template['RESTARTNAME'] = f"{short_log}restart_{fit_type}.txt"
             #this could be fancier
             '''
@@ -2656,7 +2645,7 @@ def set_sbr_fitting(Configuration,systemic = 100., stage = 'no_stage',debug = Fa
     if stage in ['initial','run_cc','initialize_ec','run_ec','initialize_os','run_os']:
         radii,sbr_ring_limits = sbr_limits(Configuration,systemic = systemic, debug = debug)
         if stage in ['run_ec','run_os']:
-            sbr_ring_limits[-4:]=[x/5 for x in sbr_ring_limits]
+            sbr_ring_limits[-4:]=[x/5 for x in sbr_ring_limits[-4:]]
         if debug:
             print_log(f'''SET_SBR_FITTING: Using these SBR limits.
 {'':8s} limits = {sbr_ring_limits}
@@ -2745,12 +2734,11 @@ set_sbr_fitting.__doc__ =f'''
 def set_vrot_fitting(Configuration, stage = 'initial', rotation = [100,5.], debug = False):
     NUR = Configuration['NO_RINGS']
     vrot_input = {}
-    vrot_limits = [set_limits(rotation[0]-rotation[1]-10,Configuration['CHANNEL_WIDTH'],360.), \
-                   set_limits(rotation[0]+rotation[1]+10,80.,600.)]
+
     if debug:
         print_log(f'''SET_VROT_FITTING: We are setting the VROT limits.
 {'':8s} No_Rings = {Configuration['NO_RINGS']}
-{'':8s} Limits = {vrot_limits}
+{'':8s} Limits = {Configuration['VROT_CURRENT_BOUNDARY'][0]}
 ''',Configuration['OUTPUTLOG'],debug = True)
     if stage in ['final_os']:
         modifier= [Configuration['LIMIT_MODIFIER'][0]/2.,Configuration['LIMIT_MODIFIER'][0],Configuration['LIMIT_MODIFIER'][0]/4.]
@@ -2765,8 +2753,8 @@ def set_vrot_fitting(Configuration, stage = 'initial', rotation = [100,5.], debu
         vrot_input['VARY'] =  np.array([f"VROT {NUR}:2 VROT_2 {NUR}:2"],dtype=str)
     else:
         vrot_input['VARY'] =  np.array([f"!VROT {NUR}:2 VROT_2 {NUR}:2"],dtype=str)
-    vrot_input['PARMAX'] = np.array([vrot_limits[1]],dtype=float)
-    vrot_input['PARMIN'] = np.array([vrot_limits[0]],dtype=float)
+    vrot_input['PARMAX'] = np.array([Configuration['VROT_CURRENT_BOUNDARY'][0][1]],dtype=float)
+    vrot_input['PARMIN'] = np.array([Configuration['VROT_CURRENT_BOUNDARY'][0][0]],dtype=float)
     vrot_input['MODERATE'] = np.array([5],dtype=float) #How many steps from del start to del end
     vrot_input['DELSTART'] = np.array([2.*Configuration['CHANNEL_WIDTH']*modifier[0]],dtype=float) # Starting step
     #These were lower in the original fat
@@ -3029,6 +3017,45 @@ update_disk_angles.__doc__ =f'''
 
  NOTE:
 '''
+
+def write_center(Configuration,Tirific_Template,center,debug=False):
+    extension = ['','_2']
+    variables = ['XPOS','YPOS','VSYS']
+    for i,var in enumerate(variables):
+        values= [center[i]]*int(Tirific_Template['NUR'])
+        format= set_format(var)
+        for ext in extension:
+            Tirific_Template[f"{var}{ext}"] = f"{' '.join([f'{x:{format}}' for x in values])}"
+
+write_center.__doc__ =f'''
+ NAME:
+    write_center
+
+ PURPOSE:
+    Update the center in the template
+
+ CATEGORY:
+    modify_template
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    Tirific_Template = Standard FAT Tirific Template
+    center = [xpos,ypos,vsys]
+
+ OPTIONAL INPUTS:
+    debug = False
+
+ OUTPUTS:
+    Updated template
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
+
 
 def write_new_to_template(Configuration, filename,Tirific_Template, Variables = ['VROT',
                  'Z0', 'SBR', 'INCL','PA','XPOS','YPOS','VSYS','SDIS','VROT_2',  'Z0_2','SBR_2',

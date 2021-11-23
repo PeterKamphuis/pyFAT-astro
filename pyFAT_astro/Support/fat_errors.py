@@ -8,6 +8,8 @@ class BadSourceError(Exception):
     pass
 class CfluxError(Exception):
     pass
+class DefFileError(Exception):
+    pass
 class FileNotFoundError(Exception):
     pass
 class FunctionCallError(Exception):

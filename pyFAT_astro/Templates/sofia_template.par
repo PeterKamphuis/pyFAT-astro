@@ -58,7 +58,7 @@ linker.radiusXY = 3
 linker.radiusZ = 3
 linker.minSizeXY = 6
 linker.minSizeZ = 8
-
+linker.positivity = True
 
 
 # Parameterisation

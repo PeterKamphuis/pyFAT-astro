@@ -19,15 +19,16 @@ Requirements
 The code requires full installation of:
 
     python v3.6 or higher
-    numpy>=1.14, scipy, astropy, omegaconf, matplotlib, future-fstrings, importlib_resources>=3.3.0 (These should be managed through a pip install)
+    numpy>=1.14, scipy, astropy, omegaconf, matplotlib, future-fstrings, psutil, importlib_resources>=3.3.0 (These should be managed through a pip install)
     TiRiFiC v2.2.3 or higher
-    SoFiA2  
+    SoFiA2
 
 [python](https://www.python.org/),[TiRiFiC](http://gigjozsa.github.io/tirific/download_and_installation.html), [SoFiA2](https://github.com/SoFiA-Admin/SoFiA-2)
 
 TiRiFiC and SoFiA2 should be accessible for subproccess calls. This normally means that it should be possible to invoke them properly from the command line.
-TiRiFiC should be installed as tirific (standard) and can be installed through the kern-suite (https://kernsuite.info)
-SoFiA2 should be installed as sofia2 or sofia, pyFAT will first check for the existence of the sofia2 command, if this does not exist it will look for the sofia command and assume it is SoFiA2 if it can run.
+the command names for TiRiFiC and SoFiA2 can be changed through the yaml input file. pyFAT assumes 'tirific' and 'sofia2' or 'sofia' as the respective defaults.
+TiRiFiC can be installed through the kern-suite (https://kernsuite.info) on linux. If you have trouble installing tirific due to the requirement of pg-plot there is now a pg-plotless version on the tirific github (https://github.com/gigjozsa/tirific/tree/no_pgp) that can be installed and that will run under pyFAT. It is not recommended to use this version without FAT and you will do so at your own risk.
+If you have SoFiA1 installed as sofia and no SoFiA2 installation pyFAT will crash.
 
 Installation
 ------------
@@ -40,19 +41,20 @@ This should also install all required python dependencies.
 We recommend the use of python virtual environments. If so desired a pyFAT installation would look like:
 
   	python3 -m venv FAT_venv
-  	source FAT_venv/bin/activate
+  	source FAT_venv/bin/activate.csh
   	pip install pyFAT-astro
 
+(In case of bash the correct middle line is 	source FAT_venv/bin/activate)
 You might have to restart the env:
 
   	deactivate
-  	source FAT_venv/bin/activate
+  	source FAT_venv/bin/activate.csh
 
 Once you have installed FAT you can check that it has been installed properly by running FAT as.
 
   	FAT>  pyFAT installation_check=True
 
-This should take typically 10 min and should finish with the message:
+This should take typically a few minutes and should finish with the message:
 
 	!!!!--------------------------------------------!!!!!
 	!!!! As far as we can tell FAT is installed     !!!!!
@@ -62,13 +64,13 @@ This should take typically 10 min and should finish with the message:
 The check consists of fitting a flat disk on NGC 2903. The data for this galaxy were take as part of the WHISP program.
 This survey is decribed in [van der Hulst et al. (2001)](http://adsabs.harvard.edu/abs/2001ASPC..240..451V) and the data can be found at [Westerbork on the Web](http://wow.astron.nl/) or the [WHISP page](https://www.astro.rug.nl/~whisp/).
 
-If you get any other message please do not hesitate to file an issue on the GitHub (https://github.com/PeterKamphuis/pyFAT). Do note however that if you perform this check on a unreleased version/branch it might not perform well. So always check with the master branch.
+If you get any other message please do not hesitate to file an issue on the GitHub (https://github.com/PeterKamphuis/pyFAT-astro). Do note however that if you perform this check on a unreleased version/branch it might not perform well. So always check with the master branch.
 
 The Overview.png will contain a comparison with the fit performed by you. These should be the same (the correct fit is classified as Input.)
 
 The plots should look like this:
 
-![Overview plot after running installation check.](pyFAT_astro/Installation_Check/Overview.png)
+![Overview plot after running installation check.](https://raw.githubusercontent.com/PeterKamphuis/pyFAT-astro/main/pyFAT_astro/Installation_Check/Overview.png)
 
 Sometimes, due to updates in SoFiA2 or TiRiFiC, the check might show differences beyond the tolerance limits. If these are small and you have checked the individual installations of SoFiA2, TiRiFiC and the Installation Check files are older than the latest SoFiA2 or TiRiFiC update, then the installation is probably correct and you can continue. Please do post an issue about the outdated installation check.
 
@@ -84,11 +86,15 @@ Will provide an overview of call options. For the most basic usage one can call 
 
     FAT> pyFAT configuration_file=FAT_Input.yml
 
+or simply start from your input catalogue (See below).
+
+    FAT> pyFAT input.catalogue=Input_Catalogue.txt
+
 or a single Cube
 
     FAT> pyFAT cube_name=Input_Cube.fits
 
-Where Input_Cube.fits is the observation to be fitted. In this mode configuration_file can still be used to specify fit settings but catalogue and location setting will be ignored. !! If cube_name is set in either the command line or the configuration file this always will always trigger the singular fitting instead of batch fitting.
+Where Input_Cube.fits is the observation to be fitted. In this mode a configuration_file can still be used to specify fit settings but catalogue and location settings will be ignored. !! If cube_name is set in either the command line or the configuration file this always will always trigger the singular fitting instead of batch fitting.
 
 FAT is intended for batch fitting and as such it is recommended to have all source in separate directories
 
@@ -110,12 +116,12 @@ Input Catalog
 
 The input catalog should have at least 4 columns named as
 
-        number|distance|directoryname|cubename
+    id|distance|directoryname|cubename
 
 and seperated by |
-The number is an easy identifier to keep track of which galaxy is being fitted.
-the distance is the distance to the galaxy in Mpc. This is used to make some initial guesses for the structure of the galaxy. If it is unknown it should be set to 1.
+The id is an easy identifier to keep track of which galaxy is being fitted.
+the distance is the distance to the galaxy in Mpc. This is used to make some initial guesses for the structure of the galaxy. If it is unknown it should be set to -1 and the hubble flow will be used to calculate the distance.
 The directory name is the name of the directory of the galaxy to be fitted. This directory should be located in the specified maindir in the config file.
 cubename is the name of the cube to be fitted. This should be without the fits extension.
 
-An example catalog is included in the distribution. This also gives examples for how to set up a catalog when using pre-made sofia input.
+An example catalog is included in the distribution. If SoFiA 2 is already ran then the output catalogue can immediately be used for fitting with FAT. Please see the read the docs on how.

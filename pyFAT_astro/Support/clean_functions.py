@@ -236,7 +236,8 @@ def cleanup(Configuration,Fits_Files, debug = False):
             os.remove(f'{dir}sofia_input.par')
         except:
             pass
-
+    if 'tirshaker' in Configuration['FITTING_STAGES']:
+        directories.append('Error_Shaker')
     # Existing_Sofia
 
 
@@ -321,11 +322,15 @@ def cleanup_final(Configuration,Fits_Files, debug =False):
     if debug:
          print_log(f'''Starting the final cleanup of the directory.
 ''',Configuration['OUTPUTLOG'],debug = True)
-    clean_files = [Fits_Files['OPTIMIZED_CUBE'],f"{Configuration['USED_FITTING']}_In.def",\
-                    "clean_map_0.fits","dep_map_0.fits","minimum_map_0.fits","rot_map_0.fits",\
-                    "clean_map_1.fits","dep_map_1.fits","minimum_map_1.fits","rot_map_1.fits",
-                    'tmp_incl_check_In.def'\
-                    ]
+
+    if Configuration['USED_FITTING'] == 'Fit_Tirific_OSC':
+        clean_files = [Fits_Files['OPTIMIZED_CUBE'],f"{Configuration['USED_FITTING']}_In.def",\
+                        "clean_map_0.fits","dep_map_0.fits","minimum_map_0.fits","rot_map_0.fits",\
+                        "clean_map_1.fits","dep_map_1.fits","minimum_map_1.fits","rot_map_1.fits",
+                        "tmp_incl_check_In.def"\
+                        ]
+    else:
+        clean_files = []
     for file in clean_files:
     # Not remove anything but cleanup all
         try:
@@ -361,22 +366,29 @@ def cleanup_final(Configuration,Fits_Files, debug =False):
                         os.remove(f"{Configuration['FITTING_DIR']}{dir}/{file}")
                     except FileNotFoundError:
                         pass
+    stage_dirs = []
     if os.path.isdir(f"{Configuration['FITTING_DIR']}tmp_incl_check"):
+        stage_dirs.append('tmp_incl_check')
+    if 'tirshaker' in Configuration['FITTING_STAGES']:
+        stage_dirs.append('Error_Shaker')
+
+    for dirs in stage_dirs:
         if 5 > Configuration['OUTPUT_QUANTITY'] >= 1:
-            files_in_dir = os.listdir(f"{Configuration['FITTING_DIR']}tmp_incl_check")
+            files_in_dir = os.listdir(f"{Configuration['FITTING_DIR']}{dirs}")
             for file in files_in_dir:
                 try:
-                    os.remove(f"{Configuration['FITTING_DIR']}tmp_incl_check/{file}")
+                    os.remove(f"{Configuration['FITTING_DIR']}{dirs}/{file}")
                 except FileNotFoundError:
                     pass
-            os.rmdir(f"{Configuration['FITTING_DIR']}tmp_incl_check")
+            os.rmdir(f"{Configuration['FITTING_DIR']}{dirs}")
         else:
             # else move this directory to the LOG
-            target = get_system_string(f"{Configuration['LOG_DIRECTORY']}tmp_incl_check")
-            if  os.path.isdir(f"{Configuration['LOG_DIRECTORY']}tmp_incl_check"):
+            target = get_system_string(f"{Configuration['LOG_DIRECTORY']}{dirs}")
+            if  os.path.isdir(f"{Configuration['LOG_DIRECTORY']}{dirs}"):
                 os.system(f"rm -Rf {target}")
-            source = get_system_string(f"{Configuration['FITTING_DIR']}tmp_incl_check")
+            source = get_system_string(f"{Configuration['FITTING_DIR']}{dirs}")
             os.system(f"mv {source} {target}")
+
 
 cleanup_final.__doc__ =f'''
  NAME:
@@ -504,7 +516,8 @@ def finish_galaxy(Configuration,maximum_directory_length,current_run = 'Not init
     #make sure we are not leaving stuff
     finish_current_run(Configuration,current_run,debug=debug)
     # We need to check if the final output is legit
-    check_legitimacy(Configuration,debug=debug)
+    if Configuration['USED_FITTING']:
+        check_legitimacy(Configuration,debug=debug)
 
     # Need to write to results catalog
     if Configuration['OUTPUT_CATALOGUE']:

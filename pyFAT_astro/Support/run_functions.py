@@ -4,19 +4,21 @@
 
 
 from pyFAT_astro.Support.support_functions import print_log, convert_type,set_limits,rename_fit_products,\
-                              set_ring_size,calc_rings,get_usage_statistics,get_inner_fix,convertskyangle,\
+                              set_ring_size,calc_rings,get_inner_fix,convertskyangle,\
                               finish_current_run, remove_inhomogeneities,get_from_template,set_format, \
-                              set_rings, convertRADEC,sbr_limits, create_directory,get_system_string
+                              set_rings, convertRADEC,sbr_limits, create_directory,get_system_string,\
+                              get_fit_groups,run_tirific,update_statistic,set_boundaries
 from pyFAT_astro.Support.clean_functions import clean_before_sofia,clean_after_sofia
 from pyFAT_astro.Support.fits_functions import cut_cubes,extract_pv,make_moments
-from pyFAT_astro.Support.read_functions import load_template
+from pyFAT_astro.Support.read_functions import load_template,tirific_template
 
 from pyFAT_astro.Support.modify_template import write_new_to_template,smooth_profile,set_cflux,fix_sbr, \
                                           regularise_profile,set_fitting_parameters,check_size, \
-                                          no_declining_vrot,set_errors,get_warp_slope,check_angles
+                                          no_declining_vrot,set_errors,get_warp_slope,check_angles,write_center
 from pyFAT_astro.Support.constants import H_0
 from pyFAT_astro.Support.fat_errors import SofiaFaintError,BadConfigurationError,\
                                               InclinationRunError,SofiaRunError,BadSourceError
+from pyFAT_astro.Support.tirshaker import tirshaker
 
 from astropy.wcs import WCS
 from astropy.io import fits
@@ -27,6 +29,7 @@ import os
 import sys
 import time
 import copy
+
 import subprocess
 import numpy as np
 import traceback
@@ -37,9 +40,12 @@ from datetime import datetime
 
 
 def check_central_convergence(Configuration,Tirific_Template, fit_type = 'Undefined', debug = False):
+    #The new values are already loaded into the Tirific_Template so if we do accept we have to reset the values
     if debug:
         print_log(f'''CHECK_CENTRAL_CONVERGE: Starting stage {fit_type}.
 ''',Configuration['OUTPUTLOG'],debug = True)
+    update_statistic(Configuration, message= "Starting the central convergence run", debug=debug)
+
     new_xpos,new_ypos,new_vsys = rf.load_tirific(Configuration,f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def",Variables = ['XPOS','YPOS','VSYS'],debug = debug)
     old_xpos,old_ypos,old_vsys = rf.load_tirific(Configuration,f"{Configuration['FITTING_DIR']}{fit_type}_In.def",Variables = ['XPOS','YPOS','VSYS'],debug = debug)
     if Configuration['OUTER_RINGS_DOUBLED']:
@@ -53,16 +59,18 @@ def check_central_convergence(Configuration,Tirific_Template, fit_type = 'Undefi
        abs(new_ypos[0] - old_ypos[0]) > dec_lim or \
        abs(new_vsys[0] - old_vsys[0]) > sys_lim:
         if Configuration['SIZE_IN_BEAMS'] < 20:
-            apply_limit = 2*Configuration['BEAM'][0]/3600.
+            apply_limit = 2.*Configuration['BEAM'][0]/3600.
         else:
             apply_limit = Configuration['BEAM'][0]/3600.*Configuration['SIZE_IN_BEAMS']*0.2
         if abs(new_xpos[0] - old_xpos[0]) > apply_limit or\
            abs(new_ypos[0] - old_ypos[0]) > apply_limit:
-           print_log(f'''CHECK_CONVERGENCE: The center shifted more than {apply_limit/Configuration['BEAM'][0]/3600.} FWHM.
+           print_log(f'''CHECK_CONVERGENCE: The center shifted more than {apply_limit/(Configuration['BEAM'][0]/3600.)} FWHM.
 {"":8s}CHECK_CONVERGENCE: Not applying this shift
 ''', Configuration['OUTPUTLOG'])
-           write_new_to_template(Configuration,f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def", Tirific_Template, Variables = ['VROT',
-                         'Z0', 'SBR', 'INCL','PA','SDIS','VROT_2',  'Z0_2','SBR_2','INCL_2','PA_2','SDIS_2'],debug=debug)
+           write_center(Configuration,Tirific_Template, [old_xpos[0],old_ypos[0],old_vsys[0]])
+
+           #write_new_to_template(Configuration,f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def", Tirific_Template, Variables = ['VROT',
+            #             'Z0', 'SBR', 'INCL','PA','SDIS','VROT_2',  'Z0_2','SBR_2','INCL_2','PA_2','SDIS_2'],debug=debug)
            return False
         else:
             try:
@@ -72,7 +80,7 @@ def check_central_convergence(Configuration,Tirific_Template, fit_type = 'Undefi
                    abs(new_vsys[0] - old_vsys[0]) < sys_lim:
                    print_log(f'''CHECK_CONVERGENCE: The center shifted back to the old position. Moving on to the next stage.
 ''', Configuration['OUTPUTLOG'])
-                   write_new_to_template(Configuration,f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def", Tirific_Template,debug=debug)
+                   #write_new_to_template(Configuration,f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def", Tirific_Template,debug=debug)
                    return True
             except:
                 pass
@@ -81,7 +89,7 @@ def check_central_convergence(Configuration,Tirific_Template, fit_type = 'Undefi
 {"":8s}The DEC has shifted from {old_ypos[0]} to  {new_ypos[0]} which is a difference of {abs(new_ypos[0] - old_ypos[0])} needed = {dec_lim}.
 {"":8s}The VSYS has shifted from {old_vsys[0]} to  {new_vsys[0]} which is a difference of {abs(new_vsys[0] - old_vsys[0])} needed = {sys_lim}.
 ''', Configuration['OUTPUTLOG'])
-            write_new_to_template(Configuration,f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def", Tirific_Template,debug=debug)
+            #write_new_to_template(Configuration,f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def", Tirific_Template,debug=debug)
             return False
     else:
         print_log(f'''CHECK_CONVERGENCE: The center is accepted. The shift is:
@@ -89,7 +97,7 @@ def check_central_convergence(Configuration,Tirific_Template, fit_type = 'Undefi
 {"":8s}The DEC has shifted from {old_ypos[0]} to  {new_ypos[0]} which is a difference of {abs(new_ypos[0] - old_ypos[0])} needed = {dec_lim}.
 {"":8s}The VSYS has shifted from {old_vsys[0]} to  {new_vsys[0]} which is a difference of {abs(new_vsys[0] - old_vsys[0])} needed = {sys_lim}.
 ''', Configuration['OUTPUTLOG'])
-        write_new_to_template(Configuration,f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def", Tirific_Template,debug=debug)
+        #write_new_to_template(Configuration,f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def", Tirific_Template,debug=debug)
         return True
 check_central_convergence.__doc__ =f'''
  NAME:
@@ -126,6 +134,8 @@ def check_inclination(Configuration,Tirific_Template,Fits_Files, fit_type = 'Und
     if debug:
         print_log(f'''CHECK_INCLINATION: estimating whether our inclination estimate is decent.
 ''',Configuration['OUTPUTLOG'],debug = True)
+    update_statistic(Configuration, message= "Starting the the inclination run", debug=debug)
+
     to_extract=['VROT','INCL','INCL_2','PA','XPOS','YPOS']
     current = rf.load_template(Configuration,Tirific_Template,
                 Variables= to_extract)
@@ -160,7 +170,7 @@ def check_inclination(Configuration,Tirific_Template,Fits_Files, fit_type = 'Und
         Check_Template['INIMODE'] = '0'
         Check_Template['INSET'] = f"{Fits_Files['FITTING_CUBE']}"
         current_cwd = os.getcwd()
-        short_log = Configuration['LOG_DIRECTORY'].replace(current_cwd,'.')
+        short_log = Configuration['LOG_DIRECTORY'].replace(Configuration['FITTING_DIR'],'')
         Check_Template['RESTARTNAME'] = f"{short_log}restart_{tmp_stage}.txt"
         #Check_Template['RESTARTNAME'] = get_system_string(f"{Configuration['LOG_DIRECTORY']}restart_{tmp_stage}.txt")
         #Check_Template['RESTARTNAME'] = f"./Logs/06-09-2021/restart_tmp_incl_check.txt"
@@ -305,6 +315,8 @@ def check_source(Configuration, Fits_Files, debug = False):
     if debug:
         print_log(f'''CHECK_SOURCE: Starting.
 ''',Configuration['OUTPUTLOG'],debug = True)
+    update_statistic(Configuration, message= "Starting the check source run", debug=debug)
+
 
     name,x,x_min,x_max,y,y_min,y_max,z,z_min,z_max,ra,dec,v_app,f_sum,kin_pa, \
         w50,err_f_sum, err_x,err_y,err_z= rf.sofia_catalogue(Configuration,Fits_Files,debug=debug)
@@ -332,6 +344,9 @@ def check_source(Configuration, Fits_Files, debug = False):
     if debug:
         print_log(f'''CHECK_SOURCE: We use a distance of {Configuration['DISTANCE']}.
 ''',Configuration['OUTPUTLOG'])
+    if np.sum(Configuration['Z0_INPUT_BOUNDARY']) == 0.:
+        set_boundaries(Configuration,'Z0',*convertskyangle(Configuration,[0.05,2.5],Configuration['DISTANCE'], physical = True),input=True,debug=debug)
+
     #Check whether the cube is very large, if so cut it down
 
     new_box = cut_cubes(Configuration, Fits_Files, galaxy_box,debug=debug)
@@ -625,60 +640,39 @@ fitting_osc.__doc__ =f'''
 '''
 
 def fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run, stage = 'initial',fit_type='Undefined', debug = False):
+    update_statistic(Configuration, message= "Starting the smoothed check run", debug=debug)
     if debug:
         print_log(f'''FIT_SMOOTHED_CHECK: Starting stage {stage} and fit_type {fit_type}.
 ''',Configuration['OUTPUTLOG'],debug = True)
     #if we have only a few rings we only smooth. else we fit a polynomial to the RC and smooth the SBR
     #smoothed_sbr = smooth_profile(Configuration,Tirific_Template,'SBR',hdr, min_error= np.max([float(Tirific_Template['CFLUX']),float(Tirific_Template['CFLUX_2'])]),debug = debug)
     fix_sbr(Configuration,Tirific_Template,smooth = True, debug = debug)
-
-    if stage in ['after_ec', 'after_os']:
+    if stage == 'after_cc':
+        smoothed_vrot = smooth_profile(Configuration,Tirific_Template,'VROT',min_error = Configuration['CHANNEL_WIDTH'],debug = debug)
+    else:
         min_error = []
         pars_to_smooth = []
         not_to_smooth = []
         fixed_errors = []
-        for parameter in ['INCL','Z0','SDIS','PA']:
+        for parameter in ['VROT','INCL','Z0','SDIS','PA','XPOS','YPOS','VSYS']:
             if parameter in Configuration['FIXED_PARAMETERS'][0]:
                 not_to_smooth.append(parameter)
             else:
                 pars_to_smooth.append(parameter)
             min_error.append(Configuration['MIN_ERROR'][parameter])
 
-        #if not Configuration['FIX_INCLINATION'][0]:
-        #    pars_to_smooth.append('INCL')
-        #    min_error.append(set_limits(3.*np.mean(Configuration['LIMIT_MODIFIER']),2,5))
-        #else:
-        #    not_to_smooth.append('INCL')
-        #    fixed_errors.append(set_limits(2.*np.mean(Configuration['LIMIT_MODIFIER']),2,5))
-        #if not Configuration['FIX_Z0'][0]:
-        #    pars_to_smooth.append('Z0')
-        #    min_error.append(convertskyangle(Configuration,0.1,Configuration['DISTANCE'],physical= True))
-        #else:
-        #    not_to_smooth.append('Z0')
-        #    fixed_errors.append(convertskyangle(Configuration,0.1,Configuration['DISTANCE'],physical= True))
-        #if not Configuration['FIX_PA'][0]:
-        #    pars_to_smooth.append('PA')
-        #    min_error.append(2.)
-        #else:
-        #    not_to_smooth.append('PA')
-        #    fixed_errors.append(1.)
-
-        #if not Configuration['FIX_SDIS'][0]:
-        #    pars_to_smooth.append('SDIS')
-        #    min_error.append(Configuration['CHANNEL_WIDTH']/2./Configuration['LIMIT_MODIFIER'])
-        #else:
-        #    not_to_smooth.append('SDIS')
-        #    fixed_errors.append(Configuration['CHANNEL_WIDTH']/3.)
-
         for key,min_err in zip(pars_to_smooth,min_error):
-            smoothed = regularise_profile(Configuration,Tirific_Template,key,min_error = Configuration['MIN_ERROR'][parameter],debug = debug)
+                smoothed = regularise_profile(Configuration,Tirific_Template,key,min_error = Configuration['MIN_ERROR'][parameter],debug = debug)
+                if key == 'VROT':
+                    smoothed_vrot=copy.deepcopy(smoothed)
 
         for key,min_err in zip(not_to_smooth,fixed_errors):
             set_errors(Configuration,Tirific_Template,key,min_error = Configuration['MIN_ERROR'][parameter],debug = debug)
-    if stage == 'after_cc':
-        smoothed_vrot = smooth_profile(Configuration,Tirific_Template,'VROT',min_error = Configuration['CHANNEL_WIDTH'],debug = debug)
-    else:
-        smoothed_vrot = regularise_profile(Configuration,Tirific_Template,'VROT',min_error = Configuration['CHANNEL_WIDTH'],debug = debug)
+
+    #if stage == 'after_cc':
+    #    smoothed_vrot = smooth_profile(Configuration,Tirific_Template,'VROT',min_error = Configuration['CHANNEL_WIDTH'],debug = debug)
+    #else:
+    #    smoothed_vrot = regularise_profile(Configuration,Tirific_Template,'VROT',min_error = Configuration['CHANNEL_WIDTH'],debug = debug)
 
     #If our fit stage is after cc we want to make sure we do an extra check on low inclinations or small Galaxies
     #if stage =='after_cc' and (Configuration['SIZE_IN_BEAMS'] < 5 or incl[0] < 50.):
@@ -718,7 +712,6 @@ def fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run, s
 
     write_new_to_template(Configuration, f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def", Tirific_Template,debug = debug)
     if Configuration['NO_RINGS'] > 5.:
-        write_new_to_template(Configuration, f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def", Tirific_Template,debug = debug)
         smoothed_vrot = regularise_profile(Configuration,Tirific_Template,'VROT',min_error = Configuration['CHANNEL_WIDTH'],debug = debug)
         set_fitting_parameters(Configuration, Tirific_Template,stage = 'final_os',\
                           initial_estimates = parameters,parameters_to_adjust  = ['VROT'], debug = debug)
@@ -765,6 +758,7 @@ fit_smoothed_check.__doc__ =f'''
  NOTE:
 '''
 def make_full_resolution(Configuration,Tirific_Template,Fits_Files,fit_type = 'Undefined', current_run = 'Not zed', debug = False):
+    update_statistic(Configuration, message= "Starting to make a full resolution model run", debug=debug)
     if debug:
         print_log(f'''MAKE_FULL_RESOLUTION: creating full resolution for stage {fit_type}.
 ''',Configuration['OUTPUTLOG'],debug = True)
@@ -821,7 +815,20 @@ def one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run, de
     #Then we load the produced output into our template
     write_new_to_template(Configuration,f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def" , Tirific_Template, debug = debug)
     #Check that the centre does not deviate too much
+    if debug:
+        print_log(f'''CHECK THAT WE CAHANGE !!!!!!
+{Tirific_Template['VROT']}
+{Tirific_Template['PA']}
+{Tirific_Template['XPOS']}
+''',Configuration['OUTPUTLOG'])
     accepted_central = check_central_convergence(Configuration,Tirific_Template, fit_type = fit_type,debug=debug)
+    if debug:
+        print_log(f'''CHECK THAT WE CAHANGE !!!!!!
+{Tirific_Template['VROT']}
+{Tirific_Template['PA']}
+{Tirific_Template['XPOS']}
+''',Configuration['OUTPUTLOG'])
+
     # Check whether we have the correct sizes,
     accepted_size = check_size(Configuration,Tirific_Template, fit_type = fit_type, stage = stage, current_run = current_run, debug=debug,Fits_Files=Fits_Files)
     if accepted and accepted_size and accepted_central:
@@ -866,7 +873,11 @@ def one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run, de
 
         set_fitting_parameters(Configuration, Tirific_Template,stage = 'run_os',\
                              debug = debug)
-
+        print_log(f'''CHECK THAT WE CAHANGE !!!!!!
+        {Tirific_Template['VROT']}
+        {Tirific_Template['PA']}
+        {Tirific_Template['XPOS']}
+        ''',Configuration['OUTPUTLOG'])
         wf.tirific(Configuration,Tirific_Template,name = f"{Configuration['USED_FITTING']}_In.def",debug = debug)
     return current_run
 one_step_converge.__doc__ =f'''
@@ -898,124 +909,13 @@ one_step_converge.__doc__ =f'''
 
  NOTE: This routine sets the Configuration['ACCEPTED']
 '''
-def run_tirific(Configuration, current_run, stage = 'initial',fit_type = 'Undefined', debug = False):
-    if debug:
-        print_log(f'''RUN_TIRIFIC: Starting a new run in stage {stage} and fit_type {fit_type}
-''',Configuration['OUTPUTLOG'], screen = True,debug = debug)
-
-    # First move the previous fits
-    rename_fit_products(Configuration,fit_type = fit_type, stage=stage, debug = debug)
-    # Then if already running change restart file
-    if Configuration['TIRIFIC_RUNNING']:
-        print_log(f'''RUN_TIRIFIC: We are using an initialized tirific in {Configuration['FITTING_DIR']}
-''',Configuration['OUTPUTLOG'], screen = True)
-        with open(f"{Configuration['LOG_DIRECTORY']}restart_{fit_type}.txt",'a') as file:
-            file.write("Restarting from previous run")
-    else:
-        print_log(f'''RUN_TIRIFIC: We are starting a new TiRiFiC in {Configuration['FITTING_DIR']}
-''',Configuration['OUTPUTLOG'], screen = True)
-        with open(f"{Configuration['LOG_DIRECTORY']}restart_{fit_type}.txt",'w') as file:
-            file.write("Initialized a new run")
-        current_run = subprocess.Popen([Configuration['TIRIFIC'],f"DEFFILE={fit_type}_In.def","ACTION = 1"], stdout = subprocess.PIPE, \
-                                    stderr = subprocess.PIPE,cwd=Configuration['FITTING_DIR'],universal_newlines = True)
-        Configuration['TIRIFIC_RUNNING'] = True
-        Configuration['TIRIFIC_PID'] = current_run.pid
-    currentloop =1
-    max_loop = 0
-    counter = 0
-    if Configuration['TIMING']:
-        time.sleep(0.1)
-        with open(f"{Configuration['LOG_DIRECTORY']}Usage_Statistics.txt",'a') as file:
-            file.write(f"# Started Tirific at stage = {fit_type}\n")
-            CPU,mem = get_usage_statistics(Configuration,current_run.pid)
-            file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Mb \n")
-    else:
-        time.sleep(0.1)
-    print(f"\r{'':8s}RUN_TIRIFIC: 0 % Completed", end =" ",flush = True)
-    triggered = False
-    for tir_out_line in current_run.stdout:
-        tmp = re.split(r"[/: ]+",tir_out_line.strip())
-        counter += 1
-        if (counter % 50) == 0:
-            if Configuration['TIMING']:
-                with open(f"{Configuration['LOG_DIRECTORY']}Usage_Statistics.txt",'a') as file:
-                    if tmp[0] == 'L' and not triggered:
-                        if tmp[1] == '1':
-                            file.write("# Started the actual fitting \n")
-                            triggered = True
-                    CPU,mem = get_usage_statistics(Configuration,current_run.pid)
-                    file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Mb \n")
-        if tmp[0] == 'L':
-            if int(tmp[1]) != currentloop:
-                print(f"\r{'':8s}RUN_TIRIFIC: {float(tmp[1])/float(max_loop)*100.:.1f} % Completed", end =" ",flush = True)
-            currentloop  = int(tmp[1])
-            if max_loop == 0:
-                max_loop = int(tmp[2])
-            try:
-                Configuration['NO_POINTSOURCES'] = np.array([tmp[18],tmp[19]],dtype=float)
-            except:
-                #If this fails for some reason an old number suffices, if the code really crashed problems will occur elsewhere.
-                pass
-        if tmp[0].strip() == 'Finished':
-            break
-        if tmp[0].strip() == 'Abort':
-            break
-    print(f'\n')
-    if Configuration['TIMING']:
-        with open(f"{Configuration['LOG_DIRECTORY']}Usage_Statistics.txt",'a') as file:
-            file.write("# Finished this run \n")
-            CPU,mem = get_usage_statistics(Configuration,current_run.pid)
-            file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Gb\n")
-    print(f"{'':8s}RUN_TIRIFIC: Finished the current tirific run.")
-    #The break off goes faster sometimes than the writing of the file so let's make sure it is present
-    time.sleep(1.0)
-    wait_counter = 0
-    while not os.path.exists(f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.fits") and wait_counter < 1000.:
-        print(f"\r Waiting ", end = "", flush = True)
-        time.sleep(0.5)
-        wait_counter += 1
-
-    if currentloop != max_loop:
-        return 1,current_run
-    else:
-        return 0,current_run
-run_tirific.__doc__ =f'''
- NAME:
-    run_tirific
-
- PURPOSE:
-    Check whether we have an initialized tirific if not initialize and run else restart the initialized run.
-
- CATEGORY:
-    run_functions
-
- INPUTS:
-    Configuration = Standard FAT configuration
-    current_run = subprocess structure of tirific
-
- OPTIONAL INPUTS:
-    debug = False
-
-    fit_type = 'Undefined'
-    type of fitting
-
-    stage = 'initial'
-    stage of the fitting process
-
- OUTPUTS:
-
- OPTIONAL OUTPUTS:
-
- PROCEDURES CALLED:
-    Unspecified
-
- NOTE:
-'''
 
 def sofia(Configuration, Fits_Files, debug = False):
     if debug:
         print_log(f'''RUN_SOFIA: starting sofia run from the template.
 ''',Configuration['OUTPUTLOG'],debug = True)
+    update_statistic(Configuration, message= "Starting the SoFiA run", debug=debug)
+
     sofia_template = rf.sofia_template(debug=debug)
     create_directory('Sofia_Output',Configuration['FITTING_DIR'])
     os.chdir(Configuration['FITTING_DIR'])
@@ -1098,4 +998,125 @@ sofia.__doc__ =f'''
     Unspecified
 
  NOTE:
+'''
+
+def tirshaker_call(Configuration,debug = False):
+    # First we make a directory to keep all contained
+    update_statistic(Configuration, message= "Starting the Tirshaker call run", debug=debug)
+    if not os.path.isdir(f"{Configuration['FITTING_DIR']}/Error_Shaker/"):
+        os.mkdir(f"{Configuration['FITTING_DIR']}/Error_Shaker/")
+
+
+    # Then we open the final file
+    filename = f"{Configuration['FITTING_DIR']}Error_Shaker/Error_Shaker_In.def"
+
+    final_FAT_file= f"{Configuration['FITTING_DIR']}{Configuration['USED_FITTING']}/{Configuration['USED_FITTING']}.def"
+
+    Tirific_Template = tirific_template(filename = final_FAT_file \
+                    , debug = debug)
+    #Change the name and run only 2 LOOPS
+    Tirific_Template['RESTARTNAME']= f"restart_Error_Shaker.txt"
+    Tirific_Template['INSET'] = f"../{Tirific_Template['INSET']}"
+    Tirific_Template['TIRDEF']= f"Error_Shaker_Out.def"
+    Tirific_Template['LOOPS'] = '1'
+
+    outfilename = 'Error_Shaker.def'
+    outfileprefix = 'Error_Shaker'
+
+    #This we need to remove from the actual run
+    #Configuration['NO_RINGS'] = int(Tirific_Template['NUR'])
+    #Configuration['RING_SIZE'] = 1.
+    #Configuration['SIZE_IN_BEAMS'] = Configuration['NO_RINGS']-2
+    set_fitting_parameters(Configuration, Tirific_Template,stage = 'run_os',\
+                         debug = debug)
+
+    #Write it back to the file
+    wf.tirific(Configuration,Tirific_Template, name =f"Error_Shaker/Error_Shaker_In.def" , debug = debug)
+
+    #Determine the error block from the last fit settings.
+    parameter_groups,rings,block,variation,variation_type = get_fit_groups(Configuration,Tirific_Template,debug = debug)
+    if debug:
+        print_log(f'''TIRSHAKER_CALL: We are shaking with the following parameters:
+{'':8s}groups = {parameter_groups}
+{'':8s}rings = {rings}
+{'':8s}block = {block}
+{'':8s}variation = {variation}
+{'':8s}variation_type = {variation_type}
+''',Configuration['OUTPUTLOG'])
+
+    iterations = Configuration['SHAKER_ITERATIONS']
+    random_seed = 2
+    os.chdir(f"{Configuration['FITTING_DIR']}/Error_Shaker/")
+    tirshaker(Configuration,Tirific_Template, outfilename = outfilename,\
+                outfileprefix = outfileprefix, parameter_groups = parameter_groups, \
+                rings = rings, block = block, variation = variation,\
+                 variation_type = variation_type, iterations = iterations,
+                 random_seed = random_seed, mode = 'mad',debug=debug)
+    os.chdir(f"{Configuration['START_DIRECTORY']}")
+    '''
+    try:
+        os.remove(f"{Configuration['FITTING_DIR']}Error_Shaker/blatirshin")
+    except:
+        pass
+    try:
+        os.remove(f"{Configuration['FITTING_DIR']}Error_Shaker/blatirlog")
+    except:
+        pass
+    #remove the duplicate line in the shaker output
+    # make sure all duplicate are removed
+
+    outshaker = open(f"{Configuration['FITTING_DIR']}Error_Shaker/{outfilename}", 'r').readlines()
+    lines_set = set(outshaker)
+
+    with open(f"{Configuration['FITTING_DIR']}Error_Shaker/{outfilename}", 'w') as out:
+        for line in lines_set:
+            out.write(line)
+
+    #Let's load the   the tirshaker output
+    err_var =[]
+    for group in parameter_groups:
+        for par in group:
+            if f'ERR_{par[:-1]}' not in err_var:
+                err_var.append(f'ERR_{par[:-1]}')
+    errors = rf.load_tirific(Configuration,f"{Configuration['FITTING_DIR']}Error_Shaker/{outfilename}",Variables = err_var,
+                     unpack = False , debug = debug )
+
+    for para in err_var:
+        key=para[4:]
+        FAT_err = f'# {key}_ERR'
+        format = set_format(key)
+        if FAT_err in Tirific_Template:
+            Tirific_Template[FAT_err]= f"{' '.join([f'{x:{format}}' for x in errors[:int(Configuration['NO_RINGS']),err_var.index(para)]])}"
+        else:
+            Tirific_Template.insert(key,f"# {key}_ERR",f"{' '.join([f'{x:{format}}' for x in errors[:int(Configuration['NO_RINGS']),err_var.index(para)]])}")
+'''
+    wf.tirific(Configuration,Tirific_Template,name=f"{Configuration['USED_FITTING']}/{Configuration['USED_FITTING']}.def", debug = debug)
+
+tirshaker_call.__doc__ =f'''
+ NAME:
+    tirshaker
+
+ PURPOSE:
+    function to setup the right input for tirshaker and call it and afterwards process the results
+
+ CATEGORY:
+    run_functions
+
+ INPUTS:
+    Configuration
+
+ OPTIONAL INPUTS:
+    debug = False
+
+
+ OUTPUTS:
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+
+
 '''
