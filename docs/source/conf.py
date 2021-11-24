@@ -6,8 +6,8 @@ project = 'pyFAT-astro'
 copyright = '2021, P. Kamphuis'
 author = 'P. Kamphuis'
 
-release = '1.0'
-version = '1.0.0'
+release = '0.0'
+version = '0.0.8'
 
 # -- General configuration
 
