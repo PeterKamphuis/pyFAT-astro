@@ -3,7 +3,7 @@
 
 from pyFAT_astro.Support.fat_errors import SupportRunError,SmallSourceError,\
                                               FileNotFoundError,TirificKillError,\
-                                              InputError,ProgramError
+                                              InputError,ProgramError,DefFileError
 from collections import OrderedDict #used in Proper_Dictionary
 from inspect import getframeinfo,stack
 
@@ -23,6 +23,7 @@ import matplotlib.pyplot as plt
 import os
 import sys
 import inspect
+import psutil as psu
 import signal
 import time
 import traceback
@@ -31,8 +32,9 @@ import copy
 import warnings
 import re
 import subprocess
-
-
+from datetime import datetime
+class BadHeaderError(Exception):
+    pass
 # A class of ordered dictionary where keys can be inserted in at specified locations or at the end.
 class Proper_Dictionary(OrderedDict):
     def __setitem__(self, key, value):
@@ -45,8 +47,9 @@ class Proper_Dictionary(OrderedDict):
                 if function != 'setup_configuration':
                     raise ProgramError("FAT does not allow additional values to the Configuration outside the setup_configuration in support_functions.")
         OrderedDict.__setitem__(self,key, value)
-    #    print("what habbens now")
+    #    "what habbens now")
     def insert(self, existing_key, new_key, key_value):
+        time.sleep(0.05)
         done = False
         if new_key in self:
             self[new_key] = key_value
@@ -131,7 +134,6 @@ calc_rings.__doc__ =f'''
 
  NOTE:
 '''
-
 
 def check_sofia(Configuration,Fits_Files,debug=False):
     files =['_mask.fits','_mom0.fits','_mom1.fits','_chan.fits','_mom2.fits','_cat.txt']
@@ -767,14 +769,15 @@ def copy_homemade_sofia(Configuration,no_cat=False,debug=False):
             #make sure the header is decent
             two_dim = True
             mask_file=False
+
             if file == '_mask.fits':
                 two_dim = False
                 mask_file = True
+
             initial = fits.open(f"{Configuration['FITTING_DIR']}Sofia_Output/{Configuration['BASE_NAME']}{file}")
             hdr_in = initial[0].header
             data=initial[0].data
             initial.close()
-            two_dim = True
             hdr = clean_header(Configuration,hdr_in,two_dim=two_dim,mask_file=mask_file,debug=debug)
             update = False
             for key in hdr:
@@ -793,6 +796,7 @@ def copy_homemade_sofia(Configuration,no_cat=False,debug=False):
                     update = True
                     hdr['BUNIT'] = 'km/s'
                     data = data/1000.
+
             if update:
                  fits.writeto(f"{Configuration['FITTING_DIR']}Sofia_Output/{Configuration['BASE_NAME']}{file}",data,hdr,overwrite=True)
 
@@ -1144,6 +1148,146 @@ gaussian_function.__doc__ =f'''
 
  NOTE:
 '''
+def get_fit_groups(Configuration,Tirific_Template,debug = False):
+    parameter_groups = []
+    block = []
+    rings = []
+    groups = Tirific_Template['VARY'].split(',')
+    variation_type = []
+    variation = []
+    radii,cut_off_limits = sbr_limits(Configuration, systemic= float(Tirific_Template['VSYS'].split(' ')[0]) , debug = debug)
+    sbr_standard = np.mean(cut_off_limits) * 5.
+    paramater_standard_variation = {'PA': [10.,'a'],
+                                   'INCL': [10.,'a'],
+                                   'VROT': [Configuration['CHANNEL_WIDTH']*3.,'a'],
+                                   'VSYS': [Configuration['CHANNEL_WIDTH'],'a'],
+                                   'XPOS': [Configuration['BEAM'][0]/3600.,'a'],
+                                   'YPOS': [Configuration['BEAM'][0]/3600.,'a'],
+                                   'SBR': [sbr_standard,'a'],
+                                   'Z0': [Configuration['BEAM'][0]*2.,'a'],
+                                   'SDIS': [Configuration['CHANNEL_WIDTH']*1.5,'a'],
+                                   }
+    if debug:
+        print_log(f'''GET_FIT_GROUPS: We have found the following unformatted groups from VARY:
+{'':8s}{groups}
+''',Configuration['OUTPUTLOG'])
+    for group in groups:
+        if debug:
+            print_log(f'''GET_FIT_GROUPS: We are processing {group}
+''',Configuration['OUTPUTLOG'])
+        parts = group.split()
+        if parts[0][0] == '!':
+            block.append(False)
+            parts[0] = parts[0][1:]
+        else:
+            block.append(True)
+        found_rings = []
+        preliminary_group = []
+        for part in parts:
+            if part[0].isnumeric():
+                if ':' in part:
+                    in_rings = [int(x) for x in part.split(':')]
+                    if in_rings.sort():
+                        in_rings.sort()
+                    in_rings[1] += 1
+                    current = [int(x) for x in range(*in_rings)]
+                else:
+                    current = [int(part)]
+                if len(found_rings) == 0:
+                    found_rings = current
+                else:
+                    if np.array_equal(np.array(found_rings),np.array(found_rings)):
+                        pass
+                    else:
+                        raise DefFileError("The VARY settings in this deffile are not acceptable you have different ring for one block.")
+            else:
+                preliminary_group.append(f'{part}')
+        if len(found_rings) == 1:
+            block[-1] = False
+        parameter_groups.append(preliminary_group)
+        rings.append(found_rings)
+        block_str = 'as a block.'
+        if not block[-1]:
+            block_str = 'individually.'
+        if debug:
+            print_log(f'''GET_FIT_GROUPS: We determined the group {parameter_groups[-1]}
+{'':8s}with rings {rings[-1]}
+{'':8s} which are varied {block_str}
+''',Configuration['OUTPUTLOG'])
+        # Then get current errors that are present
+        per_par_variation  = []
+        current_par = ''
+        for par in parameter_groups[-1]:
+            if current_par == '':
+                current_par = par
+                if current_par[-1] == '2':
+                    current_par=current_par[:-2]
+            par = [f'# {par}_ERR']
+            all_errors = np.array(get_from_template(Configuration,Tirific_Template, par,debug=debug)[0],dtype=float)
+            current_rings = np.array(rings[-1],dtype=int)-1
+            if current_rings.size == 1:
+                current_rings = int(current_rings)
+            if len(all_errors) ==0. and current_par != 'SBR':
+                if block[-1]:
+                    per_par_variation.append(paramater_standard_variation[current_par][0]/3.)
+                else:
+                    per_par_variation.append(paramater_standard_variation[current_par][0])
+            elif current_par == 'SBR':
+                if debug:
+                    print_log(f'''GET_FIT_GROUPS: For SBR we are setting
+{'':8s}the cut_off_limits {cut_off_limits}
+{'':8s} in ring {current_rings}  == {cut_off_limits[current_rings]}
+''',Configuration['OUTPUTLOG'])
+                if block[-1]:
+                    per_par_variation.append(np.mean(cut_off_limits[current_rings])*3.)
+                else:
+                    per_par_variation.append(np.max(cut_off_limits[current_rings])*3.)
+            else:
+
+                if block[-1]:
+                    per_par_variation.append(np.mean(all_errors[current_rings])*3.)
+                else:
+                    per_par_variation.append(np.max(all_errors[current_rings]))
+        if block[-1]:
+            tmp_variation = np.mean(per_par_variation)*3.
+        else:
+            tmp_variation = np.max(per_par_variation)
+        if tmp_variation > paramater_standard_variation[current_par][0]:
+            variation.append(tmp_variation)
+            variation_type.append('a')
+        else:
+            variation.append(paramater_standard_variation[current_par][0])
+            variation_type.append(paramater_standard_variation[current_par][1])
+
+
+    return parameter_groups,rings,block,variation,variation_type
+
+get_fit_groups.__doc__ =f'''
+ NAME:
+    get_fit_groups
+ PURPOSE:
+    get the groups that are fitting, whether they are a block or not and their expected errors
+
+ CATEGORY:
+    support_functions
+
+ INPUTS:
+    Tirific_Template =  the def file to get errors.
+ OPTIONAL INPUTS:
+
+ KEYWORD PARAMETERS:
+
+ OUTPUTS:
+     tirshaker settings
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ EXAMPLE:
+
+ NOTE:
+'''
 
 def get_from_template(Configuration,Tirific_Template,Variables, debug = False):
     out = []
@@ -1151,7 +1295,10 @@ def get_from_template(Configuration,Tirific_Template,Variables, debug = False):
         print_log(f'''GET_FROM_TEMPLATE: Trying to get the following profiles {Variables}
 ''',Configuration['OUTPUTLOG'] ,debug= True)
     for key in Variables:
-        out.append([float(x) for x  in Tirific_Template[key].split()])
+        try:
+            out.append([float(x) for x  in Tirific_Template[key].split()])
+        except KeyError:
+            out.append([])
     #Because lists are stupid i.e. sbr[0][0] = SBR[0], sbr[1][0] = SBR_2[0] but  sbr[:][0] = SBR[:] not SBR[0],SBR_2[0] as logic would demand
     if debug:
         print_log(f'''GET_FROM_TEMPLATE: We extracted the following profiles from the Template.
@@ -1192,7 +1339,7 @@ get_from_template.__doc__ =f'''
     the latter can thus can include zeros
 '''
 
-def get_inclination_pa(Configuration, Image, center, cutoff = 0., debug = False):
+def get_inclination_pa(Configuration, Image, center, cutoff = 0., debug = False,figure_name = 'test'):
     map = copy.deepcopy(Image[0].data)
     for i in [0,1]:
         if debug:
@@ -1208,14 +1355,17 @@ def get_inclination_pa(Configuration, Image, center, cutoff = 0., debug = False)
         if np.any(np.isnan(sin_parameters)):
             return [float('NaN'),float('NaN')],  [float('NaN'),float('NaN')],float('NaN')
 
-        '''
-        import matplotlib
-        matplotlib.use('TkAgg')
-        fig = plt.figure()
-        plt.plot(angles,ratios)
-        plt.plot(angles,sin_ratios)
-        plt.show()
-        '''
+
+
+        #matplotlib.use('MacOSX')
+        #if debug:
+        #    name= f'{figure_name}_{i}.pdf'
+        #    fig = plt.figure()
+        #    plt.plot(angles,ratios)
+        #    plt.plot(angles,sin_ratios,'k--')
+        #    plt.savefig(name, bbox_inches='tight')
+        #    plt.close()
+
         ratios=sin_ratios
         if debug:
             if i == 0:
@@ -1649,7 +1799,16 @@ def get_system_string(string):
         string = "\ ".join(string.split())
     return string
 
-def get_usage_statistics(Configuration,process_id, debug = False):
+def get_usage_statistics(Configuration,process, debug = False):
+    #try:
+    memory_in_mb = (process.memory_info()[0])/2**20. #psutilreturns bytes
+    cpu_percent = process.cpu_percent(interval=1)
+    #except:
+    #    cpu_percent= 0.
+    #    memory_in_mb=0.
+    return cpu_percent,memory_in_mb
+
+def get_usage_statistics_old(Configuration,process_id, debug = False):
     result = subprocess.check_output(['top',f'-p {process_id}','-d 1','-n 1'])
     #result = subprocess.check_output(['ps','u'])
     lines = result.decode('utf8').split('\n')
@@ -1681,7 +1840,7 @@ get_usage_statistics.__doc__ =f'''
  NAME:
     get_usage_statistics
  PURPOSE:
-    use top to get the current CPU and memory usage of tirific
+    use psutil to get the current CPU and memory usage of tirific
 
  CATEGORY:
     support_functions
@@ -1703,6 +1862,7 @@ get_usage_statistics.__doc__ =f'''
     Unspecified
 
  NOTE:
+    pyFAT version < 1.0.0 uses top which only works on unix and has an error in the MB calculation
 '''
 
 def get_vel_pa(Configuration,velocity_field,center= [0.,0.], debug =False):
@@ -1784,12 +1944,18 @@ def get_vel_pa(Configuration,velocity_field,center= [0.,0.], debug =False):
                 pa = abs(pa)
             else:
                 pa = np.radians(180.) - pa
-
+    if debug:
+        print_log(f'''GET_VEL_PA: This is the PA
+{'':8s} pa = {pa} pa_from_max = {pa_from_max} pa_from_min = {pa_from_min}
+''',Configuration['OUTPUTLOG'])
     if np.degrees(abs(pa-pa_from_max)) > 170. or   np.degrees(abs(pa-pa_from_min)) > 170:
         pa = pa
     else:
         pa = np.nanmean([pa,pa_from_max,pa_from_min])
     center.reverse()
+    if debug:
+        print_log(f'''GET_VEL_PA: This is the PA we extract from the velpa {np.degrees(pa)}
+''',Configuration['OUTPUTLOG'])
     return np.degrees([pa, np.nanstd([pa,pa_from_max,pa_from_min])])
 
 get_vel_pa.__doc__ =f'''
@@ -2329,6 +2495,200 @@ rotateImage.__doc__ =f'''
  NOTE:
 '''
 
+
+def run_tirific(Configuration, current_run, stage = 'initial',fit_type = 'Undefined',deffile='Undefined', debug = False):
+    if debug:
+        print_log(f'''RUN_TIRIFIC: Starting a new run in stage {stage} and fit_type {fit_type}
+''',Configuration['OUTPUTLOG'], screen = True,debug = debug)
+    if deffile == 'Undefined':
+        deffile=f"{fit_type}_In.def"
+
+    # First move the previous fits
+    rename_fit_products(Configuration,fit_type = fit_type, stage=stage, debug = debug)
+    # Then if already running change restart file
+    if fit_type == 'Error_Shaker':
+        work_dir = os.getcwd()
+        restart_file = f"restart_Error_Shaker.txt"
+    else:
+        restart_file = f"{Configuration['LOG_DIRECTORY']}restart_{fit_type}.txt"
+        work_dir = Configuration['FITTING_DIR']
+    if Configuration['TIRIFIC_RUNNING']:
+        print_log(f'''RUN_TIRIFIC: We are using an initialized tirific in {Configuration['FITTING_DIR']}
+''',Configuration['OUTPUTLOG'], screen = True)
+
+        with open(restart_file,'a') as file:
+            file.write("Restarting from previous run \n")
+    else:
+        print_log(f'''RUN_TIRIFIC: We are starting a new TiRiFiC in {Configuration['FITTING_DIR']}
+''',Configuration['OUTPUTLOG'], screen = True)
+        with open(restart_file,'w') as file:
+            file.write("Initialized a new run \n")
+        current_run = subprocess.Popen([Configuration['TIRIFIC'],f"DEFFILE={deffile}","ACTION= 1"],\
+                                       stdout = subprocess.PIPE, stderr = subprocess.PIPE,\
+                                       cwd=work_dir,universal_newlines = True)
+
+
+        Configuration['TIRIFIC_RUNNING'] = True
+        Configuration['TIRIFIC_PID'] = current_run.pid
+    currentloop =1
+    max_loop = 0
+    counter = 0
+    current_process= psu.Process(current_run.pid)
+    if Configuration['TIMING']:
+        time.sleep(0.1)
+        with open(f"{Configuration['LOG_DIRECTORY']}Usage_Statistics.txt",'a') as file:
+            file.write(f"# TIRIFIC: Initializing Tirific at stage = {fit_type} {datetime.now()} \n")
+            CPU,mem = get_usage_statistics(Configuration,current_process)
+            file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Mb for TiRiFiC \n")
+    else:
+        time.sleep(0.1)
+    print(f"\r{'':8s}RUN_TIRIFIC: 0 % Completed", end =" ",flush = True)
+    triggered = False
+    for tir_out_line in current_run.stdout:
+        tmp = re.split(r"[/: ]+",tir_out_line.strip())
+        counter += 1
+        if (counter % 50) == 0:
+            if Configuration['TIMING']:
+                with open(f"{Configuration['LOG_DIRECTORY']}Usage_Statistics.txt",'a') as file:
+                    if tmp[0] == 'L' and not triggered:
+                        if tmp[1] == '1':
+                            file.write(f"# TIRIFIC: Started the actual fitting {datetime.now()} \n")
+                            triggered = True
+                    CPU,mem = get_usage_statistics(Configuration,current_process)
+                    file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Mb for TiRiFiC \n")
+        if tmp[0] == 'L':
+            if int(tmp[1]) != currentloop:
+                print(f"\r{'':8s}RUN_TIRIFIC: {float(tmp[1])/float(max_loop)*100.:.1f} % Completed", end =" ",flush = True)
+            currentloop  = int(tmp[1])
+            if max_loop == 0:
+                max_loop = int(tmp[2])
+            try:
+                Configuration['NO_POINTSOURCES'] = np.array([tmp[18],tmp[19]],dtype=float)
+            except:
+                #If this fails for some reason an old number suffices, if the code really crashed problems will occur elsewhere.
+                pass
+        if tmp[0].strip() == 'Finished':
+            break
+        if tmp[0].strip() == 'Abort':
+            break
+    print(f'\n')
+    if Configuration['TIMING']:
+        with open(f"{Configuration['LOG_DIRECTORY']}Usage_Statistics.txt",'a') as file:
+            file.write(f"# TIRIFIC: Finished this run {datetime.now()} \n")
+            CPU,mem = get_usage_statistics(Configuration,current_process)
+            file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Mb for TiRiFiC \n")
+    print(f"{'':8s}RUN_TIRIFIC: Finished the current tirific run.")
+
+    #The break off goes faster sometimes than the writing of the file so let's make sure it is present
+    time.sleep(1.0)
+    wait_counter = 0
+    if fit_type != 'Error_Shaker':
+        while not os.path.exists(f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.fits") and wait_counter < 1000.:
+            print(f"\r Waiting ", end = "", flush = True)
+            time.sleep(0.5)
+            wait_counter += 1
+
+    if currentloop != max_loop:
+        return 1,current_run
+    else:
+        return 0,current_run
+run_tirific.__doc__ =f'''
+ NAME:
+    run_tirific
+
+ PURPOSE:
+    Check whether we have an initialized tirific if not initialize and run else restart the initialized run.
+
+ CATEGORY:
+    support_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    current_run = subprocess structure of tirific
+
+ OPTIONAL INPUTS:
+    debug = False
+
+    fit_type = 'Undefined'
+    type of fitting
+
+    stage = 'initial'
+    stage of the fitting process
+
+ OUTPUTS:
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
+
+
+def set_boundaries(Configuration,key,lower,upper,input=False,debug=False):
+    check=False
+    key = key.upper()
+    if np.sum(Configuration[f'{key}_INPUT_BOUNDARY']) != 0.:
+        check = True
+    if input:
+        boundary = f'{key}_INPUT_BOUNDARY'
+    else:
+        boundary = f'{key}_CURRENT_BOUNDARY'
+    try:
+        _ = (e for e in lower)
+    except TypeError:
+        lower= [lower]
+    try:
+        _ = (e for e in upper)
+    except TypeError:
+        upper= [upper]
+
+    if len(lower) == 1:
+        lower = lower*3
+    if len(upper) == 1:
+        upper = upper*3
+    for i in range(len(Configuration[boundary])):
+        if check:
+            if lower[i] < Configuration[f'{key}_INPUT_BOUNDARY'][i][0]:
+                lower[i] = Configuration[f'{key}_INPUT_BOUNDARY'][i][0]
+            if upper[i] > Configuration[f'{key}_INPUT_BOUNDARY'][i][1]:
+                upper[i] = Configuration[f'{key}_INPUT_BOUNDARY'][i][1]
+        Configuration[boundary][i][0] = float(lower[i])
+        Configuration[boundary][i][1] = float(upper[i])
+set_boundaries.__doc__ =f'''
+ NAME:
+    set_boundaries
+
+ PURPOSE:
+    set the bopundaries for a current parameter
+
+ CATEGORY:
+    support_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    key = name of the parameter
+    lower = the lower boundary
+    upper = upper boundary
+
+ OPTIONAL INPUTS:
+    debug = False
+    input = False
+    if set to true the user input parameters are updated. this should only be used
+    when reading the cube to set the input VSYS, XPOS and YPOS limits.
+
+ OUTPUTS:
+    updated boundary limits. When user input is set these can never be loewer/higher than those limits.
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
+
 #Function to read FAT configuration file into a dictionary
 def setup_configuration(cfg):
     if cfg.installation_check:
@@ -2412,6 +2772,8 @@ def setup_configuration(cfg):
                'CURRENT_STAGE': 'initial', #Current stage of the fitting process, set at switiching stages
                'USED_FITTING': None,
                'TIRIFIC_PID': 'Not Initialized', #Process ID of tirific that is running
+               'FAT_PID': os.getpid(), #Process ID of FAT that is running
+               'FAT_PSUPROCESS': 'cant copy',
                'FINAL_COMMENT': "This fitting stopped with an unregistered exit.",
 
                'MAX_SIZE_IN_BEAMS': 30, # The galaxy is not allowed to extend beyond this number of beams in radius, set in check_source
@@ -2434,7 +2796,6 @@ def setup_configuration(cfg):
                'BEAM': [0.,0.,0.], #  FWHM BMAJ, BMIN in arcsec and BPA, set in main
                'BEAM_AREA': 0., #BEAM_AREA in arcsec set in main
                'NAXES': [0.,0.,0.], #  Size of the cube in pixels x,y,z arranged like sane people not python, set in main
-               'NAXES_LIMITS': [[0.,0.],[0.,0.],[0.,0.]], #  Size of the cube in degree and km/s,  x,y,z arranged like sane people not python, set in main updated in cut_cubes
                'MAX_ERROR': {}, #The maximum allowed errors for the parameters, set in main derived from cube
                'MIN_ERROR': {}, #The minumum allowed errors for the parameters, initially set in check_source but can be modified through out INCL,PA,SDSIS,Z0 errors change when the parameters is fixed or release
                'CHANNEL_WIDTH': 0., #Width of the channel in the cube in km/s, set in main derived from cube
@@ -2444,9 +2805,21 @@ def setup_configuration(cfg):
     for key in other_keys:
         Configuration[key] = other_keys[key]
 
+    #If the input boundaries are unset we will set some reasonable limits
+
+
 # The parameters that need boundary limits are set here
-    boundary_limit_keys = ['PA','INCL', 'SDIS', 'Z0','VSYS','XPOS','YPOS']
+    boundary_limit_keys = ['PA','INCL', 'SDIS', 'Z0','VSYS','XPOS','YPOS','VROT']
     for key in boundary_limit_keys:
+        if np.sum(Configuration[f"{key}_INPUT_BOUNDARY"]) == 0.:
+            if key == 'INCL':
+                Configuration[f"{key}_INPUT_BOUNDARY"] = [[5.,90.] for x in range(3)]
+            elif key == 'PA':
+                Configuration[f"{key}_INPUT_BOUNDARY"] = [[-10.,370.] for x in range(3)]
+            else:
+                #These are set when we have read the cube as they depend on it or the distance (Z0)
+                pass
+
         Configuration[f"{key}_CURRENT_BOUNDARY"] = [[0.,0.],[0.,0.],[0.,0.]]
 
     #Make the input idiot safe
@@ -2467,7 +2840,7 @@ Please provide the correct file name.
     #Make sure there is only one Fit_ stage
 
     # Make sure all selected stages exist
-    possible_stages = ['Fit_Tirific_OSC','Create_FAT_Cube','Run_Sofia','Existing_Sofia','Sofia_Catalogue']
+    possible_stages = ['Fit_Tirific_OSC','Create_FAT_Cube','Run_Sofia','Existing_Sofia','Sofia_Catalogue','Tirshaker']
     possible_stages_l = [x.lower() for x in possible_stages]
     approved_stages = []
     fit_count = 0
@@ -2525,6 +2898,8 @@ Please pick one of the following {', '.join(['sinusoidal','independent','hanning
         Configuration['RING_SIZE'] = 0.5
     if Configuration['OUTPUT_QUANTITY'] == 5:
         Configuration['OUTPUT_QUANTITY'] = 4
+    if Configuration['SHAKER_ITERATIONS'] < 2:
+        Configuration['SHAKER_ITERATIONS'] = 2
 
     return Configuration
 setup_configuration.__doc__ =f'''
@@ -2975,3 +3350,20 @@ sofia_output_exists.__doc__ =f'''
 
  NOTE:
 '''
+
+def update_statistic(Configuration,process= None,message = None ,debug=False):
+    if Configuration['TIMING']:
+        function,variable,empty = traceback.format_stack()[-2].split('\n')
+        function = function.split()[-1].strip()
+        if not process:
+            process = Configuration['FAT_PSUPROCESS']
+            program = 'pyFAT'
+        else:
+            program = 'TiRiFiC'
+
+        CPU,mem = get_usage_statistics(Configuration,process)
+        with open(f"{Configuration['LOG_DIRECTORY']}Usage_Statistics.txt",'a') as file:
+            if message:
+                file.write(f"# {function.upper()}: {message} at {datetime.now()} \n")
+            # We cannot copy the process so initialize in the configuration
+            file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Mb for {program} \n")

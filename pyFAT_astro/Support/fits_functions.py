@@ -2,8 +2,10 @@
 # This module contains a set of functions and classes that are used in several different Python scripts in the Database.
 from astropy.io import fits
 from astropy.wcs import WCS
-from pyFAT_astro.Support.support_functions import linenumber,print_log,set_limits,clean_header
-from pyFAT_astro.Support.read_functions import obtain_border_pix
+from pyFAT_astro.Support.support_functions import linenumber,print_log,set_limits,\
+                                                clean_header,obtain_border_pix,set_boundaries
+from pyFAT_astro.Support.fat_errors import FunctionCallError
+#from pyFAT_astro.Support.read_functions import obtain_border_pix
 from scipy import ndimage
 import numpy as np
 import copy
@@ -84,9 +86,12 @@ check_mask.__doc__ =f'''
 
 
 # Create a cube suitable for FAT
-def create_fat_cube(Configuration, Fits_Files, debug = False):
+def create_fat_cube(Configuration, Fits_Files,sofia_catalogue=False,id='No default',name='No default', debug = False):
     #First get the cubes
-    Cube = fits.open(Configuration['FITTING_DIR']+Fits_Files['ORIGINAL_CUBE'],uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
+    if sofia_catalogue:
+        Cube = fits.open(f"{Configuration['SOFIA_DIR']}{name}_{id}_cube.fits",uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
+    else:
+        Cube = fits.open(Configuration['FITTING_DIR']+Fits_Files['ORIGINAL_CUBE'],uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
     data = Cube[0].data
     hdr = Cube[0].header
     if hdr['NAXIS'] == 4:
@@ -100,7 +105,10 @@ def create_fat_cube(Configuration, Fits_Files, debug = False):
     log_statement = f'''CREATE_FAT_CUBE: We are writing a FAT modfied cube to be used for the fitting. This cube is called {Configuration['FITTING_DIR']+Fits_Files['FITTING_CUBE']}
 '''
     print_log(log_statement,Configuration["OUTPUTLOG"])
-    fits.writeto(Configuration['FITTING_DIR']+Fits_Files['FITTING_CUBE'],data,hdr)
+    if sofia_catalogue:
+        fits.writeto(f"{Configuration['MAIN_DIRECTORY']}{name}_FAT_cubelets/{name}_{id}/{name}_{id}_FAT.fits",data,hdr)
+    else:
+        fits.writeto(Configuration['FITTING_DIR']+Fits_Files['FITTING_CUBE'],data,hdr)
     # Release the arrays
 
     Cube.close()
@@ -174,7 +182,17 @@ def cut_cubes(Configuration, Fits_Files, galaxy_box, debug = False):
 ''', Configuration['OUTPUTLOG'])
 
         for file in files_to_cut:
-            cutout_cube(Configuration,file,new_cube,debug=debug)
+            if debug:
+                print_log(f'''CUT_CUBES: We are cutting the file {file}
+''', Configuration['OUTPUTLOG'],screen=True)
+            if os.path.exists(f"{Configuration['FITTING_DIR']}{file}"):
+                cutout_cube(Configuration,file,new_cube,debug=debug)
+            else:
+                if file == 'Sofia_Output/'+Fits_Files['CHANNEL_MAP']:
+                    pass
+                else:
+                    raise FunctionCallError(f'We are trying to cut {file} but it does not exist')
+
 
     #We want to check if the cube has a decent number of pixels per beam.
     if not os.path.exists(f"{Configuration['FITTING_DIR']}/{Fits_Files['OPTIMIZED_CUBE']}"):
@@ -232,7 +250,13 @@ def cutout_cube(Configuration,filename,sub_cube, debug = False):
             coordinate_frame = WCS(hdr)
             xlow,ylow,zlow = coordinate_frame.wcs_pix2world(1,1,1., 1.)
             xhigh,yhigh,zhigh = coordinate_frame.wcs_pix2world(*Configuration['NAXES'], 1.)
-            Configuration['NAXES_LIMITS'] = [np.sort([xlow,xhigh]),np.sort([ylow,yhigh]),np.sort([zlow,zhigh])/1000.]
+            xlim = np.sort([xlow,xhigh])
+            ylim = np.sort([ylow,yhigh])
+            zlim =np.sort([zlow,zhigh])/1000.
+            set_boundaries(Configuration,'VSYS',*zlim,input=True,debug=debug)
+            set_boundaries(Configuration,'XPOS',*xlim,input=True,debug=debug)
+            set_boundaries(Configuration,'YPOS',*ylim,input=True,debug=debug)
+
     elif hdr['NAXIS'] == 2:
         data = Cube[0].data[sub_cube[1,0]:sub_cube[1,1],sub_cube[2,0]:sub_cube[2,1]]
         hdr['NAXIS1'] = sub_cube[2,1]-sub_cube[2,0]
@@ -792,7 +816,6 @@ def regrid_cube(data,hdr,ratio):
     new_shape = [int(x/ratio) for x in shape]
     # Which means our real ratio is
     real_ratio = shape/new_shape
-
     #* np.ceil(shape / ratio).astype(int)
     new_shape[0] = shape[0]
     # Create the zero-padded array and assign it with the old density

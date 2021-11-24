@@ -3,9 +3,10 @@
 
 from pyFAT_astro.Support.support_functions import Proper_Dictionary,print_log,convertRADEC,set_limits, remove_inhomogeneities, \
                                 obtain_border_pix, get_inclination_pa,get_vel_pa,columndensity,get_profile, get_kinematical_center,\
-                                create_directory,copy_homemade_sofia,clean_header,get_new_center
-from pyFAT_astro.Support.fits_functions import check_mask,clean_header
+                                create_directory,copy_homemade_sofia,clean_header,get_new_center,update_statistic,set_boundaries
+from pyFAT_astro.Support.fits_functions import check_mask,clean_header,create_fat_cube
 from pyFAT_astro.Support.fat_errors import BadCatalogueError, NoConfigFile
+
 from astropy.io import fits
 from astropy.wcs import WCS
 from scipy import ndimage
@@ -100,10 +101,10 @@ def check_edge_limits(xmin,xmax,ymin,ymax,zmin,zmax,Configuration,debug=False ,b
 {'':8s} diff  = {diff}
 ''',Configuration['OUTPUTLOG'])
     if np.where(diff < vel_edge)[0].size:
-        print(f"On the edge")
+        print_log(f"On the edge",Configuration['OUTPUTLOG'])
         return True
     else:
-        print(f"Off the edge")
+        print_log(f"Off the edge",Configuration['OUTPUTLOG'])
         return False
 check_edge_limits.__doc__ =f'''
  NAME:
@@ -193,18 +194,31 @@ def extract_vrot(Configuration,map ,angle,center, debug= False):
 {'':8s} because bmaj in pixels  ={Configuration['BEAM_IN_PIXELS'][0]}  and the resolution of the profile = {maj_resolution} pixels
 ''',Configuration['OUTPUTLOG'])
     profile = np.array(avg_profile[0::int(ring_size_req)],dtype=float)
-    if debug:
-        print_log(f'''EXTRACT_VROT: Constructing the final RC
-{'':8s} initial RC= {profile}
-{'':8s} at step width= {ring_size_req}
-''',Configuration['OUTPUTLOG'])
+
     try:
         profile[np.isnan(profile)] = profile[~np.isnan(profile)][-1]
     except IndexError:
         profile = []
 
-    if len(profile) < 1 and len(avg_profile) > 0.:
-        profile = [np.max(avg_profile)]
+    if len(profile) < 1:
+        if len(avg_profile) > 0.:
+            profile = np.array([np.max(avg_profile)],dtype=float)
+        else:
+            profile = np.array([Configuration['CHANNEL_WIDTH']*2.],dtype=float)
+    if debug:
+        print_log(f'''EXTRACT_VROT: Unlimited profile
+{'':8s} unlimited  RC= {profile}
+''',Configuration['OUTPUTLOG'])
+    profile[profile > 300.] = 300.
+    profile[profile < Configuration['CHANNEL_WIDTH']*2.] = Configuration['CHANNEL_WIDTH']*2.
+
+
+    #profile[0] = 0.
+    if debug:
+        print_log(f'''EXTRACT_VROT: Constructing the final RC
+{'':8s} initial RC= {profile}
+{'':8s} at step width= {ring_size_req}
+''',Configuration['OUTPUTLOG'])
     return profile
 extract_vrot.__doc__ =f'''
  NAME:
@@ -325,9 +339,11 @@ get_totflux.__doc__ =f'''
 # Function to get the PA and inclination from the moment 0 for initial estimates
 def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, debug = False):
     #open the moment 0
-    if debug:
-        print_log(f'''GUESS_ORIENTATION: starting extraction of initial parameters.
-''',Configuration['OUTPUTLOG'], debug = True)
+
+    print_log(f'''GUESS_ORIENTATION: starting extraction of initial parameters.
+''',Configuration['OUTPUTLOG'], debug = debug, screen =True)
+    update_statistic(Configuration, message= "Starting the guess orientation run", debug=debug)
+
     Image = fits.open(f"{Configuration['FITTING_DIR']}Sofia_Output/{Fits_Files['MOMENT0']}",\
             uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
     map = Image[0].data
@@ -347,10 +363,13 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, debug
     SNR = np.nanmean(map[noise_map > 0.]/noise_map[noise_map > 0.])
     noise_hdr = Image[0].header
     Image.close()
+    noise_map [0. > map ] =0.
     median_noise_in_map = np.nanmedian(noise_map[noise_map > 0.])
     minimum_noise_in_map = np.nanmin(noise_map[noise_map > 0.])
 
     map[0.5*minimum_noise_in_map > noise_map] = 0.
+    #Also remove negative values
+    #map[0. > map ] =0
     mom0[0].data= map
     scale_factor = set_limits(SNR/3.*minimum_noise_in_map/median_noise_in_map, 0.05, 1.)
     if debug:
@@ -362,8 +381,13 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, debug
     checked_center = False
     center_counter = 0.
     original_center = copy.deepcopy(center)
+    print_log(f'''GUESS_ORIENTATION: Looking for the center, pa and inclination
+''',Configuration['OUTPUTLOG'], debug = debug, screen =True)
+
+    update_statistic(Configuration, message= "Starting the initial search for the pa, inclination and center.", debug=debug)
+
     while not center_stable:
-        inclination_av, pa_av, maj_extent_av = get_inclination_pa(Configuration, mom0, center, cutoff = scale_factor* median_noise_in_map, debug = debug)
+        inclination_av, pa_av, maj_extent_av = get_inclination_pa(Configuration, mom0, center, cutoff = scale_factor* median_noise_in_map, figure_name=f'{Configuration["LOG_DIRECTORY"]}loc_{center[0]:.2f}_{center[1]:.2f}',debug = debug)
 
         inclination_av = [inclination_av]
         int_weight = [2.]
@@ -372,7 +396,7 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, debug
         for mod in beam_check:
             for i in [[-1,-1],[-1,1],[1,-1],[1,1]]:
                 center_tmp = [center[0]+mod*i[0],center[1]+mod*i[1]]
-                inclination_tmp, pa_tmp, maj_extent_tmp= get_inclination_pa(Configuration, mom0, center_tmp, cutoff = scale_factor* median_noise_in_map, debug = debug)
+                inclination_tmp, pa_tmp, maj_extent_tmp= get_inclination_pa(Configuration, mom0, center_tmp, cutoff = scale_factor* median_noise_in_map, figure_name=f'{Configuration["LOG_DIRECTORY"]}loc_{center_tmp[0]:.2f}_{center_tmp[1]:.2f}',debug = debug)
                 inclination_av.append(inclination_tmp)
                 pa_av.append(pa_tmp)
                 int_weight.append(mod/beam_check[0]*0.25)
@@ -382,6 +406,12 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, debug
         inclination = np.array([np.nansum(np.array([x[0] for x in inclination_av],dtype=float)*weight)/np.nansum(weight),\
                                 np.nansum(np.array([x[1] for x in inclination_av],dtype=float)*weight)/np.nansum(weight)],dtype=float)
         weight = np.array([1./x[1] for x in pa_av],dtype= float)
+        if debug:
+            print_log(f'''GUESS_ORIENTATION: We find these pa_av
+{'':8s} pa = {' '.join([f'{float(x[0]):.2f}' for x in pa_av])}
+{'':8s} int_weights = {' '.join([f'{float(x):.2f}' for x in int_weight])}
+{'':8s} weights = {' '.join([f'{float(x):.2f}' for x in weight])}
+''',Configuration['OUTPUTLOG'])
         pa = np.array([np.nansum(np.array([x[0] for x in pa_av],dtype=float)*weight)/np.nansum(weight),\
                                 np.nansum(np.array([x[1] for x in pa_av],dtype=float)*weight)/np.nansum(weight)],dtype=float)
 
@@ -441,44 +471,14 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, debug
 ''',Configuration['OUTPUTLOG'])
             center,checked_center,center_stable = get_new_center(Configuration,map,center,maj_extent,noise=median_noise_in_map,debug=debug)
             center_counter += 1
-            '''
-            neg_index = np.where(maj_axis < center_of_profile)[0]
-            pos_index = np.where(maj_axis > center_of_profile)[0]
-            avg_profile_new = []
-            neg_profile_new = []
-            pos_profile_new = []
-            diff_new =0.
-            for i in range(np.nanmin([neg_index.size,pos_index.size])):
-                avg_profile_new.append(np.nanmean([maj_profile[neg_index[neg_index.size-i-1]],maj_profile[pos_index[i]]]))
-                neg_profile_new.append(maj_profile[neg_index[neg_index.size-i-1]])
-                pos_profile_new.append(maj_profile[pos_index[i]])
-                #diff_new = diff_new+abs(avg_profile_new[i]-neg_profile_new[i])+abs(avg_profile_new[i]-pos_profile_new[i])
-                diff_new = diff_new+abs(pos_profile_new[-1]-neg_profile_new[-1])*abs(np.mean([pos_profile_new[-1],neg_profile_new[-1]]))
-            diff_new = diff_new/np.nanmin([neg_index.size,pos_index.size])
-            if debug:
-                print_log(f'GUESS_ORIENTATION: We have this old difference {diff} and this new difference {diff_new}
-',Configuration['OUTPUTLOG'])
-            if diff_new < diff:
-                if debug:
-                    print_log(f'GUESS_ORIENTATION: We are updating the center from {center[0]},{center[1]} to {center[0]-center_of_profile/(2.*np.sin(np.radians(pa[0])))*maj_resolution},{center[1]+center_of_profile/(2.*np.cos(np.radians(pa[0])))*maj_resolution}
-',Configuration['OUTPUTLOG'])
-                avg_profile = avg_profile_new
-                center[0] = center[0]-center_of_profile/(2.*np.sin(np.radians(pa[0])))*maj_resolution
-                center[1] = center[1]+center_of_profile/(2.*np.cos(np.radians(pa[0])))*maj_resolution
-                center_counter += 1
-                maj_axis =  np.linspace(0,1000*maj_resolution,1000)- (abs((abs(center[0]))*np.sin(np.radians(pa[0])))+abs(abs(center[1])*np.cos(np.radians(pa[0]))))
-                if debug:
-                    ra_new,dec_new = mom0_wcs.wcs_pix2world(center[0],center[1],1.)
-                    print(ra_new,dec_new)
-                    ra_hr_new,dec_hr_new = convertRADEC(Configuration,ra_new,dec_new)
-                    print_log(f'GUESS_ORIENTATION: We are re-starting with the updated center
-{'':8s} RA = {ra_hr_new}, DEC={dec_hr_new}
-',Configuration['OUTPUTLOG'])
-            '''
-            #else:
-            #    center_stable= True
+
+
         else:
             center_stable = True
+    print_log(f'''GUESS_ORIENTATION: Looking for the Initial surface brightness profile.
+''',Configuration['OUTPUTLOG'], debug = debug, screen =True)
+    update_statistic(Configuration, message= "Starting the initial search for the SBR and VROT.", debug=debug)
+
     ring_size_req = Configuration['BEAM_IN_PIXELS'][0]/maj_resolution
     SBR_initial = avg_profile[0::int(ring_size_req)]/(np.pi*Configuration['BEAM'][0]*Configuration['BEAM'][1]/(4.*np.log(2.))) # Jy*km/s
     SBR_initial =np.hstack((SBR_initial[0],SBR_initial,SBR_initial[-1]))
@@ -489,7 +489,8 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, debug
     #We need to know which is the approaching side and which is receding
 
 
-
+    print_log(f'''GUESS_ORIENTATION: Looking for the Initial Rotation Curve.
+''',Configuration['OUTPUTLOG'], debug = debug, screen =True)
     Image = fits.open(f"{Configuration['FITTING_DIR']}Sofia_Output/{Fits_Files['MOMENT1']}",\
             uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
     map = copy.deepcopy(Image[0].data)
@@ -499,7 +500,7 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, debug
 ''',Configuration['OUTPUTLOG'])
     #Image.close()
     #map[3*minimum_noise_in_map > noise_map] = float('NaN')
-    map[3*minimum_noise_in_map > noise_map] = float('NaN')
+    map[3.*minimum_noise_in_map > noise_map] = float('NaN')
     if debug:
         print_log(f'''GUESS_ORIENTATION: This is the amount of values we find after blanking low SNR {len(map[~np.isnan(map)])}
 ''',Configuration['OUTPUTLOG'])
@@ -557,11 +558,21 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, debug
         pa[0] = pa[0]+180
         print_log(f'''GUESS_ORIENTATION: We have modified the pa by 180 deg as we found the maximum velocity west of the center.
 ''' , Configuration['OUTPUTLOG'])
-    if abs(pa[0]-vel_pa[0]) > 25. and ~np.isnan(vel_pa[0]):
-        pa=vel_pa
+
+    if debug:
+        print_log(f'''GUESS_ORIENTATION: this is the pa {pa} and the vel_pa {vel_pa}
+''' , Configuration['OUTPUTLOG'])
+    if abs(pa[0]-vel_pa[0]) > 25. and ~np.isnan(vel_pa[0])  :
+        # if the vel pa has a ridiculous error we use the normal pa
+        if vel_pa[1] < 60.:
+            pa=vel_pa
     else:
         if ~np.isnan(vel_pa[0]):
             pa = [np.nansum([vel_pa[0]/vel_pa[1],pa[0]/pa[1]])/np.nansum([1./vel_pa[1],1./pa[1]]),2.*1./np.sqrt(np.nansum([1./vel_pa[1],1./pa[1]]))]
+
+    if debug:
+        print_log(f'''GUESS_ORIENTATION: this is the final pa {pa}
+''' , Configuration['OUTPUTLOG'])
     #As python is utterly moronic the center goes in back wards to the map
     buffer = int(round(np.mean(Configuration['BEAM_IN_PIXELS'][:2])/2.))
     if debug:
@@ -605,6 +616,8 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, debug
         VROT_initial[0] = 0
 
     VROT_initial = np.abs(VROT_initial/np.sin(np.radians(inclination[0])))
+
+
     if debug:
         print_log(f'''GUESS_ORIENTATION: We found the following initial rotation curve:
 {'':8s}GUESS_ORIENTATION: RC = {VROT_initial}
@@ -862,7 +875,17 @@ def read_cube(Configuration,cube,debug=False):
         coordinate_frame = WCS(cube_hdr)
         xlow,ylow,zlow = coordinate_frame.wcs_pix2world(1,1,1., 1.)
         xhigh,yhigh,zhigh = coordinate_frame.wcs_pix2world(*Configuration['NAXES'], 1.)
-        Configuration['NAXES_LIMITS'] = [np.sort([xlow,xhigh]),np.sort([ylow,yhigh]),np.sort([zlow,zhigh])/1000.]
+        xlim = np.sort([xlow,xhigh])
+        ylim = np.sort([ylow,yhigh])
+        zlim =np.sort([zlow,zhigh])/1000.
+        set_boundaries(Configuration,'VSYS',*zlim,input=True,debug=debug)
+        set_boundaries(Configuration,'XPOS',*xlim,input=True,debug=debug)
+        set_boundaries(Configuration,'YPOS',*ylim,input=True,debug=debug)
+    if np.sum(Configuration['VROT_INPUT_BOUNDARY']) == 0.:
+        set_boundaries(Configuration,'VROT',Configuration['CHANNEL_WIDTH'],600.,input=True,debug=debug)
+    if np.sum(Configuration['SDIS_INPUT_BOUNDARY']) == 0.:
+        set_boundaries(Configuration,'SDIS',Configuration['CHANNEL_WIDTH'],25.,input=True,debug=debug)
+
     # We write the pixels per beam info to Configuration such that it is easily accesible
     beamarea=(np.pi*abs(cube_hdr['BMAJ']*cube_hdr['BMIN']))/(4.*np.log(2.))
     Configuration['BEAM_AREA'] = beamarea*3600.**2 # beamarea in arcsec
@@ -892,6 +915,8 @@ def read_cube(Configuration,cube,debug=False):
                                   'XPOS': [cube_hdr['BMAJ']*0.1],\
                                   'YPOS': [cube_hdr['BMAJ']*0.1],\
                                 }
+
+
 # function to read the sofia catalogue
 def sofia_catalogue(Configuration,Fits_Files, Variables =['id','x','x_min','x_max','y','y_min','y_max','z','z_min','z_max','ra',\
                     'dec','v_app','f_sum','kin_pa','w50','err_f_sum','err_x','err_y','err_z'], debug = False):
@@ -992,13 +1017,7 @@ def sofia_catalogue(Configuration,Fits_Files, Variables =['id','x','x_min','x_ma
                             source_size=(float(many_sources[Variables.index('z_max')][i])-float(many_sources[Variables.index('z_min')][i]))* \
                                         (float(many_sources[Variables.index('y_max')][i])-float(many_sources[Variables.index('y_min')][i]))* \
                                         (float(many_sources[Variables.index('x_max')][i])-float(many_sources[Variables.index('x_min')][i]))
-                            #print(source_size,cube)
-                            #cube= np.array([float(Configuration['NAXES'][0]),float(Configuration['NAXES'][1]), \
-                            #        (float(many_sources[Variables.index('z_max')][i])-float(many_sources[Variables.index('z_min')][i]))])
-                            #source_size=np.array([(float(many_sources[Variables.index('z_max')][i])-float(many_sources[Variables.index('z_min')][i])), \
-                            #            (float(many_sources[Variables.index('y_max')][i])-float(many_sources[Variables.index('y_min')][i])), \
-                            #            (float(many_sources[Variables.index('x_max')][i])-float(many_sources[Variables.index('x_min')][i]))])
-                            #print(source_size,cube)
+
                             if source_size/cube > 0.5:
                                 print_log(f'''SOFIA_CATALOGUE: We discarded a very large source, so we will restore is and try for that.
     !!!!!!!!!!!!!!!!!!!!!!!!! This means your original cube is in principle too small!!!!!!!!!!!!!!!!!!!!!!!!
@@ -1108,6 +1127,9 @@ def sofia_input_catalogue(Configuration,debug=False):
     Variables =['id','x','x_min','x_max','y','y_min','y_max','z','z_min','z_max','ra',\
                     'dec','v_app','f_sum','kin_pa','w50','err_f_sum','err_x','err_y','err_z']
     headerlines=[]
+    if not Configuration['SOFIA_DIR']:
+        Configuration['SOFIA_DIR']=f"{Configuration['MAIN_DIRECTORY']}{basename}_cubelets/"
+
     #Read the sofia catalogue
     with open(Configuration['CATALOGUE']) as sof_cat:
         for line in sof_cat.readlines():
@@ -1151,22 +1173,37 @@ def sofia_input_catalogue(Configuration,debug=False):
 
                 if not os.path.exists(f"{Configuration['MAIN_DIRECTORY']}{basename}_FAT_cubelets/{basename}_{outlist[input_columns.index('id')]}"):
                     create_directory(f"{Configuration['MAIN_DIRECTORY']}{basename}_FAT_cubelets/{basename}_{outlist[input_columns.index('id')]}",f"{Configuration['MAIN_DIRECTORY']}")
-                Cube = fits.open(f"{Configuration['MAIN_DIRECTORY']}{basename}_cubelets/{basename}_{outlist[input_columns.index('id')]}_cube.fits",uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
-                data = Cube[0].data
-                hdr = Cube[0].header
-                if hdr['NAXIS'] == 4:
-                    data = data[0,:,:,:]
-                    del hdr['NAXIS4']
-                    hdr['NAXIS'] = 3
-                # clean the header
-                hdr = clean_header(Configuration,hdr,debug=debug)
-                hdr['FATNOISE'] = np.mean([np.nanstd(data[0,:,:]),np.nanstd(data[-1,:,:])])
-                if hdr['CDELT3'] < -1:
-                    raise InputError(f"Your velocity axis is declining this won't work. exiting")
-                fits.writeto(f"{Configuration['MAIN_DIRECTORY']}{basename}_FAT_cubelets/{basename}_{outlist[input_columns.index('id')]}/{basename}_{outlist[input_columns.index('id')]}_FAT.fits",data,hdr,overwrite=True)
+
+                if 'create_fat_cube' in Configuration['FITTING_STAGES']:
+                    create_fat_cube(Configuration, Fits_Files,sofia_catalogue=True,name=basename,id = outlist[input_columns.index('id')],debug=debug)
+                else:
+                    Cube = fits.open(f"{Configuration['SOFIA_DIR']}{basename}_{outlist[input_columns.index('id')]}_cube.fits",uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
+                    data = Cube[0].data
+                    hdr = Cube[0].header
+                    if hdr['NAXIS'] == 4:
+                        data = data[0,:,:,:]
+                        del hdr['NAXIS4']
+                        hdr['NAXIS'] = 3
+                    # clean the header
+                    hdr = clean_header(Configuration,hdr,debug=debug)
+                    low_chan = float('NAN')
+                    channel=int(0)
+                    while np.isnan(low_chan):
+                        low_chan = np.nanstd(data[channel,:,:])
+                        channel+=1
+                    high_chan = float('NAN')
+                    channel=int(-1)
+                    while np.isnan(high_chan):
+                        high_chan = np.nanstd(data[channel,:,:])
+                        channel-=1
+
+                    hdr['FATNOISE'] = np.mean([low_chan,high_chan])
+
+                    if hdr['CDELT3'] < -1:
+                        raise InputError(f"Your velocity axis is declining this won't work. exiting")
+                    fits.writeto(f"{Configuration['MAIN_DIRECTORY']}{basename}_FAT_cubelets/{basename}_{outlist[input_columns.index('id')]}/{basename}_{outlist[input_columns.index('id')]}_FAT.fits",data,hdr,overwrite=True)
                 create_directory(f"{Configuration['MAIN_DIRECTORY']}{basename}_FAT_cubelets/{basename}_{outlist[input_columns.index('id')]}/Sofia_Output",f"{Configuration['MAIN_DIRECTORY']}")
-                if not Configuration['SOFIA_DIR']:
-                    Configuration['SOFIA_DIR']=f"{Configuration['MAIN_DIRECTORY']}{basename}_cubelets/"
+
                 Configuration['FITTING_DIR']=f"{Configuration['MAIN_DIRECTORY']}{basename}_FAT_cubelets/{basename}_{outlist[input_columns.index('id')]}/"
                 Configuration['SOFIA_BASENAME'] = f"{basename}_{outlist[input_columns.index('id')]}"
                 Configuration['BASE_NAME'] =  f"{basename}_{outlist[input_columns.index('id')]}_FAT"

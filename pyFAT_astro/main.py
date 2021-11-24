@@ -4,6 +4,7 @@
 import sys
 import os
 import copy
+import psutil as psu
 import numpy as np
 from omegaconf import OmegaConf,MissingMandatoryValue
 import traceback
@@ -49,8 +50,7 @@ def main(argv):
 
 
 
-        #Get the directory we are running from, This is for the Installation Check
-        start_dir = os.getcwd()
+
         #Get default settings
         if '-v' in argv or '--version' in argv:
             print(f"This is version {pyFAT_astro.__version__} of the program.")
@@ -137,8 +137,8 @@ def main(argv):
                     ,cfg.print_examples,cfg.input.catalogue]):
             print(help_message)
             sys.exit()
-        #Add none user mutable input
-        #OmegaConf.update(cfg, 'start_directory', f'{os.getcwd()}', force_add=True)
+        #Transform all to a Configuration dictionary
+
 
         Original_Configuration = sf.setup_configuration(cfg)
 
@@ -312,8 +312,9 @@ def main(argv):
 
 
             if Configuration['TIMING']:
-                with open(f"{Configuration['LOG_DIRECTORY']}Usage_Statistics.txt",'w') as file:
-                    file.write("Creating a CPU RAM Log for analysis. \n")
+                Configuration['FAT_PSUPROCESS'] = psu.Process(Configuration['FAT_PID'])
+                sf.update_statistic(Configuration, message= "Creating a CPU RAM Log for analysis.")
+
             # Check if the input cube exists
 
 
@@ -339,6 +340,7 @@ def main(argv):
             #If we have Sofia Preprocessed Output request make sure it all exists
             if Configuration['DEBUG']:
                 wf.write_config(f'{Configuration["LOG_DIRECTORY"]}CFG_Before_Sofia.txt',Configuration,debug = True)
+            
             if 'existing_sofia' in  Configuration['FITTING_STAGES']:
                 sf.copy_homemade_sofia(Configuration,debug=Configuration['DEBUG'])
             elif 'run_sofia' in Configuration['FITTING_STAGES']:
@@ -358,19 +360,22 @@ def main(argv):
                     # We assume sofia is ran and created the proper files
             try:
 
-                # Process the found source in sofia to set up the proper fitting and make sure source can be fitted
-                Initial_Parameters = runf.check_source(Configuration, Fits_Files,debug=Configuration['DEBUG'])
-                #sf.sofia_output_exists(Configuration,Fits_Files)
 
-                sf.print_log(f'''The source is well defined and we will now setup the initial tirific file
-''' ,Configuration['OUTPUTLOG'], screen =True, debug = Configuration['DEBUG'])
-                #Add your personal fitting types here
-                wf.write_config(f'{Configuration["LOG_DIRECTORY"]}CFG_Before_Fitting.txt',Configuration,debug = True)
+
                 # If you add any make sure that the fitstage  starts with 'Fit_'
+                if Configuration['USED_FITTING']:
+                    # Process the found source in sofia to set up the proper fitting and make sure source can be fitted
+                    Initial_Parameters = runf.check_source(Configuration, Fits_Files,debug=Configuration['DEBUG'])
+                    #sf.sofia_output_exists(Configuration,Fits_Files)
+                    sf.print_log(f'''The source is well defined and we will now setup the initial tirific file
+    ''' ,Configuration['OUTPUTLOG'], screen =True, debug = Configuration['DEBUG'])
+                    #Add your personal fitting types here
+                    wf.write_config(f'{Configuration["LOG_DIRECTORY"]}CFG_Before_Fitting.txt',Configuration,debug = True)
+
                 if 'fit_tirific_osc' in Configuration['FITTING_STAGES']:
                     current_run = runf.fitting_osc(Configuration,Fits_Files,Tirific_Template,Initial_Parameters)
                 elif 'fit_make_your_own' in Configuration['FITTING_STAGES']:
-                    print_log(f'If you add any fiiting routine make sure that the fit stage  starts with Fit_')
+                    print_log(f'If you add any fitting routine make sure that the fit stage  starts with Fit_')
                     Configuration['FINAL_COMMENT'] = 'This example does not work'
                     cf.finish_galaxy(Configuration,maximum_directory_length,debug=Configuration['DEBUG'])
                     continue
@@ -380,7 +385,13 @@ def main(argv):
                     continue
                 #cf.finish_galaxy(Configuration,maximum_directory_length, Fits_Files =Fits_Files,current_run =current_run,debug=Configuration['DEBUG'])
                 #continue
-                Configuration['FINAL_COMMENT'] = 'The fit has converged succesfully'
+                #if all the fitting has gone properly we create nice errors
+
+                if Configuration['OUTPUT_QUANTITY'] != 5:
+                    if 'tirshaker' in Configuration['FITTING_STAGES']:
+                        runf.tirshaker_call(Configuration,debug=Configuration['DEBUG'])
+
+                    Configuration['FINAL_COMMENT'] = 'The fit has converged succesfully'
 
 
             except Exception as e:
@@ -390,6 +401,7 @@ def main(argv):
                     Configuration['OUTPUT_QUANTITY'] = 5
                 else:
                     Configuration['OUTPUT_QUANTITY'] = 'error'
+            #Only
             cf.finish_galaxy(Configuration,maximum_directory_length,current_run =current_run, Fits_Files =Fits_Files,debug = Configuration['DEBUG'],exiting=registered_exception)
             if Configuration['OUTPUT_QUANTITY'] != 5:
                 DHI = rf.get_DHI(Configuration,Model=Configuration['USED_FITTING'],debug=Configuration['DEBUG'])

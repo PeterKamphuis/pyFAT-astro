@@ -1,14 +1,21 @@
 # -*- coding: future_fstrings -*-
 # This module contains a set of functions and classes that are used to write text files to Disk
 
-from pyFAT_astro.Support.support_functions import print_log,convertRADEC,convertskyangle,set_limit_modifier,columndensity,set_limits,get_inner_fix,linenumber
-from pyFAT_astro.Support.modify_template import set_model_parameters, set_overall_parameters, set_fitting_parameters,get_warp_slope, update_disk_angles
+from pyFAT_astro.Support.support_functions import print_log,convertRADEC,convertskyangle,\
+                                set_limit_modifier,columndensity,set_limits,\
+                                get_inner_fix,linenumber
+from pyFAT_astro.Support.modify_template import set_model_parameters, set_overall_parameters,\
+                                set_fitting_parameters,get_warp_slope, update_disk_angles
 from pyFAT_astro.Support.fits_functions import extract_pv
 from pyFAT_astro.Support.read_functions import load_tirific,load_basicinfo, load_template
+from pyFAT_astro.Support.fat_errors import ProgramError
+import copy
 import numpy as np
 import warnings
-import datetime
+from datetime import datetime
+import traceback
 import os
+from datetime import datetime
 with warnings.catch_warnings():
     warnings.simplefilter("ignore")
     import matplotlib
@@ -180,7 +187,7 @@ def initialize_def_file(Configuration, Fits_Files,Tirific_Template,Initial_Param
                                initial_estimates=parameters, debug=debug)
 
     tirific(Configuration,Tirific_Template,name = f'{fit_type}_In.def', debug=debug)
-
+    
 initialize_def_file.__doc__ =f'''
  NAME:
     initialize_def_file
@@ -236,9 +243,18 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
         im_wcs = WCS(moment0[0].header)
 
     # Open the model info
-    Vars_to_plot= ['RADI','XPOS','YPOS','VSYS','VROT','VROT_ERR','VROT_2','VROT_2_ERR','INCL','INCL_ERR','INCL_2',
-                    'INCL_2_ERR','PA','PA_ERR','PA_2','PA_2_ERR','SDIS','SDIS_ERR','SDIS_2','SDIS_2_ERR','SBR',
-                    'SBR_2','Z0','Z0_2','Z0_ERR','Z0_2_ERR']
+    if debug:
+        print_log(f'''MAKE_OVERVIEW_PLOT: Reading the variables from the final model
+''',Configuration['OUTPUTLOG'],debug =True )
+    Vars_to_plot_short= ['RADI','XPOS','YPOS','VSYS','VROT','INCL','PA','SDIS',\
+                    'SBR','Z0']
+    Vars_to_plot=copy.deepcopy(Vars_to_plot_short)
+    for x in Vars_to_plot_short:
+        if x != 'RADI':
+            Vars_to_plot.append(f'{x}_ERR')
+        if x not in ['XPOS','YPOS','VSYS']:
+            Vars_to_plot.append(f'{x}_2')
+            Vars_to_plot.append(f'{x}_2_ERR')
     FAT_Model = load_tirific(Configuration,f"{Configuration['FITTING_DIR']}Finalmodel/Finalmodel.def",Variables= Vars_to_plot,unpack=False,debug=debug)
     Extra_Model_File = f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}_Iteration_{Configuration['ITERATIONS']}.def"
 
@@ -467,17 +483,6 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
         info_string=f'''{info_string}.'''
 
 
-    '''
-    if len(column_levels) < 4:
-        info_string = f"The contours are at {column_levels} km/s."
-    else:
-        info_string = f"The contours are at {', '.join(['{:.1f}'.format(x) for x in momlevel[0:4]])}"
-        counter = 4
-        while counter < len(momlevel):
-            info_string = info_string+f"\n {', '.join(['{:.1f}'.format(x) for x in momlevel[counter:counter+7]])}"
-            counter += 7
-        info_string = info_string+" km/s."
-    '''
     ax_moment1.text(-0.1,-0.2,info_string, va='top',ha='left', color='black',transform = ax_moment1.transAxes,
           bbox=dict(facecolor='white',edgecolor='white',pad=0.,alpha=0.),zorder=7)
     # No further need for the moment maps
@@ -506,8 +511,7 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
               levels=momlevel, colors='k',zorder=6, linewidths=1.2)
     ax_moment2.contour(moment2_mod[0].data, transform=ax_moment2.get_transform(im_wcs),
                levels=momlevel, colors='white',linewidths=1.2 , zorder =7)
-    #ax_moment2.contour(moment2_mod[0].data, transform=ax_moment1.get_transform(im_wcs),
-    #          levels=momlevel, colors='yellow',zorder=8, linewidths=0.9)
+
     xmin, xmax = ax_moment2.get_xlim()
     ymin, ymax = ax_moment2.get_ylim()
     if xmax > ymax:
@@ -850,7 +854,10 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
     ax_VSYS = Overview.add_subplot(gs[2:6,16:20])
     plt.xlabel('Sys. Vel. (km s$^{-1}$)',**labelfont)
     plt.ylabel('Distance (Mpc)',**labelfont)
-    plt.scatter(float(FAT_Model[0,Vars_to_plot.index('VSYS')]),float(Configuration['DISTANCE']),c='k',zorder= 3)
+
+    plt.errorbar(float(FAT_Model[0,Vars_to_plot.index('VSYS')]),float(Configuration['DISTANCE'])\
+                ,xerr=float(FAT_Model[0,Vars_to_plot.index('VSYS_ERR')]), c='k',zorder= 3,fmt="o")
+    #plt.scatter(float(FAT_Model[0,Vars_to_plot.index('VSYS')]),float(Configuration['DISTANCE']),c='k',zorder= 3)
     if len(Extra_Model) > 0:
         plt.scatter(float(Extra_Model[0,Vars_to_plot.index('VSYS')]),float(Configuration['DISTANCE']),c='r',alpha = 0.5,zorder=1)
     if len(Input_Model) > 0:
@@ -874,6 +881,12 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
     ax_VSYS.set_ylim(ymin, ymax)
 #----------------------------------------------RA vs DEC -----------------------------------------
     ax_RAD = Overview.add_subplot(gs[8:12,16:20])
+
+    plt.errorbar(float(FAT_Model[0,Vars_to_plot.index('XPOS')]),\
+                 float(FAT_Model[0,Vars_to_plot.index('YPOS')]),
+                xerr=float(FAT_Model[0,Vars_to_plot.index('XPOS_ERR')]),\
+                yerr=float(FAT_Model[0,Vars_to_plot.index('YPOS_ERR')]), c='k',zorder= 3,fmt="o")
+
     plt.scatter(float(FAT_Model[0,Vars_to_plot.index('XPOS')]),float(FAT_Model[0,Vars_to_plot.index('YPOS')]),c='k',zorder=3,label = 'Final')
     if len(Extra_Model) > 0:
         lab = 'Unsmoothed'
@@ -1033,85 +1046,103 @@ plot_parameters.__doc__ =f'''
 def plot_usage_stats(Configuration,debug = False):
     with open(f"{Configuration['LOG_DIRECTORY']}Usage_Statistics.txt") as file:
         lines = file.readlines()
-    labels = []
-    label_times = []
-    times = []
-    CPU = []
-    mem = []
+
+    labels = {'FAT': {'label':[], 'Time':[]}, 'Tirific':{'label':[], 'Time':[]}}
+    loads = {'FAT':{'CPU':[],'MEM':[],'Time':[]},'Tirific':{'CPU':[],'MEM':[],'Time': []}}
     labelfont = {'family': 'Times New Roman',
              'weight': 'normal',
              'size': 4}
     current_stage = 'Not_Found'
+    current_module = 'Unknown'
     startdate = 0
     for line in lines:
         line = line.strip()
+        tmp = line.split(' ')
         if line[0] == '#':
-            tmp = line.split('=')
-            if len(tmp) == 2:
-                current_stage = tmp[1].strip()
-                labels.append(f'Initializing {current_stage}')
-                label_times.append('No Time')
-            else:
-                tmp = line.split(' ')
-                if tmp[1].lower() == 'finished':
-                    labels.append(f'Ended {current_stage}')
-                    label_times.append('No Time')
-                elif tmp[3].lower() == 'actual':
-                    labels.append(f'Started {current_stage}')
-                    label_times.append('No Time')
-                    times.append('No Time')
-                    CPU.append(CPU[-1])
-                    mem.append(mem[-1])
+            date = extract_date(f"{tmp[-2]} {tmp[-1]}")
         else:
-            tmp = line.split(' ')
-            tmp2 = tmp[0].split('-')
-            if len(tmp2) == 3:
-                try:
-                    date =  datetime.datetime.strptime(f"{tmp[0]} {tmp[1]}", '%Y-%m-%d %H:%M:%S.%f')
-                except ValueError:
-                    date =  datetime.datetime.strptime(f"{tmp[0]} {tmp[1]}", '%Y-%m-%d %H:%M:%S')
+            date = extract_date(f"{tmp[0]} {tmp[1]}")
+        if startdate == 0:
+            startdate = date
+        diff = date - startdate
+        time = diff.total_seconds()/60.
+        if line[0] == '#':
+            if tmp[1] == 'TIRIFIC:':
 
-                if startdate == 0:
-                    try:
-                        startdate  =  datetime.datetime.strptime(f"{tmp[0]} {tmp[1]}", '%Y-%m-%d %H:%M:%S.%f')
-                    except ValueError:
-                        startdate  =  datetime.datetime.strptime(f"{tmp[0]} {tmp[1]}", '%Y-%m-%d %H:%M:%S')
-                diff = date - startdate
-                if len(times) > 0 :
-                    if times[-1] == 'No Time':
-                        times[-1] = diff.total_seconds()/60.
-                times.append(diff.total_seconds()/60.)
-                if label_times[-1] == 'No Time':
-                    label_times[-1] = diff.total_seconds()/60.
-                CPU.append(tmp[4])
-                mem.append(tmp[8])
+                if tmp[2].lower() == 'initializing':
+                    tmp2 = line.split('=')[1].split()
+                    current_stage = tmp2[0].strip()
+                    labels['Tirific']['label'].append(f'Initializing {current_stage}')
+                    labels['Tirific']['Time'].append(time)
+                elif tmp[2].lower() == 'finished':
+                    labels['Tirific']['label'].append(f'Ended {current_stage}')
+                    labels['Tirific']['Time'].append(time)
+                    #current_stage = 'No Tirific'
+                elif tmp[2].lower() == 'started':
+                    labels['Tirific']['label'].append(f'Started {current_stage}')
+                    labels['Tirific']['Time'].append(time)
+            else:
+                labels['FAT']['label'].append(f'Starting {tmp[1]}')
+                labels['FAT']['Time'].append(time)
+        else:
+            if tmp[-1].lower() == 'tirific':
+                loads['Tirific']['Time'].append(time)
+                loads['Tirific']['CPU'].append(tmp[4])
+                loads['Tirific']['MEM'].append(tmp[8])
+            else:
+                loads['FAT']['Time'].append(time)
+                loads['FAT']['CPU'].append(tmp[4])
+                loads['FAT']['MEM'].append(tmp[8])
+
     # Below thanks to P. Serra
     # Make single-PID figures and total figure
-    if len(mem) > 0.:
+    #print(loads['Tirific']['Time'],loads['FAT']['Time'])
+    if len(loads['Tirific']['Time']) > 0.:
+        combined_time =  np.sort(np.array(loads['Tirific']['Time']+loads['FAT']['Time'],dtype=float))
+
+        combined_loads ={'Tirific':{'CPU':np.interp(combined_time,np.array(loads['Tirific']['Time'],dtype=float),np.array(loads['Tirific']['CPU'],dtype=float)),\
+                                    'MEM':np.interp(combined_time,np.array(loads['Tirific']['Time'],dtype=float),np.array(loads['Tirific']['MEM'],dtype=float))},\
+                        'FAT':{'CPU':np.interp(combined_time,np.array(loads['FAT']['Time'],dtype=float),np.array(loads['FAT']['CPU'],dtype=float)),\
+                                                    'MEM':np.interp(combined_time,np.array(loads['FAT']['Time'],dtype=float),np.array(loads['FAT']['MEM'],dtype=float))}
+
+        }
+        comb_list= labels['Tirific']['Time']+labels['FAT']['Time']
+        comb_label = labels['Tirific']['label']+labels['FAT']['label']
+
+        labels_times=np.array([x for x, _ in sorted(zip(comb_list, comb_label))],dtype=float)
+        labels_comb = [x for _, x in sorted(zip(comb_list, comb_label))]
+
         fig, ax1 = plt.subplots(figsize = (8,4))
         fig.subplots_adjust(left = 0.1, right = 0.9, bottom = 0.15, top = 0.7)
-        times = np.array(times, dtype = float)
-        mem = np.array(mem, dtype = float)
-        CPU = np.array(CPU, dtype = float)
 
-        ax1.plot(times,mem,'b-',lw=0.5)
-        ax1.set_ylim(0,np.max(mem)+np.max(mem)/10.)
+
+        ax1.plot(combined_time,combined_loads['Tirific']['MEM'],'b-',lw=0.5)
+        ax1.plot(combined_time,combined_loads['FAT']['MEM'],'b--',lw=0.5)
+        ax1.set_ylim(0,np.max([combined_loads['Tirific']['MEM'],combined_loads['FAT']['MEM']]) \
+                      +np.max([combined_loads['Tirific']['MEM'],combined_loads['FAT']['MEM']])/10.)
         ax1.set_ylabel('RAM (Mb) ', color='b')
         ax1.tick_params(axis='y', labelcolor='b')
         ax1.set_xlabel('time (min)', color='k')
         ax2 = ax1.twinx()
-        ax2.plot(times,CPU,'r-',lw=0.5)
+        ax2.plot(combined_time,combined_loads['Tirific']['CPU'],'r-',lw=0.5)
+        #ax2.plot(combined_time,combined_loads['FAT']['CPU'],'r--',lw=0.5)
         ax2.set_ylabel('CPUs (%)',color='r')
         ax2miny,ax2maxy = ax2.get_ylim()
         ax2.tick_params(axis='y', labelcolor='r')
         last_label = -100
-        label_sep = label_times[-1]/40.
+        label_sep = combined_time[-1]/30.
         color, linest = '0.5', '--'
         labelfont = {'family': 'Times New Roman',
                  'weight': 'normal',
                  'size': 6.5}
         prev_label = ''
-        for label,time in zip(labels,label_times):
+        #for label,time in zip(labels['Tirific']['label'],labels['Tirific']['Time']):
+        for label,time in zip(labels_comb,labels_times):
+
+            if label in labels['Tirific']['label']:
+                offset =20.
+            else:
+                offset = 50.
             if color == '0.5':
                 color = 'k'
             elif color == 'k':
@@ -1120,27 +1151,50 @@ def plot_usage_stats(Configuration,debug = False):
                 linest = '-'
             elif linest == '-':
                 linest = '--'
+
             if (prev_label == 'Initializing tmp_incl_check' or prev_label == 'Ended tmp_incl_check'):
-                if (label != 'Initializing tmp_incl_check' and label != 'Ended tmp_incl_check'):
-                    ax2.axvline(x=prev_time, linestyle=linest, color=color, linewidth=0.05)
-                    last_label = max(prev_time,last_label+label_sep)
-                    ax2.text(last_label,ax2maxy+20.,prev_label, va='bottom',ha='left',rotation= 60, color='black',
-                          bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7,fontdict = labelfont)
-                    ax2.plot([prev_time,last_label+0.1],[ax2maxy,ax2maxy+20.],'k'+linest,color=color,linewidth=0.05,clip_on=False)
+                if (label != 'Initializing tmp_incl_check' and label != 'Ended tmp_incl_check') or \
+                        time == labels_times[-1]    :
+
+                    if time != labels_times[-1]:
+                        ax2.axvline(x=prev_time, linestyle=linest, color=color, linewidth=0.05)
+                        last_label = max(prev_time,last_label+label_sep)
+                        ax2.text(last_label,ax2maxy+offset,prev_label, va='bottom',ha='left',rotation= 60, color='black',
+                              bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7,fontdict = labelfont)
+                        ax2.plot([prev_time,last_label+0.1],[ax2maxy,ax2maxy+offset],linest,color=color,linewidth=0.05,clip_on=False)
                     ax2.axvline(x=time, linestyle=linest, color=color, linewidth=0.05)
                     last_label = max(time,last_label+label_sep)
-                    ax2.text(last_label,ax2maxy+20.,label, va='bottom',ha='left',rotation= 60, color='black',
+                    ax2.text(last_label,ax2maxy+offset,label, va='bottom',ha='left',rotation= 60, color='black',
                           bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7,fontdict = labelfont)
-                    ax2.plot([time,last_label+0.1],[ax2maxy,ax2maxy+20.],'k'+linest,color=color,linewidth=0.05,clip_on=False)
+                    ax2.plot([time,last_label+0.1],[ax2maxy,ax2maxy+offset],linest,color=color,linewidth=0.05,clip_on=False)
                 else:
+                    prev_time = time
+            elif (prev_label == 'Initializing Error_Shaker' or prev_label == 'Ended Error_Shaker' or prev_label == 'Started Error_Shaker'):
+                if (label != 'Initializing Error_Shaker' and label != 'Ended Error_Shaker' and  label != 'Started Error_Shaker') or \
+                        time == labels_times[-1]:
+
+                    #ax2.axvline(x=prev_time, linestyle=linest, color=color, linewidth=0.05)
+                    #last_label = max(prev_time,last_label+label_sep)
+                    #ax2.text(last_label,ax2maxy+20.,prev_label, va='bottom',ha='left',rotation= 60, color='black',
+                    #      bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7,fontdict = labelfont)
+                    #ax2.plot([prev_time,last_label+0.1],[ax2maxy,ax2maxy+20.],linest,color=color,linewidth=0.05,clip_on=False)
+                    ax2.axvline(x=time, linestyle=linest, color=color, linewidth=0.05)
+                    last_label = max(time,last_label+label_sep)
+                    ax2.text(last_label,ax2maxy+offset,label, va='bottom',ha='left',rotation= 60, color='black',
+                          bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7,fontdict = labelfont)
+                    ax2.plot([time,last_label+0.1],[ax2maxy,ax2maxy+offset],linest,color=color,linewidth=0.05,clip_on=False)
+                else:
+                    prev_label = label
                     prev_time = time
             else:
                 ax2.axvline(x=time, linestyle=linest, color=color, linewidth=0.05)
                 last_label = max(time,last_label+label_sep)
-                ax2.text(last_label,ax2maxy+20.,label, va='bottom',ha='left',rotation= 60, color='black',
+                ax2.text(last_label,ax2maxy+offset,label, va='bottom',ha='left',rotation= 60, color='black',
                       bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7,fontdict = labelfont)
-                ax2.plot([time,last_label+0.1],[ax2maxy,ax2maxy+20.],'k'+linest,color=color,linewidth=0.05,clip_on=False)
+                ax2.plot([time,last_label+0.1],[ax2maxy,ax2maxy+offset],linest,color=color,linewidth=0.05,clip_on=False)
             prev_label = label
+
+
         #This is beyond stupid again, but hey it is python so needed to make things work.
         ax2.set_ylim([ax2miny,ax2maxy])
         fig.savefig(f"{Configuration['LOG_DIRECTORY']}ram_cpu.pdf")
@@ -1173,7 +1227,17 @@ plot_usage_stats.__doc__ =f'''
  NOTE:
 '''
 
-
+def extract_date(string):
+    tmp = string.split(' ')
+    tmp2 = tmp[0].split('-')
+    if len(tmp2) == 3:
+        try:
+            date =  datetime.strptime(f"{tmp[0]} {tmp[1]}", '%Y-%m-%d %H:%M:%S.%f')
+        except ValueError:
+            date =  datetime.strptime(f"{tmp[0]} {tmp[1]}", '%Y-%m-%d %H:%M:%S')
+    else:
+        raise ProgramError("There is no date in the provided string.")
+    return date
 
 def sofia(template,name):
     with open(name,'w') as file:
@@ -1210,7 +1274,10 @@ sofia.__doc__ =f'''
 def tirific(Configuration,Tirific_Template, name = 'tirific.def', debug = False):
     #IF we're writing we bump up the restart_ID and adjust the AZ1P angles to the current warping
     update_disk_angles(Configuration,Tirific_Template, debug= debug)
-    Tirific_Template['RESTARTID'] = str(int(Tirific_Template['RESTARTID'])+1)
+    try:
+        Tirific_Template['RESTARTID'] = str(int(Tirific_Template['RESTARTID'])+1)
+    except:
+        Tirific_Template['RESTARTID'] = 0
     with open(Configuration['FITTING_DIR']+name, 'w') as file:
         for key in Tirific_Template:
             if key[0:5] == 'EMPTY':
@@ -1247,6 +1314,7 @@ tirific.__doc__ =f'''
 
  NOTE:
  '''
+
 
 def write_config(file,Configuration,debug = False):
     if debug:

@@ -14,16 +14,17 @@ requirements = [
     'omegaconf',
     'matplotlib',
     'future-fstrings',
+    'psutil',
     'importlib_resources>=3.3.0',
 ]
 
 PACKAGE_NAME = 'pyFAT_astro'
-__version__ = 'v0.0.7'
+__version__ = 'v0.0.8'
 
 
-with open("README.md", "r") as fh:
-    long_description = fh.read()
-
+#with open("README.md", "r") as fh:
+#    long_description = fh.read()
+long_description = "Not sure what is going wrong here."
 
 setup(name=PACKAGE_NAME,
       version=__version__,
