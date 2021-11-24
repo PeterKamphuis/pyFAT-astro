@@ -52,6 +52,11 @@ scfind.kernelsXY =  0, 4, 8
 scfind.kernelsZ =  2, 4, 8, 16
 scfind.threshold =  5.0
 
+# Dilation
+
+dilation.enable = True
+dilation.iterationsZ = 1
+
 # Linker
 
 linker.radiusXY = 3

@@ -2107,6 +2107,49 @@ make_tiltogram.__doc__ =f'''
 
 '''
 
+def max_profile_change(Configuration,radius,profile,key,debug=False):
+    radkpc =[convertskyangle(Configuration,float(x),distance=Configuration['DISTANCE']) \
+                for x in radius]
+    new_profile = copy.deepcopy(profile)
+    diff_rad =  [float(y-x) for x,y in zip(radkpc,radkpc[1:])]
+    diff_profile = [float(abs(x-y)) for x,y in zip(profile,profile[1:])]
+    for i,diff in enumerate(diff_profile):
+        if diff/diff_rad[i] > Configuration['MAX_CHANGE'][key]:
+            new_profile[i+1] -=  diff-(Configuration['MAX_CHANGE'][key]*0.9*diff_rad[i])
+    return new_profile
+max_profile_change.__doc__ =f'''
+ NAME:
+     max_profile_change
+
+ PURPOSE:
+    Check that the profile is not change more than the maximum per kpc and correct if it does
+
+ CATEGORY:
+    support_functions
+
+ INPUTS:
+    Configuration = standard FAT Configuration
+    radius = radius corresponding to the profile
+    profile = profile to examine
+    key = the parameter to indicate the type of profile
+
+ OPTIONAL INPUTS:
+    debug = False
+
+ OUTPUTS:
+    new_profile
+    the modified profile
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+
+'''
+
+
 def obtain_border_pix(Configuration,angle,center, debug = False):
     rotate = False
     # only setup for 0-180 but 180.-360 is the same but -180
@@ -2751,7 +2794,8 @@ def setup_configuration(cfg):
                 'EXCLUDE_CENTRAL', # Do we exclude the central part of the fitting due to blanks/an absorption source
                 'ACCEPTED',
                 'SOFIA_RAN', #Check if we have ran Sofia
-                'NO_RADEC'
+                'NO_RADEC',
+                'FIX_SIZE' # If we have before fitted a size we want to fix to this size to avoid looping
                 ]
 #
     for key in boolean_keys:
@@ -2798,6 +2842,7 @@ def setup_configuration(cfg):
                'NAXES': [0.,0.,0.], #  Size of the cube in pixels x,y,z arranged like sane people not python, set in main
                'MAX_ERROR': {}, #The maximum allowed errors for the parameters, set in main derived from cube
                'MIN_ERROR': {}, #The minumum allowed errors for the parameters, initially set in check_source but can be modified through out INCL,PA,SDSIS,Z0 errors change when the parameters is fixed or release
+               'MAX_CHANGE': {'INCL': 6.25, 'PA': 50.}, #The maximum change in a parameter in unit/kpc
                'CHANNEL_WIDTH': 0., #Width of the channel in the cube in km/s, set in main derived from cube
                'PIXEL_SIZE': 0., #'Size of the pixels in degree'
                }
@@ -3043,15 +3088,21 @@ def set_limit_modifier(Configuration,Inclination, debug= False):
     if not Inclination.shape:
         Inclination = [Inclination]
     modifier_list = []
+    if len(Inclination) > 1:
+        if np.abs(Inclination[-1]-Inclination[-2]) > Configuration['MAX_CHANGE']['INCL']:
+            Inclination[-1] = Inclination[-2]
     # Correction because the noise applies to non-face on rings while the SBR is face on,correction is normalized to the average inclination
     # The square root is because of the square root between the noise in cube and the noise in J2007
     # The lower limit corresponds to a inclination 80 above which the cos becomes too steep
-    for inc in Inclination:
+    for i,inc in enumerate(Inclination):
         if inc > 90.:
             inc  = 180.-inc
         if inc < 0.:
             inc= abs(inc)
-        modifier_list.append(set_limits(np.sqrt(np.cos(np.radians(inc))/np.cos(np.radians(60.))),0.75,2.))
+        if i < 10.:
+            modifier_list.append(set_limits(np.sqrt(np.cos(np.radians(inc))/np.cos(np.radians(60.))),0.75,2.))
+        else:
+            modifier_list.append(set_limits(np.sqrt(np.cos(np.radians(inc))/np.cos(np.radians(60.)))*i/10.,0.8,1.75))
     if Configuration['OUTER_RINGS_DOUBLED']:
         if len(modifier_list) > 10:
             modifier_list[10:]= np.sqrt(modifier_list[10:])

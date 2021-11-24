@@ -112,6 +112,7 @@ def create_fat_cube(Configuration, Fits_Files,sofia_catalogue=False,id='No defau
     # Release the arrays
 
     Cube.close()
+    
     data = []
     hdr = []
 create_fat_cube.__doc__ =f'''
@@ -567,7 +568,7 @@ def prep_cube(Configuration,hdr,data, debug = False):
         print_log(f'''PREPROCESSING: This cube has noise statistics that cannot be dealt with.
 ''',Configuration['OUTPUTLOG'],screen=True)
         raise BadCubeError('The Cube has noise statistics that cannot be dealt with')
-    hdr['FATNOISE'] = noise_corner
+    #hdr['FATNOISE'] = noise_corner
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         low_noise_indices = np.where(data < -10*noise_corner)
@@ -586,6 +587,10 @@ def prep_cube(Configuration,hdr,data, debug = False):
         blanked_channels = ['-1']
     hdr['BL_CHAN'] = ','.join(blanked_channels)
     #Previously SoFiA was not dealing with blanks properly and the statement went here
+    #finally we want to get the noise level from the negative in the final cube
+
+    new_noise = np.std(np.hstack([data[data<0],-1.*data[data<0]]))
+    hdr['FATNOISE'] = new_noise
 
     return data
 prep_cube.__doc__ =f'''

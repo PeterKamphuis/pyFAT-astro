@@ -6,7 +6,7 @@
 import copy
 from pyFAT_astro.Support.support_functions import set_rings,convertskyangle,sbr_limits,set_limits,print_log,set_limit_modifier,\
                               set_ring_size,calc_rings,finish_current_run,set_format,get_from_template,gaussian_function,fit_gaussian,\
-                              get_ring_weights,set_boundaries
+                              get_ring_weights,set_boundaries,max_profile_change
 from pyFAT_astro.Support.fat_errors import InitializeError,CfluxError,FunctionCallError,BadConfigurationError
 import numpy as np
 import os
@@ -53,19 +53,29 @@ arc_tan_function.__doc__ =f'''
 
 def check_angles(Configuration,Tirific_Template, debug = False):
     incl = get_from_template(Configuration,Tirific_Template, ['INCL','INCL_2'],debug=debug)
-
-    if incl[0][0] > 90. and incl[1][0] > 90.:
-        Tirific_Template['INCL'] = f"{' '.join(f'{180.-x:.2e}' for x in incl[0])}"
-        Tirific_Template['INCL_2'] = f"{' '.join(f'{180.-x:.2e}' for x in incl[1])}"
     pa = get_from_template(Configuration,Tirific_Template, ['PA','PA_2'],debug=debug)
 
-    if pa[0][0] > 360. and pa[1][0] > 360.:
-        Tirific_Template['PA'] = f"{' '.join(f'{x-360.:.2e}' for x in pa[0])}"
-        Tirific_Template['PA_2'] = f"{' '.join(f'{x-360.:.2e}' for x in pa[1])}"
+    rad =[float(x) for x in Tirific_Template['RADI'].split()]
 
-    if pa[0][0] < 0. and pa[1][0] < 0.:
-        Tirific_Template['PA'] = f"{' '.join(f'{360.-x:.2e}' for x in pa[0])}"
-        Tirific_Template['PA_2'] = f"{' '.join(f'{360.-x:.2e}' for x in pa[1])}"
+    for side in [0,1]:
+        if incl[side][0] > 90.:
+            incl[side] = [float(180-x) for x in incl[side]]
+        if pa[side][0] > 360.:
+            pa[side] = [x-360. for x in pa[side]]
+        if pa[side][0] < 0.:
+            pa[side] = [360.-x for x in pa[side]]
+        pa_tmp = max_profile_change(Configuration,rad,pa[side],'PA',debug=debug)
+        pa[side] = pa_tmp
+        incl_tmp = max_profile_change(Configuration,rad,incl[side],'INCL',debug=debug)
+        incl[side] = incl_tmp
+
+
+    Tirific_Template['INCL'] = f"{' '.join(f'{x:.2e}' for x in incl[0])}"
+    Tirific_Template['INCL_2'] = f"{' '.join(f'{x:.2e}' for x in incl[1])}"
+    Tirific_Template['PA'] = f"{' '.join(f'{x:.2e}' for x in pa[0])}"
+    Tirific_Template['PA_2'] = f"{' '.join(f'{x:.2e}' for x in pa[1])}"
+
+
 check_angles.__doc__=f'''
  NAME:
     check_angles
@@ -293,6 +303,7 @@ def check_size(Configuration,Tirific_Template, fit_type = 'Undefined', stage = '
         if Configuration['OLD_RINGS'][ind+1] > Configuration['OLD_RINGS'][ind]:
             print_log(f'''CHECK_SIZE: After which we increased the size.
 ''', Configuration['OUTPUTLOG'])
+            Configuration['FIX_SIZE'] = True
             if Configuration['OLD_RINGS'][ind+1] == Configuration['OLD_RINGS'][-1]:
                 print_log(f'''CHECK_SIZE: Which is the current fit so that's ok.
 ''', Configuration['OUTPUTLOG'])
@@ -301,9 +312,11 @@ def check_size(Configuration,Tirific_Template, fit_type = 'Undefined', stage = '
                 print_log(f'''CHECK_SIZE: Which is not the current fit so we refit this size.
 ''', Configuration['OUTPUTLOG'])
             Configuration['OLD_RINGS'].append(f"{size_in_beams:.1f}")
+
         else:
             print_log(f'''CHECK_SIZE: After which we decreased so we allow this addition. But no more.
 ''', Configuration['OUTPUTLOG'])
+            Configuration['FIX_SIZE'] = True
             Configuration['OLD_RINGS'].append(f"{size_in_beams:.1f}")
     else:
         if debug:
@@ -660,7 +673,7 @@ def fix_profile(Configuration, key, profile, Tirific_Template, debug= False, inn
 
 
     profile = np.array(profile,dtype=float)
-
+    rad = [float(x) for x in Tirific_Template['RADI'].split()]
 
     if key in ['VROT']:
         indexes = [0]
@@ -695,7 +708,8 @@ def fix_profile(Configuration, key, profile, Tirific_Template, debug= False, inn
             for x in range(0,xrange):
                 if inner_fix[i]+x < len(profile[i,:]):
                     profile[i,inner_fix[i]+x] = 1/(x+4./xrange)*inner_mean+ (1-1/(x+4./xrange))*profile[i,inner_fix[i]+x]
-
+            if key in ['PA','INCL']:
+                profile[i,:] = max_profile_change(Configuration,rad,profile[i,:],key,debug=debug)
         if debug:
             print_log(f'''FIX_PROFILE:After smoothe transition
 {'':8s} profile = {profile[i,:]}

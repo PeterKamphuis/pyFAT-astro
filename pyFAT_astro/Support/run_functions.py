@@ -830,7 +830,10 @@ def one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run, de
 ''',Configuration['OUTPUTLOG'])
 
     # Check whether we have the correct sizes,
-    accepted_size = check_size(Configuration,Tirific_Template, fit_type = fit_type, stage = stage, current_run = current_run, debug=debug,Fits_Files=Fits_Files)
+    if not Configuration['FIX_SIZE']:
+        accepted_size = check_size(Configuration,Tirific_Template, fit_type = fit_type, stage = stage, current_run = current_run, debug=debug,Fits_Files=Fits_Files)
+    else:
+        accepted_size = True
     if accepted and accepted_size and accepted_central:
         Configuration['ACCEPTED'] = True
     else:
@@ -919,7 +922,7 @@ def sofia(Configuration, Fits_Files, debug = False):
     sofia_template = rf.sofia_template(debug=debug)
     create_directory('Sofia_Output',Configuration['FITTING_DIR'])
     os.chdir(Configuration['FITTING_DIR'])
-    threshold = 5.
+    threshold = 7.
     counter = 3
     sofia_template['input.data'] = Fits_Files['FITTING_CUBE']
     spatial_kernels = [0,int(round(Configuration['BEAM_IN_PIXELS'][0])),int(round(Configuration['BEAM_IN_PIXELS'][0]))*2]
@@ -953,7 +956,7 @@ def sofia(Configuration, Fits_Files, debug = False):
 {"":8s} RUN_SOFIA: Lowering the threshold and trying again."
 '''
                 print_log(log_statement,Configuration['OUTPUTLOG'])
-                threshold -= 1
+                threshold -= 2
             else:
                 clean_after_sofia(Configuration)
                 log_statement = f'''RUN_SOFIA: We did not find a source above a threshold of {threshold}.
