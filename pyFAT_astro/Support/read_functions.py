@@ -469,9 +469,24 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, debug
                 print_log(f'''GUESS_ORIENTATION: The SoFiA center and that of the SBR profile are separated by more than half a beam.
 {'':8s}GUESS_ORIENTATION: Determining the more symmetric profile.
 ''',Configuration['OUTPUTLOG'])
-            center,checked_center,center_stable = get_new_center(Configuration,map,center,maj_extent,noise=median_noise_in_map,debug=debug)
-            center_counter += 1
+            # let's check against a central absorption
 
+            cube = fits.open(f"{Configuration['FITTING_DIR']}{Fits_Files['FITTING_CUBE']}",\
+                    uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
+            buffer = int(round(np.mean(Configuration['BEAM_IN_PIXELS'][:2])/2.))
+            central = cube[0].data[:,int(round(center[1]-buffer)):int(round(center[1]+buffer)),int(round(center[0]-buffer)):int(round(center[0]+buffer))]
+
+            if np.count_nonzero(np.isnan(central))/central.size < 0.1:
+                center,checked_center,center_stable = get_new_center(Configuration,map,center,maj_extent,noise=median_noise_in_map,debug=debug)
+                center_counter += 1
+                if debug:
+                    print_log(f'''GUESS_ORIENTATION: We calculated a new center.
+''',Configuration['OUTPUTLOG'])
+            else:
+                center_stable = True
+                if debug:
+                    print_log(f'''GUESS_ORIENTATION: There appears to be a central absorption source. We are relying on sofia
+''',Configuration['OUTPUTLOG'])
 
         else:
             center_stable = True

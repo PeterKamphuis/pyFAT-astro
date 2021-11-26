@@ -1136,15 +1136,24 @@ def plot_usage_stats(Configuration,debug = False):
                  'weight': 'normal',
                  'size': 6.5}
         prev_label = ''
+
+        last_label_top = 0.
+        last_label_bottom = 0.
         #for label,time in zip(labels['Tirific']['label'],labels['Tirific']['Time']):
         for label,time in zip(labels_comb,labels_times):
 
             if label in labels['Tirific']['label']:
                 offset = 20.
                 vertical_start = ax2maxy
+                va= 'bottom'
+                ha= 'left'
+
             else:
                 offset=-50
                 vertical_start = ax2miny
+                va= 'top'
+                ha='right'
+
             if color == '0.5':
                 color = 'k'
             elif color == 'k':
@@ -1160,13 +1169,19 @@ def plot_usage_stats(Configuration,debug = False):
 
                     if time != labels_times[-1]:
                         ax2.axvline(x=prev_time, linestyle=linest, color=color, linewidth=0.05)
-                        last_label = max(prev_time,last_label+label_sep)
-                        ax2.text(last_label,vertical_start+offset,prev_label, va='bottom',ha='left',rotation= 60, color='black',
+                        if label in labels['Tirific']['label']:
+                            last_label = last_label_top = max(prev_time,last_label_top+label_sep)
+                        else:
+                            last_label = last_label_bottom = max(prev_time,last_label_bottom+label_sep)
+                        ax2.text(last_label,vertical_start+offset,prev_label, va=va,ha=ha,rotation= 60, color='black',
                               bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7,fontdict = labelfont)
                         ax2.plot([prev_time,last_label+0.1],[vertical_start,vertical_start+offset],linest,color=color,linewidth=0.05,clip_on=False)
                     ax2.axvline(x=time, linestyle=linest, color=color, linewidth=0.05)
-                    last_label = max(time,last_label+label_sep)
-                    ax2.text(last_label,vertical_start+offset,label, va='bottom',ha='left',rotation= 60, color='black',
+                    if label in labels['Tirific']['label']:
+                        last_label = last_label_top = max(time,last_label_top+label_sep)
+                    else:
+                        last_label = last_label_bottom = max(time,last_label_bottom+label_sep)
+                    ax2.text(last_label,vertical_start+offset,label, va=va,ha=ha,rotation= 60, color='black',
                           bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7,fontdict = labelfont)
                     ax2.plot([time,last_label+0.1],[vertical_start,vertical_start+offset],linest,color=color,linewidth=0.05,clip_on=False)
                 else:
@@ -1181,8 +1196,11 @@ def plot_usage_stats(Configuration,debug = False):
                     #      bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7,fontdict = labelfont)
                     #ax2.plot([prev_time,last_label+0.1],[ax2maxy,ax2maxy+20.],linest,color=color,linewidth=0.05,clip_on=False)
                     ax2.axvline(x=time, linestyle=linest, color=color, linewidth=0.05)
-                    last_label = max(time,last_label+label_sep)
-                    ax2.text(last_label,vertical_start+offset,label, va='bottom',ha='left',rotation= 60, color='black',
+                    if label in labels['Tirific']['label']:
+                        last_label = last_label_top = max(time,last_label_top+label_sep)
+                    else:
+                        last_label = last_label_bottom = max(time,last_label_bottom+label_sep)
+                    ax2.text(last_label,vertical_start+offset,label, va=va,ha=ha,rotation= 60, color='black',
                           bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7,fontdict = labelfont)
                     ax2.plot([time,last_label+0.1],[vertical_start,vertical_start+offset],linest,color=color,linewidth=0.05,clip_on=False)
                 else:
@@ -1190,8 +1208,11 @@ def plot_usage_stats(Configuration,debug = False):
                     prev_time = time
             else:
                 ax2.axvline(x=time, linestyle=linest, color=color, linewidth=0.05)
-                last_label = max(time,last_label+label_sep)
-                ax2.text(last_label,vertical_start+offset,label, va='bottom',ha='left',rotation= 60, color='black',
+                if label in labels['Tirific']['label']:
+                    last_label = last_label_top = max(time,last_label_top+label_sep)
+                else:
+                    last_label = last_label_bottom= max(time,last_label_bottom+label_sep)
+                ax2.text(last_label,vertical_start+offset,label,va=va,ha=ha,rotation= 60, color='black',
                       bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7,fontdict = labelfont)
                 ax2.plot([time,last_label+0.1],[vertical_start,vertical_start+offset],linest,color=color,linewidth=0.05,clip_on=False)
             prev_label = label

@@ -244,24 +244,7 @@ def check_size(Configuration,Tirific_Template, fit_type = 'Undefined', stage = '
 ''',Configuration['OUTPUTLOG'])
     #if we haven't subtracted we check if we should add
     if int(new_rings) == int(Configuration['NO_RINGS']):
-        if (np.any(sbr[:,-2] > sbr_ring_limits[:,-2]*7.) and np.any(sbr[:,-1] > sbr_ring_limits[:,-1]*3.)) or \
-            np.any(sbr[:,-1] > sbr_ring_limits[:,-1]*5.):
-            if debug:
-                print_log(f'''CHECK_SIZE: The last rings were found to be:
-{'':8s}{sbr[:,-2:]}
-{'':8s}and the limits:
-{'':8s}{sbr_ring_limits[:,-2:]}
-{'':8s}Thus we add a ring.
-''', Configuration['OUTPUTLOG'])
-            new_rings += 1
-        else:
-            if debug:
-                print_log(f'''CHECK_SIZE: The last rings were found to be:
-{'':8s}{sbr[:,-2:]}
-{'':8s}and the limits:
-{'':8s}{sbr_ring_limits[:,-2:]}
-{'':8s}Thus we keep the ring size.
-''', Configuration['OUTPUTLOG'])
+        new_rings = check_for_ring_addition(Configuration,Tirific_Template,sbr,sbr_ring_limits*limit_factor,debug=debug)
     else:
         if debug:
             print_log(f'''CHECK_SIZE: The last rings were found to be:
@@ -384,7 +367,87 @@ check_size.__doc__  =f'''
 
  NOTE: Configuration['RC_UNRELIABLE'] = modified and updated here.
 '''
+def check_for_ring_addition(Configuration,Tirific_Template,sbr,sbr_ring_limits,debug=False):
+    new_rings = Configuration['NO_RINGS']
+    add = False
+    for side in [0,1]:
+        if (sbr[side,-2] > sbr_ring_limits[side,-2]*10. and sbr[side,-1] > sbr_ring_limits[side,-1]*3.) or \
+            (sbr[side,-2] > sbr_ring_limits[side,-2]*7.5 and sbr[side,-1] > sbr_ring_limits[side,-1]*4.) or \
+            sbr[side,-1] > sbr_ring_limits[side,-1]*7.:
+            if debug:
+                print_log(f'''CHECK_FOR_RING_ADDITION: Check side {side}:
+{'':8s}{sbr[side,-2:]},{sbr[side,-2]},{sbr[side,-1]}
+{'':8s}and the limits:
+{'':8s}{sbr_ring_limits[side,-2:]},{sbr_ring_limits[side,-2]},{sbr_ring_limits[side,-1]}
+{'':8s}Thus we check for gaps.
+''', Configuration['OUTPUTLOG'])
 
+
+            rad= np.array(get_from_template(Configuration,Tirific_Template, [f'RADI'],debug=debug)[0],dtype = float)
+
+            gap= np.where(sbr[side] < sbr_ring_limits[side])[0]
+            if gap.size > 0:
+                if gap[-1] == len(sbr[side])-1:
+                    if debug:
+                        print_log(f'''CHECK_FOR_RING_ADDITION: We found a gap ({gap}) that runs to the last ring.
+{'':8s} Not adding based on this side.
+''', Configuration['OUTPUTLOG'])
+                    continue
+                while gap[0] < int(len(sbr[side])/2.):
+                    gap = gap[1:]
+                    if len(gap) == 0:
+                        break
+
+            if gap.size > 0:
+
+                if debug:
+                    print_log(f'''CHECK_FOR_RING_ADDITION: We found a gap in the rings {gap}.
+{'':8s}{sbr[side]}
+{'':8s}We will check the change in PA and INCLINATION.
+''', Configuration['OUTPUTLOG'])
+                ext = ''
+                if side == 1:
+                    ext='_2'
+                angles = np.array(get_from_template(Configuration,Tirific_Template, [f'PA{ext}',f'INCL{ext}'],debug=debug),dtype = float)
+                PA_change =  np.sum(np.array([np.abs(x-y) for x,y in zip(angles[0,gap[0]-1:],angles[0,gap[0]:])]))
+                INCL_change = np.sum(np.array([np.abs(x-y) for x,y in zip(angles[1,gap[0]-1:],angles[1,gap[0]:])]))
+
+                gap_size = convertskyangle(Configuration,[rad[gap[0]],rad[-1]],Configuration['DISTANCE'])
+                if debug:
+                    print_log(f'''CHECK_FOR_RING_ADDITION: We found a gap {[rad[gap[0]],rad[-1]]} arcsec = {gap_size} kpc
+{'':8s}PA variation = {[np.abs(x-y) for x,y in zip(angles[0,gap[0]-1:],angles[0,gap[0]:])]}
+{'':8s}INCL variation = {[np.abs(x-y) for x,y in zip(angles[1,gap[0]-1:],angles[1,gap[0]:])]}
+''', Configuration['OUTPUTLOG'])
+                gap_size = float(gap_size[1]-gap_size[0])
+                if PA_change/gap_size  < Configuration['MAX_CHANGE']['PA'] and INCL_change/gap_size < Configuration['MAX_CHANGE']['INCL']:
+
+                    add = True
+                if debug:
+                    print_log(f'''CHECK_FOR_RING_ADDITION: We found a change  of {PA_change/gap_size} in PA and {INCL_change/gap_size} in INCL.
+{'':8s} The gap is {gap_size} kpc
+''', Configuration['OUTPUTLOG'])
+
+
+            else:
+                if debug:
+                    print_log(f'''CHECK_FOR_RING_ADDITION: We did not find a gap so we were are adding.
+''', Configuration['OUTPUTLOG'])
+                add=True
+
+
+    if add:
+        print_log(f'''CHECK_FOR_RING_ADDITION:  We are adding a ring (new no ring = {new_rings+1.})
+''', Configuration['OUTPUTLOG'])
+        new_rings += 1
+    else:
+        if debug:
+            print_log(f'''CHECK_FOR_RING_ADDITION: The last rings were found to be:
+{'':8s}{sbr[:,-2:]}
+{'':8s}and the limits:
+{'':8s}{sbr_ring_limits[:,-2:]}
+{'':8s}Thus we keep the ring size.
+''', Configuration['OUTPUTLOG'])
+    return new_rings
 
 def fit_arc(Configuration,radii,sm_profile,error, debug = False ):
 

@@ -392,7 +392,7 @@ def check_source(Configuration, Fits_Files, debug = False):
                 /(Configuration['BEAM_IN_PIXELS'][0])+5.))
 
 
-    pa, inclination, SBR_initial, maj_extent,x_new,y_new,new_vsys,VROT_initial = rf.guess_orientation(Configuration,Fits_Files, center = [x,y],debug=debug)
+    pa, inclination, SBR_initial, maj_extent,x_new,y_new,new_vsys,VROT_initial = rf.guess_orientation(Configuration,Fits_Files, v_sys= v_app, center = [x,y],debug=debug)
 
     if x_new != x or y_new != y or new_vsys != v_app:
 
