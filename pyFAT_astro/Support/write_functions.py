@@ -177,14 +177,23 @@ def initialize_def_file(Configuration, Fits_Files,Tirific_Template,Initial_Param
         get_inner_fix(Configuration,Tirific_Template, debug=debug)
         get_warp_slope(Configuration,Tirific_Template, debug=debug)
 
+        Initial_Parameters['XPOS'][1]= set_limits(Initial_Parameters['XPOS'][1],Configuration['BEAM'][0]/3600.,Configuration['BEAM'][0]/3600.*5)
+        Initial_Parameters['YPOS'][1]= set_limits(Initial_Parameters['YPOS'][1],Configuration['BEAM'][0]/3600.,Configuration['BEAM'][0]/3600.*5)
+        Initial_Parameters['VSYS'][1]= set_limits(Initial_Parameters['VSYS'][1],Configuration['CHANNEL_WIDTH'],Configuration['CHANNEL_WIDTH']*5)
+        Initial_Parameters['PA'][1]= set_limits(Initial_Parameters['PA'][1],3.,15)
+        Initial_Parameters['INCL'][1]= set_limits(Initial_Parameters['INCL'][1],3.,15)
+
+        '''
         parameters = {'VSYS': [FAT_Model[0,Vars_to_Set.index('VSYS')], Configuration['CHANNEL_WIDTH']], \
                       'XPOS': [FAT_Model[0,Vars_to_Set.index('XPOS')], Configuration['BEAM'][0]/3600.] ,
                       'YPOS': [FAT_Model[0,Vars_to_Set.index('YPOS')], Configuration['BEAM'][0]/3600.],
                       'INCL': [FAT_Model[0,Vars_to_Set.index('INCL')], 3.],
                       'PA':  [FAT_Model[0,Vars_to_Set.index('PA')], 3.],
                       'VROT':[np.mean(FAT_Model[:,Vars_to_Set.index('VROT')]),np.max(FAT_Model[:,Vars_to_Set.index('VROT')])-np.min(FAT_Model[1:,Vars_to_Set.index('VROT')]) ]  }
+        '''
+
         set_fitting_parameters(Configuration, Tirific_Template,stage = 'initialize_os',
-                               initial_estimates=parameters, debug=debug)
+                               initial_estimates=Initial_Parameters, debug=debug)
 
     tirific(Configuration,Tirific_Template,name = f'{fit_type}_In.def', debug=debug)
 

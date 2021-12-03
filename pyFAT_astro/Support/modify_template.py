@@ -20,7 +20,7 @@ def arc_tan_function(axis,center,length,amplitude,mean):
     c = axis[-1]*0.1
     #and the turnover has to be beyon 20*of the inner part
     c2 = set_limits(axis[-1]*0.2,axis[2],axis[int(len(axis)/1.5)])
-    return -1*np.arctan((axis-(c2+abs(center)))/(c+abs(length)))*amplitude/np.pi + mean
+    return -1*np.arctan((axis-(c2+abs(center)))/(c+abs(length)))*abs(amplitude)/np.pi + abs(mean)
 arc_tan_function.__doc__ =f'''
  NAME:
     arc_tan_function
@@ -373,7 +373,7 @@ def check_for_ring_addition(Configuration,Tirific_Template,sbr,sbr_ring_limits,d
     for side in [0,1]:
         if (sbr[side,-2] > sbr_ring_limits[side,-2]*10. and sbr[side,-1] > sbr_ring_limits[side,-1]*3.) or \
             (sbr[side,-2] > sbr_ring_limits[side,-2]*7.5 and sbr[side,-1] > sbr_ring_limits[side,-1]*4.) or \
-            sbr[side,-1] > sbr_ring_limits[side,-1]*7.:
+            sbr[side,-1] > sbr_ring_limits[side,-1]*6.:
             if debug:
                 print_log(f'''CHECK_FOR_RING_ADDITION: Check side {side}:
 {'':8s}{sbr[side,-2:]},{sbr[side,-2]},{sbr[side,-1]}
@@ -780,7 +780,8 @@ def fix_profile(Configuration, key, profile, Tirific_Template, debug= False, inn
         #profile[:,:Configuration['INNER_FIX']] = np.nanmean(profile[:,:Configuration['INNER_FIX']])
         if key in ['SDIS']:
             inner_max = np.nanmax(profile[i,:int(len(profile[i,:])/2.)])
-            if inner_mean < inner_max:
+            mean = np.nanmean(profile[i,:])
+            if inner_mean < mean or inner_mean < np.nanmean(profile[i,-3:]):
                 ind = np.where(profile[i,:] == inner_max)[0]
                 if ind.size > 1:
                     ind = int(ind[0])
@@ -1991,6 +1992,17 @@ def set_fitting_parameters(Configuration, Tirific_Template, parameters_to_adjust
             print_log(f'''SET_FITTING_PARAMETERS: This {key} is in modifiers
 {'':8s} With these values {modifiers[key]}
 ''',Configuration['OUTPUTLOG'])
+    ###############-- Modfier adaptations for large galaxies ####################
+    if Configuration['OUTER_RINGS_DOUBLED']:
+        for par_to_change in ['XPOS','YPOS']:
+            if par_to_change in modifiers:
+                modifiers[par_to_change]  = np.array(modifiers[par_to_change],dtype=float)*\
+                                            np.array([4.,3.,5.],dtype=float)
+    if  Configuration['VEL_SMOOTH_EXTENDED']:
+        if 'VSYS' in modifiers:
+            modifiers['VSYS']  = np.array(modifiers['VSYS'],dtype=float)*\
+                                        np.array([2.,2.,3.],dtype=float)
+    ###############-- Modfier adaptations based on the inclination ####################
     if stage not in ['final_os']:
         if initial_estimates['INCL'][0] < 30.:
             if 'Z0' in modifiers:

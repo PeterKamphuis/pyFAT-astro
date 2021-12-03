@@ -60,8 +60,12 @@ def check_central_convergence(Configuration,Tirific_Template, fit_type = 'Undefi
        abs(new_vsys[0] - old_vsys[0]) > sys_lim:
         if Configuration['SIZE_IN_BEAMS'] < 20:
             apply_limit = 2.*Configuration['BEAM'][0]/3600.
+
         else:
-            apply_limit = Configuration['BEAM'][0]/3600.*Configuration['SIZE_IN_BEAMS']*0.2
+            if Configuration['OUTER_RINGS_DOUBLED'] and Configuration['ITERATIONS'] <= 2:
+                apply_limit = Configuration['BEAM'][0]/3600.*Configuration['SIZE_IN_BEAMS']
+            else:
+                apply_limit = Configuration['BEAM'][0]/3600.*Configuration['SIZE_IN_BEAMS']*0.2
         if abs(new_xpos[0] - old_xpos[0]) > apply_limit or\
            abs(new_ypos[0] - old_ypos[0]) > apply_limit:
            print_log(f'''CHECK_CONVERGENCE: The center shifted more than {apply_limit/(Configuration['BEAM'][0]/3600.)} FWHM.
@@ -390,9 +394,15 @@ def check_source(Configuration, Fits_Files, debug = False):
     #There is a factor of two missing here but this is necessary otherwise the maxima are far to small
     Configuration['MAX_SIZE_IN_BEAMS'] = int(round(np.sqrt(((x_max-x_min)/2.)**2+((y_max-y_min)/2.)**2) \
                 /(Configuration['BEAM_IN_PIXELS'][0])+5.))
+    if debug:
+        print_log(f'''CHECK_SOURCE: From Sofia we find a max extend of {Configuration['MAX_SIZE_IN_BEAMS']}
+''', Configuration['OUTPUTLOG'])
+    if Configuration['MAX_SIZE_IN_BEAMS'] > 20.:
+        smooth_field = True
+    else:
+        smooth_field = False
 
-
-    pa, inclination, SBR_initial, maj_extent,x_new,y_new,new_vsys,VROT_initial = rf.guess_orientation(Configuration,Fits_Files, v_sys= v_app, center = [x,y],debug=debug)
+    pa, inclination, SBR_initial, maj_extent,x_new,y_new,new_vsys,VROT_initial = rf.guess_orientation(Configuration,Fits_Files, v_sys= v_app, smooth = smooth_field,center = [x,y],debug=debug)
 
     if x_new != x or y_new != y or new_vsys != v_app:
 
@@ -530,6 +540,11 @@ def check_source(Configuration, Fits_Files, debug = False):
     Initial_Parameters['XPOS'] = [ra,set_limits(abs(err_x*header['CDELT1']),0.1/3600.*Configuration['BEAM'][0],3./3600.*Configuration['BEAM'][0] )]
     Initial_Parameters['YPOS'] = [dec,set_limits(abs(err_y*header['CDELT2']),0.1/3600.*Configuration['BEAM'][0],3./3600.*Configuration['BEAM'][0] )]
     Initial_Parameters['VSYS'] =[v_app*1000.,vsys_error]
+
+    if Configuration['OUTER_RINGS_DOUBLED']:
+        for par in ['XPOS','YPOS']:
+            Initial_Parameters[par][1]= Initial_Parameters[par][1]*Configuration['SIZE_IN_BEAMS']*10.
+        Initial_Parameters['VSYS'][1] = Initial_Parameters['VSYS'][1]*Configuration['NAXES'][2]/10.*Configuration['CHANNEL_WIDTH']*1000.
     Initial_Parameters['SBR_profile'] = SBR_initial
     #Initial_Parameters['VROT'] = [max_vrot/1000.,max_vrot_dev/1000.]
     Initial_Parameters['VROT_profile'] = VROT_initial
