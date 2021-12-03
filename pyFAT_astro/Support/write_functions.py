@@ -176,12 +176,20 @@ def initialize_def_file(Configuration, Fits_Files,Tirific_Template,Initial_Param
         set_limit_modifier(Configuration,FAT_Model[0,Vars_to_Set.index('INCL')], debug=debug)
         get_inner_fix(Configuration,Tirific_Template, debug=debug)
         get_warp_slope(Configuration,Tirific_Template, debug=debug)
+        if ['OUTER_RINGS_DOUBLED']:
+            Initial_Parameters['XPOS'][1]= set_limits(Initial_Parameters['XPOS'][1],Configuration['BEAM'][0]/3600.,Configuration['BEAM'][0]/3600.*5)
+            Initial_Parameters['YPOS'][1]= set_limits(Initial_Parameters['YPOS'][1],Configuration['BEAM'][0]/3600.,Configuration['BEAM'][0]/3600.*5)
+            Initial_Parameters['VSYS'][1]= set_limits(Initial_Parameters['VSYS'][1],Configuration['CHANNEL_WIDTH'],Configuration['CHANNEL_WIDTH']*5)
+            Initial_Parameters['PA'][1]= set_limits(Initial_Parameters['PA'][1],3.,15)
+            Initial_Parameters['INCL'][1]= set_limits(Initial_Parameters['INCL'][1],3.,15)
 
-        Initial_Parameters['XPOS'][1]= set_limits(Initial_Parameters['XPOS'][1],Configuration['BEAM'][0]/3600.,Configuration['BEAM'][0]/3600.*5)
-        Initial_Parameters['YPOS'][1]= set_limits(Initial_Parameters['YPOS'][1],Configuration['BEAM'][0]/3600.,Configuration['BEAM'][0]/3600.*5)
-        Initial_Parameters['VSYS'][1]= set_limits(Initial_Parameters['VSYS'][1],Configuration['CHANNEL_WIDTH'],Configuration['CHANNEL_WIDTH']*5)
-        Initial_Parameters['PA'][1]= set_limits(Initial_Parameters['PA'][1],3.,15)
-        Initial_Parameters['INCL'][1]= set_limits(Initial_Parameters['INCL'][1],3.,15)
+        else:
+            Initial_Parameters['XPOS'][1]= Configuration['BEAM'][0]/3600.
+            Initial_Parameters['YPOS'][1]= Configuration['BEAM'][0]/3600.
+            Initial_Parameters['VSYS'][1]= Configuration['CHANNEL_WIDTH']
+            Initial_Parameters['PA'][1]= 3.
+            Initial_Parameters['INCL'][1]= 3.
+
 
         '''
         parameters = {'VSYS': [FAT_Model[0,Vars_to_Set.index('VSYS')], Configuration['CHANNEL_WIDTH']], \

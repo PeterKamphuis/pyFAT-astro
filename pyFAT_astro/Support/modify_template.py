@@ -369,11 +369,15 @@ check_size.__doc__  =f'''
 '''
 def check_for_ring_addition(Configuration,Tirific_Template,sbr,sbr_ring_limits,debug=False):
     new_rings = Configuration['NO_RINGS']
+    if Configuration['OUTER_RINGS_DOUBLED']:
+        factors = [[10.,3.],[7.5,4.],[6.]]
+    else:
+        factors = [[7.,3.],[7.,3.],[5.]]
     add = False
     for side in [0,1]:
-        if (sbr[side,-2] > sbr_ring_limits[side,-2]*10. and sbr[side,-1] > sbr_ring_limits[side,-1]*3.) or \
-            (sbr[side,-2] > sbr_ring_limits[side,-2]*7.5 and sbr[side,-1] > sbr_ring_limits[side,-1]*4.) or \
-            sbr[side,-1] > sbr_ring_limits[side,-1]*6.:
+        if (sbr[side,-2] > sbr_ring_limits[side,-2]*factors[0][0] and sbr[side,-1] > sbr_ring_limits[side,-1]*factors[0][1]) or \
+            (sbr[side,-2] > sbr_ring_limits[side,-2]*factors[1][0] and sbr[side,-1] > sbr_ring_limits[side,-1]*factors[1][1]) or \
+            sbr[side,-1] > sbr_ring_limits[side,-1]*factors[2][0]:
             if debug:
                 print_log(f'''CHECK_FOR_RING_ADDITION: Check side {side}:
 {'':8s}{sbr[side,-2:]},{sbr[side,-2]},{sbr[side,-1]}
