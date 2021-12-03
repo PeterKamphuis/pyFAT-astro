@@ -372,7 +372,7 @@ def check_for_ring_addition(Configuration,Tirific_Template,sbr,sbr_ring_limits,d
     if Configuration['OUTER_RINGS_DOUBLED']:
         factors = [[10.,3.],[7.5,4.],[6.]]
     else:
-        factors = [[7.,3.],[7.,3.],[5.]]
+        factors = [[7.,3.],[6.,4.],[5.]]
     add = False
     for side in [0,1]:
         if (sbr[side,-2] > sbr_ring_limits[side,-2]*factors[0][0] and sbr[side,-1] > sbr_ring_limits[side,-1]*factors[0][1]) or \
@@ -2014,7 +2014,7 @@ def set_fitting_parameters(Configuration, Tirific_Template, parameters_to_adjust
                 modifiers['Z0'][2] = float(modifiers['Z0'][2])*1.5
             if 'INCL' in modifiers:
                 modifiers['INCL'][0:1] =np.array(modifiers['INCL'][0:1],dtype=float)*(0.1/1.0)
-                modifiers['INCL'][2] = float(modifiers['INCL'][2])*2.
+                modifiers['INCL'][2] = float(modifiers['INCL'][2])*5.
             if 'SDIS' in modifiers:
                 modifiers['SDIS'][0:1] = np.array(modifiers['SDIS'][0:1],dtype=float)*1.5
                 modifiers['SDIS'][2] = float(modifiers['SDIS'][2])*0.5
