@@ -176,18 +176,36 @@ def initialize_def_file(Configuration, Fits_Files,Tirific_Template,Initial_Param
         set_limit_modifier(Configuration,FAT_Model[0,Vars_to_Set.index('INCL')], debug=debug)
         get_inner_fix(Configuration,Tirific_Template, debug=debug)
         get_warp_slope(Configuration,Tirific_Template, debug=debug)
+        if Configuration['OUTER_RINGS_DOUBLED']:
+            Initial_Parameters['XPOS'][1]= set_limits(Initial_Parameters['XPOS'][1],Configuration['BEAM'][0]/3600.,Configuration['BEAM'][0]/3600.*5)
+            Initial_Parameters['YPOS'][1]= set_limits(Initial_Parameters['YPOS'][1],Configuration['BEAM'][0]/3600.,Configuration['BEAM'][0]/3600.*5)
+            Initial_Parameters['VSYS'][1]= set_limits(Initial_Parameters['VSYS'][1],Configuration['CHANNEL_WIDTH'],Configuration['CHANNEL_WIDTH']*5)
+            Initial_Parameters['PA'][1]= set_limits(Initial_Parameters['PA'][1],3.,15)
+            Initial_Parameters['INCL'][1]= set_limits(Initial_Parameters['INCL'][1],3.,15)
+        else:
+            Initial_Parameters['XPOS'][1]= Configuration['BEAM'][0]/3600.
+            Initial_Parameters['YPOS'][1]= Configuration['BEAM'][0]/3600.
+            Initial_Parameters['VSYS'][1]= Configuration['CHANNEL_WIDTH']
+            Initial_Parameters['PA'][1]= 3.
+            Initial_Parameters['INCL'][1]= 3.
 
+
+
+        '''
         parameters = {'VSYS': [FAT_Model[0,Vars_to_Set.index('VSYS')], Configuration['CHANNEL_WIDTH']], \
                       'XPOS': [FAT_Model[0,Vars_to_Set.index('XPOS')], Configuration['BEAM'][0]/3600.] ,
                       'YPOS': [FAT_Model[0,Vars_to_Set.index('YPOS')], Configuration['BEAM'][0]/3600.],
                       'INCL': [FAT_Model[0,Vars_to_Set.index('INCL')], 3.],
                       'PA':  [FAT_Model[0,Vars_to_Set.index('PA')], 3.],
                       'VROT':[np.mean(FAT_Model[:,Vars_to_Set.index('VROT')]),np.max(FAT_Model[:,Vars_to_Set.index('VROT')])-np.min(FAT_Model[1:,Vars_to_Set.index('VROT')]) ]  }
+        '''
+
         set_fitting_parameters(Configuration, Tirific_Template,stage = 'initialize_os',
-                               initial_estimates=parameters, debug=debug)
+                               initial_estimates=Initial_Parameters, debug=debug)
 
     tirific(Configuration,Tirific_Template,name = f'{fit_type}_In.def', debug=debug)
     
+
 initialize_def_file.__doc__ =f'''
  NAME:
     initialize_def_file
@@ -1122,7 +1140,7 @@ def plot_usage_stats(Configuration,debug = False):
                       +np.max([combined_loads['Tirific']['MEM'],combined_loads['FAT']['MEM']])/10.)
         ax1.set_ylabel('RAM (Mb) ', color='b')
         ax1.tick_params(axis='y', labelcolor='b')
-        ax1.set_xlabel('time (min)', color='k')
+        ax1.set_xlabel('time (min)', color='k',zorder=5)
         ax2 = ax1.twinx()
         ax2.plot(combined_time,combined_loads['Tirific']['CPU'],'r-',lw=0.5)
         #ax2.plot(combined_time,combined_loads['FAT']['CPU'],'r--',lw=0.5)
@@ -1136,13 +1154,24 @@ def plot_usage_stats(Configuration,debug = False):
                  'weight': 'normal',
                  'size': 6.5}
         prev_label = ''
+
+        last_label_top = 0.
+        last_label_bottom = 0.
         #for label,time in zip(labels['Tirific']['label'],labels['Tirific']['Time']):
         for label,time in zip(labels_comb,labels_times):
 
             if label in labels['Tirific']['label']:
-                offset =20.
+                offset = 20.
+                vertical_start = ax2maxy
+                va= 'bottom'
+                ha= 'left'
+
             else:
-                offset = 50.
+                offset=-50
+                vertical_start = ax2miny
+                va= 'top'
+                ha='right'
+
             if color == '0.5':
                 color = 'k'
             elif color == 'k':
@@ -1158,15 +1187,21 @@ def plot_usage_stats(Configuration,debug = False):
 
                     if time != labels_times[-1]:
                         ax2.axvline(x=prev_time, linestyle=linest, color=color, linewidth=0.05)
-                        last_label = max(prev_time,last_label+label_sep)
-                        ax2.text(last_label,ax2maxy+offset,prev_label, va='bottom',ha='left',rotation= 60, color='black',
+                        if label in labels['Tirific']['label']:
+                            last_label = last_label_top = max(prev_time,last_label_top+label_sep)
+                        else:
+                            last_label = last_label_bottom = max(prev_time,last_label_bottom+label_sep)
+                        ax2.text(last_label,vertical_start+offset,prev_label, va=va,ha=ha,rotation= 60, color='black',
                               bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7,fontdict = labelfont)
-                        ax2.plot([prev_time,last_label+0.1],[ax2maxy,ax2maxy+offset],linest,color=color,linewidth=0.05,clip_on=False)
+                        ax2.plot([prev_time,last_label+0.1],[vertical_start,vertical_start+offset],linest,color=color,linewidth=0.05,clip_on=False)
                     ax2.axvline(x=time, linestyle=linest, color=color, linewidth=0.05)
-                    last_label = max(time,last_label+label_sep)
-                    ax2.text(last_label,ax2maxy+offset,label, va='bottom',ha='left',rotation= 60, color='black',
+                    if label in labels['Tirific']['label']:
+                        last_label = last_label_top = max(time,last_label_top+label_sep)
+                    else:
+                        last_label = last_label_bottom = max(time,last_label_bottom+label_sep)
+                    ax2.text(last_label,vertical_start+offset,label, va=va,ha=ha,rotation= 60, color='black',
                           bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7,fontdict = labelfont)
-                    ax2.plot([time,last_label+0.1],[ax2maxy,ax2maxy+offset],linest,color=color,linewidth=0.05,clip_on=False)
+                    ax2.plot([time,last_label+0.1],[vertical_start,vertical_start+offset],linest,color=color,linewidth=0.05,clip_on=False)
                 else:
                     prev_time = time
             elif (prev_label == 'Initializing Error_Shaker' or prev_label == 'Ended Error_Shaker' or prev_label == 'Started Error_Shaker'):
@@ -1179,20 +1214,27 @@ def plot_usage_stats(Configuration,debug = False):
                     #      bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7,fontdict = labelfont)
                     #ax2.plot([prev_time,last_label+0.1],[ax2maxy,ax2maxy+20.],linest,color=color,linewidth=0.05,clip_on=False)
                     ax2.axvline(x=time, linestyle=linest, color=color, linewidth=0.05)
-                    last_label = max(time,last_label+label_sep)
-                    ax2.text(last_label,ax2maxy+offset,label, va='bottom',ha='left',rotation= 60, color='black',
+                    if label in labels['Tirific']['label']:
+                        last_label = last_label_top = max(time,last_label_top+label_sep)
+                    else:
+                        last_label = last_label_bottom = max(time,last_label_bottom+label_sep)
+                    ax2.text(last_label,vertical_start+offset,label, va=va,ha=ha,rotation= 60, color='black',
                           bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7,fontdict = labelfont)
-                    ax2.plot([time,last_label+0.1],[ax2maxy,ax2maxy+offset],linest,color=color,linewidth=0.05,clip_on=False)
+                    ax2.plot([time,last_label+0.1],[vertical_start,vertical_start+offset],linest,color=color,linewidth=0.05,clip_on=False)
                 else:
                     prev_label = label
                     prev_time = time
             else:
                 ax2.axvline(x=time, linestyle=linest, color=color, linewidth=0.05)
-                last_label = max(time,last_label+label_sep)
-                ax2.text(last_label,ax2maxy+offset,label, va='bottom',ha='left',rotation= 60, color='black',
+                if label in labels['Tirific']['label']:
+                    last_label = last_label_top = max(time,last_label_top+label_sep)
+                else:
+                    last_label = last_label_bottom= max(time,last_label_bottom+label_sep)
+                ax2.text(last_label,vertical_start+offset,label,va=va,ha=ha,rotation= 60, color='black',
                       bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7,fontdict = labelfont)
-                ax2.plot([time,last_label+0.1],[ax2maxy,ax2maxy+offset],linest,color=color,linewidth=0.05,clip_on=False)
+                ax2.plot([time,last_label+0.1],[vertical_start,vertical_start+offset],linest,color=color,linewidth=0.05,clip_on=False)
             prev_label = label
+
 
 
         #This is beyond stupid again, but hey it is python so needed to make things work.

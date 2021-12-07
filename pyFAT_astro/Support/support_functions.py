@@ -970,6 +970,127 @@ finish_current_run.__doc__ =f'''
  NOTE:
 '''
 
+def fit_center_ellipse(Configuration,map,inclination= -1, pa = -1,debug=False):
+    max = np.max(map)
+    ellipses = np.linspace(max/2.,max,num=10)
+    parameters =[]
+    for el_out,el_in in zip(ellipses,ellipses[1:]):
+        map_to_fit = np.zeros(map.shape)
+        map_to_fit[map < el_in ] = 1.
+        map_to_fit[map < el_out ] = 0.
+        y,x = np.where(map_to_fit == 1.)
+        cx,cy,a,b, orient = fit_ellipse(Configuration,x,y,debug=False)
+        if a < b:
+            tmp = a
+            a = copy.deepcopy(b)
+            b = copy.deepcopy(tmp)
+            orient = orient-90
+        inc = np.degrees(np.arccos(np.sqrt((float(b/a)**2-0.2**2)/0.96)))
+        parameters.append([cx,cy,inc , orient])
+    if inclination == -1. or pa == -1.:
+        x_center = np.mean([x[0] for x  in parameters])
+        y_center = np.mean([x[1] for x  in parameters])
+    else:
+        weight = [1./(abs(x[2]-inclination)+abs(x[3]-inclination))  for x in parameters ]
+        x_in = [x[0] for x  in parameters]
+        y_in = [x[1] for x  in parameters]
+        x_center = np.sum([x*y for x,y in zip(x_in,weight)])/np.sum(weight)
+        y_center = np.sum([x*y for x,y in zip(y_in,weight)])/np.sum(weight)
+    return [x_center,y_center]
+fit_center_ellipse.__doc__= '''
+NAME:
+   fit_center_ellipse
+PURPOSE:
+   determine the center through ellipse fits
+
+CATEGORY:
+   support_functions
+
+INPUTS:
+  Configuration = stadard configurstion
+  map = moment 0 map
+  inclination= current inclination
+  pa = current pa
+
+OPTIONAL INPUTS:
+
+   debug = False
+
+OUTPUTS:
+   center
+   the fitted center in pixels
+
+OPTIONAL OUTPUTS:
+
+PROCEDURES CALLED:
+   Unspecified
+
+NOTE:
+'''
+
+
+
+def fit_ellipse(Configuration,x,y,debug=False):
+    x=x[:,None]
+    y=y[:,None]
+    diag = np.hstack([x*x,x*y,y*y,x,y,np.ones(x.shape)])
+    dmult = np.dot(diag.T,diag)
+    constant=np.zeros([6,6])
+    constant[0,2]=constant[2,0]=2
+    constant[1,1]=-1
+    eigen,vec=np.linalg.eig(np.dot(np.linalg.inv(dmult),constant))
+    n= np.argmax(eigen)
+    a=vec[:,n]
+        #-------------------Fit ellipse-------------------
+    b,c,d,f,g,a=a[1]/2., a[2], a[3]/2., a[4]/2., a[5], a[0]
+    bb=b**2
+    num=b**2-a*c
+    new_x=(c*d-b*f)/num
+    new_y=(a*f-b*d)/num
+
+    angle=0.5*np.arctan(2*b/(a-c))*180/np.pi+90.
+    up = 2*(a*f**2+c*d**2+g*bb-2*b*d*f-a*c*g)
+    down1=(bb-a*c)*( (c-a)*np.sqrt(1+4*bb/((a-c)*(a-c)))-(c+a))
+    down2=(bb-a*c)*( (a-c)*np.sqrt(1+4*bb/((a-c)*(a-c)))-(c+a))
+    a=np.sqrt(abs(up/down1))
+    b=np.sqrt(abs(up/down2))
+
+    return new_x,new_y,a,b,angle
+
+fit_ellipse.__doc__= '''
+NAME:
+   fit_ellipse
+PURPOSE:
+   fit ellipse to a bunch of coordinates
+
+CATEGORY:
+   support_functions
+
+INPUTS:
+  Configuration = stadard configurstion
+  x = x -coordinates to evaluated
+  y = y -coordinates to evaluated
+
+OPTIONAL INPUTS:
+
+   debug = False
+
+OUTPUTS:
+   new_x = new x center
+   new_y = new y center
+   a =  major axis
+   b = minor axis
+   angle= orientaion of ellipse
+
+
+OPTIONAL OUTPUTS:
+
+PROCEDURES CALLED:
+   Unspecified
+
+NOTE:
+'''
+
 def fit_sine(Configuration,x,y,debug = False):
     if debug:
         print_log(f'''FIT_SINE: Starting to fit a sin.
@@ -1349,6 +1470,7 @@ def get_inclination_pa(Configuration, Image, center, cutoff = 0., debug = False,
         #extract the profiles under a set of angles
         angles = np.linspace(0, 360, 180)
         ratios, maj_extent = obtain_ratios(Configuration,map, center, angles,noise = cutoff,debug=debug)
+
         if np.any(np.isnan(ratios)):
             return [float('NaN'),float('NaN')],  [float('NaN'),float('NaN')],float('NaN')
         sin_ratios,sin_parameters = fit_sine(Configuration,angles,ratios,debug=debug)
@@ -1356,7 +1478,7 @@ def get_inclination_pa(Configuration, Image, center, cutoff = 0., debug = False,
             return [float('NaN'),float('NaN')],  [float('NaN'),float('NaN')],float('NaN')
 
 
-
+        #import matplotlib
         #matplotlib.use('MacOSX')
         #if debug:
         #    name= f'{figure_name}_{i}.pdf'
@@ -1384,10 +1506,16 @@ def get_inclination_pa(Configuration, Image, center, cutoff = 0., debug = False,
         if max_index.size > 1:
             max_index =int(max_index[0])
         min_index = np.where(ratios == np.nanmin(ratios))[0]
+
         if min_index.size > 1:
             min_index =int(min_index[0])
         max_index = set_limits(max_index,2,177)
         min_index = set_limits(min_index,2,177)
+        if min_index > 135 and max_index < 45:
+            min_index=min_index-90
+        if max_index > 135 and min_index < 45:
+            max_index=max_index-90
+
         if debug:
             if i == 0:
                 print_log(f'''GET_INCLINATION_PA: We initially find these indeces min {min_index } {angles[min_index]} max {max_index} {angles[max_index]}.
@@ -1506,21 +1634,10 @@ get_inclination_pa.__doc__ =f'''
  NOTE:
 '''
 
-def get_new_center(Configuration, map_in, center, maj_extent, noise= 0., debug = False):
+def get_new_center(Configuration, map_in, inclination=-1,pa=-1, noise= 0., debug = False):
 
-    map = copy.deepcopy(map_in)
-    map[map < noise]= 0.
-    size_in_beam = set_limits(2*maj_extent/(Configuration['BEAM'][0]/3600.),1.0,Configuration['MAX_SIZE_IN_BEAMS'])
-    if size_in_beam > 8.:
-        sigma = [Configuration['BEAM_IN_PIXELS'][1]*size_in_beam/8.,Configuration['BEAM_IN_PIXELS'][0]*size_in_beam/8.]
-        map = ndimage.gaussian_filter(map, sigma=(sigma[1], sigma[0]), order=0)
-    map[map < np.max(map)/2.] = 0.
-    x =  range(0,len(map[0,:]))
-    y =  range(0,len(map[:,0]))
-    M10 = np.sum((x-center[0])*np.sum(map,axis=0))
-    M01 = np.sum((y-center[1])*np.sum(map,axis=1))
-    M00=np.sum(map)
-    new_center=[center[0]+M10/M00, center[1]+M01/M00]
+    new_center = fit_center_ellipse(Configuration,map_in,inclination=inclination,pa=pa,debug=debug)
+
 
     return new_center,True,False
 
@@ -1536,14 +1653,13 @@ get_new_center.__doc__ =f'''
 
  INPUTS:
     Configuration = Standard FAT configuration
-    map = the intensity map to be evaluated, this should be an astropy structure
-    center = center of the galaxy in pixels
+    map_in = the intensity map to be evaluated, this should be an astropy structure
+    inclination = the current inclination for weighing purposes
+    pa =  the current inclination for weighing purposes
 
  OPTIONAL INPUTS:
     debug = False
 
-    noise = 0.
-    Limit to trust the map to, below this values are not evaluated
 
  OUTPUTS:
     center = the newly determined center
@@ -2106,6 +2222,49 @@ make_tiltogram.__doc__ =f'''
  NOTE:
 
 '''
+
+def max_profile_change(Configuration,radius,profile,key,debug=False):
+    radkpc =[convertskyangle(Configuration,float(x),distance=Configuration['DISTANCE']) \
+                for x in radius]
+    new_profile = copy.deepcopy(profile)
+    diff_rad =  [float(y-x) for x,y in zip(radkpc,radkpc[1:])]
+    diff_profile = [float(abs(x-y)) for x,y in zip(profile,profile[1:])]
+    for i,diff in enumerate(diff_profile):
+        if diff/diff_rad[i] > Configuration['MAX_CHANGE'][key]:
+            new_profile[i+1] -=  diff-(Configuration['MAX_CHANGE'][key]*0.9*diff_rad[i])
+    return new_profile
+max_profile_change.__doc__ =f'''
+ NAME:
+     max_profile_change
+
+ PURPOSE:
+    Check that the profile is not change more than the maximum per kpc and correct if it does
+
+ CATEGORY:
+    support_functions
+
+ INPUTS:
+    Configuration = standard FAT Configuration
+    radius = radius corresponding to the profile
+    profile = profile to examine
+    key = the parameter to indicate the type of profile
+
+ OPTIONAL INPUTS:
+    debug = False
+
+ OUTPUTS:
+    new_profile
+    the modified profile
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+
+'''
+
 
 def obtain_border_pix(Configuration,angle,center, debug = False):
     rotate = False
@@ -2751,7 +2910,8 @@ def setup_configuration(cfg):
                 'EXCLUDE_CENTRAL', # Do we exclude the central part of the fitting due to blanks/an absorption source
                 'ACCEPTED',
                 'SOFIA_RAN', #Check if we have ran Sofia
-                'NO_RADEC'
+                'NO_RADEC',
+                'FIX_SIZE' # If we have before fitted a size we want to fix to this size to avoid looping
                 ]
 #
     for key in boolean_keys:
@@ -2798,6 +2958,7 @@ def setup_configuration(cfg):
                'NAXES': [0.,0.,0.], #  Size of the cube in pixels x,y,z arranged like sane people not python, set in main
                'MAX_ERROR': {}, #The maximum allowed errors for the parameters, set in main derived from cube
                'MIN_ERROR': {}, #The minumum allowed errors for the parameters, initially set in check_source but can be modified through out INCL,PA,SDSIS,Z0 errors change when the parameters is fixed or release
+               'MAX_CHANGE': {'INCL': 6.25, 'PA': 50.}, #The maximum change in a parameter in unit/kpc
                'CHANNEL_WIDTH': 0., #Width of the channel in the cube in km/s, set in main derived from cube
                'PIXEL_SIZE': 0., #'Size of the pixels in degree'
                }
@@ -3043,15 +3204,21 @@ def set_limit_modifier(Configuration,Inclination, debug= False):
     if not Inclination.shape:
         Inclination = [Inclination]
     modifier_list = []
+    if len(Inclination) > 1:
+        if np.abs(Inclination[-1]-Inclination[-2]) > Configuration['MAX_CHANGE']['INCL']:
+            Inclination[-1] = Inclination[-2]
     # Correction because the noise applies to non-face on rings while the SBR is face on,correction is normalized to the average inclination
     # The square root is because of the square root between the noise in cube and the noise in J2007
     # The lower limit corresponds to a inclination 80 above which the cos becomes too steep
-    for inc in Inclination:
+    for i,inc in enumerate(Inclination):
         if inc > 90.:
             inc  = 180.-inc
         if inc < 0.:
             inc= abs(inc)
-        modifier_list.append(set_limits(np.sqrt(np.cos(np.radians(inc))/np.cos(np.radians(60.))),0.75,2.))
+        if i < 10.:
+            modifier_list.append(set_limits(np.sqrt(np.cos(np.radians(inc))/np.cos(np.radians(60.))),0.75,2.))
+        else:
+            modifier_list.append(set_limits(np.sqrt(np.cos(np.radians(inc))/np.cos(np.radians(60.)))*i/10.,0.8,1.75))
     if Configuration['OUTER_RINGS_DOUBLED']:
         if len(modifier_list) > 10:
             modifier_list[10:]= np.sqrt(modifier_list[10:])

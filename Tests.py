@@ -5,6 +5,7 @@ import sys
 import os
 import copy
 import numpy as np
+
 from optparse import OptionParser
 import traceback
 import warnings
@@ -147,6 +148,119 @@ with warnings.catch_warnings():
     xlow,ylow,zlow = coordinate_frame.wcs_pix2world(1,1,1., 1.)
     xhigh,yhigh,zhigh = coordinate_frame.wcs_pix2world(*Configuration['NAXES'], 1.)
     Configuration['NAXES_LIMITS'] = [np.sort([xlow,xhigh]),np.sort([ylow,yhigh]),np.sort([zlow,zhigh])/1000.]
+
+
+def Test_ellipse_center():
+    sm_map = fits.open(f"/Users/peter/FAT_Main/FAT_Testers/HPASS00020/Logs/02-12-2021/smooth_mom_map.fits",\
+            uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
+    #sm_map = fits.open(f"/Users/peter/FAT_Main/FAT_Testers/HPASS00020/Sofia_Output/Cube_FAT_mom0.fits",\
+    #        uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
+    new_center = fit_center_ellipse(Configuration,sm_map[0].data,inclination=50,pa=10.,debug=True)
+    print(new_center)
+
+
+
+def fit_center_ellipse(Configuration,map,inclination= -1, pa = -1,debug=False):
+    max = np.max(map)
+    ellipses = np.linspace(max/2.,max,num=10)
+    parameters =[]
+    for el_out,el_in in zip(ellipses,ellipses[1:]):
+        map_to_fit = np.zeros(map.shape)
+        map_to_fit[map < el_in ] = 1.
+        map_to_fit[map < el_out ] = 0.
+        y,x = np.where(map_to_fit == 1.)
+        cx,cy,a,b, orient = fit_ellipse(Configuration,x,y,debug=False)
+        if a < b:
+            tmp = a
+            a = copy.deepcopy(b)
+            b = copy.deepcopy(tmp)
+            orient = orient-90
+        inc = np.degrees(np.arccos(np.sqrt((float(b/a)**2-0.2**2)/0.96)))
+        parameters.append([cx,cy,inc , orient])
+    if inclination == -1 or pa == -1:
+        x_center = np.mean([x[0] for x  in parameters])
+        y_center = np.mean([x[1] for x  in parameters])
+    else:
+        weight = [1./(abs(x[2]-inclination)+abs(x[3]-inclination))  for x in parameters ]
+        x_in = [x[0] for x  in parameters]
+        y_in = [x[1] for x  in parameters]
+        x_center = np.sum([x*y for x,y in zip(x_in,weight)])/np.sum(weight)
+        y_center = np.sum([x*y for x,y in zip(y_in,weight)])/np.sum(weight)
+    return [x_center,y_center]
+
+def fit_ellipse(Configuration,x,y,debug=False):
+    x=x[:,None]
+    y=y[:,None]
+    diag = np.hstack([x*x,x*y,y*y,x,y,np.ones(x.shape)])
+    dmult = np.dot(diag.T,diag)
+    constant=np.zeros([6,6])
+    constant[0,2]=constant[2,0]=2
+    constant[1,1]=-1
+    eigen,vec=np.linalg.eig(np.dot(np.linalg.inv(dmult),constant))
+    n= np.argmax(eigen)
+    a=vec[:,n]
+        #-------------------Fit ellipse-------------------
+    b,c,d,f,g,a=a[1]/2., a[2], a[3]/2., a[4]/2., a[5], a[0]
+    bb=b**2
+    num=b**2-a*c
+    cx=(c*d-b*f)/num
+    cy=(a*f-b*d)/num
+
+    angle=0.5*np.arctan(2*b/(a-c))*180/np.pi+90.
+    up = 2*(a*f**2+c*d**2+g*bb-2*b*d*f-a*c*g)
+    down1=(bb-a*c)*( (c-a)*np.sqrt(1+4*bb/((a-c)*(a-c)))-(c+a))
+    down2=(bb-a*c)*( (a-c)*np.sqrt(1+4*bb/((a-c)*(a-c)))-(c+a))
+    a=np.sqrt(abs(up/down1))
+    b=np.sqrt(abs(up/down2))
+
+    return cx,cy,a,b,angle
+
+
+
+
+def fitEllipse(cont,method):
+
+    x=cont[:,0]
+    y=cont[:,1]
+
+    x=x[:,None]
+    y=y[:,None]
+
+    D=numpy.hstack([x*x,x*y,y*y,x,y,numpy.ones(x.shape)])
+    S=numpy.dot(D.T,D)
+    C=numpy.zeros([6,6])
+    C[0,2]=C[2,0]=2
+    C[1,1]=-1
+    E,V=numpy.linalg.eig(numpy.dot(numpy.linalg.inv(S),C))
+
+    if method==1:
+        n=numpy.argmax(numpy.abs(E))
+    else:
+        n=numpy.argmax(E)
+    a=V[:,n]
+
+    #-------------------Fit ellipse-------------------
+    b,c,d,f,g,a=a[1]/2., a[2], a[3]/2., a[4]/2., a[5], a[0]
+    num=b*b-a*c
+    cx=(c*d-b*f)/num
+    cy=(a*f-b*d)/num
+
+    angle=0.5*numpy.arctan(2*b/(a-c))*180/numpy.pi
+    up = 2*(a*f*f+c*d*d+g*b*b-2*b*d*f-a*c*g)
+    down1=(b*b-a*c)*( (c-a)*numpy.sqrt(1+4*b*b/((a-c)*(a-c)))-(c+a))
+    down2=(b*b-a*c)*( (a-c)*numpy.sqrt(1+4*b*b/((a-c)*(a-c)))-(c+a))
+    a=numpy.sqrt(abs(up/down1))
+    b=numpy.sqrt(abs(up/down2))
+
+    #---------------------Get path---------------------
+    ell=Ellipse((cx,cy),a*2.,b*2.,angle)
+    ell_coord=ell.get_verts()
+
+    params=[cx,cy,a,b,angle]
+
+    return params,ell_coord
+
+
 
 
 def Test_Regularise():
@@ -427,4 +541,4 @@ basic.__doc__ =f'''
 
 
 if __name__ == '__main__':
-    Test_Ram()
+    Test_ellipse_center()

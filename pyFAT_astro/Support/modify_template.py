@@ -6,7 +6,7 @@
 import copy
 from pyFAT_astro.Support.support_functions import set_rings,convertskyangle,sbr_limits,set_limits,print_log,set_limit_modifier,\
                               set_ring_size,calc_rings,finish_current_run,set_format,get_from_template,gaussian_function,fit_gaussian,\
-                              get_ring_weights,set_boundaries
+                              get_ring_weights,set_boundaries,max_profile_change
 from pyFAT_astro.Support.fat_errors import InitializeError,CfluxError,FunctionCallError,BadConfigurationError
 import numpy as np
 import os
@@ -20,7 +20,7 @@ def arc_tan_function(axis,center,length,amplitude,mean):
     c = axis[-1]*0.1
     #and the turnover has to be beyon 20*of the inner part
     c2 = set_limits(axis[-1]*0.2,axis[2],axis[int(len(axis)/1.5)])
-    return -1*np.arctan((axis-(c2+abs(center)))/(c+abs(length)))*amplitude/np.pi + mean
+    return -1*np.arctan((axis-(c2+abs(center)))/(c+abs(length)))*abs(amplitude)/np.pi + abs(mean)
 arc_tan_function.__doc__ =f'''
  NAME:
     arc_tan_function
@@ -53,19 +53,29 @@ arc_tan_function.__doc__ =f'''
 
 def check_angles(Configuration,Tirific_Template, debug = False):
     incl = get_from_template(Configuration,Tirific_Template, ['INCL','INCL_2'],debug=debug)
-
-    if incl[0][0] > 90. and incl[1][0] > 90.:
-        Tirific_Template['INCL'] = f"{' '.join(f'{180.-x:.2e}' for x in incl[0])}"
-        Tirific_Template['INCL_2'] = f"{' '.join(f'{180.-x:.2e}' for x in incl[1])}"
     pa = get_from_template(Configuration,Tirific_Template, ['PA','PA_2'],debug=debug)
 
-    if pa[0][0] > 360. and pa[1][0] > 360.:
-        Tirific_Template['PA'] = f"{' '.join(f'{x-360.:.2e}' for x in pa[0])}"
-        Tirific_Template['PA_2'] = f"{' '.join(f'{x-360.:.2e}' for x in pa[1])}"
+    rad =[float(x) for x in Tirific_Template['RADI'].split()]
 
-    if pa[0][0] < 0. and pa[1][0] < 0.:
-        Tirific_Template['PA'] = f"{' '.join(f'{360.-x:.2e}' for x in pa[0])}"
-        Tirific_Template['PA_2'] = f"{' '.join(f'{360.-x:.2e}' for x in pa[1])}"
+    for side in [0,1]:
+        if incl[side][0] > 90.:
+            incl[side] = [float(180-x) for x in incl[side]]
+        if pa[side][0] > 360.:
+            pa[side] = [x-360. for x in pa[side]]
+        if pa[side][0] < 0.:
+            pa[side] = [360.-x for x in pa[side]]
+        pa_tmp = max_profile_change(Configuration,rad,pa[side],'PA',debug=debug)
+        pa[side] = pa_tmp
+        incl_tmp = max_profile_change(Configuration,rad,incl[side],'INCL',debug=debug)
+        incl[side] = incl_tmp
+
+
+    Tirific_Template['INCL'] = f"{' '.join(f'{x:.2e}' for x in incl[0])}"
+    Tirific_Template['INCL_2'] = f"{' '.join(f'{x:.2e}' for x in incl[1])}"
+    Tirific_Template['PA'] = f"{' '.join(f'{x:.2e}' for x in pa[0])}"
+    Tirific_Template['PA_2'] = f"{' '.join(f'{x:.2e}' for x in pa[1])}"
+
+
 check_angles.__doc__=f'''
  NAME:
     check_angles
@@ -234,24 +244,7 @@ def check_size(Configuration,Tirific_Template, fit_type = 'Undefined', stage = '
 ''',Configuration['OUTPUTLOG'])
     #if we haven't subtracted we check if we should add
     if int(new_rings) == int(Configuration['NO_RINGS']):
-        if (np.any(sbr[:,-2] > sbr_ring_limits[:,-2]*7.) and np.any(sbr[:,-1] > sbr_ring_limits[:,-1]*3.)) or \
-            np.any(sbr[:,-1] > sbr_ring_limits[:,-1]*5.):
-            if debug:
-                print_log(f'''CHECK_SIZE: The last rings were found to be:
-{'':8s}{sbr[:,-2:]}
-{'':8s}and the limits:
-{'':8s}{sbr_ring_limits[:,-2:]}
-{'':8s}Thus we add a ring.
-''', Configuration['OUTPUTLOG'])
-            new_rings += 1
-        else:
-            if debug:
-                print_log(f'''CHECK_SIZE: The last rings were found to be:
-{'':8s}{sbr[:,-2:]}
-{'':8s}and the limits:
-{'':8s}{sbr_ring_limits[:,-2:]}
-{'':8s}Thus we keep the ring size.
-''', Configuration['OUTPUTLOG'])
+        new_rings = check_for_ring_addition(Configuration,Tirific_Template,sbr,sbr_ring_limits*limit_factor,debug=debug)
     else:
         if debug:
             print_log(f'''CHECK_SIZE: The last rings were found to be:
@@ -293,6 +286,7 @@ def check_size(Configuration,Tirific_Template, fit_type = 'Undefined', stage = '
         if Configuration['OLD_RINGS'][ind+1] > Configuration['OLD_RINGS'][ind]:
             print_log(f'''CHECK_SIZE: After which we increased the size.
 ''', Configuration['OUTPUTLOG'])
+            Configuration['FIX_SIZE'] = True
             if Configuration['OLD_RINGS'][ind+1] == Configuration['OLD_RINGS'][-1]:
                 print_log(f'''CHECK_SIZE: Which is the current fit so that's ok.
 ''', Configuration['OUTPUTLOG'])
@@ -301,9 +295,11 @@ def check_size(Configuration,Tirific_Template, fit_type = 'Undefined', stage = '
                 print_log(f'''CHECK_SIZE: Which is not the current fit so we refit this size.
 ''', Configuration['OUTPUTLOG'])
             Configuration['OLD_RINGS'].append(f"{size_in_beams:.1f}")
+
         else:
             print_log(f'''CHECK_SIZE: After which we decreased so we allow this addition. But no more.
 ''', Configuration['OUTPUTLOG'])
+            Configuration['FIX_SIZE'] = True
             Configuration['OLD_RINGS'].append(f"{size_in_beams:.1f}")
     else:
         if debug:
@@ -371,7 +367,91 @@ check_size.__doc__  =f'''
 
  NOTE: Configuration['RC_UNRELIABLE'] = modified and updated here.
 '''
+def check_for_ring_addition(Configuration,Tirific_Template,sbr,sbr_ring_limits,debug=False):
+    new_rings = Configuration['NO_RINGS']
+    if Configuration['OUTER_RINGS_DOUBLED']:
+        factors = [[10.,3.],[7.5,4.],[6.]]
+    else:
+        factors = [[7.,3.],[6.,4.],[5.]]
+    add = False
+    for side in [0,1]:
+        if (sbr[side,-2] > sbr_ring_limits[side,-2]*factors[0][0] and sbr[side,-1] > sbr_ring_limits[side,-1]*factors[0][1]) or \
+            (sbr[side,-2] > sbr_ring_limits[side,-2]*factors[1][0] and sbr[side,-1] > sbr_ring_limits[side,-1]*factors[1][1]) or \
+            sbr[side,-1] > sbr_ring_limits[side,-1]*factors[2][0]:
+            if debug:
+                print_log(f'''CHECK_FOR_RING_ADDITION: Check side {side}:
+{'':8s}{sbr[side,-2:]},{sbr[side,-2]},{sbr[side,-1]}
+{'':8s}and the limits:
+{'':8s}{sbr_ring_limits[side,-2:]},{sbr_ring_limits[side,-2]},{sbr_ring_limits[side,-1]}
+{'':8s}Thus we check for gaps.
+''', Configuration['OUTPUTLOG'])
 
+
+            rad= np.array(get_from_template(Configuration,Tirific_Template, [f'RADI'],debug=debug)[0],dtype = float)
+
+            gap= np.where(sbr[side] < sbr_ring_limits[side])[0]
+            if gap.size > 0:
+                if gap[-1] == len(sbr[side])-1:
+                    if debug:
+                        print_log(f'''CHECK_FOR_RING_ADDITION: We found a gap ({gap}) that runs to the last ring.
+{'':8s} Not adding based on this side.
+''', Configuration['OUTPUTLOG'])
+                    continue
+                while gap[0] < int(len(sbr[side])/2.):
+                    gap = gap[1:]
+                    if len(gap) == 0:
+                        break
+
+            if gap.size > 0:
+
+                if debug:
+                    print_log(f'''CHECK_FOR_RING_ADDITION: We found a gap in the rings {gap}.
+{'':8s}{sbr[side]}
+{'':8s}We will check the change in PA and INCLINATION.
+''', Configuration['OUTPUTLOG'])
+                ext = ''
+                if side == 1:
+                    ext='_2'
+                angles = np.array(get_from_template(Configuration,Tirific_Template, [f'PA{ext}',f'INCL{ext}'],debug=debug),dtype = float)
+                PA_change =  np.sum(np.array([np.abs(x-y) for x,y in zip(angles[0,gap[0]-1:],angles[0,gap[0]:])]))
+                INCL_change = np.sum(np.array([np.abs(x-y) for x,y in zip(angles[1,gap[0]-1:],angles[1,gap[0]:])]))
+
+                gap_size = convertskyangle(Configuration,[rad[gap[0]],rad[-1]],Configuration['DISTANCE'])
+                if debug:
+                    print_log(f'''CHECK_FOR_RING_ADDITION: We found a gap {[rad[gap[0]],rad[-1]]} arcsec = {gap_size} kpc
+{'':8s}PA variation = {[np.abs(x-y) for x,y in zip(angles[0,gap[0]-1:],angles[0,gap[0]:])]}
+{'':8s}INCL variation = {[np.abs(x-y) for x,y in zip(angles[1,gap[0]-1:],angles[1,gap[0]:])]}
+''', Configuration['OUTPUTLOG'])
+                gap_size = float(gap_size[1]-gap_size[0])
+                if PA_change/gap_size  < Configuration['MAX_CHANGE']['PA'] and INCL_change/gap_size < Configuration['MAX_CHANGE']['INCL']:
+
+                    add = True
+                if debug:
+                    print_log(f'''CHECK_FOR_RING_ADDITION: We found a change  of {PA_change/gap_size} in PA and {INCL_change/gap_size} in INCL.
+{'':8s} The gap is {gap_size} kpc
+''', Configuration['OUTPUTLOG'])
+
+
+            else:
+                if debug:
+                    print_log(f'''CHECK_FOR_RING_ADDITION: We did not find a gap so we were are adding.
+''', Configuration['OUTPUTLOG'])
+                add=True
+
+
+    if add:
+        print_log(f'''CHECK_FOR_RING_ADDITION:  We are adding a ring (new no ring = {new_rings+1.})
+''', Configuration['OUTPUTLOG'])
+        new_rings += 1
+    else:
+        if debug:
+            print_log(f'''CHECK_FOR_RING_ADDITION: The last rings were found to be:
+{'':8s}{sbr[:,-2:]}
+{'':8s}and the limits:
+{'':8s}{sbr_ring_limits[:,-2:]}
+{'':8s}Thus we keep the ring size.
+''', Configuration['OUTPUTLOG'])
+    return new_rings
 
 def fit_arc(Configuration,radii,sm_profile,error, debug = False ):
 
@@ -660,7 +740,7 @@ def fix_profile(Configuration, key, profile, Tirific_Template, debug= False, inn
 
 
     profile = np.array(profile,dtype=float)
-
+    rad = [float(x) for x in Tirific_Template['RADI'].split()]
 
     if key in ['VROT']:
         indexes = [0]
@@ -695,7 +775,8 @@ def fix_profile(Configuration, key, profile, Tirific_Template, debug= False, inn
             for x in range(0,xrange):
                 if inner_fix[i]+x < len(profile[i,:]):
                     profile[i,inner_fix[i]+x] = 1/(x+4./xrange)*inner_mean+ (1-1/(x+4./xrange))*profile[i,inner_fix[i]+x]
-
+            if key in ['PA','INCL']:
+                profile[i,:] = max_profile_change(Configuration,rad,profile[i,:],key,debug=debug)
         if debug:
             print_log(f'''FIX_PROFILE:After smoothe transition
 {'':8s} profile = {profile[i,:]}
@@ -703,7 +784,8 @@ def fix_profile(Configuration, key, profile, Tirific_Template, debug= False, inn
         #profile[:,:Configuration['INNER_FIX']] = np.nanmean(profile[:,:Configuration['INNER_FIX']])
         if key in ['SDIS']:
             inner_max = np.nanmax(profile[i,:int(len(profile[i,:])/2.)])
-            if inner_mean < inner_max:
+            mean = np.nanmean(profile[i,:])
+            if inner_mean < mean or inner_mean < np.nanmean(profile[i,-3:]):
                 ind = np.where(profile[i,:] == inner_max)[0]
                 if ind.size > 1:
                     ind = int(ind[0])
@@ -1914,6 +1996,17 @@ def set_fitting_parameters(Configuration, Tirific_Template, parameters_to_adjust
             print_log(f'''SET_FITTING_PARAMETERS: This {key} is in modifiers
 {'':8s} With these values {modifiers[key]}
 ''',Configuration['OUTPUTLOG'])
+    ###############-- Modfier adaptations for large galaxies ####################
+    if Configuration['OUTER_RINGS_DOUBLED']:
+        for par_to_change in ['XPOS','YPOS']:
+            if par_to_change in modifiers:
+                modifiers[par_to_change]  = np.array(modifiers[par_to_change],dtype=float)*\
+                                            np.array([4.,3.,5.],dtype=float)
+    if  Configuration['VEL_SMOOTH_EXTENDED']:
+        if 'VSYS' in modifiers:
+            modifiers['VSYS']  = np.array(modifiers['VSYS'],dtype=float)*\
+                                        np.array([2.,2.,3.],dtype=float)
+    ###############-- Modfier adaptations based on the inclination ####################
     if stage not in ['final_os']:
         if initial_estimates['INCL'][0] < 30.:
             if 'Z0' in modifiers:
@@ -1921,7 +2014,7 @@ def set_fitting_parameters(Configuration, Tirific_Template, parameters_to_adjust
                 modifiers['Z0'][2] = float(modifiers['Z0'][2])*1.5
             if 'INCL' in modifiers:
                 modifiers['INCL'][0:1] =np.array(modifiers['INCL'][0:1],dtype=float)*(0.1/1.0)
-                modifiers['INCL'][2] = float(modifiers['INCL'][2])*2.
+                modifiers['INCL'][2] = float(modifiers['INCL'][2])*5.
             if 'SDIS' in modifiers:
                 modifiers['SDIS'][0:1] = np.array(modifiers['SDIS'][0:1],dtype=float)*1.5
                 modifiers['SDIS'][2] = float(modifiers['SDIS'][2])*0.5

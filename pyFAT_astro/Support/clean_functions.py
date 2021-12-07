@@ -321,6 +321,7 @@ cleanup.__doc__ =f'''
 def cleanup_final(Configuration,Fits_Files, debug =False):
     if debug:
          print_log(f'''Starting the final cleanup of the directory.
+{'':8s} The request is {Configuration['OUTPUT_QUANTITY']}
 ''',Configuration['OUTPUTLOG'],debug = True)
 
     if Configuration['USED_FITTING'] == 'Fit_Tirific_OSC':
@@ -360,7 +361,7 @@ def cleanup_final(Configuration,Fits_Files, debug =False):
                     os.remove(f"{Configuration['FITTING_DIR']}{dir}/{file}")
                 except FileNotFoundError:
                     pass
-            if (Configuration['OUTPUT_QUANTITY'] == 2 and extension != ".fits") or (5 >= Configuration['OUTPUT_QUANTITY'] >= 3) :
+            if (Configuration['OUTPUT_QUANTITY'] == 2 and extension != ".fits") or (5 > Configuration['OUTPUT_QUANTITY'] >= 3) :
                 if (file != f"{Configuration['USED_FITTING']}.def" and file != f"{Configuration['USED_FITTING']}.fits") :
                     try:
                         os.remove(f"{Configuration['FITTING_DIR']}{dir}/{file}")
