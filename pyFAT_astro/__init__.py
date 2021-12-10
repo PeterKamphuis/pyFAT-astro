@@ -10,6 +10,7 @@ def report_version():
         __version__ = pkg_resources.require("pyFAT-astro")[0].version
     except pkg_resources.DistributionNotFound:
         __version__ = "dev"
+    print(__version__)
     # perhaps we are in a github with tags; in that case return describe
     path = os.path.dirname(os.path.abspath(__file__))
     try:
