@@ -980,13 +980,16 @@ def fit_center_ellipse(Configuration,map,inclination= -1, pa = -1,debug=False):
         map_to_fit[map < el_out ] = 0.
         y,x = np.where(map_to_fit == 1.)
         cx,cy,a,b, orient = fit_ellipse(Configuration,x,y,debug=False)
-        if a < b:
-            tmp = a
-            a = copy.deepcopy(b)
-            b = copy.deepcopy(tmp)
-            orient = orient-90
-        inc = np.degrees(np.arccos(np.sqrt((float(b/a)**2-0.2**2)/0.96)))
-        parameters.append([cx,cy,inc , orient])
+        if np.isnan(cx) or np.isnan(cx):
+            continue
+        else:
+            if a < b:
+                tmp = a
+                a = copy.deepcopy(b)
+                b = copy.deepcopy(tmp)
+                orient = orient-90
+            inc = np.degrees(np.arccos(np.sqrt((float(b/a)**2-0.2**2)/0.96)))
+            parameters.append([cx,cy,inc , orient])
     if inclination == -1. or pa == -1.:
         x_center = np.mean([x[0] for x  in parameters])
         y_center = np.mean([x[1] for x  in parameters])
@@ -1038,8 +1041,14 @@ def fit_ellipse(Configuration,x,y,debug=False):
     constant=np.zeros([6,6])
     constant[0,2]=constant[2,0]=2
     constant[1,1]=-1
-    eigen,vec=np.linalg.eig(np.dot(np.linalg.inv(dmult),constant))
+    try:
+        eigen,vec=np.linalg.eig(np.dot(np.linalg.inv(dmult),constant))
+    except LinAlgError:
+        return float('NaN'),float('NaN'),float('NaN'),float('NaN'),float('NaN')
     n= np.argmax(eigen)
+    # if we have more then 3 arguments then we have complex numbers which is pointless for our center
+    if n > 3:
+        return float('NaN'),float('NaN'),float('NaN'),float('NaN'),float('NaN')
     a=vec[:,n]
         #-------------------Fit ellipse-------------------
     b,c,d,f,g,a=a[1]/2., a[2], a[3]/2., a[4]/2., a[5], a[0]

@@ -556,6 +556,11 @@ def check_source(Configuration, Fits_Files, debug = False):
     para = ['PA','INCL','VSYS']
     for err,parameter in zip(new_errors,para):
         Configuration['MIN_ERROR'][parameter] = [set_limits(err,Configuration['MIN_ERROR'][parameter][0],Configuration['MAX_ERROR'][parameter][0]/2.)]
+    #if the source is small we fix the warping
+    if Configuration['SIZE_IN_BEAMS'] <= Configuration['MINIMUM_WARP_SIZE']:
+        for parameter in ['INCL','Z0','SDIS','PA']:
+            if parameter not in Configuration['FIXED_PARAMETERS'][0]:
+                Configuration['FIXED_PARAMETERS'][0].append(parameter)
 
     return Initial_Parameters
 check_source.__doc__='''
@@ -603,7 +608,7 @@ def fitting_osc(Configuration,Fits_Files,Tirific_Template,Initial_Parameters):
         # Run the step
         current_run = one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run,debug = Configuration['DEBUG'])
 
-        if (Configuration['ITERATIONS'] == 1 or Configuration['ACCEPTED']) and Configuration['SIZE_IN_BEAMS'] < 4:
+        if (Configuration['ITERATIONS'] == 1  and Configuration['SIZE_IN_BEAMS'] < 5.3) or  (Configuration['ACCEPTED'] and Configuration['SIZE_IN_BEAMS'] < 3.3):
             if Configuration['DEBUG']:
                         print_log(f'''FITTING_OSC: Checking the inclination due to small galaxy size.
 {'':8s}PA = {Tirific_Template['PA']}
@@ -870,7 +875,7 @@ def one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run, de
         check_angles(Configuration,Tirific_Template,debug = debug)
 
                     # First we fix the SBR we are left with also to set the reliable ring to configuration.
-        fix_sbr(Configuration,Tirific_Template,debug = debug)    # Then we determine the inner rings that should remain fixed
+        fix_sbr(Configuration,Tirific_Template,smooth = True, debug = debug)    # Then we determine the inner rings that should remain fixed
 
         get_inner_fix(Configuration, Tirific_Template,debug=debug)
 

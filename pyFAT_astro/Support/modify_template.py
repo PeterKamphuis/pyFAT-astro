@@ -372,7 +372,10 @@ def check_for_ring_addition(Configuration,Tirific_Template,sbr,sbr_ring_limits,d
     if Configuration['OUTER_RINGS_DOUBLED']:
         factors = [[10.,3.],[7.5,4.],[6.]]
     else:
-        factors = [[7.,3.],[6.,4.],[5.]]
+        if Configuration['NO_RINGS'] <= 8:
+            factors = [[5.,1.],[4.,2.],[3.]]
+        else:
+            factors = [[6.,2.],[5.,3.],[5.]]
     add = False
     for side in [0,1]:
         if (sbr[side,-2] > sbr_ring_limits[side,-2]*factors[0][0] and sbr[side,-1] > sbr_ring_limits[side,-1]*factors[0][1]) or \
@@ -1300,7 +1303,9 @@ def get_warp_slope(Configuration,Tirific_Template, debug = False):
     if np.mean(incl[:,:int(Configuration['NO_RINGS']/2.)]) < 35. :
         if 'INCL' not in Configuration['FIXED_PARAMETERS'][0]:
             Configuration['FIXED_PARAMETERS'][0].append('INCL')
-
+    else:
+        if 'INCL' in Configuration['FIXED_PARAMETERS'][0] and 'INCL' not in Configuration['FIXED_PARAMETERS'][1]:
+            Configuration['FIXED_PARAMETERS'][0].remove('INCL')
 get_warp_slope.__doc__ =f'''
  NAME:
     get_warp_slope
@@ -2065,7 +2070,7 @@ def set_fitting_parameters(Configuration, Tirific_Template, parameters_to_adjust
         if key == 'VROT':
             fitting_settings['VROT'] = set_vrot_fitting(Configuration,stage = stage, rotation = initial_estimates['VROT'], debug = debug )
         elif key == 'SBR':
-            fitting_settings['SBR'] = set_sbr_fitting(Configuration,stage = stage, systemic = initial_estimates['VSYS'][0], debug = debug)
+            fitting_settings['SBR'] = set_sbr_fitting(Configuration,Tirific_Template,stage = stage, systemic = initial_estimates['VSYS'][0], debug = debug)
         else:
             flat_slope = False
             symmetric = False
@@ -2638,13 +2643,13 @@ def set_overall_parameters(Configuration, Fits_Files,Tirific_Template,stage = 'i
             else:
                 Tirific_Template['INIMODE'] = '3'
 
-            if Configuration['NO_RINGS'] > 3.:
+            if Configuration['NO_RINGS'] > 8.:
 
                 Tirific_Template['INTY'] = 0
                 #Tirific_Template['INDINTY'] = 0
             else:
                 #This should not be used with 8 <  rings.
-                Tirific_Template['INTY'] = 1
+                Tirific_Template['INTY'] = 2
                 #preferably we'd use the akima spline but there is an issue with that where the final ring does not get modified
                 #Tirific_Template['INDINTY'] = 2
             Tirific_Template['NUR'] = f"{Configuration['NO_RINGS']}"
@@ -2728,13 +2733,14 @@ set_overall_parameters.__doc__ =f'''
  NOTE:
  '''
 
-def set_sbr_fitting(Configuration,systemic = 100., stage = 'no_stage',debug = False):
+def set_sbr_fitting(Configuration,Tirific_Template,systemic = 100., stage = 'no_stage',debug = False):
     if debug:
         print_log(f'''SET_SBR_FITTING: We are setting the SBR limits.
 {'':8s} No_Rings = {Configuration['NO_RINGS']}
 ''',Configuration['OUTPUTLOG'],debug = True)
     sbr_input = {}
     inner_ring = 2
+    sbr_profile=np.array(get_from_template(Configuration,Tirific_Template, ['SBR','SBR_2']),dtype=float)
     if stage in ['initial','run_cc','initialize_ec','run_ec','initialize_os','run_os']:
         radii,sbr_ring_limits = sbr_limits(Configuration,systemic = systemic, debug = debug)
         if stage in ['run_ec','run_os']:
@@ -2748,32 +2754,49 @@ def set_sbr_fitting(Configuration,systemic = 100., stage = 'no_stage',debug = Fa
             max_size = 4
         elif stage in ['initialize_ec','run_ec','initialize_os','run_os']:
             max_size = 2.
-
+        #Make sure the SBR profile is not dropping below the minimum we are setting
+        if Configuration['SIZE_IN_BEAMS'] < max_size:
+            fact=1.5
+        else:
+            fact=4.
+        format = set_format('SBR')
+        for i in [0,1]:
+            print(sbr_profile[i],sbr_ring_limits)
+            sbr_profile[i,inner_ring:] = [set_limits(sbr_profile[i,x],sbr_ring_limits[x]/fact*2.,1.) for x in range(len(radii)-1,inner_ring-1,-1)]
+            sbr_profile[i,:inner_ring] = [set_limits(x,np.min(sbr_ring_limits),1.) for x in sbr_profile[i,:inner_ring]]
+            if i == 0:
+                ext=''
+            else:
+                ext='_2'
+            Tirific_Template[f"SBR{ext}"]= f"{' '.join([f'{x:{format}}' for x in sbr_profile[i]])}"
         if Configuration['SIZE_IN_BEAMS'] < max_size:
             sbr_input['VARY'] =  np.array([f"SBR {x+1} SBR_2 {x+1}" for x in range(len(radii)-1,inner_ring-1,-1)],dtype=str)
-            sbr_input['PARMAX'] = np.array([1 for x in range(len(radii)-1,inner_ring-1,-1)],dtype=float)
+
+
+            sbr_input['PARMAX'] = np.array([set_limits(np.mean([sbr_profile[0,x-1],sbr_profile[1,x-1]])*2.5,sbr_ring_limits[x]*10.,1) for x in range(len(radii)-1,inner_ring-1,-1)],dtype=float)
             #if stage in ['initial','run_cc']:
             #    sbr_input['PARMIN'] = np.array([sbr_ring_limits[x]/2. if x <= (3./4.)*len(radii) else 0 for x in range(len(radii)-1,inner_ring-1,-1)])
             #elif stage in ['initialize_ec','run_ec']:
-            sbr_input['PARMIN'] = np.array([sbr_ring_limits[x]/1.5 for x in range(len(radii)-1,inner_ring-1,-1)],dtype=float)
+
+            sbr_input['PARMIN'] = np.array([sbr_ring_limits[x]/fact for x in range(len(radii)-1,inner_ring-1,-1)],dtype=float)
             sbr_input['MODERATE'] = np.array([5 for x in range(len(radii)-1,inner_ring-1,-1)],dtype=float) #How many steps from del start to del end
             sbr_input['DELSTART'] = np.array([1e-4 for x in range(len(radii)-1,inner_ring-1,-1)],dtype=float) # Starting step
             sbr_input['DELEND'] = np.array([2.5e-6 for x in range(len(radii)-1,inner_ring-1,-1)],dtype=float) #Ending step
             sbr_input['MINDELTA'] = np.array([5e-6 for x in range(len(radii)-1,inner_ring-1,-1)],dtype=float) #saturation criterum when /SIZE SIZE should be 10 troughout the code
         else:
             sbr_input['VARY'] =  np.array([[f"SBR {x+1}",f"SBR_2 {x+1}"] for x in range(len(radii)-1,inner_ring-1,-1)],dtype=str).reshape((len(radii)-inner_ring)*2)
-            sbr_input['PARMAX'] = np.array([[1,1] for x in range(len(radii)-1,inner_ring-1,-1)],dtype=float).reshape((len(radii)-inner_ring)*2)
+            sbr_input['PARMAX'] = np.array([[set_limits(sbr_profile[0,x-1]*5.,sbr_ring_limits[x]*10.,1.),set_limits(sbr_profile[1,x-1]*5.,sbr_ring_limits[x]*10.,1)] for x in range(len(radii)-1,inner_ring-1,-1)],dtype=float).reshape((len(radii)-inner_ring)*2)
         #if stage in ['initial','run_cc']:
             #    sbr_input['PARMIN'] = np.array([[sbr_ring_limits[x]/2.,sbr_ring_limits[x]/2.] if x <= (3./4.)*len(radii) else [0.,0.] for x in range(len(radii)-1,inner_ring-1,-1)]).reshape((len(radii)-inner_ring)*2)
             #elif stage in ['initialize_ec','run_ec']:
-            sbr_input['PARMIN'] = np.array([[sbr_ring_limits[x]/4.,sbr_ring_limits[x]/4.] for x in range(len(radii)-1,inner_ring-1,-1)],dtype=float).reshape((len(radii)-inner_ring)*2)
+            sbr_input['PARMIN'] = np.array([[sbr_ring_limits[x]/fact,sbr_ring_limits[x]/fact] for x in range(len(radii)-1,inner_ring-1,-1)],dtype=float).reshape((len(radii)-inner_ring)*2)
             sbr_input['MODERATE'] = np.array([[5,5] for x in range(len(radii)-1,inner_ring-1,-1)],dtype=float).reshape((len(radii)-inner_ring)*2) #How many steps from del start to del end
             sbr_input['DELSTART'] = np.array([[1e-4,1e-4] for x in range(len(radii)-1,inner_ring-1,-1)],dtype=float).reshape((len(radii)-inner_ring)*2) # Starting step
             sbr_input['DELEND'] = np.array([[sbr_ring_limits[x]/20.,sbr_ring_limits[x]/20.] for x in range(len(radii)-1,inner_ring-1,-1)],dtype=float).reshape((len(radii)-inner_ring)*2)
             sbr_input['MINDELTA'] = np.array([[sbr_ring_limits[x]/20.,sbr_ring_limits[x]/20.] for x in range(len(radii)-1,inner_ring-1,-1)],dtype=float).reshape((len(radii)-inner_ring)*2)
 
         sbr_input['VARY'] = np.concatenate((sbr_input['VARY'],[f"SBR {' '.join([str(int(x)) for x in range(1,inner_ring+1)])} SBR_2 {' '.join([str(int(x)) for x in range(1,inner_ring+1)])}"]),axis=0)
-        sbr_input['PARMAX'] = np.concatenate((sbr_input['PARMAX'],[2e-3]))
+        sbr_input['PARMAX'] = np.concatenate((sbr_input['PARMAX'],[set_limits(np.mean([sbr_profile[0,2:4],sbr_profile[1,2:4]])*4.,sbr_ring_limits[2]*10.,1.)]))
         sbr_input['PARMIN'] = np.concatenate((sbr_input['PARMIN'],[np.min(sbr_ring_limits)]))
         sbr_input['MODERATE'] = np.concatenate((sbr_input['MODERATE'],[5]))
         sbr_input['DELSTART'] = np.concatenate((sbr_input['DELSTART'],[1e-5]))
@@ -2782,7 +2805,7 @@ def set_sbr_fitting(Configuration,systemic = 100., stage = 'no_stage',debug = Fa
     elif stage in ['after_cc','after_ec','after_os']:
         #Used in Fit_Smoothed_Check
         sbr_input['VARY'] = [f"SBR 3:{Configuration['NO_RINGS']}, SBR_2 3:{Configuration['NO_RINGS']}"]
-        sbr_input['PARMAX'] = np.concatenate(([2e-3],[2e-3]))
+        sbr_input['PARMAX'] = np.concatenate(([np.max(sbr_profile[0,2:])*3.],[np.max(sbr_profile[1,2:])*3.]))
         sbr_input['PARMIN'] = np.concatenate(([0],[0]))
         sbr_input['MODERATE'] = np.concatenate(([5],[5]))
         sbr_input['DELSTART'] = np.concatenate(([1e-5],[1e-5]))
@@ -2950,7 +2973,7 @@ def smooth_profile(Configuration,Tirific_Template,key,min_error = 0.,debug=False
 
     if key == 'VROT':
         #if profile[0,1] > profile[0,2] or np.mean(profile[1:3]) > 120.:
-        if np.mean(profile[1:3]) > 120.:
+        if np.mean([profile[0][1:3],profile[1][1:3]]) > 120.:
             shortened =True
             profile = np.delete(profile, 0, axis = 1)
         else:
@@ -2961,7 +2984,7 @@ def smooth_profile(Configuration,Tirific_Template,key,min_error = 0.,debug=False
 ''',Configuration['OUTPUTLOG'])
     # savgol filters do not work for small array
     for i in [0,1]:
-        if len(profile[i]) < 8:
+        if len(profile[i]) <= 8:
             #In this case we are using a cubic spline so no smoothing required
             pass
         elif len(profile[i]) < 15:
