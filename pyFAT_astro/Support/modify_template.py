@@ -2761,7 +2761,6 @@ def set_sbr_fitting(Configuration,Tirific_Template,systemic = 100., stage = 'no_
             fact=4.
         format = set_format('SBR')
         for i in [0,1]:
-            print(sbr_profile[i],sbr_ring_limits)
             sbr_profile[i,inner_ring:] = [set_limits(sbr_profile[i,x],sbr_ring_limits[x]/fact*2.,1.) for x in range(len(radii)-1,inner_ring-1,-1)]
             sbr_profile[i,:inner_ring] = [set_limits(x,np.min(sbr_ring_limits),1.) for x in sbr_profile[i,:inner_ring]]
             if i == 0:
