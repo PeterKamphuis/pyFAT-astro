@@ -1709,7 +1709,7 @@ def set_boundary_limits(Configuration,Tirific_Template,key,values = [0.,0.],  to
     profile = np.array(get_from_template(Configuration,Tirific_Template, [key,f"{key}_2"]),dtype = float)
     current_boundaries = Configuration[f"{key}_CURRENT_BOUNDARY"]
 
-    if key == 'VROT':
+    if key == 'VROT' and np.sum(values) != 0.:
         current_boundaries =[[values[0]-values[1]*5.,values[0]+values[1]*5.] for x in range(3)]
     if np.sum(current_boundaries) == 0. and np.sum(values) != 0.:
         current_boundaries =[[values[0]-values[1],values[0]+values[1]] for x in range(3)]
@@ -1718,7 +1718,7 @@ def set_boundary_limits(Configuration,Tirific_Template,key,values = [0.,0.],  to
 {'':8s} current Boundaries = {current_boundaries}
 ''',Configuration['OUTPUTLOG'])
     elif np.sum(current_boundaries) == 0. and np.sum(values) == 0.:
-        raise FunctionCallError(f'SET_BOUNDARY_LIMITS: if boundaries are not set in the Configuration call set_boundarylimits with values')
+        raise FunctionCallError(f'SET_BOUNDARY_LIMITS: if boundaries are not set in the Configuration call set_boundary_limits with values')
     else:
         if debug:
                 print_log(f'''SET_BOUNDARY_LIMITS: Checking
@@ -1954,7 +1954,10 @@ def set_fitting_parameters(Configuration, Tirific_Template, parameters_to_adjust
         elif stage in ['initialize_ec','run_ec','after_ec']:
             parameters_to_adjust = ['INCL','PA','VROT','SDIS','SBR','Z0','XPOS','YPOS','VSYS']
         elif stage in  ['initialize_os','run_os','after_os']:
-            parameters_to_adjust = ['VSYS','XPOS','YPOS','INCL','PA','SBR','VROT','SDIS','Z0']
+            if Configuration['ITERATIONS'] == 0:
+                parameters_to_adjust = ['VSYS','XPOS','YPOS','SBR','VROT','INCL','PA','SDIS','Z0']
+            else:
+                parameters_to_adjust = ['VSYS','XPOS','YPOS','INCL','PA','SBR','VROT','SDIS','Z0']
         else:
             if debug:
                 print_log(f'''SET_FITTING_PARAMETERS: No default adjustment for unknown stage.

@@ -2237,10 +2237,36 @@ def max_profile_change(Configuration,radius,profile,key,debug=False):
                 for x in radius]
     new_profile = copy.deepcopy(profile)
     diff_rad =  [float(y-x) for x,y in zip(radkpc,radkpc[1:])]
-    diff_profile = [float(abs(x-y)) for x,y in zip(profile,profile[1:])]
+    diff_profile = [float(x-y) for x,y in zip(profile,profile[1:])]
     for i,diff in enumerate(diff_profile):
-        if diff/diff_rad[i] > Configuration['MAX_CHANGE'][key]:
-            new_profile[i+1] -=  diff-(Configuration['MAX_CHANGE'][key]*0.9*diff_rad[i])
+        if abs(diff)/diff_rad[i] > Configuration['MAX_CHANGE'][key]:
+            if debug:
+                print_log(f'''MAX_CHANGE_PROFILE: The profile {key} is change too much in ring {i+1}.
+''', Configuration['OUTPUTLOG'],debug=True)
+            if diff > 0.:
+            #if it is the last point we simply limit it
+                if i == len(diff_profile)-1:
+                    new_profile[i+1] = profile[i]+ diff/abs(diff)*(Configuration['MAX_CHANGE'][key]*0.5*diff_rad[i])
+                elif diff_profile[i+1] == 0:
+                    new_profile[i+1] = profile[i]+ diff/abs(diff)*(Configuration['MAX_CHANGE'][key]*0.9*diff_rad[i])
+                    #If the change does not reverse we simply limit
+                elif diff/abs(diff) == diff_profile[i+1]/abs(diff_profile[i+1]):
+                    new_profile[i+1] = profile[i]+ diff/abs(diff)*(Configuration['MAX_CHANGE'][key]*0.9*diff_rad[i])
+                else:
+                    gapped_diff = radkpc[i+2] - radkpc[i]
+                    if abs(new_profile[i]-new_profile[i+2])/gapped_diff < Configuration['MAX_CHANGE'][key]:
+                        new_profile[i+1] = np.mean([new_profile[i],new_profile[i+2]])
+                    else:
+                        new_profile[i+1] = new_profile[i]
+                if new_profile[i+1] != profile[i+1] and i != len(diff_profile)-1:
+                    diff_profile[i+1] = new_profile[i+1]-new_profile[i+2]
+
+                if debug:
+                    print_log(f'''MAX_CHANGE_PROFILE: We changed the ring value from {profile[i+1]} to {new_profile[i+1]}.
+    ''', Configuration['OUTPUTLOG'],debug=True)
+    print_log(f'''MAX_CHANGE_PROFILE: The returned profile is:
+{'':8s}{key} = {new_profile}
+''', Configuration['OUTPUTLOG'],debug=True)
     return new_profile
 max_profile_change.__doc__ =f'''
  NAME:

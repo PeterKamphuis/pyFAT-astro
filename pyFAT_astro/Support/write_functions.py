@@ -186,7 +186,7 @@ def initialize_def_file(Configuration, Fits_Files,Tirific_Template,Initial_Param
             Initial_Parameters['XPOS'][1]= Configuration['BEAM'][0]/3600.
             Initial_Parameters['YPOS'][1]= Configuration['BEAM'][0]/3600.
             Initial_Parameters['VSYS'][1]= Configuration['CHANNEL_WIDTH']
-            Initial_Parameters['PA'][1]= 3.
+            Initial_Parameters['PA'][1]= 1.
             Initial_Parameters['INCL'][1]= 3.
 
 
@@ -204,7 +204,7 @@ def initialize_def_file(Configuration, Fits_Files,Tirific_Template,Initial_Param
                                initial_estimates=Initial_Parameters, debug=debug)
 
     tirific(Configuration,Tirific_Template,name = f'{fit_type}_In.def', debug=debug)
-    
+
 
 initialize_def_file.__doc__ =f'''
  NAME:
