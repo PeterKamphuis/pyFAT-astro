@@ -2236,35 +2236,50 @@ def max_profile_change(Configuration,radius,profile,key,debug=False):
     radkpc =[convertskyangle(Configuration,float(x),distance=Configuration['DISTANCE']) \
                 for x in radius]
     new_profile = copy.deepcopy(profile)
+
     diff_rad =  [float(y-x) for x,y in zip(radkpc,radkpc[1:])]
-    diff_profile = [float(x-y) for x,y in zip(profile,profile[1:])]
+    diff_profile = [float(y-x) for x,y in zip(profile,profile[1:])]
+    if debug:
+        print_log(f'''MAX_CHANGE_PROFILE: The profile {key} starts with.
+{'':8s} {key} = {new_profile}
+{'':8s} {key} = {diff_profile}
+{'':8s} diff/kpc = {[x/y for x,y in zip(diff_profile,diff_rad)]}
+''', Configuration['OUTPUTLOG'],debug=True)
+
     for i,diff in enumerate(diff_profile):
         if abs(diff)/diff_rad[i] > Configuration['MAX_CHANGE'][key]:
             if debug:
                 print_log(f'''MAX_CHANGE_PROFILE: The profile {key} is change too much in ring {i+1}.
 ''', Configuration['OUTPUTLOG'],debug=True)
-            if diff > 0.:
+
             #if it is the last point we simply limit it
-                if i == len(diff_profile)-1:
-                    new_profile[i+1] = profile[i]+ diff/abs(diff)*(Configuration['MAX_CHANGE'][key]*0.5*diff_rad[i])
-                elif diff_profile[i+1] == 0:
-                    new_profile[i+1] = profile[i]+ diff/abs(diff)*(Configuration['MAX_CHANGE'][key]*0.9*diff_rad[i])
-                    #If the change does not reverse we simply limit
-                elif diff/abs(diff) == diff_profile[i+1]/abs(diff_profile[i+1]):
-                    new_profile[i+1] = profile[i]+ diff/abs(diff)*(Configuration['MAX_CHANGE'][key]*0.9*diff_rad[i])
-                else:
+            if i == len(diff_profile)-1:
+                print(1)
+                new_profile[i+1] = profile[i]+ diff/abs(diff)*(Configuration['MAX_CHANGE'][key]*0.5*diff_rad[i])
+            elif diff_profile[i+1] == 0:
+                print(2)
+                new_profile[i+1] = profile[i]+ diff/abs(diff)*(Configuration['MAX_CHANGE'][key]*0.9*diff_rad[i])
+                #If the change does not reverse we simply limit
+            elif diff/abs(diff) == diff_profile[i+1]/abs(diff_profile[i+1]):
+                print(3)
+                new_profile[i+1] = profile[i]+ diff/abs(diff)*(Configuration['MAX_CHANGE'][key]*0.9*diff_rad[i])
+            else:
+                if abs(diff) > abs(diff_profile[i+1]):
+                    print(4,abs(diff),abs(diff_profile[i+1]))
                     gapped_diff = radkpc[i+2] - radkpc[i]
                     if abs(new_profile[i]-new_profile[i+2])/gapped_diff < Configuration['MAX_CHANGE'][key]:
                         new_profile[i+1] = np.mean([new_profile[i],new_profile[i+2]])
                     else:
                         new_profile[i+1] = new_profile[i]
-                if new_profile[i+1] != profile[i+1] and i != len(diff_profile)-1:
-                    diff_profile[i+1] = new_profile[i+1]-new_profile[i+2]
+                else:
+                    print(5)
+                    new_profile[i+1] = profile[i]+ diff/abs(diff)*(Configuration['MAX_CHANGE'][key]*0.9*diff_rad[i])
 
-                if debug:
-                    print_log(f'''MAX_CHANGE_PROFILE: We changed the ring value from {profile[i+1]} to {new_profile[i+1]}.
-    ''', Configuration['OUTPUTLOG'],debug=True)
-    print_log(f'''MAX_CHANGE_PROFILE: The returned profile is:
+            if debug:
+                print_log(f'''MAX_CHANGE_PROFILE: We changed the ring value from {profile[i+1]} to {new_profile[i+1]}.
+''', Configuration['OUTPUTLOG'],debug=True)
+    if debug:
+        print_log(f'''MAX_CHANGE_PROFILE: The returned profile is:
 {'':8s}{key} = {new_profile}
 ''', Configuration['OUTPUTLOG'],debug=True)
     return new_profile
@@ -2963,6 +2978,7 @@ def setup_configuration(cfg):
                'END_TIME':'Not completed',
                'OUTPUTLOG':'Not set yet',
                'RUN_COUNTER': 0,
+               'CENTRAL_CONVERGENCE_COUNTER': 1,
                'ITERATIONS': 0,
                'CURRENT_STAGE': 'initial', #Current stage of the fitting process, set at switiching stages
                'USED_FITTING': None,
@@ -2982,6 +2998,7 @@ def setup_configuration(cfg):
                'NO_POINTSOURCES': 0. , # Number of point sources, set in run_tirific
 
                'INNER_FIX': [4.,4.], #Number of rings that are fixed in the inner part for the INCL and PA, , adapted after every run in get_inner_fix in support_functions and for both sides
+               'CENTRAL_FIX': [], #Parameters of the center to fix. This set in check_cantral_convergence
                'WARP_SLOPE': [0.,0.], #Ring numbers from which outwards the warping should be fitted as a slope, set in get_warp_slope in modify_template
                'OUTER_SLOPE_START': 1, # Ring number from where the RC is fitted as a slope
                'RC_UNRELIABLE': 1, # Ring number from where the RC values are set flat. Should only be set in check_size

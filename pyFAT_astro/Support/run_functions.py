@@ -49,9 +49,9 @@ def check_central_convergence(Configuration,Tirific_Template, fit_type = 'Undefi
     new_xpos,new_ypos,new_vsys = rf.load_tirific(Configuration,f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def",Variables = ['XPOS','YPOS','VSYS'],debug = debug)
     old_xpos,old_ypos,old_vsys = rf.load_tirific(Configuration,f"{Configuration['FITTING_DIR']}{fit_type}_In.def",Variables = ['XPOS','YPOS','VSYS'],debug = debug)
     if Configuration['OUTER_RINGS_DOUBLED']:
-        shift_beam_frac =Configuration['SIZE_IN_BEAMS']*0.05
+        shift_beam_frac = set_limits(Configuration['SIZE_IN_BEAMS']*0.1/Configuration['CENTRAL_CONVERGENCE_COUNTER'],Configuration['SIZE_IN_BEAMS']*0.05,Configuration['SIZE_IN_BEAMS']*0.15)
     else:
-        shift_beam_frac =0.15
+        shift_beam_frac = set_limits(0.25/Configuration['CENTRAL_CONVERGENCE_COUNTER'],0.15,0.3)
     ra_lim = set_limits(shift_beam_frac*Configuration['BEAM'][0]/3600.,np.max([Configuration['PIXEL_SIZE'],1./3600.]),Configuration['BEAM'][0]/3600.,debug = debug )
     dec_lim =set_limits(shift_beam_frac*Configuration['BEAM'][0]/3600.,np.max([Configuration['PIXEL_SIZE'],1./3600.]),Configuration['BEAM'][0]/3600.,debug = debug )
     sys_lim = set_limits(0.5*Configuration['CHANNEL_WIDTH'],2.5, 2.*Configuration['CHANNEL_WIDTH'],debug = debug )
@@ -93,6 +93,21 @@ def check_central_convergence(Configuration,Tirific_Template, fit_type = 'Undefi
 {"":8s}The DEC has shifted from {old_ypos[0]} to  {new_ypos[0]} which is a difference of {abs(new_ypos[0] - old_ypos[0])} needed = {dec_lim}.
 {"":8s}The VSYS has shifted from {old_vsys[0]} to  {new_vsys[0]} which is a difference of {abs(new_vsys[0] - old_vsys[0])} needed = {sys_lim}.
 ''', Configuration['OUTPUTLOG'])
+            if  abs(new_xpos[0] - old_xpos[0]) < ra_lim:
+                if debug:
+                    print_log(f'''CHECK_CONVERGENCE: We are fixing the XPOS.
+''', Configuration['OUTPUTLOG'])
+                #Configuration['CENTRAL_FIX'].append('XPOS')
+            if  abs(new_ypos[0] - old_ypos[0]) < dec_lim:
+                if debug:
+                    print_log(f'''CHECK_CONVERGENCE: We are fixing the YPOS.
+''', Configuration['OUTPUTLOG'])
+                #Configuration['CENTRAL_FIX'].append('YPOS')
+            if  abs(new_vsys[0] - old_vsys[0]) < sys_lim:
+                if debug:
+                    print_log(f'''CHECK_CONVERGENCE: We are fixing the VSYS.
+''', Configuration['OUTPUTLOG'])
+                #Configuration['CENTRAL_FIX'].append('VSYS')
             #write_new_to_template(Configuration,f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def", Tirific_Template,debug=debug)
             return False
     else:
@@ -349,7 +364,7 @@ def check_source(Configuration, Fits_Files, debug = False):
         print_log(f'''CHECK_SOURCE: We use a distance of {Configuration['DISTANCE']}.
 ''',Configuration['OUTPUTLOG'])
     if np.sum(Configuration['Z0_INPUT_BOUNDARY']) == 0.:
-        set_boundaries(Configuration,'Z0',*convertskyangle(Configuration,[0.05,2.5],Configuration['DISTANCE'], physical = True),input=True,debug=debug)
+        set_boundaries(Configuration,'Z0',*convertskyangle(Configuration,[0.05,1.0],Configuration['DISTANCE'], physical = True),input=True,debug=debug)
 
     #Check whether the cube is very large, if so cut it down
 
@@ -832,6 +847,7 @@ def one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run, de
     stage = 'run_os'
     #First we run tirific
     accepted,current_run = run_tirific(Configuration,current_run,stage = stage, fit_type = fit_type, debug= debug)
+
     #Then we load the produced output into our template
     write_new_to_template(Configuration,f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def" , Tirific_Template, debug = debug)
     #Check that the centre does not deviate too much
@@ -842,6 +858,10 @@ def one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run, de
 {Tirific_Template['XPOS']}
 ''',Configuration['OUTPUTLOG'])
     accepted_central = check_central_convergence(Configuration,Tirific_Template, fit_type = fit_type,debug=debug)
+    if accepted_central:
+        Configuration['CENTRAL_CONVERGENCE_COUNTER'] += 1
+        Configuration['CENTRAL_FIX'] = []
+
     if debug:
         print_log(f'''CHECK THAT WE CAHANGE !!!!!!
 {Tirific_Template['VROT']}

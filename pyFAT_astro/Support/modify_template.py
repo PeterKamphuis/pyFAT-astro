@@ -1964,6 +1964,16 @@ def set_fitting_parameters(Configuration, Tirific_Template, parameters_to_adjust
 ''',Configuration['OUTPUTLOG'])
             raise InitializeError('No default adjustment for unknown stage. ')
 
+    for center in Configuration['CENTRAL_FIX']:
+        if center in parameters_to_adjust:
+            parameters_to_adjust.remove(center)
+
+    #VSYS should always be in the initial estimates as sbr setting uses it
+    for key in ['VSYS']:
+        if key not in initial_estimates:
+            if key == 'VSYS':
+                initial_estimates['VSYS'] = [profile[0],Configuration['CHANNEL_WIDTH']/2.]
+
     for key in parameters_to_adjust:
         if key not in initial_estimates:
             profile = np.array([np.mean([x,y]) for x,y in \
@@ -1978,8 +1988,6 @@ def set_fitting_parameters(Configuration, Tirific_Template, parameters_to_adjust
                 initial_estimates['XPOS'] = [profile[0],Configuration['BEAM_IN_PIXELS'][1]*Configuration['PIXEL_SIZE']]
             elif key == 'YPOS':
                 initial_estimates['YPOS'] = [profile[0],Configuration['BEAM_IN_PIXELS'][1]*Configuration['PIXEL_SIZE']]
-            elif key == 'VSYS':
-                initial_estimates['VSYS'] = [profile[0],Configuration['CHANNEL_WIDTH']/2.]
             elif key == 'SDIS':
                 initial_estimates['SDIS'] = [np.mean(profile),Configuration['CHANNEL_WIDTH']]
             elif key == 'Z0':

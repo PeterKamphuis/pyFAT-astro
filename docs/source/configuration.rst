@@ -31,7 +31,7 @@ A configuration file with all default values and an example catalogue file can b
 
 and the installation check can be ran similarly
 
-  pyFAT print_installation=True
+  pyFAT installation_check=True
 
 The cube name can be directly specified from the command line. PyFAT will then simply fit this cube and nothing else. The configuration file for fitting can then still be provided but any catalogue information specified in there will be ignored. This can be useful to fit a single galaxy or when you want to refit a single galaxy from a batch with slightly different parameters.
 
