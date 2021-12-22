@@ -9,6 +9,7 @@ from inspect import getframeinfo,stack
 
 from scipy.optimize import curve_fit, OptimizeWarning
 from scipy import ndimage
+from scipy.signal import savgol_filter
 from astropy.wcs import WCS
 from astropy.io import fits
 from dataclasses import  asdict
@@ -32,6 +33,7 @@ import copy
 import warnings
 import re
 import subprocess
+
 from datetime import datetime
 class BadHeaderError(Exception):
     pass
@@ -1285,7 +1287,8 @@ def get_fit_groups(Configuration,Tirific_Template,debug = False):
     groups = Tirific_Template['VARY'].split(',')
     variation_type = []
     variation = []
-    radii,cut_off_limits = sbr_limits(Configuration, systemic= float(Tirific_Template['VSYS'].split(' ')[0]) , debug = debug)
+    radii,cut_off_limits = sbr_limits(Configuration, scaleheight= float(Tirific_Template['Z0'].split(' ')[0]),
+                            systemic= float(Tirific_Template['VSYS'].split(' ')[0]) , debug = debug)
     sbr_standard = np.mean(cut_off_limits) * 5.
     paramater_standard_variation = {'PA': [10.,'a'],
                                    'INCL': [10.,'a'],
@@ -1876,7 +1879,8 @@ def get_ring_weights(Configuration,Tirific_Template,debug = False):
     sbr = np.array(get_from_template(Configuration,Tirific_Template, ["SBR",f"SBR_2"]),dtype=float)
     systemic = np.array(get_from_template(Configuration,Tirific_Template, ["VSYS"]),dtype=float)
     systemic = systemic[0,0]
-    radii,cut_off_limits = sbr_limits(Configuration, systemic= systemic , debug = debug)
+    radii,cut_off_limits = sbr_limits(Configuration, scaleheight= float(Tirific_Template['Z0'].split(' ')[0]),\
+                                        systemic= systemic , debug = debug)
     weights= [[],[]]
     for i in [0,1]:
         weights[i] = [set_limits(x/y,0.1,10.) for x,y in zip(sbr[i],cut_off_limits)]
@@ -2169,7 +2173,7 @@ def make_tiltogram(Configuration,Tirific_Template,debug =False):
     sbr = np.array(get_from_template(Configuration,Tirific_Template, ["SBR",f"SBR_2"]),dtype=float)
     systemic = np.array(get_from_template(Configuration,Tirific_Template, ["VSYS"]),dtype=float)
     systemic = systemic[0,0]
-    radii,cut_off_limits = sbr_limits(Configuration, systemic= systemic , debug = debug)
+    radii,cut_off_limits = sbr_limits(Configuration, scaleheight= float(Tirific_Template['Z0'].split(' ')[0]),systemic= systemic , debug = debug)
     add = [[],[]]
     Theta = [[],[]]
     phi = [[],[]]
@@ -2236,13 +2240,17 @@ def max_profile_change(Configuration,radius,profile,key,debug=False):
     radkpc =[convertskyangle(Configuration,float(x),distance=Configuration['DISTANCE']) \
                 for x in radius]
     new_profile = copy.deepcopy(profile)
+    sm_profile = savgol_filter(profile, 3, 1)
 
     diff_rad =  [float(y-x) for x,y in zip(radkpc,radkpc[1:])]
     diff_profile = [float(y-x) for x,y in zip(profile,profile[1:])]
+    diff_sm_profile = [float(y-x) for x,y in zip(sm_profile,sm_profile[1:])]
     if debug:
         print_log(f'''MAX_CHANGE_PROFILE: The profile {key} starts with.
 {'':8s} {key} = {new_profile}
-{'':8s} {key} = {diff_profile}
+{'':8s} smoothed {key}  = {sm_profile}
+{'':8s} diff per ring = {diff_profile}
+{'':8s} smoothed dif per ring = {diff_sm_profile}
 {'':8s} diff/kpc = {[x/y for x,y in zip(diff_profile,diff_rad)]}
 ''', Configuration['OUTPUTLOG'],debug=True)
 
@@ -2254,25 +2262,23 @@ def max_profile_change(Configuration,radius,profile,key,debug=False):
 
             #if it is the last point we simply limit it
             if i == len(diff_profile)-1:
-                print(1)
                 new_profile[i+1] = profile[i]+ diff/abs(diff)*(Configuration['MAX_CHANGE'][key]*0.5*diff_rad[i])
+            elif diff_sm_profile[i]/diff_rad[i] < Configuration['MAX_CHANGE'][key]*0.5:
+                new_profile[i+1] = sm_profile[i+1]
             elif diff_profile[i+1] == 0:
-                print(2)
                 new_profile[i+1] = profile[i]+ diff/abs(diff)*(Configuration['MAX_CHANGE'][key]*0.9*diff_rad[i])
                 #If the change does not reverse we simply limit
             elif diff/abs(diff) == diff_profile[i+1]/abs(diff_profile[i+1]):
-                print(3)
                 new_profile[i+1] = profile[i]+ diff/abs(diff)*(Configuration['MAX_CHANGE'][key]*0.9*diff_rad[i])
             else:
                 if abs(diff) > abs(diff_profile[i+1]):
-                    print(4,abs(diff),abs(diff_profile[i+1]))
                     gapped_diff = radkpc[i+2] - radkpc[i]
                     if abs(new_profile[i]-new_profile[i+2])/gapped_diff < Configuration['MAX_CHANGE'][key]:
                         new_profile[i+1] = np.mean([new_profile[i],new_profile[i+2]])
                     else:
                         new_profile[i+1] = new_profile[i]
                 else:
-                    print(5)
+
                     new_profile[i+1] = profile[i]+ diff/abs(diff)*(Configuration['MAX_CHANGE'][key]*0.9*diff_rad[i])
 
             if debug:
@@ -2961,7 +2967,8 @@ def setup_configuration(cfg):
                 'ACCEPTED',
                 'SOFIA_RAN', #Check if we have ran Sofia
                 'NO_RADEC',
-                'FIX_SIZE' # If we have before fitted a size we want to fix to this size to avoid looping
+                'FIX_SIZE', # If we have before fitted a size we want to fix to this size to avoid looping
+                'CENTRAL_CONVERGENCE' #Have we found the center
                 ]
 #
     for key in boolean_keys:
@@ -2978,7 +2985,7 @@ def setup_configuration(cfg):
                'END_TIME':'Not completed',
                'OUTPUTLOG':'Not set yet',
                'RUN_COUNTER': 0,
-               'CENTRAL_CONVERGENCE_COUNTER': 1,
+               'CENTRAL_CONVERGENCE_COUNTER': 1.,
                'ITERATIONS': 0,
                'CURRENT_STAGE': 'initial', #Current stage of the fitting process, set at switiching stages
                'USED_FITTING': None,
@@ -3145,7 +3152,7 @@ setup_configuration.__doc__ =f'''
 
 
 
-def sbr_limits(Configuration, systemic= 100. , debug = False):
+def sbr_limits(Configuration,scaleheight = 2., systemic= 100. , debug = False):
     radii = set_rings(Configuration,debug=debug)
     if debug:
         print_log(f'''SBR_LIMITS: Got {len(radii)} radii
@@ -3153,7 +3160,8 @@ def sbr_limits(Configuration, systemic= 100. , debug = False):
     level = Configuration['NOISE']*1000
     noise_in_column = columndensity(Configuration,level,systemic = systemic)
     J2007col=9.61097e+19
-    ratio=(noise_in_column/J2007col)**0.5
+    J2007scl= 2. #arcsec in a sech^2 layer
+    ratio=(noise_in_column/J2007col)**0.5*np.sqrt(J2007scl/scaleheight)
     beamsolid=(np.pi*Configuration['BEAM'][0]*Configuration['BEAM'][1])/(4.*np.log(2.))
     ringarea= [0 if radii[0] == 0 else np.pi*((radii[0]+radii[1])/2.)**2]
     ringarea = np.hstack((ringarea,

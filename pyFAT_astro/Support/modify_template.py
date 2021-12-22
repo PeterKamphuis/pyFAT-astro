@@ -15,18 +15,54 @@ from scipy.signal import savgol_filter
 from scipy.interpolate import CubicSpline,Akima1DInterpolator
 
 
-def arc_tan_function(axis,center,length,amplitude,mean):
+def arc_tan_sdis_function(axis,center,length,amplitude,mean):
     # to prevent instant turnover
     c = axis[-1]*0.1
     #and the turnover has to be beyon 20*of the inner part
     c2 = set_limits(axis[-1]*0.2,axis[2],axis[int(len(axis)/1.5)])
     return -1*np.arctan((axis-(c2+abs(center)))/(c+abs(length)))*abs(amplitude)/np.pi + abs(mean)
+arc_tan_sdis_function.__doc__ =f'''
+ NAME:
+    arc_tan_function
+
+ PURPOSE:
+    arc tangent function for fitting the SDIS this one can only be declining
+
+ CATEGORY:
+    modify_template
+
+ INPUTS:
+    axis = xaxis
+    center = 0 point of the acrtan
+    length = turnover length
+    amplitude = height of the arctan
+    mean = amplitude zero point
+
+ OPTIONAL INPUTS:
+
+ OUTPUTS:
+    arctan function
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
+
+def arc_tan_function(axis,center,length,amplitude,mean):
+    # to prevent instant turnover
+    c = axis[-1]*0.2
+    #and the turnover has to be beyon 20*of the inner part
+    c2 = set_limits(axis[-1]*0.2,axis[2],axis[int(len(axis)/1.5)])
+    return np.arctan((axis-(c2+abs(center)))/(c+abs(length)))*amplitude/np.pi + abs(mean)
 arc_tan_function.__doc__ =f'''
  NAME:
     arc_tan_function
 
  PURPOSE:
-    arc tangent function
+    arc tangent function that can be declining or increain
 
  CATEGORY:
     modify_template
@@ -192,7 +228,7 @@ def check_size(Configuration,Tirific_Template, fit_type = 'Undefined', stage = '
 ''',Configuration['OUTPUTLOG'],debug=True)
 
 
-    radii, sbr_ring_limits = sbr_limits(Configuration,systemic = float(Tirific_Template['VSYS'].split()[0]),debug=debug)
+    radii, sbr_ring_limits = sbr_limits(Configuration,scaleheight= float(Tirific_Template['Z0'].split(' ')[0]),systemic = float(Tirific_Template['VSYS'].split()[0]),debug=debug)
     #get the sbr profiles
 
     sbr = np.array(get_from_template(Configuration,Tirific_Template, ['SBR','SBR_2'],debug=debug),dtype = float)
@@ -234,7 +270,7 @@ def check_size(Configuration,Tirific_Template, fit_type = 'Undefined', stage = '
     if Configuration['RC_UNRELIABLE'] == Configuration['NO_RINGS']:
         Configuration['RC_UNRELIABLE'] -= 1
     for i in [0,1]:
-        corr_val = np.where(sbr[i,2:] > sbr_ring_limits[i,2:])[0]+2
+        corr_val = np.where(sbr[i,2:] > sbr_ring_limits[i,2:]*3.)[0]+2
         if corr_val.size > 0:
             Configuration['LAST_RELIABLE_RINGS'][i] = corr_val[-1]+1
         else:
@@ -456,12 +492,15 @@ def check_for_ring_addition(Configuration,Tirific_Template,sbr,sbr_ring_limits,d
 ''', Configuration['OUTPUTLOG'])
     return new_rings
 
-def fit_arc(Configuration,radii,sm_profile,error, debug = False ):
+def fit_arc(Configuration,radii,sm_profile,error, function_to_fit,key, debug = False ):
 
     c2 = set_limits(radii[-1]*0.2,radii[2],radii[int(len(radii)/1.5)])
     est_center = radii[-1]/2.-c2
     est_length = radii[-1]*0.1
-    est_amp = abs(np.max(sm_profile)-np.min(sm_profile))
+    if key in ['SDIS']:
+        est_amp = abs(np.max(sm_profile)-np.min(sm_profile))
+    else:
+        est_amp = np.mean(sm_profile[3:])-np.mean(sm_profile[:4])
     est_mean = np.mean(sm_profile)
 
     if not error.any():
@@ -470,11 +509,11 @@ def fit_arc(Configuration,radii,sm_profile,error, debug = False ):
     else:
         absolute_sigma = True
     try:
-        arc_par,arc_cov  =  curve_fit(arc_tan_function, radii, sm_profile,p0=[est_center,est_length,est_amp,est_mean]\
+        arc_par,arc_cov  =  curve_fit(function_to_fit, radii, sm_profile,p0=[est_center,est_length,est_amp,est_mean]\
                                     ,sigma=error,absolute_sigma=absolute_sigma)
     except OptimizeWarning:
         pass
-    new_profile = arc_tan_function(radii,*arc_par)
+    new_profile = function_to_fit(radii,*arc_par)
 
     new_profile[:3] = np.mean(new_profile[:3])
 
@@ -519,7 +558,7 @@ def fit_polynomial(Configuration,radii,profile,sm_profile,error, key, Tirific_Te
     only_inner = False
     if key in ['PA','INCL','Z0']:
         fixed = inner_fix
-        only_inner =True
+        only_inner = True
         error[:fixed] = error[:fixed]/10.
     elif key in ['VROT']:
         #fixed =len(radii)-Configuration['OUTER_SLOPE_START']
@@ -529,13 +568,14 @@ def fit_polynomial(Configuration,radii,profile,sm_profile,error, key, Tirific_Te
         error[1] = error[1]*3.
     else:
         fixed = 1
-    if len(radii) > 15.:
-        start_order = int(len(radii)/5)
+    if len(radii) > 10.:
+        start_order = int(len(radii)/5.)
     else:
         start_order = 0
 
     st_fit = int(0)
     if key in ['VROT']:
+
         if np.mean(profile[1:3]) > 120.:
             st_fit = int(1)
 
@@ -553,7 +593,7 @@ def fit_polynomial(Configuration,radii,profile,sm_profile,error, key, Tirific_Te
 
     else:
         if key in ['PA','INCL','Z0']:
-            max_order = set_limits(len(radii)-fixed,3,7)
+            max_order = set_limits(len(radii)-fixed,3,5)
         else:
             max_order = set_limits(len(radii)-1,3,7)
 
@@ -582,11 +622,13 @@ def fit_polynomial(Configuration,radii,profile,sm_profile,error, key, Tirific_Te
 
     for ord in order:
         fit_prof = np.poly1d(np.polyfit(radii[st_fit:],profile[st_fit:],ord,w=1./error[st_fit:]))
+
         if st_fit > 0.:
             fit_profile = np.concatenate(([sm_profile[0]],[e for e in fit_prof(radii[st_fit:])]))
         else:
             fit_profile = fit_prof(radii)
         #fit_profile = fit_prof(radii)
+
         if key != 'SBR':
             fit_profile = fix_profile(Configuration, key, fit_profile, Tirific_Template,inner_fix=inner_fix, singular = True,only_inner =only_inner)
         red_chi = np.sum((profile[st_fit:]-fit_profile[st_fit:])**2/error[st_fit:])/(len(radii[st_fit:])-ord)
@@ -760,10 +802,10 @@ def fix_profile(Configuration, key, profile, Tirific_Template, debug= False, inn
 ''', Configuration['OUTPUTLOG'])
 
     for i in indexes:
-        if Configuration['LAST_RELIABLE_RINGS'][i] < len(profile[i,:]) and not only_inner:
-            if debug:
-                print_log(f'''FIX_PROFILE: From ring {Configuration['LAST_RELIABLE_RINGS'][i]} on we do not trust these rings.
+        if debug:
+            print_log(f'''FIX_PROFILE: From ring {Configuration['LAST_RELIABLE_RINGS'][i]} on we do not trust these rings.
 ''', Configuration['OUTPUTLOG'])
+        if Configuration['LAST_RELIABLE_RINGS'][i] < len(profile[i,:]) and not only_inner:
             #profile[i,Configuration['LAST_RELIABLE_RINGS'][i]:] = profile[i,Configuration['LAST_RELIABLE_RINGS'][i]:]*0.25+profile[i,Configuration['LAST_RELIABLE_RINGS'][i]-1]*0.75
             profile[i,Configuration['LAST_RELIABLE_RINGS'][i]:] = profile[i,Configuration['LAST_RELIABLE_RINGS'][i]-1]
         if debug:
@@ -778,8 +820,8 @@ def fix_profile(Configuration, key, profile, Tirific_Template, debug= False, inn
             for x in range(0,xrange):
                 if inner_fix[i]+x < len(profile[i,:]):
                     profile[i,inner_fix[i]+x] = 1/(x+4./xrange)*inner_mean+ (1-1/(x+4./xrange))*profile[i,inner_fix[i]+x]
-            if key in ['PA','INCL']:
-                profile[i,:] = max_profile_change(Configuration,rad,profile[i,:],key,debug=debug)
+            #if key in ['PA','INCL']:
+            #    profile[i,:] = max_profile_change(Configuration,rad,profile[i,:],key,debug=debug)
         if debug:
             print_log(f'''FIX_PROFILE:After smoothe transition
 {'':8s} profile = {profile[i,:]}
@@ -853,7 +895,8 @@ def fix_sbr(Configuration,Tirific_Template, smooth = False, debug=False):
 
     # get the cutoff limits
     vsys = float(Tirific_Template['VSYS'].split()[0])
-    radii,cutoff_limits = sbr_limits(Configuration, systemic=vsys)
+    radii,cutoff_limits = sbr_limits(Configuration, scaleheight= float(Tirific_Template['Z0'].split(' ')[0]),\
+                                    systemic=vsys,debug=debug)
     cutoff_limits = np.array([cutoff_limits,cutoff_limits],dtype=float)
     # Then get the profile from the template
     sbr = np.array(get_from_template(Configuration,Tirific_Template,['SBR','SBR_2']),dtype=float)
@@ -1263,7 +1306,8 @@ def get_warp_slope(Configuration,Tirific_Template, debug = False):
     if debug:
         print_log(f'''GET_WARP_SLOPE: We have {Tirific_Template['NUR']} rings in the template. and this should be {Configuration['NO_RINGS']}
 ''', Configuration['OUTPUTLOG'],debug = True)
-    radii, sbr_ring_limits = sbr_limits(Configuration,systemic = float(Tirific_Template['VSYS'].split()[0]),debug=debug)
+    radii, sbr_ring_limits = sbr_limits(Configuration,scaleheight= float(Tirific_Template['Z0'].split(' ')[0]),\
+                                systemic = float(Tirific_Template['VSYS'].split()[0]),debug=debug)
     #get the sbr profiles
     sbr = np.array(get_from_template(Configuration,Tirific_Template, ['SBR','SBR_2'],debug=debug),dtype = float)
     if debug:
@@ -1292,8 +1336,8 @@ def get_warp_slope(Configuration,Tirific_Template, debug = False):
                     Configuration['FIXED_PARAMETERS'][0].append(parameter)
         else:
             final = len(slope)
-        if final > Configuration['LAST_RELIABLE_RINGS'][i]:
-            final = Configuration['LAST_RELIABLE_RINGS'][i]
+        if final > Configuration['LAST_RELIABLE_RINGS'][i]-1:
+            final = Configuration['LAST_RELIABLE_RINGS'][i]-1
         warp_slope[i] = final
     if debug:
         print_log(f'''GET_WARP_SLOPE: We find a slope of {warp_slope}.
@@ -1617,9 +1661,10 @@ def regularise_profile(Configuration,Tirific_Template, key,min_error= [0.],debug
     radii =set_rings(Configuration,debug=debug)
     for i in sides:
 
-        if key == 'SDIS':
+        if key in ['SDIS']:
+            function_to_fit =arc_tan_sdis_function
             try:
-                fit_profile = fit_arc(Configuration,radii,sm_profile[i],error[i],debug= debug)
+                fit_profile = fit_arc(Configuration,radii,sm_profile[i],error[i],function_to_fit,key,debug= debug)
             except:
                 fit_profile = np.full(len(sm_profile[i]), np.mean(sm_profile[i]))
 
@@ -1971,8 +2016,8 @@ def set_fitting_parameters(Configuration, Tirific_Template, parameters_to_adjust
     #VSYS should always be in the initial estimates as sbr setting uses it
     for key in ['VSYS']:
         if key not in initial_estimates:
-            if key == 'VSYS':
-                initial_estimates['VSYS'] = [profile[0],Configuration['CHANNEL_WIDTH']/2.]
+            profile = np.array(get_from_template(Configuration,Tirific_Template, ['VSYS'])[0],dtype=float)
+            initial_estimates['VSYS'] = [profile[0],Configuration['CHANNEL_WIDTH']/2.]
 
     for key in parameters_to_adjust:
         if key not in initial_estimates:
@@ -1992,13 +2037,22 @@ def set_fitting_parameters(Configuration, Tirific_Template, parameters_to_adjust
                 initial_estimates['SDIS'] = [np.mean(profile),Configuration['CHANNEL_WIDTH']]
             elif key == 'Z0':
                 initial_estimates['Z0'] = convertskyangle(Configuration,[0.2,0.05],Configuration['DISTANCE'], physical = True)
+
         if key not in modifiers:
             if debug:
                 print_log(f'''SET_FITTING_PARAMETERS: Adding {key} to the modifiers
 ''',Configuration['OUTPUTLOG'])
             if key == 'Z0': modifiers['Z0'] = [0.5,0.5,2.]
-            elif key in ['XPOS','YPOS']: modifiers[key] = [1.,1.,1.]
-            elif key == 'VSYS': modifiers[key] = [2.,0.5,0.1]
+            elif key in ['XPOS','YPOS']:
+                if Configuration['CENTRAL_CONVERGENCE']:
+                    modifiers[key] = [0.5,0.5,1.]
+                else:
+                    modifiers[key] = [1.,1.,2.]
+            elif key == 'VSYS':
+                if Configuration['CENTRAL_CONVERGENCE']:
+                    modifiers[key] = [0.5,0.5,1.]
+                else:
+                    modifiers[key] = [2.,0.5,0.5]
             elif stage in  ['initial','run_cc','after_cc','after_ec','after_os','final_os']:
                 if key == 'INCL': modifiers['INCL'] = [1.,1.,1.]
                 elif key == 'PA': modifiers['PA'] = [1.,1.,1.]
@@ -2034,6 +2088,8 @@ def set_fitting_parameters(Configuration, Tirific_Template, parameters_to_adjust
             if 'SDIS' in modifiers:
                 modifiers['SDIS'][0:1] = np.array(modifiers['SDIS'][0:1],dtype=float)*1.5
                 modifiers['SDIS'][2] = float(modifiers['SDIS'][2])*0.5
+            if 'VSYS' in modifiers:
+                modifiers['VSYS'][0] = modifiers['VSYS'][0]*1.5
             if debug:
                 print_log(f'''SET_FITTING_PARAMETERS: These are the  modifiers after correcting < 30.
 {'':8s} {modifiers}
@@ -2087,6 +2143,13 @@ def set_fitting_parameters(Configuration, Tirific_Template, parameters_to_adjust
             symmetric = False
             if key in ['PA','INCL','Z0']:
                 slope = Configuration['WARP_SLOPE']
+                profile = np.array(get_from_template(Configuration,Tirific_Template, [key,f"{key}_2"]),dtype=float)
+                for i in [0,1]:
+                    if slope[i] < Configuration['NO_RINGS'] and \
+                        (np.mean(profile[i,:3]) > np.mean(profile[i,3:slope[i]]) < np.mean(profile[i,slope[i]:]) or \
+                        np.mean(profile[i,:3]) < np.mean(profile[i,3:slope[i]]) > np.mean(profile[i,slope[i]:])):
+                        flat_slope = True
+
                 if stage in ['initialize_os']:
                     inner = int(set_limits(Configuration['NO_RINGS']*1./3., 3,Configuration['NO_RINGS']-2 ))
                 else:
@@ -2108,7 +2171,7 @@ def set_fitting_parameters(Configuration, Tirific_Template, parameters_to_adjust
                 except:
                     inner = int(set_limits(inner*fact,4,Configuration['NO_RINGS']/2.))
 
-            fitting_settings[key] =  set_generic_fitting(Configuration,key,stage = stage, values = initial_estimates[key],\
+            fitting_settings[key] =  set_generic_fitting(Configuration,key,stage = stage, basic_variation = initial_estimates[key][1],\
                                                         debug = debug,slope= slope, flat_slope = flat_slope,\
                                                          fixed =fixed, flat_inner = inner, step_modifier = modifiers[key], \
                                                          symmetric = symmetric)
@@ -2185,7 +2248,7 @@ set_fitting_parameters.__doc__ = '''
  NOTE:
 '''
 
-def set_generic_fitting(Configuration, key , stage = 'initial', values = [60,5.], \
+def set_generic_fitting(Configuration, key , stage = 'initial', basic_variation = 5., \
                         debug = False, slope = [0, 0], flat_slope = False , symmetric = False,\
                         fixed = True, moderate = 3, step_modifier = [1.,1.,1.],\
                         flat_inner = 3):
@@ -2212,15 +2275,15 @@ def set_generic_fitting(Configuration, key , stage = 'initial', values = [60,5.]
         input['PARMAX'] = np.array([Configuration[f'{key}_CURRENT_BOUNDARY'][0][1]],dtype=float)
         input['PARMIN'] = np.array([Configuration[f'{key}_CURRENT_BOUNDARY'][0][0]],dtype=float)
         input['MODERATE'] = np.array([moderate],dtype=int) #How many steps from del start to del end
-        input['DELSTART'] = np.array([values[1]*step_modifier[0]],dtype=float) # Starting step
-        input['DELEND'] = np.array([0.1*values[1]*step_modifier[1]],dtype=float) #Ending step
-        input['MINDELTA'] = np.array([0.05*values[1]*step_modifier[2]],dtype=float) #saturation criterum when /SIZE SIZE should be 10 troughout the code
+        input['DELSTART'] = np.array([basic_variation*step_modifier[0]],dtype=float) # Starting step
+        input['DELEND'] = np.array([0.1*basic_variation*step_modifier[1]],dtype=float) #Ending step
+        input['MINDELTA'] = np.array([0.05*basic_variation*step_modifier[2]],dtype=float) #saturation criterum when /SIZE SIZE should be 10 troughout the code
     else:
         if not symmetric:
             if debug:
                 print_log(f'''SET_GENERIC_FITTING: implementing a varying non-symmetric profile.
 {'':8s} step_modifier = {step_modifier}
-{'':8s} values = {values}
+{'':8s} variations = {basic_variation}
 {'':8s} limits = {Configuration[f'{key}_CURRENT_BOUNDARY']}
 ''', Configuration['OUTPUTLOG'])
             input['VARY'] = []
@@ -2245,14 +2308,14 @@ def set_generic_fitting(Configuration, key , stage = 'initial', values = [60,5.]
                                         Configuration[f'{key}_CURRENT_BOUNDARY'][2][0],\
                                         Configuration[f'{key}_CURRENT_BOUNDARY'][0][0]],dtype=float)
             input['MODERATE'] =np.array([moderate,moderate,moderate],dtype=float) #How many steps from del start to del end
-            input['DELSTART'] =np.array([2.,2.,0.5],dtype=float)*step_modifier[0]*values[1]# Starting step
-            input['DELEND'] = np.array([0.1,0.1,0.05],dtype=float)*step_modifier[1]*values[1] #Ending step
-            input['MINDELTA'] = np.array([0.1,0.1,0.075],dtype=float)*step_modifier[2]*values[1] #saturation criterum when /SIZE SIZE should be 10 troughout the code
+            input['DELSTART'] =np.array([2.,2.,0.5],dtype=float)*step_modifier[0]*basic_variation# Starting step
+            input['DELEND'] = np.array([0.1,0.1,0.05],dtype=float)*step_modifier[1]*basic_variation#Ending step
+            input['MINDELTA'] = np.array([0.1,0.1,0.075],dtype=float)*step_modifier[2]*basic_variation #saturation criterum when /SIZE SIZE should be 10 troughout the code
         else:
             if debug:
                 print_log(f'''SET_GENERIC_FITTING: implementing a varying symmetric profile
 {'':8s} step_modifier = {step_modifier}
-{'':8s} values = {values}
+{'':8s} basic_variation = {basic_variation}
 {'':8s} limits = {Configuration[f'{key}_CURRENT_BOUNDARY']}
 ''', Configuration['OUTPUTLOG'])
             flat_inner = int(np.min(flat_inner))
@@ -2267,9 +2330,9 @@ def set_generic_fitting(Configuration, key , stage = 'initial', values = [60,5.]
             input['PARMIN'] = np.array([Configuration[f'{key}_CURRENT_BOUNDARY'][1][0],\
                                         Configuration[f'{key}_CURRENT_BOUNDARY'][0][0]],dtype=float)
             input['MODERATE'] =np.array([moderate,moderate],dtype=float) #How many steps from del start to del end
-            input['DELSTART'] =np.array([2.,0.5],dtype=float)*step_modifier[0]*values[1] # Starting step
-            input['DELEND'] = np.array([0.1,0.05],dtype=float)*step_modifier[1]*values[1] #Ending step
-            input['MINDELTA'] = np.array([0.1,0.075],dtype=float)*step_modifier[2]*values[1] #saturation criterum when /SIZE SIZE should be 10 troughout the code
+            input['DELSTART'] =np.array([2.,0.5],dtype=float)*step_modifier[0]*basic_variation # Starting step
+            input['DELEND'] = np.array([0.1,0.05],dtype=float)*step_modifier[1]*basic_variation #Ending step
+            input['MINDELTA'] = np.array([0.1,0.075],dtype=float)*step_modifier[2]*basic_variation #saturation criterum when /SIZE SIZE should be 10 troughout the code
         # then we need to set the warp slope
 
         forvarindex = ''
@@ -2312,8 +2375,10 @@ set_generic_fitting.__doc__ =f'''
     stage = 'initial'
     STAGE OF THE FITTING WE ARE IN
 
-    values = [60,5.]
-    mean values of the parameter
+    basic_variation = 5.
+        the basic variation parameters which is the base for delstart
+        delstart =  basic_variation  without modifiers
+        delend and mindelt = 0.1*basic_variation without modifiers
 
     slope = [0, 0]
     outer rings to be fitted as slope
@@ -2753,7 +2818,8 @@ def set_sbr_fitting(Configuration,Tirific_Template,systemic = 100., stage = 'no_
     inner_ring = 2
     sbr_profile=np.array(get_from_template(Configuration,Tirific_Template, ['SBR','SBR_2']),dtype=float)
     if stage in ['initial','run_cc','initialize_ec','run_ec','initialize_os','run_os']:
-        radii,sbr_ring_limits = sbr_limits(Configuration,systemic = systemic, debug = debug)
+        radii,sbr_ring_limits = sbr_limits(Configuration,scaleheight= float(Tirific_Template['Z0'].split(' ')[0]),\
+                                            systemic = systemic, debug = debug)
         if stage in ['run_ec','run_os']:
             sbr_ring_limits[-4:]=[x/5 for x in sbr_ring_limits[-4:]]
         if debug:
@@ -2807,7 +2873,10 @@ def set_sbr_fitting(Configuration,Tirific_Template,systemic = 100., stage = 'no_
 
         sbr_input['VARY'] = np.concatenate((sbr_input['VARY'],[f"SBR {' '.join([str(int(x)) for x in range(1,inner_ring+1)])} SBR_2 {' '.join([str(int(x)) for x in range(1,inner_ring+1)])}"]),axis=0)
         sbr_input['PARMAX'] = np.concatenate((sbr_input['PARMAX'],[set_limits(np.mean([sbr_profile[0,2:4],sbr_profile[1,2:4]])*4.,sbr_ring_limits[2]*10.,1.)]))
-        sbr_input['PARMIN'] = np.concatenate((sbr_input['PARMIN'],[np.min(sbr_ring_limits)]))
+        if Configuration['CENTRAL_CONVERGENCE']:
+            sbr_input['PARMIN'] = np.concatenate((sbr_input['PARMIN'],[np.min(sbr_ring_limits)]))
+        else:
+            sbr_input['PARMIN'] = np.concatenate((sbr_input['PARMIN'],[sbr_ring_limits[inner_ring]*3.]))
         sbr_input['MODERATE'] = np.concatenate((sbr_input['MODERATE'],[5]))
         sbr_input['DELSTART'] = np.concatenate((sbr_input['DELSTART'],[1e-5]))
         sbr_input['DELEND'] = np.concatenate((sbr_input['DELEND'],[1e-6]))

@@ -6,7 +6,7 @@
 from pyFAT_astro.Support.support_functions import print_log, convert_type,set_limits,rename_fit_products,\
                               set_ring_size,calc_rings,get_inner_fix,convertskyangle,\
                               finish_current_run, remove_inhomogeneities,get_from_template,set_format, \
-                              set_rings, convertRADEC,sbr_limits, create_directory,get_system_string,\
+                              set_rings, convertRADEC, create_directory,get_system_string,\
                               get_fit_groups,run_tirific,update_statistic,set_boundaries
 from pyFAT_astro.Support.clean_functions import clean_before_sofia,clean_after_sofia
 from pyFAT_astro.Support.fits_functions import cut_cubes,extract_pv,make_moments
@@ -50,7 +50,9 @@ def check_central_convergence(Configuration,Tirific_Template, fit_type = 'Undefi
     old_xpos,old_ypos,old_vsys = rf.load_tirific(Configuration,f"{Configuration['FITTING_DIR']}{fit_type}_In.def",Variables = ['XPOS','YPOS','VSYS'],debug = debug)
     if Configuration['OUTER_RINGS_DOUBLED']:
         shift_beam_frac = set_limits(Configuration['SIZE_IN_BEAMS']*0.1/Configuration['CENTRAL_CONVERGENCE_COUNTER'],Configuration['SIZE_IN_BEAMS']*0.05,Configuration['SIZE_IN_BEAMS']*0.15)
+        #shift_beam_frac =Configuration['SIZE_IN_BEAMS']*0.05
     else:
+        #shift_beam_frac = 0.15
         shift_beam_frac = set_limits(0.25/Configuration['CENTRAL_CONVERGENCE_COUNTER'],0.15,0.3)
     ra_lim = set_limits(shift_beam_frac*Configuration['BEAM'][0]/3600.,np.max([Configuration['PIXEL_SIZE'],1./3600.]),Configuration['BEAM'][0]/3600.,debug = debug )
     dec_lim =set_limits(shift_beam_frac*Configuration['BEAM'][0]/3600.,np.max([Configuration['PIXEL_SIZE'],1./3600.]),Configuration['BEAM'][0]/3600.,debug = debug )
@@ -97,17 +99,29 @@ def check_central_convergence(Configuration,Tirific_Template, fit_type = 'Undefi
                 if debug:
                     print_log(f'''CHECK_CONVERGENCE: We are fixing the XPOS.
 ''', Configuration['OUTPUTLOG'])
-                #Configuration['CENTRAL_FIX'].append('XPOS')
+                if 'XPOS' not in Configuration['CENTRAL_FIX']:
+                    Configuration['CENTRAL_FIX'].append('XPOS')
+            else:
+                if 'XPOS' in Configuration['CENTRAL_FIX']:
+                    Configuration['CENTRAL_FIX'].remove('XPOS')
             if  abs(new_ypos[0] - old_ypos[0]) < dec_lim:
                 if debug:
                     print_log(f'''CHECK_CONVERGENCE: We are fixing the YPOS.
 ''', Configuration['OUTPUTLOG'])
-                #Configuration['CENTRAL_FIX'].append('YPOS')
+                if 'YPOS' not in Configuration['CENTRAL_FIX']:
+                    Configuration['CENTRAL_FIX'].append('YPOS')
+            else:
+                if 'YPOS' in Configuration['CENTRAL_FIX']:
+                    Configuration['CENTRAL_FIX'].remove('YPOS')
             if  abs(new_vsys[0] - old_vsys[0]) < sys_lim:
                 if debug:
                     print_log(f'''CHECK_CONVERGENCE: We are fixing the VSYS.
 ''', Configuration['OUTPUTLOG'])
-                #Configuration['CENTRAL_FIX'].append('VSYS')
+                    if 'VSYS' not in Configuration['CENTRAL_FIX']:
+                        Configuration['CENTRAL_FIX'].append('VSYS')
+                else:
+                    if 'VSYS' in Configuration['CENTRAL_FIX']:
+                        Configuration['CENTRAL_FIX'].remove('VSYS')
             #write_new_to_template(Configuration,f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def", Tirific_Template,debug=debug)
             return False
     else:
@@ -859,7 +873,8 @@ def one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run, de
 ''',Configuration['OUTPUTLOG'])
     accepted_central = check_central_convergence(Configuration,Tirific_Template, fit_type = fit_type,debug=debug)
     if accepted_central:
-        Configuration['CENTRAL_CONVERGENCE_COUNTER'] += 1
+        Configuration['CENTRAL_CONVERGENCE'] = True
+        Configuration['CENTRAL_CONVERGENCE_COUNTER'] += 1.
         Configuration['CENTRAL_FIX'] = []
 
     if debug:
