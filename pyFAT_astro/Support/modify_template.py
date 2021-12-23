@@ -895,7 +895,7 @@ def fix_sbr(Configuration,Tirific_Template, smooth = False, debug=False):
 
     # get the cutoff limits
     vsys = float(Tirific_Template['VSYS'].split()[0])
-    radii,cutoff_limits = sbr_limits(Configuration, scaleheight= float(Tirific_Template['Z0'].split(' ')[0]),\
+    radii,cutoff_limits = sbr_limits(Configuration, scaleheight= float(get_from_template(Configuration,Tirific_Template,['Z0'])[0][0]),\
                                     systemic=vsys,debug=debug)
     cutoff_limits = np.array([cutoff_limits,cutoff_limits],dtype=float)
     # Then get the profile from the template
