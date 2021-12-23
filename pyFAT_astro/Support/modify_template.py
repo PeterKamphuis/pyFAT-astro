@@ -10,6 +10,7 @@ from pyFAT_astro.Support.support_functions import set_rings,convertskyangle,sbr_
 from pyFAT_astro.Support.fat_errors import InitializeError,CfluxError,FunctionCallError,BadConfigurationError
 import numpy as np
 import os
+import warnings
 from scipy.optimize import curve_fit
 from scipy.signal import savgol_filter
 from scipy.interpolate import CubicSpline,Akima1DInterpolator
