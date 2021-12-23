@@ -1287,7 +1287,7 @@ def get_fit_groups(Configuration,Tirific_Template,debug = False):
     groups = Tirific_Template['VARY'].split(',')
     variation_type = []
     variation = []
-    radii,cut_off_limits = sbr_limits(Configuration, scaleheight= float(Tirific_Template['Z0'].split(' ')[0]),
+    radii,cut_off_limits = sbr_limits(Configuration, \
                             systemic= float(Tirific_Template['VSYS'].split(' ')[0]) , debug = debug)
     sbr_standard = np.mean(cut_off_limits) * 5.
     paramater_standard_variation = {'PA': [10.,'a'],
@@ -1879,7 +1879,7 @@ def get_ring_weights(Configuration,Tirific_Template,debug = False):
     sbr = np.array(get_from_template(Configuration,Tirific_Template, ["SBR",f"SBR_2"]),dtype=float)
     systemic = np.array(get_from_template(Configuration,Tirific_Template, ["VSYS"]),dtype=float)
     systemic = systemic[0,0]
-    radii,cut_off_limits = sbr_limits(Configuration, scaleheight= float(Tirific_Template['Z0'].split(' ')[0]),\
+    radii,cut_off_limits = sbr_limits(Configuration,\
                                         systemic= systemic , debug = debug)
     weights= [[],[]]
     for i in [0,1]:
@@ -2173,7 +2173,7 @@ def make_tiltogram(Configuration,Tirific_Template,debug =False):
     sbr = np.array(get_from_template(Configuration,Tirific_Template, ["SBR",f"SBR_2"]),dtype=float)
     systemic = np.array(get_from_template(Configuration,Tirific_Template, ["VSYS"]),dtype=float)
     systemic = systemic[0,0]
-    radii,cut_off_limits = sbr_limits(Configuration, scaleheight= float(Tirific_Template['Z0'].split(' ')[0]),systemic= systemic , debug = debug)
+    radii,cut_off_limits = sbr_limits(Configuration,systemic= systemic , debug = debug)
     add = [[],[]]
     Theta = [[],[]]
     phi = [[],[]]
