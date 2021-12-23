@@ -3152,7 +3152,7 @@ setup_configuration.__doc__ =f'''
 
 
 
-def sbr_limits(Configuration,scaleheight = 2., systemic= 100. , debug = False):
+def sbr_limits(Configuration, systemic= 100. , debug = False):
     radii = set_rings(Configuration,debug=debug)
     if debug:
         print_log(f'''SBR_LIMITS: Got {len(radii)} radii
@@ -3160,8 +3160,9 @@ def sbr_limits(Configuration,scaleheight = 2., systemic= 100. , debug = False):
     level = Configuration['NOISE']*1000
     noise_in_column = columndensity(Configuration,level,systemic = systemic)
     J2007col=9.61097e+19
-    J2007scl= 2. #arcsec in a sech^2 layer
-    ratio=(noise_in_column/J2007col)**0.5*np.sqrt(J2007scl/scaleheight)
+    #J2007scl= 2. #arcsec in a sech^2 layer
+    ratio=(noise_in_column/J2007col)**0.5
+    #*np.sqrt(J2007scl/scaleheight)
     beamsolid=(np.pi*Configuration['BEAM'][0]*Configuration['BEAM'][1])/(4.*np.log(2.))
     ringarea= [0 if radii[0] == 0 else np.pi*((radii[0]+radii[1])/2.)**2]
     ringarea = np.hstack((ringarea,

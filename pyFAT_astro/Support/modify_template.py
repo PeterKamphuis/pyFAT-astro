@@ -228,7 +228,7 @@ def check_size(Configuration,Tirific_Template, fit_type = 'Undefined', stage = '
 ''',Configuration['OUTPUTLOG'],debug=True)
 
 
-    radii, sbr_ring_limits = sbr_limits(Configuration,scaleheight= float(Tirific_Template['Z0'].split(' ')[0]),systemic = float(Tirific_Template['VSYS'].split()[0]),debug=debug)
+    radii, sbr_ring_limits = sbr_limits(Configuration,systemic = float(Tirific_Template['VSYS'].split()[0]),debug=debug)
     #get the sbr profiles
 
     sbr = np.array(get_from_template(Configuration,Tirific_Template, ['SBR','SBR_2'],debug=debug),dtype = float)
@@ -895,7 +895,7 @@ def fix_sbr(Configuration,Tirific_Template, smooth = False, debug=False):
 
     # get the cutoff limits
     vsys = float(Tirific_Template['VSYS'].split()[0])
-    radii,cutoff_limits = sbr_limits(Configuration, scaleheight= float(get_from_template(Configuration,Tirific_Template,['Z0'])[0][0]),\
+    radii,cutoff_limits = sbr_limits(Configuration,\
                                     systemic=vsys,debug=debug)
     cutoff_limits = np.array([cutoff_limits,cutoff_limits],dtype=float)
     # Then get the profile from the template
@@ -1306,7 +1306,7 @@ def get_warp_slope(Configuration,Tirific_Template, debug = False):
     if debug:
         print_log(f'''GET_WARP_SLOPE: We have {Tirific_Template['NUR']} rings in the template. and this should be {Configuration['NO_RINGS']}
 ''', Configuration['OUTPUTLOG'],debug = True)
-    radii, sbr_ring_limits = sbr_limits(Configuration,scaleheight= float(Tirific_Template['Z0'].split(' ')[0]),\
+    radii, sbr_ring_limits = sbr_limits(Configuration,\
                                 systemic = float(Tirific_Template['VSYS'].split()[0]),debug=debug)
     #get the sbr profiles
     sbr = np.array(get_from_template(Configuration,Tirific_Template, ['SBR','SBR_2'],debug=debug),dtype = float)
@@ -2145,10 +2145,16 @@ def set_fitting_parameters(Configuration, Tirific_Template, parameters_to_adjust
                 slope = Configuration['WARP_SLOPE']
                 profile = np.array(get_from_template(Configuration,Tirific_Template, [key,f"{key}_2"]),dtype=float)
                 for i in [0,1]:
-                    if slope[i] < Configuration['NO_RINGS'] and \
-                        (np.mean(profile[i,:3]) > np.mean(profile[i,3:slope[i]]) < np.mean(profile[i,slope[i]:]) or \
-                        np.mean(profile[i,:3]) < np.mean(profile[i,3:slope[i]]) > np.mean(profile[i,slope[i]:])):
-                        flat_slope = True
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("error")
+                        try:
+                            if slope[i] < Configuration['NO_RINGS'] and \
+                                (np.mean(profile[i,:3]) > np.mean(profile[i,3:slope[i]]) < np.mean(profile[i,slope[i]:]) or \
+                                np.mean(profile[i,:3]) < np.mean(profile[i,3:slope[i]]) > np.mean(profile[i,slope[i]:])):
+                                flat_slope = True
+                        except RuntimeWarning:
+                            flat_slope = False
+
 
                 if stage in ['initialize_os']:
                     inner = int(set_limits(Configuration['NO_RINGS']*1./3., 3,Configuration['NO_RINGS']-2 ))
@@ -2818,7 +2824,7 @@ def set_sbr_fitting(Configuration,Tirific_Template,systemic = 100., stage = 'no_
     inner_ring = 2
     sbr_profile=np.array(get_from_template(Configuration,Tirific_Template, ['SBR','SBR_2']),dtype=float)
     if stage in ['initial','run_cc','initialize_ec','run_ec','initialize_os','run_os']:
-        radii,sbr_ring_limits = sbr_limits(Configuration,scaleheight= float(Tirific_Template['Z0'].split(' ')[0]),\
+        radii,sbr_ring_limits = sbr_limits(Configuration,\
                                             systemic = systemic, debug = debug)
         if stage in ['run_ec','run_os']:
             sbr_ring_limits[-4:]=[x/5 for x in sbr_ring_limits[-4:]]
