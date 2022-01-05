@@ -73,7 +73,7 @@ def basicinfo(Configuration,initialize = False,stage='TiRiFiC', debug = False,
         DHI_a = f'{DHI[0]:.2f}+/-{DHI[1]:.2f}'
         Dist = f'{Distance:.2f}'
         HIMass  = f'{Tot_Flux[0]*2.36E5*Distance**2:.2e}'
-        DHI_k = f'{convertskyangle(Configuration,DHI[0],Distance):.2f}'
+        DHI_k = f'{convertskyangle(Configuration,DHI[0]):.2f}'
         Flux_c = f'{Tot_Flux[0]:.2f}+/-{Tot_Flux[1]:.2f}'
         file.write(f'''  {RA_c:>25s} {DEC_c:>25s} {VSYS_c:>20s} {PA_c:>20s} {INCL_c:>20s} {MVROT_c:>20s} {Vmask_c:>20s} {Flux_c:>20s} {DHI_a:>20s} {Dist:>20s} {HIMass:>20s} {DHI_k:>20s}
 ''')
@@ -157,7 +157,7 @@ def initialize_def_file(Configuration, Fits_Files,Tirific_Template,Initial_Param
 
         set_model_parameters(Configuration, Tirific_Template,Initial_Parameters, debug=debug)
 
-        set_limit_modifier(Configuration,Initial_Parameters['INCL'][0], debug=debug )
+        set_limit_modifier(Configuration,Tirific_Template, debug=debug )
 
         set_fitting_parameters(Configuration, Tirific_Template,stage = 'initial',
                                 initial_estimates = Initial_Parameters, debug=debug)
@@ -170,10 +170,10 @@ def initialize_def_file(Configuration, Fits_Files,Tirific_Template,Initial_Param
         Vars_to_Set =  ['XPOS','YPOS','VSYS','VROT','INCL','PA','SDIS','SBR','SBR_2','Z0']
         if fit_type == 'Fit_Tirific_OSC':
             set_model_parameters(Configuration, Tirific_Template,Initial_Parameters,stage='initialize_def_file', debug=debug)
-        FAT_Model = load_template(Configuration,Tirific_Template,Variables= Vars_to_Set,unpack=False, debug=debug)
+        #FAT_Model = load_template(Configuration,Tirific_Template,Variables= Vars_to_Set,unpack=False, debug=debug)
 
         # Finally we set how these parameters are fitted.
-        set_limit_modifier(Configuration,FAT_Model[0,Vars_to_Set.index('INCL')], debug=debug)
+        set_limit_modifier(Configuration,Tirific_Template, debug=debug)
         get_inner_fix(Configuration,Tirific_Template, debug=debug)
         get_warp_slope(Configuration,Tirific_Template, debug=debug)
         if Configuration['OUTER_RINGS_DOUBLED']:
@@ -734,7 +734,7 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
     plt.ylabel('RC (km s$^{-1}$)',**labelfont)
     arcmin,arcmax = ax_RC.get_xlim()
     sec_ax = ax_RC.twiny()
-    sec_ax.set_xlim(convertskyangle(Configuration,arcmin,Configuration['DISTANCE']),convertskyangle(Configuration,arcmax,Configuration['DISTANCE']))
+    sec_ax.set_xlim(convertskyangle(Configuration,arcmin),convertskyangle(Configuration,arcmax))
     sec_ax.figure.canvas.draw()
     sec_ax.set_xlabel('Radius (kpc)',va='bottom',**labelfont)
 
@@ -756,7 +756,7 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
     plt.ylabel('Incl ($^{\circ}$)',**labelfont)
     arcmin,arcmax = ax_INCL.get_xlim()
     sec_ax = ax_INCL.twiny()
-    sec_ax.set_xlim(convertskyangle(Configuration,arcmin,Configuration['DISTANCE']),convertskyangle(Configuration,arcmax,Configuration['DISTANCE']))
+    sec_ax.set_xlim(convertskyangle(Configuration,arcmin),convertskyangle(Configuration,arcmax))
     sec_ax.set_xticklabels([])
     sec_ax.figure.canvas.draw()
 
@@ -779,7 +779,7 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
     plt.ylabel('PA ($^{\circ}$)',**labelfont)
     arcmin,arcmax = ax_PA.get_xlim()
     sec_ax = ax_PA.twiny()
-    sec_ax.set_xlim(convertskyangle(Configuration,arcmin,Configuration['DISTANCE']),convertskyangle(Configuration,arcmax,Configuration['DISTANCE']))
+    sec_ax.set_xlim(convertskyangle(Configuration,arcmin),convertskyangle(Configuration,arcmax))
     sec_ax.set_xticklabels([])
     sec_ax.figure.canvas.draw()
 
@@ -802,7 +802,7 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
     plt.ylabel('Disp (km s$^{-1}$)',**labelfont)
     arcmin,arcmax = ax_SDIS.get_xlim()
     sec_ax = ax_SDIS.twiny()
-    sec_ax.set_xlim(convertskyangle(Configuration,arcmin,Configuration['DISTANCE']),convertskyangle(Configuration,arcmax,Configuration['DISTANCE']))
+    sec_ax.set_xlim(convertskyangle(Configuration,arcmin),convertskyangle(Configuration,arcmax))
     sec_ax.figure.canvas.draw()
     sec_ax.set_xlabel('Radius (kpc)',va='bottom',**labelfont)
 
@@ -810,7 +810,7 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
 # ------------------------------Scale height------------------------------------
     ax_Z0 = plot_parameters(Configuration,Vars_to_plot,FAT_Model,gs[22:25,12:18],\
                             Overview,'Z0',Input_Model = Input_Model,initial_extent= sof_basic_extent[0],\
-                            Extra_Model = Extra_Model,initial = convertskyangle(Configuration,0.2,Configuration['DISTANCE'],physical=True),debug=debug)
+                            Extra_Model = Extra_Model,initial = convertskyangle(Configuration,0.2,physical=True),debug=debug)
 
     plt.tick_params(
         axis='x',          # changes apply to the x-axis
@@ -826,13 +826,13 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
     plt.ylabel('Z0 (arcsec)',**labelfont)
     arcmin,arcmax = ax_Z0.get_ylim()
     sec_ax = ax_Z0.twinx()
-    sec_ax.set_ylim(convertskyangle(Configuration,arcmin,Configuration['DISTANCE']),convertskyangle(Configuration,arcmax,Configuration['DISTANCE']))
+    sec_ax.set_ylim(convertskyangle(Configuration,arcmin),convertskyangle(Configuration,arcmax))
     sec_ax.figure.canvas.draw()
     sec_ax.set_ylabel('Z0 (kpc)',rotation=-90,va='bottom',**labelfont)
     arcmin,arcmax = ax_Z0.get_xlim()
     sec_ax = ax_Z0.twiny()
     sec_ax.set_xticklabels([])
-    sec_ax.set_xlim(convertskyangle(Configuration,arcmin,Configuration['DISTANCE']),convertskyangle(Configuration,arcmax,Configuration['DISTANCE']))
+    sec_ax.set_xlim(convertskyangle(Configuration,arcmin),convertskyangle(Configuration,arcmax))
     sec_ax.figure.canvas.draw()
 
 
@@ -864,7 +864,7 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
     sec_ax = ax_SBR.twiny()
     arcmin,arcmax = ax_SBR.get_xlim()
     sec_ax.set_xticklabels([])
-    sec_ax.set_xlim(convertskyangle(Configuration,arcmin,Configuration['DISTANCE']),convertskyangle(Configuration,arcmax,Configuration['DISTANCE']))
+    sec_ax.set_xlim(convertskyangle(Configuration,arcmin),convertskyangle(Configuration,arcmax))
     sec_ax.figure.canvas.draw()
 
 

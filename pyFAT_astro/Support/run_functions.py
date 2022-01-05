@@ -5,7 +5,7 @@
 
 from pyFAT_astro.Support.support_functions import print_log, convert_type,set_limits,rename_fit_products,\
                               set_ring_size,calc_rings,get_inner_fix,convertskyangle,\
-                              finish_current_run, remove_inhomogeneities,get_from_template,set_format, \
+                              finish_current_run, remove_inhomogeneities,set_format, \
                               set_rings, convertRADEC, create_directory,get_system_string,\
                               get_fit_groups,run_tirific,update_statistic,set_boundaries
 from pyFAT_astro.Support.clean_functions import clean_before_sofia,clean_after_sofia
@@ -378,7 +378,7 @@ def check_source(Configuration, Fits_Files, debug = False):
         print_log(f'''CHECK_SOURCE: We use a distance of {Configuration['DISTANCE']}.
 ''',Configuration['OUTPUTLOG'])
     if np.sum(Configuration['Z0_INPUT_BOUNDARY']) == 0.:
-        set_boundaries(Configuration,'Z0',*convertskyangle(Configuration,[0.05,1.0],Configuration['DISTANCE'], physical = True),input=True,debug=debug)
+        set_boundaries(Configuration,'Z0',*convertskyangle(Configuration,[0.05,1.0], physical = True),input=True,debug=debug)
 
     #Check whether the cube is very large, if so cut it down
 
@@ -865,24 +865,13 @@ def one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run, de
     #Then we load the produced output into our template
     write_new_to_template(Configuration,f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def" , Tirific_Template, debug = debug)
     #Check that the centre does not deviate too much
-    if debug:
-        print_log(f'''CHECK THAT WE CAHANGE !!!!!!
-{Tirific_Template['VROT']}
-{Tirific_Template['PA']}
-{Tirific_Template['XPOS']}
-''',Configuration['OUTPUTLOG'])
+
     accepted_central = check_central_convergence(Configuration,Tirific_Template, fit_type = fit_type,debug=debug)
     if accepted_central:
         Configuration['CENTRAL_CONVERGENCE'] = True
         Configuration['CENTRAL_CONVERGENCE_COUNTER'] += 1.
         Configuration['CENTRAL_FIX'] = []
 
-    if debug:
-        print_log(f'''CHECK THAT WE CAHANGE !!!!!!
-{Tirific_Template['VROT']}
-{Tirific_Template['PA']}
-{Tirific_Template['XPOS']}
-''',Configuration['OUTPUTLOG'])
 
     # Check whether we have the correct sizes,
     if not Configuration['FIX_SIZE']:
@@ -923,7 +912,7 @@ def one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run, de
         set_cflux(Configuration,Tirific_Template,debug = debug)
         keys_to_smooth =['INCL','PA','SDIS','Z0','VROT']
         min_errors = [3.*np.mean(Configuration['LIMIT_MODIFIER']),2.,Configuration['CHANNEL_WIDTH']/(2.*Configuration['LIMIT_MODIFIER']), \
-                        convertskyangle(Configuration,0.1,Configuration['DISTANCE'],physical= True)/Configuration['LIMIT_MODIFIER'],\
+                        convertskyangle(Configuration,0.1,physical= True)/Configuration['LIMIT_MODIFIER'],\
                         Configuration['CHANNEL_WIDTH']/(Configuration['LIMIT_MODIFIER'])]
         for j,key in enumerate(keys_to_smooth):
             #Smoothing the profile also fixes it

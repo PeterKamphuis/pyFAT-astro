@@ -83,12 +83,7 @@ def calc_rings(Configuration,size_in_beams = 0., ring_size  = 0.,debug=False):
         ring_size = Configuration['RING_SIZE']
     if size_in_beams == 0.:
         size_in_beams = Configuration['SIZE_IN_BEAMS']
-    if debug:
-        print_log(f'''CALC_RINGS: Calculating the number of rings in the model.
-{'':8s} size in beams = {size_in_beams}
-{'':8s} ring_size = {ring_size}
-{'':8s} the maximum amount of rings = {Configuration['MAX_SIZE_IN_BEAMS']}
-''',Configuration['OUTPUTLOG'],debug = True)
+
     est_rings = round((size_in_beams)/(ring_size)+2.)
     #if est_rings > 20 and Configuration['MAX_SIZE_IN_BEAMS'] > 25:
     if est_rings > 20:
@@ -99,8 +94,8 @@ def calc_rings(Configuration,size_in_beams = 0., ring_size  = 0.,debug=False):
         Configuration['OUTER_RINGS_DOUBLED'] = False
         no_rings = est_rings
     if debug:
-        print_log(f'''CALC_RINGS: The model will have {no_rings} Rings.
-{'':8s} We estimated {est_rings} and double outer rings is {Configuration['OUTER_RINGS_DOUBLED']}
+        print_log(f'''CALC_RINGS: We started with ring size = {ring_size} and the size in beams {size_in_beams}.
+{'':8s}The model will have {no_rings} rings and the rings are {'doubled' if Configuration['OUTER_RINGS_DOUBLED'] else 'not doubled'}.
 ''',Configuration['OUTPUTLOG'])
     return int(no_rings)
 
@@ -651,12 +646,14 @@ convert_type.__doc__ =f'''
 '''
 
 # function for converting kpc to arcsec and vice versa
-def convertskyangle(Configuration, angle, distance=1., unit='arcsec', distance_unit='Mpc', physical=False,debug = False):
+def convertskyangle(Configuration, angle, distance=-1., unit='arcsec', distance_unit='Mpc', physical=False,debug = False):
     if debug:
         print_log(f'''CONVERTSKYANGLE: Starting conversion from the following input.
     {'':8s}Angle = {angle}
     {'':8s}Distance = {distance}
 ''',Configuration['OUTPUTLOG'],debug =True)
+    if distance == -1.:
+        distance = Configuration['DISTANCE']
     try:
         _ = (e for e in angle)
     except TypeError:
@@ -886,7 +883,6 @@ def deproject(Configuration,map,angle, center = 0., invert = False,debug=False):
         new_profile = np.interp(np.array(newaxis,dtype=float),np.array(axis,dtype=float),np.array(profile,dtype=float))
         map[:,x] = new_profile
     return map
-
 deproject.__doc__ =f'''
  NAME:
     deproject
@@ -922,6 +918,80 @@ deproject.__doc__ =f'''
  NOTE:
 '''
 
+def ensure_list(variable):
+    '''Make sure that variable is a list'''
+    if not isinstance(variable,list):
+        if not isiterable(list1):
+            variable=[variable]
+        else:
+            variable=[x for x in variable]
+    return variable
+ensure_list.__doc__ =f'''
+ NAME:
+    ensure_list
+
+ PURPOSE:
+    Make sure that variable is a list
+
+ CATEGORY:
+    support_functions
+
+ INPUTS:
+    variable = variable to check and transform
+
+ OPTIONAL INPUTS:
+
+ OUTPUTS:
+    variable = variable in list form
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
+
+def find_program(name,search):
+    '''check whether a program is available for use.'''
+    found = False
+    while not found:
+        try:
+            run = subprocess.Popen([name], stdout = subprocess.PIPE, stderr = subprocess.PIPE)
+            run.stdout.close()
+            run.stderr.close()
+            os.kill(run.pid, signal.SIGKILL)
+            found = True
+        except:
+            name = input(f'''You have indicated to use {name} for using {search} but it cannot be found.
+Please provide the correct name : ''')
+    return name
+find_program.__doc__ =f'''
+ NAME:
+    find_program
+
+ PURPOSE:
+    check whether a program is available for use.
+
+ CATEGORY:
+    support_functions
+
+ INPUTS:
+    name = command name of the program to run
+    search = Program we are looking for
+ OPTIONAL INPUTS:
+
+ OUTPUTS:
+    the correct command for running the program
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
+
 def finish_current_run(Configuration,current_run,debug=False):
     print_log(f"FINISH_CURRENT_RUN: Is Tirific Running? {Configuration['TIRIFIC_RUNNING']}. \n",Configuration['OUTPUTLOG'],debug=debug)
     if Configuration['TIRIFIC_RUNNING']:
@@ -945,7 +1015,6 @@ def finish_current_run(Configuration,current_run,debug=False):
         Configuration['TIRIFIC_PID'] = 'Not Initialized'
     else:
         print_log(f"FINISH_CURRENT_RUN: No run is initialized. \n",Configuration['OUTPUTLOG'])
-
 finish_current_run.__doc__ =f'''
  NAME:
     finish_current_run
@@ -1032,7 +1101,6 @@ PROCEDURES CALLED:
 
 NOTE:
 '''
-
 
 
 def fit_ellipse(Configuration,x,y,debug=False):
@@ -1280,6 +1348,7 @@ gaussian_function.__doc__ =f'''
 
  NOTE:
 '''
+
 def get_fit_groups(Configuration,Tirific_Template,debug = False):
     parameter_groups = []
     block = []
@@ -1287,8 +1356,7 @@ def get_fit_groups(Configuration,Tirific_Template,debug = False):
     groups = Tirific_Template['VARY'].split(',')
     variation_type = []
     variation = []
-    radii,cut_off_limits = sbr_limits(Configuration, \
-                            systemic= float(Tirific_Template['VSYS'].split(' ')[0]) , debug = debug)
+    radii,cut_off_limits = sbr_limits(Configuration,Tirific_Template, debug = debug)
     sbr_standard = np.mean(cut_off_limits) * 5.
     paramater_standard_variation = {'PA': [10.,'a'],
                                    'INCL': [10.,'a'],
@@ -1356,7 +1424,7 @@ def get_fit_groups(Configuration,Tirific_Template,debug = False):
                 if current_par[-1] == '2':
                     current_par=current_par[:-2]
             par = [f'# {par}_ERR']
-            all_errors = np.array(get_from_template(Configuration,Tirific_Template, par,debug=debug)[0],dtype=float)
+            all_errors = np.array(get_from_template(Configuration,Tirific_Template, par,debug=debug),dtype=float)
             current_rings = np.array(rings[-1],dtype=int)-1
             if current_rings.size == 1:
                 current_rings = int(current_rings)
@@ -1424,19 +1492,22 @@ get_fit_groups.__doc__ =f'''
 
 def get_from_template(Configuration,Tirific_Template,Variables, debug = False):
     out = []
-    if debug:
-        print_log(f'''GET_FROM_TEMPLATE: Trying to get the following profiles {Variables}
-''',Configuration['OUTPUTLOG'] ,debug= True)
+    #if debug:
+    #    print_log(f'''GET_FROM_TEMPLATE: Trying to get the following profiles {Variables}
+#''',Configuration['OUTPUTLOG'] ,debug= True)
     for key in Variables:
         try:
             out.append([float(x) for x  in Tirific_Template[key].split()])
         except KeyError:
             out.append([])
+    if len(Variables) == 1:
+        out= out[0]
     #Because lists are stupid i.e. sbr[0][0] = SBR[0], sbr[1][0] = SBR_2[0] but  sbr[:][0] = SBR[:] not SBR[0],SBR_2[0] as logic would demand
-    if debug:
-        print_log(f'''GET_FROM_TEMPLATE: We extracted the following profiles from the Template.
-{'':8s}GET_FROM_TEMPLATE: {out}
-''',Configuration['OUTPUTLOG'])
+    #if debug:
+    #    print_log(f'''GET_FROM_TEMPLATE: We extracted the following profiles from the Template.
+#{'':8s}GET_FROM_TEMPLATE: {out}
+#''',Configuration['OUTPUTLOG'])
+
     #Beware that lists are stupid i.e. sbr[0][0] = SBR[0], sbr[1][0] = SBR_2[0] but  sbr[:][0] = SBR[:] not SBR[0],SBR_2[0] as logic would demand
     # However if you make a np. array from it make sure that you specify float  or have lists of the same length else you get an array of lists which behave just as dumb
     return out
@@ -1686,46 +1757,6 @@ get_new_center.__doc__ =f'''
 '''
 
 
-def find_program(name,search):
-    found = False
-    while not found:
-        try:
-            run = subprocess.Popen([name], stdout = subprocess.PIPE, stderr = subprocess.PIPE)
-            run.stdout.close()
-            run.stderr.close()
-            os.kill(run.pid, signal.SIGKILL)
-            found = True
-        except:
-            name = input(f'''You have indicated to use {name} for using {search} but it cannot be found.
-Please provide the correct name : ''')
-    return name
-
-find_program.__doc__ =f'''
- NAME:
-    find_program
-
- PURPOSE:
-    check whether a program is available for use.
-
- CATEGORY:
-    support_functions
-
- INPUTS:
-    name = command name of the program to run
-    search = Program we are looking for
- OPTIONAL INPUTS:
-
- OUTPUTS:
-    the correct command for running the program
-
- OPTIONAL OUTPUTS:
-
- PROCEDURES CALLED:
-    Unspecified
-
- NOTE:
-'''
-
 # Function to get the amount of inner rings to fix
 def get_inner_fix(Configuration,Tirific_Template, debug =False):
     if debug:
@@ -1877,10 +1908,7 @@ def get_ring_weights(Configuration,Tirific_Template,debug = False):
         print_log(f'''GET_RING_WEIGTHS: Getting the importance of the rings in terms of SBR.
 ''',Configuration['OUTPUTLOG'], debug = True)
     sbr = np.array(get_from_template(Configuration,Tirific_Template, ["SBR",f"SBR_2"]),dtype=float)
-    systemic = np.array(get_from_template(Configuration,Tirific_Template, ["VSYS"]),dtype=float)
-    systemic = systemic[0,0]
-    radii,cut_off_limits = sbr_limits(Configuration,\
-                                        systemic= systemic , debug = debug)
+    radii,cut_off_limits = sbr_limits(Configuration,Tirific_Template, debug = debug)
     weights= [[],[]]
     for i in [0,1]:
         weights[i] = [set_limits(x/y,0.1,10.) for x,y in zip(sbr[i],cut_off_limits)]
@@ -1924,9 +1952,36 @@ get_ring_weights.__doc__=f'''
 '''
 
 def get_system_string(string):
+    '''Escape any spaces in string with backlash'''
     if len(string.split()) > 1:
         string = "\ ".join(string.split())
     return string
+get_system_string.__doc__=f'''
+ NAME:
+    get_system_string
+
+ PURPOSE:
+    Escape any spaces in string with backlash
+
+ CATEGORY:
+    support_functions
+
+ INPUTS:
+    string = is input string with spaces
+
+ OPTIONAL INPUTS:
+
+
+ OUTPUTS:
+    string = string with escaped spaces
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
 
 def get_usage_statistics(Configuration,process, debug = False):
     #try:
@@ -1936,34 +1991,6 @@ def get_usage_statistics(Configuration,process, debug = False):
     #    cpu_percent= 0.
     #    memory_in_mb=0.
     return cpu_percent,memory_in_mb
-
-def get_usage_statistics_old(Configuration,process_id, debug = False):
-    result = subprocess.check_output(['top',f'-p {process_id}','-d 1','-n 1'])
-    #result = subprocess.check_output(['ps','u'])
-    lines = result.decode('utf8').split('\n')
-    column_names = [x.upper() for x in lines[6].strip().split()]
-    if debug:
-        print_log(f'''{'':8s}GET_usage_statistics: We extracted the following column names {column_names}
-''',Configuration['OUTPUTLOG'],debug=True)
-    CPU = float(0.)
-    mem=float(0.)
-    column_var = [x for x in lines[7].strip().split()]
-    if debug:
-        print_log(f'''{'':8s}GET_usage_statistics: We extracted the following variables {column_var}
-''',Configuration['OUTPUTLOG'])
-    try:
-        if int(column_var[column_names.index('PID')]) == int(process_id):
-            CPU = float(column_var[column_names.index('%CPU')])
-            mem = float(column_var[column_names.index('RES')])/1024**2
-    except:
-        #if the PID is not numeric it got merged with the crap in shiftcentercounter
-        try:
-            if column_var[column_names.index('COMMAND')-1] == 'tirific':
-                CPU = float(column_var[column_names.index('%CPU')-1])
-                mem = float(column_var[column_names.index('RES')-1])/1024**2
-        except:
-            pass
-    return CPU,mem
 
 get_usage_statistics.__doc__ =f'''
  NAME:
@@ -2086,7 +2113,6 @@ def get_vel_pa(Configuration,velocity_field,center= [0.,0.], debug =False):
         print_log(f'''GET_VEL_PA: This is the PA we extract from the velpa {np.degrees(pa)}
 ''',Configuration['OUTPUTLOG'])
     return np.degrees([pa, np.nanstd([pa,pa_from_max,pa_from_min])])
-
 get_vel_pa.__doc__ =f'''
  NAME:
     get_vel_pa
@@ -2116,8 +2142,47 @@ get_vel_pa.__doc__ =f'''
  NOTE:
 '''
 
+def isiterable(variable):
+    '''Check whether variable is iterable'''
+    #First check it is not a string as those are iterable
+    if isinstance(variable,str):
+        return False
+    try:
+        iter(variable)
+    except TypeError:
+        return False
+
+    return True
+isiterable.__doc__ =f'''
+ NAME:
+    isiterable
+
+ PURPOSE:
+    Check whether variable is iterable
+
+ CATEGORY:
+    support_functions
+
+ INPUTS:
+    variable = variable to check
+
+ OPTIONAL INPUTS:
+
+ OUTPUTS:
+    True if iterable False if not
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
+
+
 # A simple function to return the line numbers in the stack from where the functions are called
 def linenumber(debug=False):
+    '''get the line number of the print statement in the main.'''
     line = []
     for key in stack():
         if key[1] == 'main.py':
@@ -2165,15 +2230,64 @@ linenumber.__doc__ =f'''
     the first debug message in every function should set this to true and later messages not.
     !!!!Not sure whether currently the linenumber is produced due to the restructuring.
 '''
+
+def make_equal_length(list1_in,list2_in):
+    '''ensure that 2 lists have the same length'''
+    #python is a silly language
+    list1=list1_in.copy()
+    list2=list2_in.copy()
+
+    #We can only do this with lists so first we ensure lists
+    list1 = ensure_list(list1)
+    list2 = ensure_list(list2)
+
+    #We are matching the lists on the highest level only so if
+    if isiterable(list1[0]) or isiterable(list2[0]):
+        raise TypeError('make_equal_length only works on 1D arrays or scalars')
+
+    while len(list1) < len(list2):
+        list1.append(list1[-1])
+    while len(list1) > len(list2):
+        list2.append(list2[-1])
+    return list1, list2
+make_equal_length.__doc__ =f'''
+ NAME:
+    make_equal_length
+
+ PURPOSE:
+    ensure that 2 lists have the same length
+
+ CATEGORY:
+    support_functions
+
+ INPUTS:
+    list1, list2
+
+ OPTIONAL INPUTS:
+    debug = False
+
+ OUTPUTS:
+    the lists with the same length.
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+    Lists are mutable objects so if the input are lists the return could give the impression that
+    the original lists remain unmodified. To ensure proper behaviour and not python magic the input
+    is copied at the start.
+'''
+
+
 def make_tiltogram(Configuration,Tirific_Template,debug =False):
     if debug:
         print_log(f'''MAKE_TILTOGRAM: Starting tiltogram.
 ''',Configuration['OUTPUTLOG'])
     pa_incl = np.array(get_from_template(Configuration,Tirific_Template,Variables=['PA','PA_2','INCL','INCL_2']),dtype=float)
     sbr = np.array(get_from_template(Configuration,Tirific_Template, ["SBR",f"SBR_2"]),dtype=float)
-    systemic = np.array(get_from_template(Configuration,Tirific_Template, ["VSYS"]),dtype=float)
-    systemic = systemic[0,0]
-    radii,cut_off_limits = sbr_limits(Configuration,systemic= systemic , debug = debug)
+    radii,cut_off_limits = sbr_limits(Configuration,Tirific_Template, debug = debug)
     add = [[],[]]
     Theta = [[],[]]
     phi = [[],[]]
@@ -2236,9 +2350,8 @@ make_tiltogram.__doc__ =f'''
 
 '''
 
-def max_profile_change(Configuration,radius,profile,key,debug=False):
-    radkpc =[convertskyangle(Configuration,float(x),distance=Configuration['DISTANCE']) \
-                for x in radius]
+def max_profile_change(Configuration,radius,profile,key,slope = -1,debug=False):
+    radkpc =[convertskyangle(Configuration,float(x)) for x in radius]
     new_profile = copy.deepcopy(profile)
     sm_profile = savgol_filter(profile, 3, 1)
 
@@ -2251,18 +2364,19 @@ def max_profile_change(Configuration,radius,profile,key,debug=False):
 {'':8s} smoothed {key}  = {sm_profile}
 {'':8s} diff per ring = {diff_profile}
 {'':8s} smoothed dif per ring = {diff_sm_profile}
+{'':8s} slope = {slope}
 {'':8s} diff/kpc = {[x/y for x,y in zip(diff_profile,diff_rad)]}
 ''', Configuration['OUTPUTLOG'],debug=True)
 
     for i,diff in enumerate(diff_profile):
         if abs(diff)/diff_rad[i] > Configuration['MAX_CHANGE'][key]:
-            if debug:
-                print_log(f'''MAX_CHANGE_PROFILE: The profile {key} is change too much in ring {i+1}.
-''', Configuration['OUTPUTLOG'],debug=True)
 
             #if it is the last point we simply limit it
             if i == len(diff_profile)-1:
                 new_profile[i+1] = profile[i]+ diff/abs(diff)*(Configuration['MAX_CHANGE'][key]*0.5*diff_rad[i])
+            elif i+1 == slope:
+                # if we have the start of the slope on the max_change then put it to value of the previous ring
+                new_profile[i+1] = new_profile[i]
             elif diff_sm_profile[i]/diff_rad[i] < Configuration['MAX_CHANGE'][key]*0.5:
                 new_profile[i+1] = sm_profile[i+1]
             elif diff_profile[i+1] == 0:
@@ -2281,9 +2395,8 @@ def max_profile_change(Configuration,radius,profile,key,debug=False):
 
                     new_profile[i+1] = profile[i]+ diff/abs(diff)*(Configuration['MAX_CHANGE'][key]*0.9*diff_rad[i])
 
-            if debug:
-                print_log(f'''MAX_CHANGE_PROFILE: We changed the ring value from {profile[i+1]} to {new_profile[i+1]}.
-''', Configuration['OUTPUTLOG'],debug=True)
+            if i < len(diff_profile)-1:
+                diff_profile[i+1] = float(new_profile[i+2]-new_profile[i+1])
     if debug:
         print_log(f'''MAX_CHANGE_PROFILE: The returned profile is:
 {'':8s}{key} = {new_profile}
@@ -3152,13 +3265,13 @@ setup_configuration.__doc__ =f'''
 
 
 
-def sbr_limits(Configuration, systemic= 100. , debug = False):
+def sbr_limits(Configuration, Tirific_Template , debug = False):
     radii = set_rings(Configuration,debug=debug)
     if debug:
         print_log(f'''SBR_LIMITS: Got {len(radii)} radii
 ''',Configuration['OUTPUTLOG'], debug=True)
     level = Configuration['NOISE']*1000
-    noise_in_column = columndensity(Configuration,level,systemic = systemic)
+    noise_in_column = columndensity(Configuration,level,systemic = float(get_from_template(Configuration,Tirific_Template,['VSYS'],debug=debug)[0]))
     J2007col=9.61097e+19
     #J2007scl= 2. #arcsec in a sech^2 layer
     ratio=(noise_in_column/J2007col)**0.5
@@ -3175,9 +3288,9 @@ def sbr_limits(Configuration, systemic= 100. , debug = False):
     if ringarea[0] == 0.:
          sbr_ring_limits[0]=np.nanmin(sbr_ring_limits)
          sbr_ring_limits[1]=sbr_ring_limits[2]/2.
-    if len(Configuration['LIMIT_MODIFIER']) == 1:
 
-        sbr_ring_limits= sbr_ring_limits*Configuration['LIMIT_MODIFIER']
+    if len(Configuration['LIMIT_MODIFIER']) == 1:
+        sbr_ring_limits= sbr_ring_limits*float(Configuration['LIMIT_MODIFIER'])
     else:
         mod_list = list(Configuration['LIMIT_MODIFIER'])
         while len(mod_list) < len(sbr_ring_limits):
@@ -3203,12 +3316,11 @@ sbr_limits.__doc__ =f'''
 
  INPUTS:
     Configuration = Standard FAT configuration
+    Tirific_Template = Standard Tirific template
+
 
  OPTIONAL INPUTS:
     debug = False
-
-    systemic= 100.
-    systemic velocity
 
  OUTPUTS:
     radii = the radii of the rings in arcsec
@@ -3258,15 +3370,16 @@ set_format.__doc__ =f'''
 '''
 
 #simple function keep track of how to modify the edge limits
-def set_limit_modifier(Configuration,Inclination, debug= False):
-    if debug:
-        print_log(f'''SET_LIMIT_MODIFIER: Checking the limit modifier.
-''', Configuration['OUTPUTLOG'], debug=True)
-    if not Inclination.shape:
-        Inclination = [Inclination]
+def set_limit_modifier(Configuration,Tirific_Template, debug= False):
+    '''Write to the Configuration a value or list of values to modify sbr dependent values.'''
+    Profiles = np.array(get_from_template(Configuration,Tirific_Template,['INCL','INCL_2','Z0','Z0_2'],debug=debug),dtype=float)
+    Inclination = [np.mean([x,y]) for x,y in zip(Profiles[0],Profiles[1])]
+    Z0_av = [np.mean([x,y]) for x,y in zip(Profiles[2],Profiles[3])]
+    kpc_radius=convertskyangle(Configuration,get_from_template(Configuration,Tirific_Template,['RADI'],debug=debug))
     modifier_list = []
+    # This should be per kpc
     if len(Inclination) > 1:
-        if np.abs(Inclination[-1]-Inclination[-2]) > Configuration['MAX_CHANGE']['INCL']:
+        if np.abs(Inclination[-1]-Inclination[-2])/(kpc_radius[-1]-kpc_radius[-2]) > Configuration['MAX_CHANGE']['INCL']:
             Inclination[-1] = Inclination[-2]
     # Correction because the noise applies to non-face on rings while the SBR is face on,correction is normalized to the average inclination
     # The square root is because of the square root between the noise in cube and the noise in J2007
@@ -3283,7 +3396,22 @@ def set_limit_modifier(Configuration,Inclination, debug= False):
     if Configuration['OUTER_RINGS_DOUBLED']:
         if len(modifier_list) > 10:
             modifier_list[10:]= np.sqrt(modifier_list[10:])
+    #We also need a correction based on Z0
+    #Get the avergae scaleheight for each ring
+    Z0_av,modifier_list = make_equal_length(Z0_av,modifier_list)
+    Z0_kpc = convertskyangle(Configuration,Z0_av)
+
+    if not isiterable(Z0_kpc):
+        Z0_kpc = [Z0_kpc]
+    #Scale the limits with the deviation away from 0.2 kpc as this is more or less the unmodified scale height
+
+    modifier_list=[x*(1.125-0.625*y)*set_limits(((Configuration['RING_SIZE']*Configuration['BEAM'][0])/45.)**0.25,0.75,1.25) for x,y in zip(modifier_list,Z0_kpc)]
+
     Configuration['LIMIT_MODIFIER'] = np.array(modifier_list,dtype=float)
+    if debug:
+        print_log(f'''SET_LIMIT_MODIFIER: Based on a Z0 in kpc {Z0_kpc}
+{'':8s} and Inclination = {Inclination}
+''', Configuration['OUTPUTLOG'],debug = True)
     print_log(f'''SET_LIMIT_MODIFIER: We updated the LIMIT_MODIFIER to {Configuration['LIMIT_MODIFIER']}.
 ''', Configuration['OUTPUTLOG'])
 
@@ -3292,14 +3420,14 @@ set_limit_modifier.__doc__ =f'''
     set_limit_modifier
 
  PURPOSE:
-    Write to the Configuration a value or list of values to modify inclination dependent values. Foremost the sbr_limits
+    Write to the Configuration a value or list of values to modify sbr dependent values. Foremost the sbr_limits
 
  CATEGORY:
     support_functions
 
  INPUTS:
     Configuration = Standard FAT configuration
-    Inclination = Inclination of the model, can be singular or for all rings.
+    Tirific_Template = Standard Tirific template
 
  OPTIONAL INPUTS:
     debug = False
@@ -3357,45 +3485,37 @@ def set_ring_size(Configuration, debug = False, size_in_beams = 0., check_set_ri
     no_rings = calc_rings(Configuration,ring_size=ring_size,size_in_beams=size_in_beams,debug=debug)
     if debug:
         print_log(f'''SET_RING_SIZE: Starting with the following parameters.
-{'':8s}SIZE_IN_BEAMS = {size_in_beams}
-{'':8s}RING_SIZE = {ring_size}
+{'':8s}size in beams = {size_in_beams} and ring size = {ring_size}
 ''', Configuration['OUTPUTLOG'],debug=True)
 
     while ring_size > 0.5 and  no_rings < 8.:
         previous_ringsize = ring_size
         ring_size = set_limits(ring_size/1.5,0.5,float('NaN'),debug=debug)
-        no_rings = calc_rings(Configuration,ring_size=ring_size,size_in_beams=size_in_beams,debug=debug)
-        print_log(f'''SET_RING_SIZE: Because we had less than four rings we have reduced the ring size from {previous_ringsize} to {ring_size}
+        no_rings = calc_rings(Configuration,ring_size=ring_size,size_in_beams=size_in_beams)
+        print_log(f'''SET_RING_SIZE: Because we had less than eight rings we have reduced the ring size from {previous_ringsize} to {ring_size}
 ''',Configuration['OUTPUTLOG'])
 
     while no_rings < Configuration['MINIMUM_RINGS'] and not size_in_beams >=  Configuration['MAX_SIZE_IN_BEAMS']:
         size_in_beams = set_limits(size_in_beams+1.*ring_size,1, Configuration['MAX_SIZE_IN_BEAMS'])
-        no_rings = calc_rings(Configuration,ring_size=ring_size,size_in_beams=size_in_beams,debug=debug)
+        no_rings = calc_rings(Configuration,ring_size=ring_size,size_in_beams=size_in_beams)
         print_log(f'''SET_RING_SIZE: The initial estimate is too small to fit adding a ring to it.
 ''',Configuration['OUTPUTLOG'])
 
-    if check_set_rings:
-        if debug:
-            print_log(f'''SET_RING_SIZE: Setting the following parameters.
-{'':8s}SIZE_IN_BEAMS = {size_in_beams}
-{'':8s}RING_SIZE = {ring_size}
-{'':8s}NO_RINGS = {no_rings}
+    if debug:
+        print_log(f'''SET_RING_SIZE: After checking the size we get
+{'':8s}size in beams = {size_in_beams}, ring size = {ring_size} and the number of ring = {no_rings}
 ''', Configuration['OUTPUTLOG'])
+
+    if check_set_rings:
         return size_in_beams,ring_size,int(no_rings)
     else:
-        if debug:
-            print_log(f'''SET_RING_SIZE: Setting the following parameters.
-{'':8s}SIZE_IN_BEAMS = {size_in_beams}
-{'':8s}RING_SIZE = {ring_size}
-{'':8s}NO_RINGS = {no_rings}
-''', Configuration['OUTPUTLOG'])
         Configuration['NO_RINGS'] = int(no_rings)
         Configuration['SIZE_IN_BEAMS'] = size_in_beams
         Configuration['RING_SIZE'] = ring_size
         if Configuration['NO_RINGS'] < Configuration['MINIMUM_RINGS']:
             print_log(f'''SET_RING_SIZE: With a ring size of {Configuration['RING_SIZE']} we still only find {Configuration['NO_RINGS']}.
-    {"":8s}SET_RING_SIZE: This is not enough for a fit.
-    ''',Configuration['OUTPUTLOG'],screen=True)
+{"":8s}SET_RING_SIZE: This is not enough for a fit.
+''',Configuration['OUTPUTLOG'],screen=True)
             raise SmallSourceError('This source is too small to reliably fit.')
 
 set_ring_size.__doc__ =f'''
