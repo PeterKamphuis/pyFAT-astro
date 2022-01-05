@@ -905,7 +905,7 @@ def one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run, de
 
         if all([True if x  in Configuration['FIXED_PARAMETERS'][0] else False for x in ['PA','INCL','Z0','SDIS']] ):
         #if all([Configuration['FIX_INCLINATION'][0],Configuration['FIX_PA'][0],Configuration['FIX_Z0'][0],Configuration['FIX_SDIS'][0]]):
-            Configuration['WARP_SLOPE'] = [0.,0.]
+            Configuration['WARP_SLOPE'] = [None ,None ]
         else:
             get_warp_slope(Configuration,Tirific_Template, debug=debug)
 

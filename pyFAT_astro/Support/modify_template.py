@@ -98,9 +98,9 @@ def check_angles(Configuration,Tirific_Template, debug = False):
         for i in range(len(incl[side])):
             if incl[side][i] > 90.:
                 incl[side][i] = float(180.-incl[side][i])
-            if pa[side][i] > 360.:
+            if pa[side][i] > 380.:
                 pa[side][i] = pa[side][i]-360.
-            if pa[side][i] < 0.:
+            if pa[side][i] < -20.:
                 pa[side][i] = 360.+pa[side][i]
         pa_tmp = max_profile_change(Configuration,rad,pa[side],'PA',slope = Configuration['WARP_SLOPE'][side],debug=debug)
         pa[side] = pa_tmp
@@ -986,7 +986,7 @@ def fix_sbr(Configuration,Tirific_Template, smooth = False, debug=False):
         sbr[np.where(sbr<cutoff_limits)] = 2.*cutoff_limits[np.where(sbr<cutoff_limits)]
         #if our warp_slope is very small we want to increase the SBR significantly
         for i in [0,1]:
-            if Configuration['WARP_SLOPE'][i] <  0.75*(Configuration['NO_RINGS']):
+            if Configuration['WARP_SLOPE'][i] <  0.75*(Configuration['NO_RINGS']) and Configuration['WARP_SLOPE'][i] != None:
                 sbr[i,Configuration['WARP_SLOPE'][i]:] = 0.5*sbr[i,Configuration['WARP_SLOPE'][i]-1]+2.5*sbr[i,Configuration['WARP_SLOPE'][i]:]
     else:
         sbr[np.where(sbr<cutoff_limits/2.)] = 1e-16
@@ -1333,7 +1333,7 @@ def get_warp_slope(Configuration,Tirific_Template, debug = False):
                 else:
                     counter -= 1
         elif len(final) == len(slope):
-            final = 1
+            final = None
             for parameter in ['INCL',"PA",'SDIS','Z0']:
                 if parameter not in Configuration['FIXED_PARAMETERS'][0]:
                     Configuration['FIXED_PARAMETERS'][0].append(parameter)
@@ -1341,7 +1341,7 @@ def get_warp_slope(Configuration,Tirific_Template, debug = False):
             final = len(slope)
         if final > Configuration['LAST_RELIABLE_RINGS'][i]-1:
             final = Configuration['LAST_RELIABLE_RINGS'][i]-1
-        warp_slope[i] = final
+        warp_slope[i] = int(final)
     if debug:
         print_log(f'''GET_WARP_SLOPE: We find a slope of {warp_slope}.
 ''', Configuration['OUTPUTLOG'])
@@ -2148,15 +2148,16 @@ def set_fitting_parameters(Configuration, Tirific_Template, parameters_to_adjust
                 slope = Configuration['WARP_SLOPE']
                 profile = np.array(get_from_template(Configuration,Tirific_Template, [key,f"{key}_2"]),dtype=float)
                 for i in [0,1]:
-                    with warnings.catch_warnings():
-                        warnings.simplefilter("error")
-                        try:
-                            if slope[i] < Configuration['NO_RINGS'] and \
-                                (np.mean(profile[i,:3]) > np.mean(profile[i,3:slope[i]]) < np.mean(profile[i,slope[i]:]) or \
-                                np.mean(profile[i,:3]) < np.mean(profile[i,3:slope[i]]) > np.mean(profile[i,slope[i]:])):
-                                flat_slope = True
-                        except RuntimeWarning:
-                            flat_slope = False
+                    if slope[i] != None:
+                        with warnings.catch_warnings():
+                            warnings.simplefilter("error")
+                            try:
+                                if slope[i] < Configuration['NO_RINGS'] and \
+                                    (np.mean(profile[i,:3]) > np.mean(profile[i,3:slope[i]]) < np.mean(profile[i,slope[i]:]) or \
+                                    np.mean(profile[i,:3]) < np.mean(profile[i,3:slope[i]]) > np.mean(profile[i,slope[i]:])):
+                                    flat_slope = True
+                            except RuntimeWarning:
+                                flat_slope = False
 
 
                 if stage in ['initialize_os']:
@@ -2170,7 +2171,7 @@ def set_fitting_parameters(Configuration, Tirific_Template, parameters_to_adjust
                 slope = [int(Configuration['NO_RINGS']*0.66),int(Configuration['NO_RINGS']*0.66)]
             else:
                 inner = 4
-                slope = [0.,0.]
+                slope = [None ,None ]
 
             if key in ['SDIS','INCL']:
                 fact = set_limits(float(initial_estimates['INCL'][0])/20.-2.5,1.,2.)
@@ -2258,7 +2259,7 @@ set_fitting_parameters.__doc__ = '''
 '''
 
 def set_generic_fitting(Configuration, key , stage = 'initial', basic_variation = 5., \
-                        debug = False, slope = [0, 0], flat_slope = False , symmetric = False,\
+                        debug = False, slope = [None, None], flat_slope = False , symmetric = False,\
                         fixed = True, moderate = 3, step_modifier = [1.,1.,1.],\
                         flat_inner = 3):
     if debug:
@@ -2267,11 +2268,6 @@ def set_generic_fitting(Configuration, key , stage = 'initial', basic_variation 
     if isinstance(flat_inner,int):
         flat_inner = [flat_inner,flat_inner]
     NUR = Configuration['NO_RINGS']
-    if all(x == 0. for x in np.array(slope,dtype=float)):
-        slope = [NUR,NUR]
-
-
-
     input= {}
     if debug:
             print_log(f'''SET_GENERIC_FITTING: flat is {fixed}
@@ -2348,7 +2344,7 @@ def set_generic_fitting(Configuration, key , stage = 'initial', basic_variation 
         if Configuration['NO_RINGS'] > 5:
             implement_keys = [key, f"{key}_2"]
             for i,cur_key in enumerate(implement_keys):
-                if slope[i] < NUR:
+                if slope[i] < NUR and slope[i] != None:
                     if flat_slope:
                         if slope[i]+1 == NUR:
                             forvarindex = forvarindex+f"{cur_key} {NUR} "
@@ -2389,7 +2385,7 @@ set_generic_fitting.__doc__ =f'''
         delstart =  basic_variation  without modifiers
         delend and mindelt = 0.1*basic_variation without modifiers
 
-    slope = [0, 0]
+    slope = [None, None]
     outer rings to be fitted as slope
 
     flat_slope = False

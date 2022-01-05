@@ -2350,7 +2350,7 @@ make_tiltogram.__doc__ =f'''
 
 '''
 
-def max_profile_change(Configuration,radius,profile,key,slope = -1,debug=False):
+def max_profile_change(Configuration,radius,profile,key,slope = None,debug=False):
     radkpc =[convertskyangle(Configuration,float(x)) for x in radius]
     new_profile = copy.deepcopy(profile)
     sm_profile = savgol_filter(profile, 3, 1)
@@ -3119,7 +3119,7 @@ def setup_configuration(cfg):
 
                'INNER_FIX': [4.,4.], #Number of rings that are fixed in the inner part for the INCL and PA, , adapted after every run in get_inner_fix in support_functions and for both sides
                'CENTRAL_FIX': [], #Parameters of the center to fix. This set in check_cantral_convergence
-               'WARP_SLOPE': [0.,0.], #Ring numbers from which outwards the warping should be fitted as a slope, set in get_warp_slope in modify_template
+               'WARP_SLOPE': [None, None], #Ring numbers from which outwards the warping should be fitted as a slope, set in get_warp_slope in modify_template
                'OUTER_SLOPE_START': 1, # Ring number from where the RC is fitted as a slope
                'RC_UNRELIABLE': 1, # Ring number from where the RC values are set flat. Should only be set in check_size
 
