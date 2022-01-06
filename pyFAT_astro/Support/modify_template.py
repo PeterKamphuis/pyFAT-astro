@@ -1333,14 +1333,16 @@ def get_warp_slope(Configuration,Tirific_Template, debug = False):
                 else:
                     counter -= 1
         elif len(final) == len(slope):
-            final = None
+            final = Configuration['LAST_RELIABLE_RINGS'][i]-1
             for parameter in ['INCL',"PA",'SDIS','Z0']:
                 if parameter not in Configuration['FIXED_PARAMETERS'][0]:
                     Configuration['FIXED_PARAMETERS'][0].append(parameter)
         else:
             final = len(slope)
+
         if final > Configuration['LAST_RELIABLE_RINGS'][i]-1:
             final = Configuration['LAST_RELIABLE_RINGS'][i]-1
+    
         warp_slope[i] = int(final)
     if debug:
         print_log(f'''GET_WARP_SLOPE: We find a slope of {warp_slope}.

@@ -44,7 +44,8 @@ def warn_with_traceback(message, category, filename, lineno, file=None, line=Non
 
 def main(argv):
 
-    warnings.showwarning = warn_with_traceback
+
+
     try:
 
 
@@ -141,6 +142,9 @@ def main(argv):
 
 
         Original_Configuration = sf.setup_configuration(cfg)
+
+        if Original_Configuration['DEBUG']:
+            warnings.showwarning = warn_with_traceback
 
         #First we check for sofia and TiRiFiC
         Original_Configuration['SOFIA2'] = sf.find_program(Original_Configuration['SOFIA2'], "SoFiA 2")
@@ -340,7 +344,7 @@ def main(argv):
             #If we have Sofia Preprocessed Output request make sure it all exists
             if Configuration['DEBUG']:
                 wf.write_config(f'{Configuration["LOG_DIRECTORY"]}CFG_Before_Sofia.txt',Configuration,debug = True)
-            
+
             if 'existing_sofia' in  Configuration['FITTING_STAGES']:
                 sf.copy_homemade_sofia(Configuration,debug=Configuration['DEBUG'])
             elif 'run_sofia' in Configuration['FITTING_STAGES']:
