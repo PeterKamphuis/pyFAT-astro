@@ -95,18 +95,29 @@ def check_angles(Configuration,Tirific_Template, debug = False):
     rad =[float(x) for x in Tirific_Template['RADI'].split()]
 
     for side in [0,1]:
-        for i in range(len(incl[side])):
-            if incl[side][i] > 90.:
-                incl[side][i] = float(180.-incl[side][i])
-            if pa[side][i] > 380.:
-                pa[side][i] = pa[side][i]-360.
-            if pa[side][i] < -20.:
-                pa[side][i] = 360.+pa[side][i]
+        incl_too_large = (np.array(incl[side],dtype=float) > 90.)
+        incl[side] = [180.-x if y else x for x,y in zip(incl[side],incl_too_large)]
+
+        pa_too_large = (np.array(pa[side],dtype=float) > 360.)
+        if any(pa_too_large):
+            if np.mean(np.array(pa[side],dtype=float)[~pa_too_large]) < 180.:
+                pa[side] = [x-360. if y else x for x,y in zip(pa[side],pa_too_large)]
+
+        pa_too_small = (np.array(pa[side],dtype=float) < 0.)
+        if any(pa_too_small) > 0:
+            if np.mean(np.array(pa[side],dtype=float)[~pa_too_small]) > 180.:
+                pa[side] = [x+360. if y else x for x,y in zip(pa[side],pa_too_small)]
+
         pa_tmp = max_profile_change(Configuration,rad,pa[side],'PA',slope = Configuration['WARP_SLOPE'][side],debug=debug)
         pa[side] = pa_tmp
         incl_tmp = max_profile_change(Configuration,rad,incl[side],'INCL',slope = Configuration['WARP_SLOPE'][side],debug=debug)
         incl[side] = incl_tmp
-
+    #Ensure that we have not made PA differences
+    if pa[0][0] != pa[1][0]:
+        if pa[0][0] > 360.:
+            pa[0] = pa[0]-360.
+        elif pa[0][0] < 0.:
+            pa[0] = pa[0]+360.
 
     Tirific_Template['INCL'] = f"{' '.join(f'{x:.2e}' for x in incl[0])}"
     Tirific_Template['INCL_2'] = f"{' '.join(f'{x:.2e}' for x in incl[1])}"
@@ -1342,7 +1353,7 @@ def get_warp_slope(Configuration,Tirific_Template, debug = False):
 
         if final > Configuration['LAST_RELIABLE_RINGS'][i]-1:
             final = Configuration['LAST_RELIABLE_RINGS'][i]-1
-    
+
         warp_slope[i] = int(final)
     if debug:
         print_log(f'''GET_WARP_SLOPE: We find a slope of {warp_slope}.
@@ -2881,7 +2892,7 @@ def set_sbr_fitting(Configuration,Tirific_Template, stage = 'no_stage',debug = F
         if Configuration['CENTRAL_CONVERGENCE']:
             sbr_input['PARMIN'] = np.concatenate((sbr_input['PARMIN'],[np.min(sbr_ring_limits)]))
         else:
-            sbr_input['PARMIN'] = np.concatenate((sbr_input['PARMIN'],[sbr_ring_limits[inner_ring]*3.]))
+            sbr_input['PARMIN'] = np.concatenate((sbr_input['PARMIN'],[sbr_ring_limits[inner_ring]*1.5]))
         sbr_input['MODERATE'] = np.concatenate((sbr_input['MODERATE'],[5]))
         sbr_input['DELSTART'] = np.concatenate((sbr_input['DELSTART'],[1e-5]))
         sbr_input['DELEND'] = np.concatenate((sbr_input['DELEND'],[1e-6]))

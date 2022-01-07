@@ -399,7 +399,10 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, smoot
         print_log(f'''GUESS_ORIENTATION: We find SNR = {SNR} and a scale factor {scale_factor} and the noise median {median_noise_in_map}
 {'':8s} minimum {minimum_noise_in_map}
 ''',Configuration['OUTPUTLOG'])
-    beam_check=[Configuration['BEAM_IN_PIXELS'][0],Configuration['BEAM_IN_PIXELS'][0]/2.]
+    if Configuration['SIZE_IN_BEAMS'] >10:
+        beam_check=[Configuration['BEAM_IN_PIXELS'][0],Configuration['BEAM_IN_PIXELS'][0]/2.]
+    else:
+        beam_check=[Configuration['BEAM_IN_PIXELS'][0]/2.]
     center_stable = False
     checked_center = False
     center_counter = 0.
@@ -415,16 +418,16 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, smoot
         int_weight = [2.]
         pa_av = [pa_av]
         maj_extent_av = [maj_extent_av]
-        if debug:
-            print_log(f'''GUESS_ORIENTATION: This is what takes long.
-''',Configuration['OUTPUTLOG'],screen =True)
+
         for mod in beam_check:
 
             for i in [[-1,-1],[-1,1],[1,-1],[1,1]]:
-                if debug:
-                    print_log(f'''GUESS_ORIENTATION: Because of these iterations.
-        ''',Configuration['OUTPUTLOG'],screen =True)
                 center_tmp = [center[0]+mod*i[0],center[1]+mod*i[1]]
+
+                if debug:
+                    print_log(f'''GUESS_ORIENTATION: Checking at location RA = {center_tmp[0]} pix, DEC = {center_tmp[1]} pix
+        ''',Configuration['OUTPUTLOG'],screen =True)
+
                 inclination_tmp, pa_tmp, maj_extent_tmp= get_inclination_pa(Configuration, mom0, center_tmp, cutoff = scale_factor* median_noise_in_map, figure_name=f'{Configuration["LOG_DIRECTORY"]}loc_{center_tmp[0]:.2f}_{center_tmp[1]:.2f}',debug = debug)
                 inclination_av.append(inclination_tmp)
                 pa_av.append(pa_tmp)
@@ -645,6 +648,8 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, smoot
     if v_sys == -1 or center_counter > 0.:
         #As python is utterly moronic the center goes in back wards to the map
         map_vsys = np.nanmean(map[int(round(center[1]-buffer)):int(round(center[1]+buffer)),int(round(center[0]-buffer)):int(round(center[0]+buffer))])
+        if Configuration['SIZE_IN_BEAMS'] < 10.:
+            map_vsys = (v_sys+map_vsys)/2.
     else:
         map_vsys = v_sys
 

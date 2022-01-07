@@ -1552,11 +1552,11 @@ def get_inclination_pa(Configuration, Image, center, cutoff = 0., debug = False,
         # now we need to get profiles under many angles let's say 100
         #extract the profiles under a set of angles
         angles = np.linspace(0, 360, 180)
-        ratios, maj_extent = obtain_ratios(Configuration,map, center, angles,noise = cutoff,debug=debug)
+        ratios, maj_extent = obtain_ratios(Configuration,map, center, angles,noise = cutoff,debug=False)
 
         if np.any(np.isnan(ratios)):
             return [float('NaN'),float('NaN')],  [float('NaN'),float('NaN')],float('NaN')
-        sin_ratios,sin_parameters = fit_sine(Configuration,angles,ratios,debug=debug)
+        sin_ratios,sin_parameters = fit_sine(Configuration,angles,ratios,debug=False)
         if np.any(np.isnan(sin_parameters)):
             return [float('NaN'),float('NaN')],  [float('NaN'),float('NaN')],float('NaN')
 
@@ -1572,19 +1572,20 @@ def get_inclination_pa(Configuration, Image, center, cutoff = 0., debug = False,
         #    plt.close()
 
         ratios=sin_ratios
-        if debug:
-            if i == 0:
-                print_log(f'''GET_INCLINATION_PA: We initially find radius of {maj_extent*3600./(Configuration['BEAM'][0])} beams.
-''',Configuration['OUTPUTLOG'], debug = True)
-                print_log(f'''GET_INCLINATION_PA: We initially find the ratios:
-{'':8s} ratios = {ratios}
-''',Configuration['OUTPUTLOG'])
-            else:
-                print_log(f'''GET_INCLINATION_PA: From the cleaned map we find radius of {maj_extent*3600./Configuration['BEAM'][0]} beams.
-''',Configuration['OUTPUTLOG'])
-                print_log(f'''GET_INCLINATION_PA: We  find these ratios from the cleaned map:
-{'':8s} ratios = {ratios}
-''',Configuration['OUTPUTLOG'])
+
+        #if debug:
+        #    if i == 0:
+        #        print_log(f'''GET_INCLINATION_PA: We initially find radius of {maj_extent*3600./(Configuration['BEAM'][0])} beams.
+#''',Configuration['OUTPUTLOG'], debug = True)
+#                print_log(f'''GET_INCLINATION_PA: We initially find the ratios:
+#{'':8s} ratios = {ratios}
+#''',Configuration['OUTPUTLOG'])
+#            else:
+#                print_log(f'''GET_INCLINATION_PA: From the cleaned map we find radius of {maj_extent*3600./Configuration['BEAM'][0]} beams.
+#''',Configuration['OUTPUTLOG'])
+#                print_log(f'''GET_INCLINATION_PA: We  find these ratios from the cleaned map:
+#{'':8s} ratios = {ratios}
+#''',Configuration['OUTPUTLOG'])
         max_index = np.where(ratios == np.nanmax(ratios))[0]
         if max_index.size > 1:
             max_index =int(max_index[0])
@@ -1599,13 +1600,13 @@ def get_inclination_pa(Configuration, Image, center, cutoff = 0., debug = False,
         if max_index > 135 and min_index < 45:
             max_index=max_index-90
 
-        if debug:
-            if i == 0:
-                print_log(f'''GET_INCLINATION_PA: We initially find these indeces min {min_index } {angles[min_index]} max {max_index} {angles[max_index]}.
-''',Configuration['OUTPUTLOG'])
-            else:
-                print_log(f'''GET_INCLINATION_PA: From the cleaned map we find these indeces min {min_index }  {angles[min_index]} max {max_index} {angles[max_index]}.
-''',Configuration['OUTPUTLOG'])
+        #if debug:
+        #    if i == 0:
+        #        print_log(f'''GET_INCLINATION_PA: We initially find these indeces min {min_index } {angles[min_index]} max {max_index} {angles[max_index]}.
+#''',Configuration['OUTPUTLOG'])
+#            else:
+#                print_log(f'''GET_INCLINATION_PA: From the cleaned map we find these indeces min {min_index }  {angles[min_index]} max {max_index} {angles[max_index]}.
+#''',Configuration['OUTPUTLOG'])
         #get a 10% bracket
 
         tenp_max_index = np.where(ratios > np.nanmax(ratios)*0.9)[0]
@@ -1630,7 +1631,7 @@ def get_inclination_pa(Configuration, Image, center, cutoff = 0., debug = False,
             pa = pa -180
         if debug:
             if i == 0:
-                print_log(f'''GET_INCLINATION_PA: The initial final pa = {pa}.
+                print_log(f'''GET_INCLINATION_PA: The initial  pa = {pa}.
 ''',Configuration['OUTPUTLOG'])
             else:
                 print_log(f'''GET_INCLINATION_PA: The pa from the cleaned map  = {pa}.
