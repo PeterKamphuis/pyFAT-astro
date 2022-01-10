@@ -1055,11 +1055,14 @@ def fit_center_ellipse(Configuration,map,inclination= -1, pa = -1,debug=False):
             continue
         else:
             if a < b:
-                tmp = a
+                tmp = copy.deepcopy(a)
                 a = copy.deepcopy(b)
                 b = copy.deepcopy(tmp)
-                orient = orient-90
-            inc = np.degrees(np.arccos(np.sqrt((float(b/a)**2-0.2**2)/0.96)))
+                orient = orient-90.
+
+
+            ratio = float(set_limits(b/a,0.2,1.0))
+            inc = np.degrees(np.arccos(np.sqrt((ratio**2-0.2**2)/0.96)))
             parameters.append([cx,cy,inc , orient])
     if inclination == -1. or pa == -1.:
         x_center = np.mean([x[0] for x  in parameters])
@@ -1560,17 +1563,17 @@ def get_inclination_pa(Configuration, Image, center, cutoff = 0., debug = False,
         if np.any(np.isnan(sin_parameters)):
             return [float('NaN'),float('NaN')],  [float('NaN'),float('NaN')],float('NaN')
 
-
-        #import matplotlib
-        #matplotlib.use('MacOSX')
-        #if debug:
-        #    name= f'{figure_name}_{i}.pdf'
-        #    fig = plt.figure()
-        #    plt.plot(angles,ratios)
-        #    plt.plot(angles,sin_ratios,'k--')
-        #    plt.savefig(name, bbox_inches='tight')
-        #    plt.close()
-
+        '''
+        import matplotlib
+        matplotlib.use('MacOSX')
+        if debug:
+            name= f'{figure_name}_{i}.pdf'
+            fig = plt.figure()
+            plt.plot(angles,ratios)
+            plt.plot(angles,sin_ratios,'k--')
+            plt.savefig(name, bbox_inches='tight')
+            plt.close()
+        '''
         ratios=sin_ratios
 
         #if debug:
@@ -1595,18 +1598,19 @@ def get_inclination_pa(Configuration, Image, center, cutoff = 0., debug = False,
             min_index =int(min_index[0])
         max_index = set_limits(max_index,2,177)
         min_index = set_limits(min_index,2,177)
+
         if min_index > 135 and max_index < 45:
             min_index=min_index-90
         if max_index > 135 and min_index < 45:
             max_index=max_index-90
 
-        #if debug:
-        #    if i == 0:
-        #        print_log(f'''GET_INCLINATION_PA: We initially find these indeces min {min_index } {angles[min_index]} max {max_index} {angles[max_index]}.
-#''',Configuration['OUTPUTLOG'])
-#            else:
-#                print_log(f'''GET_INCLINATION_PA: From the cleaned map we find these indeces min {min_index }  {angles[min_index]} max {max_index} {angles[max_index]}.
-#''',Configuration['OUTPUTLOG'])
+        if debug:
+            if i == 0:
+                print_log(f'''GET_INCLINATION_PA: We initially find these indeces min {min_index } {angles[min_index]} max {max_index} {angles[max_index]}.
+#''',Configuration['OUTPUTLOG'],screen=True)
+            else:
+                print_log(f'''GET_INCLINATION_PA: From the cleaned map we find these indeces min {min_index }  {angles[min_index]} max {max_index} {angles[max_index]}.
+#''',Configuration['OUTPUTLOG'],screen=True)
         #get a 10% bracket
 
         tenp_max_index = np.where(ratios > np.nanmax(ratios)*0.9)[0]
@@ -1617,6 +1621,12 @@ def get_inclination_pa(Configuration, Image, center, cutoff = 0., debug = False,
 
         if tenp_min_index.size <= 1:
             tenp_min_index= [min_index-2,min_index+2]
+
+        if angles[min_index] > angles[max_index]:
+            pa = float(np.nanmean(np.array([angles[min_index]-90,angles[max_index]],dtype=float)))
+        else:
+            pa = float(np.nanmean(np.array([angles[min_index]+90,angles[max_index]],dtype=float)))
+        '''
         if angles[min_index]-90 > 0.:
             if angles[max_index] > 165:
                 pa = float(np.nanmean(np.array([angles[min_index]+90,angles[max_index]],dtype=float)))
@@ -1627,6 +1637,7 @@ def get_inclination_pa(Configuration, Image, center, cutoff = 0., debug = False,
                 pa = float(np.nanmean(np.array([angles[min_index]-90,angles[max_index]],dtype=float)))
             else:
                 pa = float(np.nanmean(np.array([angles[min_index]+90,angles[max_index]],dtype=float)))
+        '''
         if 180. < pa:
             pa = pa -180
         if debug:

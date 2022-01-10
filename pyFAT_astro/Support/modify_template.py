@@ -718,22 +718,22 @@ def fix_outer_rotation(Configuration,profile, debug = False):
     if debug:
         print_log(f'''FIX_OUTER_ROTATION: adjust last rings of VROT profile:
 {'':8s}{profile}
+{'':8s} from ring {Configuration['RC_UNRELIABLE']} we do not trust the rings.
 ''',Configuration['OUTPUTLOG'],debug = True)
     profile = np.array(profile,dtype=float)
-    inner_slope = Configuration['RC_UNRELIABLE']
     # if the outer parts are less then 5 channels there is something wrong And we just take a flat curve from max
-    if np.mean(profile[inner_slope:]) < 5.*Configuration['CHANNEL_WIDTH']:
-        inner_slope = int(np.where(np.max(profile) == profile)[0][0])
+    if np.mean(profile[Configuration['RC_UNRELIABLE']:]) < 5.*Configuration['CHANNEL_WIDTH']:
+        Configuration['RC_UNRELIABLE'] = int(np.where(np.max(profile) == profile)[0][0])+1
+        profile[Configuration['RC_UNRELIABLE']:] = profile[Configuration['RC_UNRELIABLE']-1]
         if debug:
             print_log(f'''FIX_OUTER_ROTATION: we adjusted the unreliable part.
+{'':8s}{profile}
+{'':8s} from ring {Configuration['RC_UNRELIABLE']} we do not trust the rings.
 ''',Configuration['OUTPUTLOG'],debug = True)
-    if debug:
-        print_log(f'''FIX_OUTER_ROTATION: this is the inner slope {inner_slope}
-''',Configuration['OUTPUTLOG'])
-    NUR = Configuration['NO_RINGS']
+
     #inner_slope = int(round(set_limits(NUR*(4.-Configuration['LIMIT_MODIFIER'][0])/4.,round(NUR/2.),NUR-2)))
-    if inner_slope != NUR-1 and np.mean(profile[1:3]) > 180.:
-        profile[inner_slope:] = profile[inner_slope-1]
+    if Configuration['RC_UNRELIABLE'] != Configuration['NO_RINGS']-1 and np.mean(profile[1:3]) > 180.:
+        profile[Configuration['RC_UNRELIABLE']:] = profile[Configuration['RC_UNRELIABLE']-1]
 
     for i in range(int(Configuration['NO_RINGS']*3./4),Configuration['NO_RINGS']-1):
         if profile[i+1] > profile[i]*1.3:
@@ -2861,11 +2861,15 @@ def set_sbr_fitting(Configuration,Tirific_Template, stage = 'no_stage',debug = F
             else:
                 ext='_2'
             Tirific_Template[f"SBR{ext}"]= f"{' '.join([f'{x:{format}}' for x in sbr_profile[i]])}"
+
+        sbr_smoothed_profile = smooth_profile(Configuration,Tirific_Template,'SBR',
+                                min_error= sbr_ring_limits,no_apply = True,
+                                fix_sbr_call = True,profile_in = sbr_profile ,debug=debug)
         if Configuration['SIZE_IN_BEAMS'] < max_size:
             sbr_input['VARY'] =  np.array([f"SBR {x+1} SBR_2 {x+1}" for x in range(len(radii)-1,inner_ring-1,-1)],dtype=str)
 
 
-            sbr_input['PARMAX'] = np.array([set_limits(np.mean([sbr_profile[0,x-1],sbr_profile[1,x-1]])*2.5,sbr_ring_limits[x]*10.,1) for x in range(len(radii)-1,inner_ring-1,-1)],dtype=float)
+            sbr_input['PARMAX'] = np.array([set_limits(np.mean([sbr_smoothed_profile[0,x-1],sbr_smoothed_profile[1,x-1]])*10.,sbr_ring_limits[x]*15.,1.) for x in range(len(radii)-1,inner_ring-1,-1)],dtype=float)
             #if stage in ['initial','run_cc']:
             #    sbr_input['PARMIN'] = np.array([sbr_ring_limits[x]/2. if x <= (3./4.)*len(radii) else 0 for x in range(len(radii)-1,inner_ring-1,-1)])
             #elif stage in ['initialize_ec','run_ec']:
@@ -2877,7 +2881,9 @@ def set_sbr_fitting(Configuration,Tirific_Template, stage = 'no_stage',debug = F
             sbr_input['MINDELTA'] = np.array([5e-6 for x in range(len(radii)-1,inner_ring-1,-1)],dtype=float) #saturation criterum when /SIZE SIZE should be 10 troughout the code
         else:
             sbr_input['VARY'] =  np.array([[f"SBR {x+1}",f"SBR_2 {x+1}"] for x in range(len(radii)-1,inner_ring-1,-1)],dtype=str).reshape((len(radii)-inner_ring)*2)
-            sbr_input['PARMAX'] = np.array([[set_limits(sbr_profile[0,x-1]*5.,sbr_ring_limits[x]*10.,1.),set_limits(sbr_profile[1,x-1]*5.,sbr_ring_limits[x]*10.,1)] for x in range(len(radii)-1,inner_ring-1,-1)],dtype=float).reshape((len(radii)-inner_ring)*2)
+
+
+            sbr_input['PARMAX'] = np.array([[set_limits(sbr_smoothed_profile[0,x-1]*20.,sbr_ring_limits[x]*30.,1.),set_limits(sbr_smoothed_profile[1,x-1]*20.,sbr_ring_limits[x]*30.,1.)] for x in range(len(radii)-1,inner_ring-1,-1)],dtype=float).reshape((len(radii)-inner_ring)*2)
         #if stage in ['initial','run_cc']:
             #    sbr_input['PARMIN'] = np.array([[sbr_ring_limits[x]/2.,sbr_ring_limits[x]/2.] if x <= (3./4.)*len(radii) else [0.,0.] for x in range(len(radii)-1,inner_ring-1,-1)]).reshape((len(radii)-inner_ring)*2)
             #elif stage in ['initialize_ec','run_ec']:
@@ -2888,7 +2894,7 @@ def set_sbr_fitting(Configuration,Tirific_Template, stage = 'no_stage',debug = F
             sbr_input['MINDELTA'] = np.array([[sbr_ring_limits[x]/20.,sbr_ring_limits[x]/20.] for x in range(len(radii)-1,inner_ring-1,-1)],dtype=float).reshape((len(radii)-inner_ring)*2)
 
         sbr_input['VARY'] = np.concatenate((sbr_input['VARY'],[f"SBR {' '.join([str(int(x)) for x in range(1,inner_ring+1)])} SBR_2 {' '.join([str(int(x)) for x in range(1,inner_ring+1)])}"]),axis=0)
-        sbr_input['PARMAX'] = np.concatenate((sbr_input['PARMAX'],[set_limits(np.mean([sbr_profile[0,2:4],sbr_profile[1,2:4]])*4.,sbr_ring_limits[2]*10.,1.)]))
+        sbr_input['PARMAX'] = np.concatenate((sbr_input['PARMAX'],[set_limits(np.mean([sbr_smoothed_profile[0,2:4],sbr_smoothed_profile[1,2:4]])*4.,sbr_ring_limits[2]*15.,1.)]))
         if Configuration['CENTRAL_CONVERGENCE']:
             sbr_input['PARMIN'] = np.concatenate((sbr_input['PARMIN'],[np.min(sbr_ring_limits)]))
         else:

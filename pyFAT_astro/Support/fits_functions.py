@@ -34,7 +34,7 @@ def check_mask(Configuration,id,Fits_Files,debug=False):
         data[data != float(id)] = 0.
         diff = data-mask[0].data
         neg_index = np.where(diff < 0.)[0]
-        if neg_index.shape:
+        if len(neg_index) != 0:
             if debug:
                 print_log(f'''CHECK_MASK: The initial mask had more than a single source. redoing the mask.
 ''',Configuration['OUTPUTLOG'],screen = True)
@@ -112,7 +112,7 @@ def create_fat_cube(Configuration, Fits_Files,sofia_catalogue=False,id='No defau
     # Release the arrays
 
     Cube.close()
-    
+
     data = []
     hdr = []
 create_fat_cube.__doc__ =f'''
@@ -487,6 +487,9 @@ def prep_cube(Configuration,hdr,data, debug = False):
     prev_last_comparison = 0.
     times_cut_first_channel = 0
     times_cut_last_channel = 0
+    corner_box_size = int(np.floor(2*hdr['BMAJ']/abs(hdr['CDELT1'])))
+    if corner_box_size > np.mean([hdr['NAXIS1'],hdr['NAXIS2']])/10.:
+        corner_box_size=int(np.floor(np.mean([hdr['NAXIS1'],hdr['NAXIS2']])/10.))
     while not cube_ok:
         while np.isnan(data[0,:,:]).all():
             data=data[1:,:,:]
@@ -511,10 +514,10 @@ def prep_cube(Configuration,hdr,data, debug = False):
         #Then check the noise statistics
         noise_first_channel = np.nanstd(data[0,:,:])
         noise_last_channel = np.nanstd(data[-1,:,:])
-        noise_bottom_right =  np.nanstd(data[:,:6,-6:])
-        noise_top_right =  np.nanstd(data[:,-6:,-6:])
-        noise_bottom_left =  np.nanstd(data[:,:6,:6])
-        noise_top_left =  np.nanstd(data[:,-6:,:6])
+        noise_bottom_right =  np.nanstd(data[:,:corner_box_size,-corner_box_size:])
+        noise_top_right =  np.nanstd(data[:,-corner_box_size:,-corner_box_size:])
+        noise_bottom_left =  np.nanstd(data[:,:corner_box_size,:corner_box_size])
+        noise_top_left =  np.nanstd(data[:,-corner_box_size:,:corner_box_size])
         noise_corner = np.nanmean([noise_top_right,noise_bottom_right,noise_bottom_left,noise_top_left])
         channel_noise = np.nanmean([noise_first_channel,noise_last_channel])
         if ~np.isfinite(noise_corner):
@@ -572,9 +575,9 @@ def prep_cube(Configuration,hdr,data, debug = False):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         low_noise_indices = np.where(data < -10*noise_corner)
-    if len(low_noise_indices) > 0:
+    if len(low_noise_indices) > 0.0001*hdr['NAXIS1']*hdr['NAXIS2']*hdr['NAXIS3']:
         data[low_noise_indices] = float('NaN')
-        print_log(f'''PREPROCESSING: Your cube had values below -10*sigma. If you do not have a central absorption source there is something seriously wrong with the cube.
+        print_log(f'''PREPROCESSING: Your cube had a significant amount of values below -10*sigma. If you do not have a central absorption source there is something seriously wrong with the cube.
 {"":8s}PREPROCESSING: We blanked these values.
 ''',Configuration['OUTPUTLOG'])
 
@@ -717,16 +720,16 @@ def make_moments(Configuration,Fits_Files,fit_type = 'Undefined',
             cube[0].data[cube[0].data < level] = float('NaN')
     try:
         if cube[0].header['CUNIT3'].lower().strip() == 'm/s':
-            print_log(f"We convert your m/s to km/s", Configuration['OUTPUTLOG'])
+            print_log(f"MAKE_MOMENTS: We convert your m/s to km/s. \n", Configuration['OUTPUTLOG'],debug=debug)
             cube[0].header['CUNIT3'] = 'km/s'
             cube[0].header['CDELT3'] = cube[0].header['CDELT3']/1000.
             cube[0].header['CRVAL3'] = cube[0].header['CRVAL3']/1000.
         elif cube[0].header['CUNIT3'].lower().strip() == 'km/s':
             pass
         else:
-            print_log(f"Your Velocity unit {cube[0].header['CUNIT3']} is weird. Your units could be off", Configuration['OUTPUTLOG'])
+            print_log(f"MAKE_MOMENTS: Your Velocity unit {cube[0].header['CUNIT3']} is weird. Your units could be off", Configuration['OUTPUTLOG'],debug=debug)
     except KeyError:
-        print_log(f"Your CUNIT3 is missing, that is bad practice. We'll add a blank one but we're not guessing the value", Configuration['OUTPUTLOG'])
+        print_log(f"MAKE_MOMENTS: Your CUNIT3 is missing, that is bad practice. We'll add a blank one but we're not guessing the value", Configuration['OUTPUTLOG'],debug=debug)
         cube[0].header['CUNIT3'] = 'Unknown'
     #Make a 2D header to use
     hdr2D = copy.deepcopy(cube[0].header)

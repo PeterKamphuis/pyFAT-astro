@@ -367,7 +367,7 @@ def check_source(Configuration, Fits_Files, debug = False):
         raise BadSourceError('We found an initial negative total flux.')
     galaxy_box = [[z_min,z_max],[y_min,y_max],[x_min,x_max]]
     if debug:
-        print_log(f'''CHECK_SOURCE:  From the catalogue we got {Configuration['DISTANCE']}
+        print_log(f'''CHECK_SOURCE:  From the input we get Distance = {Configuration['DISTANCE']}
 ''',Configuration['OUTPUTLOG'])
     # If the provided distance  = -1 we assume a Hubble follow
     if float(Configuration['DISTANCE']) == -1.:
@@ -375,7 +375,7 @@ def check_source(Configuration, Fits_Files, debug = False):
     if float(Configuration['DISTANCE']) < 0.5:
         Configuration['DISTANCE'] = 0.5
     if debug:
-        print_log(f'''CHECK_SOURCE: We use a distance of {Configuration['DISTANCE']}.
+        print_log(f'''CHECK_SOURCE: After the checks we get Distance = {Configuration['DISTANCE']}.
 ''',Configuration['OUTPUTLOG'])
     if np.sum(Configuration['Z0_INPUT_BOUNDARY']) == 0.:
         set_boundaries(Configuration,'Z0',*convertskyangle(Configuration,[0.05,1.0], physical = True),input=True,debug=debug)
@@ -527,7 +527,7 @@ def check_source(Configuration, Fits_Files, debug = False):
 {"":8s}CHECK_SOURCE: SoFiA found a PA of {kin_pa:.2f} and we use a PA = {pa[0]:.2f} +/- {pa[1]:.2f}
 {"":8s}CHECK_SOURCE: We start with an inclination of {inclination[0]:.2f} +/- {inclination[1]:.2f}{"":8s}
 {"":8s}CHECK_SOURCE: SoFiA found a W50 of {w50:.2f} km/s
-{"":8s}CHECK_SOURCE: We will use {2.*Configuration['NO_RINGS']} for the model with a ring size of {Configuration['RING_SIZE']}.
+{"":8s}CHECK_SOURCE: We will use {2.*(Configuration['NO_RINGS']-1)} rings for the model with a ring size of {Configuration['RING_SIZE']}.
 ''',Configuration['OUTPUTLOG'])
 
 

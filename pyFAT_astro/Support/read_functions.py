@@ -418,7 +418,10 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, smoot
         int_weight = [2.]
         pa_av = [pa_av]
         maj_extent_av = [maj_extent_av]
-
+        if debug:
+            print_log(f'''GUESS_ORIENTATION: From the the initial guess with center {center}.
+{'':8s} We get pa = {pa_av}, inclination = {inclination_av}, maj_extent_av {maj_extent_av}
+''',Configuration['OUTPUTLOG'],screen =True)
         for mod in beam_check:
 
             for i in [[-1,-1],[-1,1],[1,-1],[1,1]]:
@@ -426,24 +429,23 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, smoot
 
                 if debug:
                     print_log(f'''GUESS_ORIENTATION: Checking at location RA = {center_tmp[0]} pix, DEC = {center_tmp[1]} pix
-        ''',Configuration['OUTPUTLOG'],screen =True)
+''',Configuration['OUTPUTLOG'],screen =True)
 
-                inclination_tmp, pa_tmp, maj_extent_tmp= get_inclination_pa(Configuration, mom0, center_tmp, cutoff = scale_factor* median_noise_in_map, figure_name=f'{Configuration["LOG_DIRECTORY"]}loc_{center_tmp[0]:.2f}_{center_tmp[1]:.2f}',debug = debug)
+                inclination_tmp, pa_tmp, maj_extent_tmp= get_inclination_pa(Configuration, mom0, center_tmp, cutoff = scale_factor* median_noise_in_map, figure_name=f'{Configuration["LOG_DIRECTORY"]}loc_{center_tmp[0]:.2f}_{center_tmp[1]:.2f}',debug = False)
                 inclination_av.append(inclination_tmp)
                 pa_av.append(pa_tmp)
                 int_weight.append(mod/beam_check[0]*0.25)
                 maj_extent_av.append(maj_extent_tmp)
-        if debug:
-            print_log(f'''GUESS_ORIENTATION: But it is necessary
-''',Configuration['OUTPUTLOG'],screen =True)
+
         int_weight = np.array(int_weight)
         weight = np.array([1./x[1] for x in inclination_av],dtype= float)*int_weight
         inclination = np.array([np.nansum(np.array([x[0] for x in inclination_av],dtype=float)*weight)/np.nansum(weight),\
                                 np.nansum(np.array([x[1] for x in inclination_av],dtype=float)*weight)/np.nansum(weight)],dtype=float)
         weight = np.array([1./x[1] for x in pa_av],dtype= float)
         if debug:
-            print_log(f'''GUESS_ORIENTATION: We find these pa_av
+            print_log(f'''GUESS_ORIENTATION: We find these pa and inclination
 {'':8s} pa = {' '.join([f'{float(x[0]):.2f}' for x in pa_av])}
+{'':8s} inclination = {' '.join([f'{float(x[0]):.2f}' for x in inclination_av])}
 {'':8s} int_weights = {' '.join([f'{float(x):.2f}' for x in int_weight])}
 {'':8s} weights = {' '.join([f'{float(x):.2f}' for x in weight])}
 ''',Configuration['OUTPUTLOG'])
@@ -475,7 +477,7 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, smoot
 ''',Configuration['OUTPUTLOG'])
                 #map[3*minimum_noise_in_map > noise_map] = 0.
         # From these estimates we also get an initial SBR
-        maj_profile,maj_axis,maj_resolution = get_profile(Configuration,map, pa[0],center,debug=debug)
+        maj_profile,maj_axis,maj_resolution = get_profile(Configuration,map, pa[0],center,debug=False)
         # let's get an intensity weighted center for the extracted profile.
 
         center_of_profile = np.sum(maj_profile*maj_axis)/np.sum(maj_profile)
@@ -493,8 +495,8 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, smoot
             diff = diff+abs(pos_profile[-1]-neg_profile[-1])*abs(np.mean([pos_profile[-1],neg_profile[-1]]))
         diff = diff/np.nanmin([neg_index.size,pos_index.size])
         if debug:
-            print_log(f'''GUESS_ORIENTATION:'BMAJ in pixels, center of profile, center, difference between pos and neg
-{'':8s}{Configuration['BEAM_IN_PIXELS'][0]*0.5} {center_of_profile} {center} {diff}
+            print_log(f'''GUESS_ORIENTATION:'BMAJ in pixels, center of the profile, current center, difference between pos and neg
+{'':8s}{Configuration['BEAM_IN_PIXELS'][0]} {center_of_profile} {center} {diff}
 ''',Configuration['OUTPUTLOG'],screen=True)
 
         # if the center of the profile is more than half a beam off from the Sofia center let's see which on provides a more symmetric profile
@@ -524,6 +526,10 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, smoot
 ''',Configuration['OUTPUTLOG'])
 
         else:
+            if debug:
+                print_log(f'''GUESS_ORIENTATION: The previous center and that of the SBR profile are not separated by more than half a beam.
+{'':8s}GUESS_ORIENTATION: Keeping the last center
+''',Configuration['OUTPUTLOG'])
             center_stable = True
     print_log(f'''GUESS_ORIENTATION: Looking for the Initial surface brightness profile.
 ''',Configuration['OUTPUTLOG'], debug = debug, screen =True)
@@ -1090,13 +1096,13 @@ def sofia_catalogue(Configuration,Fits_Files, Variables =['id','x','x_min','x_ma
 
                             if source_size/cube > 0.5:
                                 print_log(f'''SOFIA_CATALOGUE: We discarded a very large source, so we will restore is and try for that.
-    !!!!!!!!!!!!!!!!!!!!!!!!! This means your original cube is in principle too small!!!!!!!!!!!!!!!!!!!!!!!!
-    ''',Configuration['OUTPUTLOG'],screen=True)
+!!!!!!!!!!!!!!!!!!!!!!!!! This means your original cube is in principle too small!!!!!!!!!!!!!!!!!!!!!!!!
+''',Configuration['OUTPUTLOG'],screen=True)
                                 many_sources[Variables.index('f_sum')][i]=outlist[Variables.index('f_sum')][i]
                         if np.nansum(many_sources[Variables.index('f_sum')]) == 0.:
                             print_log(f'''SOFIA_CATALOGUE:The found sources are too close to the edges of the cube. And not large enough to warrant trying them.
-    {'':8s} The edge limits were {beam_edge} beams spatially and {vel_edge} channels.
-    ''',Configuration['OUTPUTLOG'],screen=True)
+{'':8s} The edge limits were {beam_edge} beams spatially and {vel_edge} channels.
+''',Configuration['OUTPUTLOG'],screen=True)
                             raise BadCatalogueError("The found sources are too close to the edges of the cube. And not large enough to warrant trying them.")
                         else:
                             found = True
@@ -1109,7 +1115,7 @@ def sofia_catalogue(Configuration,Fits_Files, Variables =['id','x','x_min','x_ma
                 if np.nanmax(no_edge_fluxes) > 10.* np.nanmax(fluxes):
                     if debug:
                         print_log(f'''SOFIA_CATALOGUE: We discarded a very bright source, let's check wether it satisfies our minimum boundaries.
-    ''',Configuration['OUTPUTLOG'])
+''',Configuration['OUTPUTLOG'])
                     index = np.where(np.nanmax(no_edge_fluxes) == no_edge_fluxes)[0][0]
                     edge = check_edge_limits(float(outlist[Variables.index('x_min')][index]),
                                     float(outlist[Variables.index('x_max')][index]),
@@ -1120,15 +1126,15 @@ def sofia_catalogue(Configuration,Fits_Files, Variables =['id','x','x_min','x_ma
                                     Configuration,debug = debug,vel_edge=min_vel_edge)
 
                     if edge:
-                        print_log(f'''SOFIA_CATALOGUE: The bright source is very close to limits
-    ''',Configuration['OUTPUTLOG'])
+                        print_log(f'''SOFIA_CATALOGUE: The bright source is very close to limits.
+''',Configuration['OUTPUTLOG'])
                     else:
-                        print_log(f'''SOFIA_CATALOGUE: The bright source is acceptable, restoring its flux
-    ''',Configuration['OUTPUTLOG'])
+                        print_log(f'''SOFIA_CATALOGUE: The bright source is acceptable, restoring its flux.
+''',Configuration['OUTPUTLOG'])
                         many_sources  = copy.deepcopy(outlist)
                         fluxes = np.array(outlist[Variables.index('f_sum')],dtype =float)
             if debug:
-                print_log(f'''SOFIA_CATALOGUE: after checking edges we find these fluxes
+                print_log(f'''SOFIA_CATALOGUE: after checking edges we find these fluxes:
 {'':8s}{many_sources[Variables.index('f_sum')]}
 ''',Configuration['OUTPUTLOG'])
         else:
@@ -1147,8 +1153,8 @@ def sofia_catalogue(Configuration,Fits_Files, Variables =['id','x','x_min','x_ma
 
     check_mask(Configuration,outlist[Variables.index('id')],Fits_Files,debug=debug)
     if debug:
-        print_log(f'''SOFIA_CATALOGUE: we found these values
-{'':8s}{outlist}
+        print_log(f'''SOFIA_CATALOGUE: we found these values:
+{chr(10).join([f'{"":8s}{x} = {y}' for x,y in zip(Variables,outlist)])}
 ''',Configuration['OUTPUTLOG'])
     return outlist
 sofia_catalogue.__doc__ =f'''
