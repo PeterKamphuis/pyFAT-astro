@@ -802,6 +802,7 @@ def fix_profile(Configuration, key, profile, Tirific_Template, debug= False, inn
     if key in ['VROT']:
         indexes = [0]
         inner_mean = 0.
+        profile[0,0] = 0.
     else:
         for i in indexes:
             profile[i,:inner_fix[i]] = inner_mean
@@ -933,8 +934,13 @@ def fix_sbr(Configuration,Tirific_Template, smooth = False, debug=False):
         print_log(f'''FIX_SBR: retrieved errors.
 {'':8s}errors  = {errors}
 ''',Configuration['OUTPUTLOG'])
-    error_weights = cutoff_limits/sm_sbr*1./np.nanmin(cutoff_limits[:,2:]/sm_sbr[:,2:])
+    no_zero_sbr = copy.deepcopy(sm_sbr)
+    zeros = np.where(no_zero_sbr < 1e-9)
+    no_zero_sbr[zeros] = 0.1*cutoff_limits[zeros]
+    error_weights = cutoff_limits/no_zero_sbr*1./np.nanmin(cutoff_limits[:,2:]/no_zero_sbr[:,2:])
     error_weights[:,0] = 3.
+    for i in [0,1]:
+        error_weights[i] = [x if x <100. else 100. for x in error_weights[i]]
     errors =errors*error_weights
     if debug:
         print_log(f'''FIX_SBR: weighed errors errors.
@@ -2863,7 +2869,7 @@ def set_sbr_fitting(Configuration,Tirific_Template, stage = 'no_stage',debug = F
             Tirific_Template[f"SBR{ext}"]= f"{' '.join([f'{x:{format}}' for x in sbr_profile[i]])}"
 
         sbr_smoothed_profile = smooth_profile(Configuration,Tirific_Template,'SBR',
-                                min_error= sbr_ring_limits,no_apply = True,
+                                min_error= [sbr_ring_limits,sbr_ring_limits],no_apply = True,
                                 fix_sbr_call = True,profile_in = sbr_profile ,debug=debug)
         if Configuration['SIZE_IN_BEAMS'] < max_size:
             sbr_input['VARY'] =  np.array([f"SBR {x+1} SBR_2 {x+1}" for x in range(len(radii)-1,inner_ring-1,-1)],dtype=str)

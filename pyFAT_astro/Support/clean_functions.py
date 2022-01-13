@@ -6,8 +6,10 @@ import os,signal,sys
 import numpy as np
 import traceback
 from datetime import datetime
-from pyFAT_astro.Support.support_functions import print_log,finish_current_run,set_format,create_directory,get_system_string
+from pyFAT_astro.Support.support_functions import print_log,finish_current_run,get_from_template,\
+                                    set_format,get_ring_weights,create_directory,get_system_string
 from pyFAT_astro.Support.fits_functions import make_moments
+from pyFAT_astro.Support.modify_template import get_error
 from pyFAT_astro.Support.write_functions import make_overview_plot,plot_usage_stats,tirific,write_config
 from pyFAT_astro.Support.read_functions import tirific_template,load_tirific,load_template
 class SofiaMissingError(Exception):
@@ -567,7 +569,8 @@ def finish_galaxy(Configuration,maximum_directory_length,current_run = 'Not init
         # We need to produce a FinalModel Directory with moment maps and an XV-Diagram of the model.
         if any([True if 'fit_' in x else False for x in Configuration['FITTING_STAGES']]):
             create_directory('Finalmodel',Configuration['FITTING_DIR'])
-            transfer_errors(Configuration,fit_type=Configuration['USED_FITTING'])
+            if 'tirshaker' not in Configuration['FITTING_STAGES']:
+                transfer_errors(Configuration,fit_type=Configuration['USED_FITTING'],debug=debug)
             linkname = f"../{Configuration['USED_FITTING']}/{Configuration['USED_FITTING']}"
             os.symlink(f"{linkname}.fits",f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel.fits")
             os.symlink(f"{linkname}.def",f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel.def")
@@ -630,6 +633,21 @@ finish_galaxy.__doc__ =f'''
 def transfer_errors(Configuration,fit_type='Undefined',debug = False):
     # Load the final file
     Tirific_Template = tirific_template(filename = f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def",debug= debug)
+    variables = ['INCL','PA','VROT','SDIS','SBR','VSYS','XPOS','YPOS','Z0']
+    weights = get_ring_weights(Configuration,Tirific_Template,debug=debug)
+    for parameter in variables:
+        profile = np.array(get_from_template(Configuration,Tirific_Template, [parameter,f"{parameter}_2"]),dtype=float)
+        sm_profile1,sm_profile2= load_tirific(Configuration,f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}_Iteration_{Configuration['ITERATIONS']}.def",Variables=[parameter,f"{parameter}_2"],unpack=True,debug=debug)
+        sm_profile = np.array([sm_profile1,sm_profile2])
+        if parameter == 'VROT':
+            apply_max= False
+        else:
+            apply_max = True
+        errors = get_error(Configuration,sm_profile,profile,parameter,min_error=Configuration['MIN_ERROR'][parameter],apply_max_error = apply_max,weights = weights,debug=debug)
+        format = set_format(parameter)
+        Tirific_Template.insert(parameter,f"# {parameter}_ERR",f"{' '.join([f'{x:{format}}' for x in errors[0]])}")
+        Tirific_Template.insert(f"{parameter}_2",f"# {parameter}_2_ERR",f"{' '.join([f'{x:{format}}' for x in errors[1]])}")
+
     # Get the errors from the input
     errors_to_transfer= ['VROT_ERR','VROT_2_ERR','INCL_ERR','INCL_2_ERR','PA_ERR','PA_2_ERR','SDIS_ERR','SDIS_2_ERR','Z0_ERR','Z0_2_ERR']
     FAT_Model = load_tirific(Configuration,f"{Configuration['FITTING_DIR']}{fit_type}_In.def",Variables=errors_to_transfer,unpack=False,debug=debug)
@@ -637,13 +655,13 @@ def transfer_errors(Configuration,fit_type='Undefined',debug = False):
     Tirific_Template['GR_CONT']=' '
     Tirific_Template.insert('GR_CONT','RESTARTID','0')
     Tirific_Template.insert('MINDELTA','DISTANCE',Configuration['DISTANCE'])
-    length_of_current = int(Tirific_Template['NUR'])
-    for key in errors_to_transfer:
-        format = set_format(key[:-4])
-        Tirific_Template.insert(key[:-4],f"# {key}",f"{' '.join([f'{x:{format}}' for x in FAT_Model[:length_of_current,errors_to_transfer.index(key)]])}")
-        if length_of_current > len(FAT_Model[:,errors_to_transfer.index(key)]):
-            Tirific_Template[f"# {key}"] = Tirific_Template[f"# {key}"]+\
-                             f"{' '.join([f'{FAT_Model[-1,errors_to_transfer.index(key)]:{format}}' for x in range(length_of_current-len(FAT_Model[:,errors_to_transfer.index(key)]))])}"
+    #length_of_current = int(Tirific_Template['NUR'])
+    #for key in errors_to_transfer:
+    #    format = set_format(key[:-4])
+    #    Tirific_Template.insert(key[:-4],f"# {key}",f"{' '.join([f'{x:{format}}' for x in FAT_Model[:length_of_current,errors_to_transfer.index(key)]])}")
+    #    if length_of_current > len(FAT_Model[:,errors_to_transfer.index(key)]):
+    #        Tirific_Template[f"# {key}"] = Tirific_Template[f"# {key}"]+\
+    #                         f"{' '.join([f'{FAT_Model[-1,errors_to_transfer.index(key)]:{format}}' for x in range(length_of_current-len(FAT_Model[:,errors_to_transfer.index(key)]))])}"
     # write back to the File
     tirific(Configuration,Tirific_Template, name = f"{fit_type}/{fit_type}.def", debug = debug)
 

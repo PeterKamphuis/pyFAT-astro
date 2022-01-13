@@ -46,20 +46,23 @@ def check_central_convergence(Configuration,Tirific_Template, fit_type = 'Undefi
 ''',Configuration['OUTPUTLOG'],debug = True)
     update_statistic(Configuration, message= "Starting the central convergence run", debug=debug)
 
-    new_xpos,new_ypos,new_vsys = rf.load_tirific(Configuration,f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def",Variables = ['XPOS','YPOS','VSYS'],debug = debug)
-    old_xpos,old_ypos,old_vsys = rf.load_tirific(Configuration,f"{Configuration['FITTING_DIR']}{fit_type}_In.def",Variables = ['XPOS','YPOS','VSYS'],debug = debug)
+    new_pos = rf.load_tirific(Configuration,f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def",Variables = ['XPOS','YPOS','VSYS'],debug = debug)
+    old_pos = rf.load_tirific(Configuration,f"{Configuration['FITTING_DIR']}{fit_type}_In.def",Variables = ['XPOS','YPOS','VSYS'],debug = debug)
     if Configuration['OUTER_RINGS_DOUBLED']:
         shift_beam_frac = set_limits(Configuration['SIZE_IN_BEAMS']*0.1/Configuration['CENTRAL_CONVERGENCE_COUNTER'],Configuration['SIZE_IN_BEAMS']*0.05,Configuration['SIZE_IN_BEAMS']*0.15)
         #shift_beam_frac =Configuration['SIZE_IN_BEAMS']*0.05
     else:
         #shift_beam_frac = 0.15
         shift_beam_frac = set_limits(0.25/Configuration['CENTRAL_CONVERGENCE_COUNTER'],0.15,0.3)
-    ra_lim = set_limits(shift_beam_frac*Configuration['BEAM'][0]/3600.,np.max([Configuration['PIXEL_SIZE'],1./3600.]),Configuration['BEAM'][0]/3600.,debug = debug )
-    dec_lim =set_limits(shift_beam_frac*Configuration['BEAM'][0]/3600.,np.max([Configuration['PIXEL_SIZE'],1./3600.]),Configuration['BEAM'][0]/3600.,debug = debug )
-    sys_lim = set_limits(0.5*Configuration['CHANNEL_WIDTH'],2.5, 2.*Configuration['CHANNEL_WIDTH'],debug = debug )
-    if abs(new_xpos[0] - old_xpos[0]) > ra_lim or \
-       abs(new_ypos[0] - old_ypos[0]) > dec_lim or \
-       abs(new_vsys[0] - old_vsys[0]) > sys_lim:
+    limits = [set_limits(shift_beam_frac*Configuration['BEAM'][0]/3600.,np.max([Configuration['PIXEL_SIZE'],1./3600.]),Configuration['BEAM'][0]/3600.,debug = debug ), \
+              set_limits(shift_beam_frac*Configuration['BEAM'][0]/3600.,np.max([Configuration['PIXEL_SIZE'],1./3600.]),Configuration['BEAM'][0]/3600.,debug = debug ), \
+              set_limits(0.5*Configuration['CHANNEL_WIDTH'],2.5, 2.*Configuration['CHANNEL_WIDTH'],debug = debug )]
+    vars = ['RA','DEC','VSYS']
+    outstr = ""
+    for i,var in enumerate(vars):
+        outstr = outstr+f'{"":8s}The {var} has shifted from {old_pos[i][0]} to  {new_pos[i][0]} which is a difference of {abs(new_pos[i][0] - old_pos[i][0])} needed = {limits[i]}.\n'
+
+    if any([True if abs(x[0]-y[0]) > lim else False for x,y,lim in zip(old_pos,new_pos,limits) ]):
         if Configuration['SIZE_IN_BEAMS'] < 20:
             apply_limit = 2.*Configuration['BEAM'][0]/3600.
 
@@ -68,8 +71,7 @@ def check_central_convergence(Configuration,Tirific_Template, fit_type = 'Undefi
                 apply_limit = Configuration['BEAM'][0]/3600.*Configuration['SIZE_IN_BEAMS']
             else:
                 apply_limit = Configuration['BEAM'][0]/3600.*Configuration['SIZE_IN_BEAMS']*0.2
-        if abs(new_xpos[0] - old_xpos[0]) > apply_limit or\
-           abs(new_ypos[0] - old_ypos[0]) > apply_limit:
+        if any([True if abs(x[0]-y[0]) > apply_limit else False for x,y in zip(old_pos[:-1],new_pos[:-1]) ]):
            print_log(f'''CHECK_CONVERGENCE: The center shifted more than {apply_limit/(Configuration['BEAM'][0]/3600.)} FWHM.
 {"":8s}CHECK_CONVERGENCE: Not applying this shift
 ''', Configuration['OUTPUTLOG'])
@@ -79,57 +81,33 @@ def check_central_convergence(Configuration,Tirific_Template, fit_type = 'Undefi
             #             'Z0', 'SBR', 'INCL','PA','SDIS','VROT_2',  'Z0_2','SBR_2','INCL_2','PA_2','SDIS_2'],debug=debug)
            return False
         else:
-            try:
-                old_xpos,old_ypos,old_vsys = rf.load_tirific(Configuration,f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}_Prev2.def",Variables = ['XPOS','YPOS','VSYS'],debug=debug)
-                if abs(new_xpos[0] - old_xpos[0]) < ra_lim and \
-                   abs(new_ypos[0] - old_ypos[0]) < dec_lim and \
-                   abs(new_vsys[0] - old_vsys[0]) < sys_lim:
+            if Configuration['ITERATIONS'] >= 3:
+                old_pos_2 = rf.load_tirific(Configuration,f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}_Iteration_{Configuration['ITERATIONS']-2}.def",Variables = ['XPOS','YPOS','VSYS'],debug=debug)
+                if any([True if abs(x[0]-y[0]) > lim else False for x,y,lim in zip(old_pos_2,new_pos,limits) ]):
                    print_log(f'''CHECK_CONVERGENCE: The center shifted back to the old position. Moving on to the next stage.
 ''', Configuration['OUTPUTLOG'])
                    #write_new_to_template(Configuration,f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def", Tirific_Template,debug=debug)
                    return True
-            except:
-                pass
             print_log(f'''CHECK_CONVERGENCE: The center shifted too much trying again with new center.
-{"":8s}The RA has shifted from {old_xpos[0]} to  {new_xpos[0]} which is a difference of {abs(new_xpos[0] - old_xpos[0])} needed = {ra_lim}.
-{"":8s}The DEC has shifted from {old_ypos[0]} to  {new_ypos[0]} which is a difference of {abs(new_ypos[0] - old_ypos[0])} needed = {dec_lim}.
-{"":8s}The VSYS has shifted from {old_vsys[0]} to  {new_vsys[0]} which is a difference of {abs(new_vsys[0] - old_vsys[0])} needed = {sys_lim}.
-''', Configuration['OUTPUTLOG'])
-            if  abs(new_xpos[0] - old_xpos[0]) < ra_lim:
-                if debug:
-                    print_log(f'''CHECK_CONVERGENCE: We are fixing the XPOS.
-''', Configuration['OUTPUTLOG'])
-                if 'XPOS' not in Configuration['CENTRAL_FIX']:
-                    Configuration['CENTRAL_FIX'].append('XPOS')
-            else:
-                if 'XPOS' in Configuration['CENTRAL_FIX']:
-                    Configuration['CENTRAL_FIX'].remove('XPOS')
-            if  abs(new_ypos[0] - old_ypos[0]) < dec_lim:
-                if debug:
-                    print_log(f'''CHECK_CONVERGENCE: We are fixing the YPOS.
-''', Configuration['OUTPUTLOG'])
-                if 'YPOS' not in Configuration['CENTRAL_FIX']:
-                    Configuration['CENTRAL_FIX'].append('YPOS')
-            else:
-                if 'YPOS' in Configuration['CENTRAL_FIX']:
-                    Configuration['CENTRAL_FIX'].remove('YPOS')
-            if  abs(new_vsys[0] - old_vsys[0]) < sys_lim:
-                if debug:
-                    print_log(f'''CHECK_CONVERGENCE: We are fixing the VSYS.
-''', Configuration['OUTPUTLOG'])
-                    if 'VSYS' not in Configuration['CENTRAL_FIX']:
-                        Configuration['CENTRAL_FIX'].append('VSYS')
-                else:
-                    if 'VSYS' in Configuration['CENTRAL_FIX']:
-                        Configuration['CENTRAL_FIX'].remove('VSYS')
+{outstr}''', Configuration['OUTPUTLOG'])
+            if Configuration['SIZE_IN_BEAMS'] > 8.:
+                for i,var in enumerate(vars):
+                    if  abs(new_pos[i][0] - old_pos[i][0]) < limits[i]:
+                        if debug:
+                            print_log(f'''CHECK_CONVERGENCE: We are fixing the {var}.
+        ''', Configuration['OUTPUTLOG'])
+                        if var not in Configuration['CENTRAL_FIX']:
+                            Configuration['CENTRAL_FIX'].append(var)
+                    else:
+                        if var in Configuration['CENTRAL_FIX']:
+                            Configuration['CENTRAL_FIX'].remove(var)
+
             #write_new_to_template(Configuration,f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def", Tirific_Template,debug=debug)
             return False
     else:
         print_log(f'''CHECK_CONVERGENCE: The center is accepted. The shift is:
-{"":8s}The RA has shifted from {old_xpos[0]} to  {new_xpos[0]} which is a difference of {abs(new_xpos[0] - old_xpos[0])} needed = {ra_lim}.
-{"":8s}The DEC has shifted from {old_ypos[0]} to  {new_ypos[0]} which is a difference of {abs(new_ypos[0] - old_ypos[0])} needed = {dec_lim}.
-{"":8s}The VSYS has shifted from {old_vsys[0]} to  {new_vsys[0]} which is a difference of {abs(new_vsys[0] - old_vsys[0])} needed = {sys_lim}.
-''', Configuration['OUTPUTLOG'])
+{outstr}''', Configuration['OUTPUTLOG'])
+
         #write_new_to_template(Configuration,f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def", Tirific_Template,debug=debug)
         return True
 check_central_convergence.__doc__ =f'''

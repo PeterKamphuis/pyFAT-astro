@@ -1607,10 +1607,10 @@ def get_inclination_pa(Configuration, Image, center, cutoff = 0., debug = False,
         if debug:
             if i == 0:
                 print_log(f'''GET_INCLINATION_PA: We initially find these indeces min {min_index } {angles[min_index]} max {max_index} {angles[max_index]}.
-#''',Configuration['OUTPUTLOG'],screen=True)
+''',Configuration['OUTPUTLOG'],screen=True)
             else:
                 print_log(f'''GET_INCLINATION_PA: From the cleaned map we find these indeces min {min_index }  {angles[min_index]} max {max_index} {angles[max_index]}.
-#''',Configuration['OUTPUTLOG'],screen=True)
+''',Configuration['OUTPUTLOG'],screen=True)
         #get a 10% bracket
 
         tenp_max_index = np.where(ratios > np.nanmax(ratios)*0.9)[0]
