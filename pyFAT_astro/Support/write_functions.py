@@ -187,7 +187,7 @@ def initialize_def_file(Configuration, Fits_Files,Tirific_Template,Initial_Param
                                initial_estimates=parameters, debug=debug)
 
     tirific(Configuration,Tirific_Template,name = f'{fit_type}_In.def', debug=debug)
-    
+
 initialize_def_file.__doc__ =f'''
  NAME:
     initialize_def_file
@@ -240,7 +240,7 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
         moment1 = fits.open(f"{Configuration['FITTING_DIR']}/Sofia_Output/{Fits_Files['MOMENT1']}")
         moment2 = fits.open(f"{Configuration['FITTING_DIR']}/Sofia_Output/{Fits_Files['MOMENT2']}")
         channels_map = fits.open(f"{Configuration['FITTING_DIR']}/Sofia_Output/{Fits_Files['CHANNEL_MAP']}")
-        im_wcs = WCS(moment0[0].header)
+        im_wcs = WCS(moment0[0].header).celestial
 
     # Open the model info
     if debug:
