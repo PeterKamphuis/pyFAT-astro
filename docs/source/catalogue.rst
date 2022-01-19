@@ -32,7 +32,7 @@ A SoFiA2 Catalogue
 If you have already ran SoFiA2 on your data cube and extracted the cubelets there is no need to have pyFAT run SoFia2 again, you can simply provide the catalogue.
 To run in this mode the fitting.fitting_stages should contain the stage 'Sofia_Catalogue' and the sofia basename (in later sofia2 versions this is specified as output.filename) should be provided, e.g:
 
-  pyFAT fitting.fitting_stages='['Sofia_Catalogue','Fit_Tirific_OSC']' input.sofia_basename='my_sofia_run'
+  pyFAT input.catalogue="my_sofia_run_cat.txt" fitting.fitting_stages="[Sofia_Catalogue,Fit_Tirific_OSC]" input.sofia_basename='my_sofia_run'
 
 If the sofia_dir is left unset the sofia products are assumed to be in the main directory in a directory called basename_cubelets where basename is replaced with the sofia_basename input. If one sets the sofia_dir this should refer to the cubelets directory.
 

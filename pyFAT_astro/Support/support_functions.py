@@ -244,8 +244,8 @@ def clean_header(Configuration,hdr_in,two_dim=False,mask_file=False, debug = Fal
             else:
                 hdr['CUNIT3'] = 'km/s'
             print_log(f'''CLEAN_HEADER: Your header did not have a unit for the third axis, that is bad policy.
-    {"":8s} We have set it to {hdr['CUNIT3']}. Please ensure that is correct.'
-    ''',Configuration['OUTPUTLOG'])
+{"":8s} We have set it to {hdr['CUNIT3']}. Please ensure that is correct.'
+''',Configuration['OUTPUTLOG'])
         if hdr['CUNIT3'].upper() == 'HZ' or hdr['CTYPE3'].upper() == 'FREQ':
             print_log('CLEAN_HEADER: FREQUENCY IS NOT A SUPPORTED VELOCITY AXIS.', Configuration['OUTPUTLOG'],screen=True)
             raise BadHeaderError('The Cube has frequency as a velocity axis this is not supported')
@@ -254,16 +254,16 @@ def clean_header(Configuration,hdr_in,two_dim=False,mask_file=False, debug = Fal
         if hdr['CTYPE3'].upper() not in vel_types:
             if hdr['CTYPE3'].split('-')[0].upper() in ['RA','DEC']:
                 print_log(f'''CLEAN_HEADER: Your zaxis is a spatial axis not a velocity axis.
-    {"":8s}CLEAN_HEADER: Please arrange your cube logically
-    ''',Configuration['OUTPUTLOG'],screen=True)
+{"":8s}CLEAN_HEADER: Please arrange your cube logically
+''',Configuration['OUTPUTLOG'],screen=True)
                 raise BadHeaderError("The Cube's third axis is not a velocity axis")
             hdr['CTYPE3'] = 'VELO'
             print_log(f'''CLEAN_HEADER: Your velocity projection is not standard. The keyword is changed to VELO (relativistic definition). This might be dangerous.
-    ''',Configuration['OUTPUTLOG'])
+''',Configuration['OUTPUTLOG'])
 
         if hdr['CUNIT3'].lower() == 'km/s':
             print_log( f'''CLEAN_HEADER: The channels in your input cube are in km/s. This sometimes leads to problems with wcs lib, hence we change it to m/s.'
-    ''',Configuration['OUTPUTLOG'])
+''',Configuration['OUTPUTLOG'])
             hdr['CUNIT3'] = 'm/s'
             hdr['CDELT3'] = hdr['CDELT3']*1000.
             hdr['CRVAL3'] = hdr['CRVAL3']*1000.
@@ -297,17 +297,18 @@ def clean_header(Configuration,hdr_in,two_dim=False,mask_file=False, debug = Fal
             hdr['BMAJ']= hdr['BMMAJ']/3600.
         else:
             found = False
-            for line in hdr['HISTORY']:
-                tmp = [x.strip().upper() for x in line.split()]
-                if 'BMAJ=' in tmp:
-                    hdr['BMAJ'] = tmp[tmp.index('BMAJ=') + 1]
-                    found = True
-                if 'BMIN=' in tmp:
-                    hdr['BMIN'] = tmp[tmp.index('BMIN=') + 1]
-                if 'BPA=' in tmp:
-                    hdr['BPA'] = tmp[tmp.index('BPA=') + 1]
-                if found:
-                    break
+            if 'HISTORY' in hdr:
+                for line in hdr['HISTORY']:
+                    tmp = [x.strip().upper() for x in line.split()]
+                    if 'BMAJ=' in tmp:
+                        hdr['BMAJ'] = tmp[tmp.index('BMAJ=') + 1]
+                        found = True
+                    if 'BMIN=' in tmp:
+                        hdr['BMIN'] = tmp[tmp.index('BMIN=') + 1]
+                    if 'BPA=' in tmp:
+                        hdr['BPA'] = tmp[tmp.index('BPA=') + 1]
+                    if found:
+                        break
             if not found:
                 print_log(f'''CLEAN_HEADER: WE CANNOT FIND THE MAJOR AXIS FWHM IN THE HEADER
 ''',Configuration['OUTPUTLOG'],screen=True)
@@ -346,15 +347,16 @@ def clean_header(Configuration,hdr_in,two_dim=False,mask_file=False, debug = Fal
     try:
         if len(hdr['HISTORY']) > 10:
             del hdr['HISTORY']
-            print_log( f'''CLEAN_HEADER: Your cube has a significant history attached we are removing it for easier interpretation.
+            if Configuration['OUTPUTLOG']:
+                print_log( f'''CLEAN_HEADER: Your cube has a significant history attached we are removing it for easier interpretation.
 ''',Configuration['OUTPUTLOG'])
     except KeyError:
         pass
     try:
         if abs(hdr['BMAJ']/hdr['CDELT1']) < 2:
             print_log( f'''CLEAN_HEADER: !!!!!!!!!!Your cube has less than two pixels per beam major axis.!!!!!!!!!!!!!!!!!
-    {"":8s}CLEAN_HEADER: !!!!!!!!!!           This will lead to bad results.              !!!!!!!!!!!!!!!!'
-    ''',Configuration['OUTPUTLOG'])
+{"":8s}CLEAN_HEADER: !!!!!!!!!!           This will lead to bad results.              !!!!!!!!!!!!!!!!'
+''',Configuration['OUTPUTLOG'])
 
         if abs(hdr['BMAJ']/hdr['CDELT1']) > hdr['NAXIS1']:
             print_log( f'''CLEAN_HEADER: !!!!!!!!!!Your cube is smaller than the beam major axis. !!!!!!!!!!!!!!!!!
@@ -754,6 +756,7 @@ def copy_homemade_sofia(Configuration,no_cat=False,debug=False):
     for file in files:
         source = get_system_string(f"{Configuration['SOFIA_DIR']}{Configuration['SOFIA_BASENAME']}{file}")
         target = get_system_string(f"{Configuration['FITTING_DIR']}Sofia_Output/{Configuration['BASE_NAME']}{file}")
+        os.system(f'''rm -f {target}''')
         os.system(f'''cp {source} {target}''')
         if not os.path.exists(f"{Configuration['FITTING_DIR']}Sofia_Output/{Configuration['BASE_NAME']+file}"):
             if file in ['_mask.fits','_cat.txt']:
@@ -764,6 +767,7 @@ def copy_homemade_sofia(Configuration,no_cat=False,debug=False):
                 raise SofiaMissingError("Either the sofia mask or catalogue is missing. We can not run without it")
             else:
                 pass
+
         elif file != '_cat.txt':
             #make sure the header is decent
             two_dim = True
@@ -3111,7 +3115,7 @@ def setup_configuration(cfg):
                'PREP_END_TIME': 'Not completed',
                'START_TIME':'Not completed',
                'END_TIME':'Not completed',
-               'OUTPUTLOG':'Not set yet',
+               'OUTPUTLOG': None,
                'RUN_COUNTER': 0,
                'CENTRAL_CONVERGENCE_COUNTER': 1.,
                'ITERATIONS': 0,
