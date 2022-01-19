@@ -1185,17 +1185,16 @@ def sofia_input_catalogue(Configuration,debug=False):
                         del hdr['NAXIS4']
                         hdr['NAXIS'] = 3
                     # clean the header
-                    hdr = clean_header(Configuration,hdr,debug=debug)
-                    low_chan = float('NAN')
+                    hdr = clean_header(Configuration,hdr)
                     channel=int(0)
-                    while np.isnan(low_chan):
-                        low_chan = np.nanstd(data[channel,:,:])
+                    while np.isnan(data[channel,:,:]).all():
                         channel+=1
-                    high_chan = float('NAN')
+                    low_chan =np.nanstd(data[channel,:,:])
+
                     channel=int(-1)
-                    while np.isnan(high_chan):
-                        high_chan = np.nanstd(data[channel,:,:])
+                    while np.isnan(data[channel,:,:]).all():
                         channel-=1
+                    high_chan = np.nanstd(data[channel,:,:])
 
                     hdr['FATNOISE'] = np.mean([low_chan,high_chan])
 

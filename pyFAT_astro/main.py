@@ -4,8 +4,10 @@
 import sys
 import os
 import copy
+from datetime import datetime
 import psutil as psu
 import numpy as np
+
 from omegaconf import OmegaConf,MissingMandatoryValue
 import traceback
 import warnings
@@ -137,9 +139,12 @@ def main(argv):
                     ,cfg.print_examples,cfg.input.catalogue]):
             print(help_message)
             sys.exit()
+        #Let's write and input example to the logs directory
+        if cfg.output.debug:
+            with open(f'{cfg.input.main_directory}/FAT_Inputs-{datetime.now().strftime("%d-%m-%Y")}.yml','w') as default_write:
+                default_write.write(OmegaConf.to_yaml(cfg))
+
         #Transform all to a Configuration dictionary
-
-
         Original_Configuration = sf.setup_configuration(cfg)
 
         #First we check for sofia and TiRiFiC
@@ -340,7 +345,7 @@ def main(argv):
             #If we have Sofia Preprocessed Output request make sure it all exists
             if Configuration['DEBUG']:
                 wf.write_config(f'{Configuration["LOG_DIRECTORY"]}CFG_Before_Sofia.txt',Configuration,debug = True)
-            
+
             if 'existing_sofia' in  Configuration['FITTING_STAGES']:
                 sf.copy_homemade_sofia(Configuration,debug=Configuration['DEBUG'])
             elif 'run_sofia' in Configuration['FITTING_STAGES']:
