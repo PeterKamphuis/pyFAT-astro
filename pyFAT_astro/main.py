@@ -234,7 +234,7 @@ def main(argv):
 
             if not Configuration['SOFIA_DIR']:
                 Configuration['SOFIA_DIR'] = Configuration['FITTING_DIR']
-            ini_mode_factor =25
+            #ini_mode_factor =25
             # We initially set the variations to fixed for all parameters
             #let's see what happens if we immediately
 
@@ -262,13 +262,14 @@ def main(argv):
 
             #Make a dictionary for the fitsfiles we use
             Fits_Files = {'ORIGINAL_CUBE': f"{Full_Catalogue['CUBENAME'][current_galaxy_index]}.fits"}
+
             #if we skip the create_fat _cube stage peaople could give the fat cube itself
 
             if Fits_Files['ORIGINAL_CUBE'][-9:] == '_FAT.fits':
                 sf.print_log(f''' Your input cube ends in _FAT.fits indicating it is a FAT processed cube.
 ''',Configuration['OUTPUTLOG'],screen=True,debug=Configuration['DEBUG'])
                 if 'create_fat_cube' in Configuration['FITTING_STAGES']:
-                    sf.print_log(f''' We are remove the Create_FAT_Cube stages from the loop.
+                    sf.print_log(f''' We remove the Create_FAT_Cube stages from the loop.
 ''',Configuration['OUTPUTLOG'],screen=True,debug=Configuration['DEBUG'])
                     Configuration['FITTING_STAGES'].remove('create_fat_cube')
                 fat_ext = ''
@@ -327,6 +328,7 @@ def main(argv):
 
             # Let's see if our base cube exists, Note that cleanup removes it if we want to start from the original dir so no need to check start_point
             if not os.path.exists(f"{Configuration['FITTING_DIR']}{Fits_Files['FITTING_CUBE']}"):
+                print(f"We doing this")
                 try:
                     ff.create_fat_cube(Configuration, Fits_Files)
                 except Exception as e:
@@ -364,8 +366,6 @@ def main(argv):
                 sf.sofia_output_exists(Configuration,Fits_Files, debug = Configuration['DEBUG'])
                     # We assume sofia is ran and created the proper files
             try:
-
-
 
                 # If you add any make sure that the fitstage  starts with 'Fit_'
                 if Configuration['USED_FITTING']:

@@ -332,7 +332,7 @@ def check_source(Configuration, Fits_Files, debug = False):
         print_log(f'''CHECK_SOURCE: This galaxy has negative total flux. That will not work. Aborting.
 ''',Configuration['OUTPUTLOG'],screen = True)
         raise BadSourceError('We found an initial negative total flux.')
-    galaxy_box = [[z_min,z_max],[y_min,y_max],[x_min,x_max]]
+
     if debug:
         print_log(f'''CHECK_SOURCE:  From the catalogue we got {Configuration['DISTANCE']}
 ''',Configuration['OUTPUTLOG'])
@@ -347,18 +347,20 @@ def check_source(Configuration, Fits_Files, debug = False):
     if np.sum(Configuration['Z0_INPUT_BOUNDARY']) == 0.:
         set_boundaries(Configuration,'Z0',*convertskyangle(Configuration,[0.05,2.5],Configuration['DISTANCE'], physical = True),input=True,debug=debug)
 
-    #Check whether the cube is very large, if so cut it down
+    #Check whether the cube is very large, if so cut it down, Not if we are using a Sofia_Catalogue
+    if not 'sofia_catalogue' in Configuration['FITTING_STAGES']:
+        galaxy_box = [[z_min,z_max],[y_min,y_max],[x_min,x_max]]
+        new_box = cut_cubes(Configuration, Fits_Files, galaxy_box,debug=debug)
 
-    new_box = cut_cubes(Configuration, Fits_Files, galaxy_box,debug=debug)
-    #update our pixel values to match the new sizes
-    for i in range(len(new_box)):
-        shift = new_box[i,0]
-        if i == 0:
-            z -= shift; z_min -= shift; z_max -= shift
-        elif i == 1:
-            y -= shift; y_min -= shift; y_max -= shift
-        elif i == 2:
-            x -= shift; x_min -= shift; x_max -= shift
+        #update our pixel values to match the new sizes
+        for i in range(len(new_box)):
+            shift = new_box[i,0]
+            if i == 0:
+                z -= shift; z_min -= shift; z_max -= shift
+            elif i == 1:
+                y -= shift; y_min -= shift; y_max -= shift
+            elif i == 2:
+                x -= shift; x_min -= shift; x_max -= shift
 
     Cube = fits.open(Configuration['FITTING_DIR']+Fits_Files['FITTING_CUBE'],uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
     data = Cube[0].data

@@ -1521,6 +1521,7 @@ def get_new_center(Configuration, map_in, center, maj_extent, noise= 0., debug =
     map[map < np.max(map)/2.] = 0.
     x =  range(0,len(map[0,:]))
     y =  range(0,len(map[:,0]))
+    print(center[0])
     M10 = np.sum((x-center[0])*np.sum(map,axis=0))
     M01 = np.sum((y-center[1])*np.sum(map,axis=1))
     M00=np.sum(map)

@@ -5,7 +5,7 @@ from pyFAT_astro.Support.support_functions import Proper_Dictionary,print_log,co
                                 obtain_border_pix, get_inclination_pa,get_vel_pa,columndensity,get_profile, get_kinematical_center,\
                                 create_directory,copy_homemade_sofia,clean_header,get_new_center,update_statistic,set_boundaries
 from pyFAT_astro.Support.fits_functions import check_mask,clean_header,create_fat_cube
-from pyFAT_astro.Support.fat_errors import BadCatalogueError, NoConfigFile
+from pyFAT_astro.Support.fat_errors import BadCatalogueError, NoConfigFile,  BadSourceError
 
 from astropy.io import fits
 from astropy.wcs import WCS
@@ -401,10 +401,23 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, debug
                 pa_av.append(pa_tmp)
                 int_weight.append(mod/beam_check[0]*0.25)
                 maj_extent_av.append(maj_extent_tmp)
+        print(inclination_av,pa_av,maj_extent_av)
+        if np.isnan(np.array(inclination_av,dtype=float)).all():
+            print_log(f'''GUESS_ORIENTATION: We are unable to find an  inclination.
+''',Configuration['OUTPUTLOG'])
+            raise BadSourceError(f'We are unable to find an initial inclination.')
+
         int_weight = np.array(int_weight)
         weight = np.array([1./x[1] for x in inclination_av],dtype= float)*int_weight
+
         inclination = np.array([np.nansum(np.array([x[0] for x in inclination_av],dtype=float)*weight)/np.nansum(weight),\
                                 np.nansum(np.array([x[1] for x in inclination_av],dtype=float)*weight)/np.nansum(weight)],dtype=float)
+
+
+        if np.isnan(np.array(inclination_av,dtype=float)).all():
+            print_log(f'''GUESS_ORIENTATION: We are unable to find an PA.
+''',Configuration['OUTPUTLOG'])
+            raise BadSourceError(f'We are unable to find an initial PA.')
         weight = np.array([1./x[1] for x in pa_av],dtype= float)
         if debug:
             print_log(f'''GUESS_ORIENTATION: We find these pa_av
@@ -516,7 +529,7 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, debug
             tmp =  ndimage.gaussian_filter(Image[0].data, sigma=(sigma[1], sigma[0]), order=0)
             tmp[noise_level*minimum_noise_in_map > noise_map] =  float('NaN')
             if debug:
-                print_log(f'''GUESS_ORIENTATION: We used the threshold {noise_level} and sigme = {sigma}
+                print_log(f'''GUESS_ORIENTATION: We used the threshold {noise_level} and sigma = {sigma}
 {'':8s}We find the len {len(tmp[~np.isnan(tmp)])}
 ''',Configuration['OUTPUTLOG'])
             if len(tmp[~np.isnan(tmp)]) < 5:
@@ -529,7 +542,7 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, debug
                 VROT_initial = [0]
                 SBR_initial = [0]
                 Image.close()
-                return np.array(pa,dtype=float),np.array(inclination,dtype=float),SBR_initial,maj_extent,center[0],center[1],VROT_initial
+                return np.array(pa,dtype=float),np.array(inclination,dtype=float),SBR_initial,maj_extent,center[0],center[1],float('NaN'),VROT_initial
 
     Image.close()
     noise_map = []
@@ -1200,6 +1213,26 @@ def sofia_input_catalogue(Configuration,debug=False):
 
                     if hdr['CDELT3'] < -1:
                         raise InputError(f"Your velocity axis is declining this won't work. exiting")
+                    #Translate the big cube to parameters in this cube.
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore")
+                        coordinate_frame = WCS(hdr)
+                        x,y,z =coordinate_frame.wcs_world2pix(float(outlist[input_columns.index('ra')]),\
+                                                          float(outlist[input_columns.index('dec')]), \
+                                                          float(outlist[input_columns.index('v_app')]), 1.)
+                    shift = [int(float(outlist[input_columns.index('x')]) - x), \
+                            int(float(outlist[input_columns.index('y')]) - y),\
+                            int(float(outlist[input_columns.index('z')]) - z)]
+
+                    for i,coord in enumerate(['x','y','z']):
+                        for chang in ['','_min','_max','_peak']:
+                            val = f'{coord}{chang}'
+                            if chang == '':
+                                outlist[input_columns.index(val)] = f'{float(outlist[input_columns.index(val)])-shift[i]:.6f}'
+                            else:
+                                outlist[input_columns.index(val)] = f'{int(outlist[input_columns.index(val)])-shift[i]:d}'
+
+
                     fits.writeto(f"{Configuration['MAIN_DIRECTORY']}{basename}_FAT_cubelets/{basename}_{outlist[input_columns.index('id')]}/{basename}_{outlist[input_columns.index('id')]}_FAT.fits",data,hdr,overwrite=True)
                 create_directory(f"{Configuration['MAIN_DIRECTORY']}{basename}_FAT_cubelets/{basename}_{outlist[input_columns.index('id')]}/Sofia_Output",f"{Configuration['MAIN_DIRECTORY']}")
 
@@ -1214,7 +1247,17 @@ def sofia_input_catalogue(Configuration,debug=False):
                 with open(f"{Configuration['FITTING_DIR']}/Sofia_Output/{Configuration['BASE_NAME']}_cat.txt",'w') as cat:
                     for hline in headerlines:
                         cat.write(f"{hline}\n")
-                    cat.write(line)
+                    comline=''
+                    for col in input_columns:
+                        if input_columns.index(col) == 0:
+                            start = 0
+                        else:
+                            start = column_locations[input_columns.index(col)-1]
+                        end = column_locations[input_columns.index(col)]
+                        strlenfor = f'>{int(end-start)}s'
+                        comline = f'{comline}{outlist[input_columns.index(col)]:{strlenfor}}'
+                    cat.write(comline)
+
     Configuration['SOFIA_BASENAME'] = None
     Configuration['BASE_NAME'] = 'Unset'
     Configuration['FITTING_DIR'] = 'Unset'
