@@ -1063,16 +1063,17 @@ def fit_center_ellipse(Configuration,map,inclination= -1, pa = -1,debug=False):
 
             ratio = float(set_limits(b/a,0.2,1.0))
             inc = np.degrees(np.arccos(np.sqrt((ratio**2-0.2**2)/0.96)))
-            parameters.append([cx,cy,inc , orient])
+            parameters.append([cx,cy,inc , orient,len(y)])
+
+    x_in = [x[0] for x  in parameters]
+    y_in = [x[1] for x  in parameters]
     if inclination == -1. or pa == -1.:
-        x_center = np.mean([x[0] for x  in parameters])
-        y_center = np.mean([x[1] for x  in parameters])
+        weight = [x[-1]  for x in parameters ]
     else:
-        weight = [1./(abs(x[2]-inclination)+abs(x[3]-inclination))  for x in parameters ]
-        x_in = [x[0] for x  in parameters]
-        y_in = [x[1] for x  in parameters]
-        x_center = np.sum([x*y for x,y in zip(x_in,weight)])/np.sum(weight)
-        y_center = np.sum([x*y for x,y in zip(y_in,weight)])/np.sum(weight)
+        weight = [x[-1]/((abs(x[2]-inclination)+abs(x[3]-inclination)))  for x in parameters ]
+    x_center = np.sum([x*y for x,y in zip(x_in,weight)])/np.sum(weight)
+    y_center = np.sum([x*y for x,y in zip(y_in,weight)])/np.sum(weight)
+
     return [x_center,y_center]
 fit_center_ellipse.__doc__= '''
 NAME:
@@ -2526,7 +2527,9 @@ def obtain_ratios(Configuration, map, center, angles, noise = 0. ,debug = False)
     for angle in angles:
         #major axis
         maj_profile,maj_axis,maj_resolution = get_profile(Configuration,map,angle,center=center,debug=debug)
+
         tmp = np.where(maj_profile > noise)[0]
+
         #gauss =fit_gaussian(maj_axis[tmp], maj_profile[tmp])
         #maj_gaus = gaussian_function(maj_profile, *gauss)
         #tmp = np.where(maj_gaus > 0.2*np.nanmax(maj_gaus))[0]

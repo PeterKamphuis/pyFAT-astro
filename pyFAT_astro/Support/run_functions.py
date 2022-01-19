@@ -14,7 +14,8 @@ from pyFAT_astro.Support.read_functions import load_template,tirific_template
 
 from pyFAT_astro.Support.modify_template import write_new_to_template,smooth_profile,set_cflux,fix_sbr, \
                                           regularise_profile,set_fitting_parameters,check_size, \
-                                          no_declining_vrot,set_errors,get_warp_slope,check_angles,write_center
+                                          no_declining_vrot,set_errors,get_warp_slope,check_angles,write_center,\
+                                          set_boundary_limits
 from pyFAT_astro.Support.constants import H_0
 from pyFAT_astro.Support.fat_errors import SofiaFaintError,BadConfigurationError,\
                                               InclinationRunError,SofiaRunError,BadSourceError
@@ -38,6 +39,80 @@ import warnings
 import re
 from datetime import datetime
 
+def check_angle_convergence(Configuration,Tirific_Template, fit_type = 'Undefined', debug = False):
+    angles= {'PA': 10., 'INCL': 5.}
+    angles_ok = True
+    for key in angles:
+        new_angle = rf.load_tirific(Configuration,f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def",Variables = [key],debug = debug)[0]
+        old_angle = rf.load_tirific(Configuration,f"{Configuration['FITTING_DIR']}{fit_type}_In.def",Variables = [key],debug = debug)[0]
+        if debug:
+            print_log(f'''CHECK_ANGLE_CONVERGENCE: For {key} we had {old_angle[0]} which changed to {new_angle[0]}.
+the maximum change is {float(Configuration['MIN_ERROR'][key][0])*float(angles[key])}
+''',Configuration['OUTPUTLOG'],debug = True)
+        if abs(old_angle[0]-new_angle[0]) > float(Configuration['MIN_ERROR'][key][0])*float(angles[key]):
+            if debug:
+                print_log(f'''CHECK_ANGLE_CONVERGENCE: The {key} changed too much between iterations.
+''',Configuration['OUTPUTLOG'])
+            angles_ok = False
+
+
+    # Also here we the boundaries being ok
+    for  key in ['INCL','PA']:
+        if key in Configuration['FIXED_PARAMETERS'][0]:
+            fixed=True
+        else:
+            fixed =False
+        old_boun = np.array(Configuration[f'{key}_CURRENT_BOUNDARY'])
+        set_boundary_limits(Configuration,Tirific_Template,key, tolerance = 0.1\
+                    ,fixed = fixed,debug=debug)
+        new_boun = np.array(Configuration[f'{key}_CURRENT_BOUNDARY'])
+
+        if not np.array_equiv(old_boun,new_boun):
+            if debug:
+                print_log(f'''CHECK_ANGLE_CONVERGENCE: The {key} boundaries changed from:
+{'':8s} old boundaries =  {old_boun}
+{'':8s} new boundaries =  {new_boun}
+''',Configuration['OUTPUTLOG'])
+            angles_ok = False
+
+    #And we chek that the angles are well behaved
+    changed_angles = check_angles(Configuration,Tirific_Template,debug = debug)
+    if changed_angles:
+        if debug:
+            print_log(f'''CHECK_ANGLE_CONVERGENCE: The angles were modified in check_angles
+''',Configuration['OUTPUTLOG'])
+        angles_ok = False
+    return angles_ok
+check_angle_convergence.__doc__ =f'''
+ NAME:
+    check_angle_convergence
+
+ PURPOSE:
+    Check whether the inclination and PA have converged, are not hitting the boundaries and do not change too much from ring to ring.
+
+ CATEGORY:
+    run_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    Fits_Files = Standard FAT dictionary with filenames
+
+ OPTIONAL INPUTS:
+    debug = False
+
+    fit_type = 'Undefined'
+    type of fitting being done.
+
+ OUTPUTS:
+    Returns a boolean that is true when the change is within the limits false when not
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
 
 def check_central_convergence(Configuration,Tirific_Template, fit_type = 'Undefined', debug = False):
     #The new values are already loaded into the Tirific_Template so if we do accept we have to reset the values
@@ -75,7 +150,7 @@ def check_central_convergence(Configuration,Tirific_Template, fit_type = 'Undefi
            print_log(f'''CHECK_CONVERGENCE: The center shifted more than {apply_limit/(Configuration['BEAM'][0]/3600.)} FWHM.
 {"":8s}CHECK_CONVERGENCE: Not applying this shift
 ''', Configuration['OUTPUTLOG'])
-           write_center(Configuration,Tirific_Template, [old_xpos[0],old_ypos[0],old_vsys[0]])
+           write_center(Configuration,Tirific_Template, [x[0] for x in old_pos])
 
            #write_new_to_template(Configuration,f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def", Tirific_Template, Variables = ['VROT',
             #             'Z0', 'SBR', 'INCL','PA','SDIS','VROT_2',  'Z0_2','SBR_2','INCL_2','PA_2','SDIS_2'],debug=debug)
@@ -319,7 +394,7 @@ check_inclination.__doc__ =f'''
  PROCEDURES CALLED:
     Unspecified
 
- NOTE: This should efinitely be further explored.
+ NOTE: This should definitely be further explored.
 '''
 
 def check_source(Configuration, Fits_Files, debug = False):
@@ -626,7 +701,6 @@ def fitting_osc(Configuration,Fits_Files,Tirific_Template,Initial_Parameters):
     if Configuration['ACCEPTED']:
         print_log(f'''FITTING_OSC: The model has converged in center and extent and we make a smoothed version.
 ''',Configuration['OUTPUTLOG'],screen =True)
-        check_angles(Configuration, Tirific_Template,debug=Configuration['DEBUG'] )
         current_run = fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run,stage = 'after_os', fit_type = Configuration['USED_FITTING'],debug = Configuration['DEBUG'])
         if Configuration['OPTIMIZED']:
             make_full_resolution(Configuration,Tirific_Template,Fits_Files,current_run = current_run,fit_type = Configuration['USED_FITTING'],debug=Configuration['DEBUG'])
@@ -850,13 +924,14 @@ def one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run, de
         Configuration['CENTRAL_CONVERGENCE_COUNTER'] += 1.
         Configuration['CENTRAL_FIX'] = []
 
-
+    # Check whether the central INCL and PA are stable.
+    accepted_angle = check_angle_convergence(Configuration,Tirific_Template, fit_type = fit_type,debug=debug)
     # Check whether we have the correct sizes,
     if not Configuration['FIX_SIZE']:
         accepted_size = check_size(Configuration,Tirific_Template, fit_type = fit_type, stage = stage, current_run = current_run, debug=debug,Fits_Files=Fits_Files)
     else:
         accepted_size = True
-    if accepted and accepted_size and accepted_central:
+    if accepted and accepted_size and accepted_central and accepted_angle:
         Configuration['ACCEPTED'] = True
     else:
         Configuration['ACCEPTED'] = False
@@ -873,8 +948,11 @@ def one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run, de
         if not accepted_size:
             print_log(f'''ONE_STEP_CONVERGENCE: FAT adjusted the rings. Refitting with new settings after smoothing them.
 ''',Configuration['OUTPUTLOG'])
+        if not accepted_angle:
+            print_log(f'''ONE_STEP_CONVERGENCE: The central disk PA or INCL have changed too much.
+''',Configuration['OUTPUTLOG'])
 
-        check_angles(Configuration,Tirific_Template,debug = debug)
+
 
                     # First we fix the SBR we are left with also to set the reliable ring to configuration.
         fix_sbr(Configuration,Tirific_Template,smooth = True, debug = debug)    # Then we determine the inner rings that should remain fixed

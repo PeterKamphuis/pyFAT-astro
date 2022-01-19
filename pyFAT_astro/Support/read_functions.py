@@ -500,6 +500,7 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, smoot
 ''',Configuration['OUTPUTLOG'],screen=True)
 
         # if the center of the profile is more than half a beam off from the Sofia center let's see which on provides a more symmetric profile
+        #if False:
         if (abs(center_of_profile/(2.*np.sin(np.radians(pa[0])))*maj_resolution) > Configuration['BEAM_IN_PIXELS'][0]*0.5 \
             or abs(center_of_profile/(2.*np.cos(np.radians(pa[0])))*maj_resolution) > Configuration['BEAM_IN_PIXELS'][0]*0.5) and SNR > 3. and not checked_center:
             if debug:
@@ -616,16 +617,35 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, smoot
         vel_pa = [float('NaN'),float('NaN')]
 
     maj_profile,maj_axis,maj_resolution = get_profile(Configuration,map,pa[0], center=center,debug=debug)
+    zeros = np.where(maj_profile == 0.)[0]
+    maj_profile[zeros] = float('NaN')
     loc_max = np.mean(maj_axis[np.where(maj_profile == np.nanmax(maj_profile))[0]])
+    #print('How can we fix this')
+    #print(pa,vel_pa)
+    values = np.where(~np.isnan(maj_profile))[0]
+    #for val in values:
+    #    print(f'Rad = {maj_axis[val]}, Value = {maj_profile[val]}')
+    loc_max = np.mean(maj_axis[np.where(maj_profile == np.nanmax(maj_profile))[0]])
+    loc_min = np.mean(maj_axis[np.where(maj_profile == np.nanmin(maj_profile))[0]])
+    #print(loc_max)
+    #print(loc_min)
 
-    if loc_max > 0.:
+    #matplotlib.use('MacOSX')
+    #plt.plot(maj_axis[values],maj_profile[values])
+    #plt.ylim(np.nanmin(maj_profile)-5.,np.nanmax(maj_profile)+5.)
+    #plt.show()
+    #exit()
+
+
+    if loc_max > loc_min:
         pa[0] = pa[0]+180
-        print_log(f'''GUESS_ORIENTATION: We have modified the pa by 180 deg as we found the maximum velocity west of the center.
+        print_log(f'''GUESS_ORIENTATION: We have modified the pa by 180 deg as we found the maximum velocity west of the minimum.
 ''' , Configuration['OUTPUTLOG'])
 
     if debug:
         print_log(f'''GUESS_ORIENTATION: this is the pa {pa} and the vel_pa {vel_pa}
-''' , Configuration['OUTPUTLOG'])
+''' , Configuration['OUTPUTLOG'],screen=True)
+    
     if abs(pa[0]-vel_pa[0]) > 300.:
         if pa[0] > 180.:
             vel_pa[0] += 360.
@@ -865,11 +885,12 @@ def load_tirific(Configuration,filename,Variables = ['BMIN','BMAJ','BPA','RMS','
                  'Z0', 'SBR', 'INCL','PA','XPOS','YPOS','VSYS','SDIS','VROT_2',  'Z0_2','SBR_2',
                  'INCL_2','PA_2','XPOS_2','YPOS_2','VSYS_2','SDIS_2','CONDISP','CFLUX','CFLUX_2'],
                  unpack = True , debug = False ):
-    if debug:
-        print_log(f'''LOAD_TIRIFIC: Starting to extract the following paramaters:
-{'':8s}{Variables}
-''',Configuration['OUTPUTLOG'], debug = True)
     Variables = np.array([e.upper() for e in Variables],dtype=str)
+    if debug:
+        print_log(f'''LOAD_TIRIFIC: Starting to extract the following parameters:
+{'':8s}{Variables}
+{'':8s} From the file {filename}
+''',Configuration['OUTPUTLOG'], debug = True)
     numrings = []
     while len(numrings) < 1:
         time.sleep(0.1)

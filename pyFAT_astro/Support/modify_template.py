@@ -89,24 +89,46 @@ arc_tan_function.__doc__ =f'''
 '''
 
 def check_angles(Configuration,Tirific_Template, debug = False):
-    incl = get_from_template(Configuration,Tirific_Template, ['INCL','INCL_2'],debug=debug)
-    pa = get_from_template(Configuration,Tirific_Template, ['PA','PA_2'],debug=debug)
-
+    changed_angles=False
+    incl_in = get_from_template(Configuration,Tirific_Template, ['INCL','INCL_2'])
+    pa_in = get_from_template(Configuration,Tirific_Template, ['PA','PA_2'])
+    incl = copy.deepcopy(incl_in)
+    pa = copy.deepcopy(pa_in)
     rad =[float(x) for x in Tirific_Template['RADI'].split()]
-
+    if debug:
+        print_log(f'''CHECK_ANGLES: We start with
+{'':8s} radius = {rad}
+{'':8s} PA appr = {pa[0]}
+{'':8s} PA rec = {pa[1]}
+{'':8s} INCL appr = {incl[0]}
+{'':8s} INCL rec = {incl[1]}
+''', Configuration['OUTPUTLOG'],debug=True)
     for side in [0,1]:
         incl_too_large = (np.array(incl[side],dtype=float) > 90.)
-        incl[side] = [180.-x if y else x for x,y in zip(incl[side],incl_too_large)]
+        if len(incl_too_large):
+            incl[side] = [180.-x if y else x for x,y in zip(incl[side],incl_too_large)]
+            if debug:
+                print_log(f'''CHECK_ANGLES: Several INCL values were too large
+''', Configuration['OUTPUTLOG'])
+            changed_angles = True
 
         pa_too_large = (np.array(pa[side],dtype=float) > 360.)
-        if any(pa_too_large):
+        if len(pa_too_large):
             if np.mean(np.array(pa[side],dtype=float)[~pa_too_large]) < 180.:
                 pa[side] = [x-360. if y else x for x,y in zip(pa[side],pa_too_large)]
+                changed_angles = True
+                if debug:
+                    print_log(f'''CHECK_ANGLES: Several PA values were too large
+''', Configuration['OUTPUTLOG'])
 
         pa_too_small = (np.array(pa[side],dtype=float) < 0.)
         if any(pa_too_small) > 0:
             if np.mean(np.array(pa[side],dtype=float)[~pa_too_small]) > 180.:
                 pa[side] = [x+360. if y else x for x,y in zip(pa[side],pa_too_small)]
+                changed_angles = True
+                if debug:
+                    print_log(f'''CHECK_ANGLES: Several PA values were too small
+''', Configuration['OUTPUTLOG'])
 
         pa_tmp = max_profile_change(Configuration,rad,pa[side],'PA',slope = Configuration['WARP_SLOPE'][side],debug=debug)
         pa[side] = pa_tmp
@@ -114,15 +136,29 @@ def check_angles(Configuration,Tirific_Template, debug = False):
         incl[side] = incl_tmp
     #Ensure that we have not made PA differences
     if pa[0][0] != pa[1][0]:
-        if pa[0][0] > 360.:
-            pa[0] = pa[0]-360.
-        elif pa[0][0] < 0.:
-            pa[0] = pa[0]+360.
+        if (pa[0][0] > 360. and pa[1][0] < 360.) or \
+            (pa[0][0] < 0. and pa[1][0] > 0.):
+                pa[0][0:3] = pa[1][0:3]
+        elif(pa[0][0] < 360. and pa[1][0] > 360.) or \
+            (pa[0][0] > 0. and pa[1][0] < 0.):
+                pa[1][0:3] = pa[0][0:3]
+        if debug:
+            print_log(f'''CHECK_ANGLES: The central PA was not the same.
+''', Configuration['OUTPUTLOG'])
+        changed_angles = True
 
     Tirific_Template['INCL'] = f"{' '.join(f'{x:.2e}' for x in incl[0])}"
     Tirific_Template['INCL_2'] = f"{' '.join(f'{x:.2e}' for x in incl[1])}"
     Tirific_Template['PA'] = f"{' '.join(f'{x:.2e}' for x in pa[0])}"
     Tirific_Template['PA_2'] = f"{' '.join(f'{x:.2e}' for x in pa[1])}"
+    if debug:
+        print_log(f'''CHECK_ANGLES: We wrote to the template
+{'':8s} PA appr = {Tirific_Template['PA']}
+{'':8s} PA rec = {Tirific_Template['PA_2']}
+{'':8s} INCL appr = {Tirific_Template['INCL']}
+{'':8s} INCL rec = {Tirific_Template['INCL_2']}
+''', Configuration['OUTPUTLOG'])
+    return changed_angles
 
 
 check_angles.__doc__=f'''
@@ -143,7 +179,8 @@ check_angles.__doc__=f'''
     debug = False
 
  OUTPUTS:
-    No output Tirific_Template is modified
+    Tirific_Template is modified
+    output is boolean indicating changes were made or not.
 
  OPTIONAL OUTPUTS:
 
@@ -1849,7 +1886,7 @@ def set_boundary_limits(Configuration,Tirific_Template,key,values = [0.,0.],  to
     if debug:
         print_log(f'''SET_BOUNDARY_LIMITS: We have adjusted the boundaries to  {Configuration[f"{key}_CURRENT_BOUNDARY"]}.
 ''',Configuration['OUTPUTLOG'])
-    return current_boundaries
+
 set_boundary_limits.__doc__ =f'''
  NAME:
     set_boundary_limits
@@ -2022,7 +2059,7 @@ def set_fitting_parameters(Configuration, Tirific_Template, parameters_to_adjust
             parameters_to_adjust = ['INCL','PA','VROT','SDIS','SBR','Z0','XPOS','YPOS','VSYS']
         elif stage in  ['initialize_os','run_os','after_os']:
             if Configuration['ITERATIONS'] == 0:
-                parameters_to_adjust = ['VSYS','XPOS','YPOS','SBR','VROT','INCL','PA','SDIS','Z0']
+                parameters_to_adjust = ['SBR','VROT','SDIS','INCL','PA','VSYS','XPOS','YPOS','Z0']
             else:
                 parameters_to_adjust = ['VSYS','XPOS','YPOS','INCL','PA','SBR','VROT','SDIS','Z0']
         else:
@@ -2052,9 +2089,9 @@ def set_fitting_parameters(Configuration, Tirific_Template, parameters_to_adjust
             elif key == 'VROT':
                 initial_estimates['VROT'] = [np.nanmax(profile),set_limits(np.nanstd(profile[1:]),np.nanmax(profile)-np.nanmin(profile[1:]),np.nanmax(profile))]
             elif key == 'XPOS':
-                initial_estimates['XPOS'] = [profile[0],Configuration['BEAM_IN_PIXELS'][1]*Configuration['PIXEL_SIZE']]
+                initial_estimates['XPOS'] = [profile[0],0.1*Configuration['BEAM_IN_PIXELS'][1]*Configuration['PIXEL_SIZE']]
             elif key == 'YPOS':
-                initial_estimates['YPOS'] = [profile[0],Configuration['BEAM_IN_PIXELS'][1]*Configuration['PIXEL_SIZE']]
+                initial_estimates['YPOS'] = [profile[0],0.1*Configuration['BEAM_IN_PIXELS'][1]*Configuration['PIXEL_SIZE']]
             elif key == 'SDIS':
                 initial_estimates['SDIS'] = [np.mean(profile),Configuration['CHANNEL_WIDTH']]
             elif key == 'Z0':
@@ -2077,7 +2114,7 @@ def set_fitting_parameters(Configuration, Tirific_Template, parameters_to_adjust
                     modifiers[key] = [2.,0.5,0.5]
             elif stage in  ['initial','run_cc','after_cc','after_ec','after_os','final_os']:
                 if key == 'INCL': modifiers['INCL'] = [1.,1.,1.]
-                elif key == 'PA': modifiers['PA'] = [1.,1.,1.]
+                elif key == 'PA': modifiers['PA'] = [3.,1.,1.]
                 elif key == 'SDIS': modifiers['SDIS'] =  [1.,1.,2.]
             else:
                 if key == 'INCL': modifiers['INCL'] = [2.0,0.5,0.5]
@@ -2147,14 +2184,27 @@ def set_fitting_parameters(Configuration, Tirific_Template, parameters_to_adjust
         if initial_estimates['INCL'][0] < 40.:
             if 'INCL' in modifiers:
                 modifiers['INCL'] = np.array(modifiers['INCL'],dtype=float)*(0.2)
-
+    if stage in ['initial','initialize_os']:
+        no_boun_check = ['SBR']
+    else:
+        no_boun_check =  ['SBR', 'INCL', 'PA']
     for key in parameters_to_adjust:
         if key in Configuration['FIXED_PARAMETERS'][0]:
             fixed=True
         else:
             fixed =False
-        if key != 'SBR':
-            set_boundary_limits(Configuration,Tirific_Template,key, values=initial_estimates[key], tolerance = 0.1\
+
+        if key not in no_boun_check:
+            bracket_values = initial_estimates[key]
+            if key == 'PA':
+                bracket_values[1] = set_limits(bracket_values[1]*10., 10.,20.)
+            if key == 'INCL':
+                if bracket_values[0] > 40.:
+                    bracket_values[1] = set_limits(bracket_values[1]*2., 5.,15.)
+            if key == 'VROT':
+                bracket_values[1] = set_limits(bracket_values[1], 10., 75.)
+            # PA and INCL are set in check_angles after the initial
+            set_boundary_limits(Configuration,Tirific_Template,key, values=bracket_values , tolerance = 0.1\
                             ,fixed = fixed,debug=debug)
         if key == 'VROT':
             fitting_settings['VROT'] = set_vrot_fitting(Configuration,stage = stage, rotation = initial_estimates['VROT'], debug = debug )
