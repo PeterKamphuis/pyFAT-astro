@@ -43,8 +43,8 @@ def check_angle_convergence(Configuration,Tirific_Template, fit_type = 'Undefine
     angles= {'PA': 10., 'INCL': 5.}
     angles_ok = True
     for key in angles:
-        new_angle = rf.load_tirific(Configuration,f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def",Variables = [key],debug = debug)[0]
-        old_angle = rf.load_tirific(Configuration,f"{Configuration['FITTING_DIR']}{fit_type}_In.def",Variables = [key],debug = debug)[0]
+        new_angle = rf.load_tirific(Configuration,f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def",Variables = [key])[0]
+        old_angle = rf.load_tirific(Configuration,f"{Configuration['FITTING_DIR']}{fit_type}_In.def",Variables = [key])[0]
         if debug:
             print_log(f'''CHECK_ANGLE_CONVERGENCE: For {key} we had {old_angle[0]} which changed to {new_angle[0]}.
 the maximum change is {float(Configuration['MIN_ERROR'][key][0])*float(angles[key])}
@@ -54,10 +54,6 @@ the maximum change is {float(Configuration['MIN_ERROR'][key][0])*float(angles[ke
                 print_log(f'''CHECK_ANGLE_CONVERGENCE: The {key} changed too much between iterations.
 ''',Configuration['OUTPUTLOG'])
             angles_ok = False
-
-
-    # Also here we the boundaries being ok
-    for  key in ['INCL','PA']:
         if key in Configuration['FIXED_PARAMETERS'][0]:
             fixed=True
         else:

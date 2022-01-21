@@ -105,15 +105,15 @@ def check_angles(Configuration,Tirific_Template, debug = False):
 ''', Configuration['OUTPUTLOG'],debug=True)
     for side in [0,1]:
         incl_too_large = (np.array(incl[side],dtype=float) > 90.)
-        if len(incl_too_large):
-            incl[side] = [180.-x if y else x for x,y in zip(incl[side],incl_too_large)]
+        if incl_too_large.any():
             if debug:
                 print_log(f'''CHECK_ANGLES: Several INCL values were too large
 ''', Configuration['OUTPUTLOG'])
+            incl[side] = [180.-x if y else x for x,y in zip(incl[side],incl_too_large)]
             changed_angles = True
 
         pa_too_large = (np.array(pa[side],dtype=float) > 360.)
-        if len(pa_too_large):
+        if pa_too_large.any():
             if np.mean(np.array(pa[side],dtype=float)[~pa_too_large]) < 180.:
                 pa[side] = [x-360. if y else x for x,y in zip(pa[side],pa_too_large)]
                 changed_angles = True
@@ -122,7 +122,7 @@ def check_angles(Configuration,Tirific_Template, debug = False):
 ''', Configuration['OUTPUTLOG'])
 
         pa_too_small = (np.array(pa[side],dtype=float) < 0.)
-        if any(pa_too_small) > 0:
+        if pa_too_small.any():
             if np.mean(np.array(pa[side],dtype=float)[~pa_too_small]) > 180.:
                 pa[side] = [x+360. if y else x for x,y in zip(pa[side],pa_too_small)]
                 changed_angles = True
