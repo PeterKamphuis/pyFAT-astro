@@ -1229,7 +1229,8 @@ def get_error(Configuration,profile,sm_profile,key,min_error = [0.],singular = F
         error = np.array(error[0],dtype=float)
     else:
         error = np.array(error,dtype=float)
-    error[error == 0.] = np.min(error[error > 0.])
+    if 0. in error:
+        error[error == 0.] = np.min(error[error > 0.])
 
     if debug:
         print_log(f'''GET_ERROR: error =
@@ -2043,7 +2044,7 @@ def set_fitting_parameters(Configuration, Tirific_Template, parameters_to_adjust
                     zip(get_from_template(Configuration,Tirific_Template, ['INCL']),\
                     get_from_template(Configuration,Tirific_Template, [f"INCL_2"]) )],dtype=float)
         diff = abs(np.max(profile)-np.min(profile))/10.
-        initial_estimates['INCL'] = [profile[0],set_limits(diff,1,5)/np.sin(np.radians(profile[0]))]
+        initial_estimates['INCL'] = [profile[0],set_limits(diff,1.,5.)/np.sin(np.radians(profile[0]))]
 
     if parameters_to_adjust[0] == 'NO_ADJUSTMENT':
         if stage in ['initial','run_cc','after_cc']:
@@ -2263,17 +2264,23 @@ def set_fitting_parameters(Configuration, Tirific_Template, parameters_to_adjust
         if key in fitting_settings:
             for fit_key in fitting_keys:
                 if  fit_key in fitting_settings[key]:
-
-                    if fit_key in ['DELSTART','DELEND','MINDELTA']:
+                    format = set_format(key)
+                    if fit_key in ['DELSTART','DELEND','MIN_DELTA']:
                     #if fit_key in ['DELEND','MINDELTA']:
                         # These should never be 0.
-                        format = set_format(key)
+
                         for i,x in enumerate(fitting_settings[key][fit_key]):
                             while float(f'{fitting_settings[key][fit_key][i]:{format}}') == 0.:
                                 if float(fitting_settings[key][fit_key][i]) == 0.:
                                     fitting_settings[key][fit_key][i] += 0.01
                                 else:
                                     fitting_settings[key][fit_key][i] *= 2.
+                            if fit_key == 'MIN_DELTA':
+                                if fitting_settings[key][fit_key][i] < Configuration['MIN_ERRORS'][key]*0.1:
+                                    fitting_settings[key][fit_key][i] = Configuration['MIN_ERRORS'][key]*0.1
+
+
+
 
                     if fit_key == 'VARY':
                         if len(Tirific_Template[fit_key]) == 0:
