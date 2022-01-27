@@ -3097,6 +3097,7 @@ def setup_configuration(cfg):
                 'VEL_SMOOTH_EXTENDED', # Is the velocity smoothing extended ????
                 'EXCLUDE_CENTRAL', # Do we exclude the central part of the fitting due to blanks/an absorption source
                 'ACCEPTED',
+                'ACCEPTED_TIRIFIC', #Did Tirific run the full loops (False) or not (True)
                 'SOFIA_RAN', #Check if we have ran Sofia
                 'NO_RADEC',
                 'FIX_SIZE', # If we have before fitted a size we want to fix to this size to avoid looping

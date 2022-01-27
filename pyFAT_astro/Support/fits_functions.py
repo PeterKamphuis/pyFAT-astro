@@ -164,7 +164,7 @@ def cut_cubes(Configuration, Fits_Files, galaxy_box, debug = False):
         if limit[1] < cube_size[i] - cube_edge[i]:
             cut = True
             new_cube[i,1] = limit[1]+int(cube_edge[i])
-    
+
     if cut:
         files_to_cut = [Fits_Files['FITTING_CUBE'],'Sofia_Output/'+Fits_Files['MASK'],\
                         'Sofia_Output/'+Fits_Files['MOMENT0'],\
@@ -822,7 +822,6 @@ def regrid_cube(data,hdr,ratio):
     #The new shape has to be integers
     new_shape = [int(x/ratio) for x in shape]
     # Which means our real ratio is
-    print(shape,new_shape)
     real_ratio = shape/new_shape
     #* np.ceil(shape / ratio).astype(int)
     new_shape[0] = shape[0]

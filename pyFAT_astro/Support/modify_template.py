@@ -1838,14 +1838,14 @@ def set_boundary_limits(Configuration,Tirific_Template,key,values = [0.,0.],  to
         for i in range_to_check:
 
             buffer = np.array(float(current_boundaries[i][1]-current_boundaries[i][0])*2,dtype=float)\
-                    *np.array([tolerance,0.1],dtype=float)
+                    *np.array([tolerance,0.25],dtype=float)
             if debug:
-                print_log(f'''SET_BOUNDARY_LIMITS: Using a buffer of {buffer[0]}.
+                print_log(f'''SET_BOUNDARY_LIMITS: Using a buffer of {buffer[0]} and a change of {buffer[1]}.
     ''',Configuration['OUTPUTLOG'])
             if i == 0:
                 profile_part = profile[0,:int(np.mean(Configuration['INNER_FIX']))+1]
             else:
-                profile_part = profile[i-1,Configuration['INNER_FIX'][i-1]:]
+                profile_part = profile[i-1,Configuration['INNER_FIX'][i-1]:Configuration['LAST_RELIABLE_RINGS'][i-1]]
             if debug:
                 print_log(f'''SET_BOUNDARY_LIMITS: Checking {profile_part}.
     ''',Configuration['OUTPUTLOG'])
@@ -1856,7 +1856,7 @@ def set_boundary_limits(Configuration,Tirific_Template,key,values = [0.,0.],  to
     ''',Configuration['OUTPUTLOG'])
             if len(on_boundary) > 0:
                 if on_boundary[0] != len(profile[0])-1:
-                    current_boundaries[i][1] = current_boundaries[i][1] + np.prod(buffer)
+                    current_boundaries[i][1] = current_boundaries[i][1] + buffer[1]
             #check the lower boundaries.
             on_boundary = np.where(profile_part < float(current_boundaries[i][0])+buffer[0])[0]
             if debug:
@@ -1864,7 +1864,7 @@ def set_boundary_limits(Configuration,Tirific_Template,key,values = [0.,0.],  to
     ''',Configuration['OUTPUTLOG'])
             if len(on_boundary) > 0:
                 if on_boundary[0] != len(profile[0])-1:
-                    current_boundaries[i][0] = current_boundaries[i][0] - np.prod(buffer)
+                    current_boundaries[i][0] = current_boundaries[i][0] - buffer[1]
     low = [x[0] for x in current_boundaries]
     high= [x[1] for x in current_boundaries]
     if key == 'Z0':
@@ -2205,7 +2205,7 @@ def set_fitting_parameters(Configuration, Tirific_Template, parameters_to_adjust
             if key == 'VROT':
                 bracket_values[1] = set_limits(bracket_values[1], 10., 75.)
             # PA and INCL are set in check_angles after the initial
-            set_boundary_limits(Configuration,Tirific_Template,key, values=bracket_values , tolerance = 0.1\
+            set_boundary_limits(Configuration,Tirific_Template,key, values=bracket_values , tolerance = 0.01\
                             ,fixed = fixed,debug=debug)
         if key == 'VROT':
             fitting_settings['VROT'] = set_vrot_fitting(Configuration,stage = stage, rotation = initial_estimates['VROT'], debug = debug )
@@ -2265,9 +2265,13 @@ def set_fitting_parameters(Configuration, Tirific_Template, parameters_to_adjust
             for fit_key in fitting_keys:
                 if  fit_key in fitting_settings[key]:
                     format = set_format(key)
-                    if fit_key in ['DELSTART','DELEND','MIN_DELTA']:
+
+                    if fit_key in ['DELSTART','DELEND','MINDELTA']:
                     #if fit_key in ['DELEND','MINDELTA']:
                         # These should never be 0.
+                        if debug and fit_key == 'MINDELTA':
+                            print_log(f'''SET_FITTING_PARAMETERS: The MINDELTA for {key} should never be below {Configuration['MIN_ERROR'][key][0]*0.1}.
+''',Configuration['OUTPUTLOG'])
 
                         for i,x in enumerate(fitting_settings[key][fit_key]):
                             while float(f'{fitting_settings[key][fit_key][i]:{format}}') == 0.:
@@ -2275,9 +2279,14 @@ def set_fitting_parameters(Configuration, Tirific_Template, parameters_to_adjust
                                     fitting_settings[key][fit_key][i] += 0.01
                                 else:
                                     fitting_settings[key][fit_key][i] *= 2.
-                            if fit_key == 'MIN_DELTA':
-                                if fitting_settings[key][fit_key][i] < Configuration['MIN_ERRORS'][key]*0.1:
-                                    fitting_settings[key][fit_key][i] = Configuration['MIN_ERRORS'][key]*0.1
+                            if fit_key in ['MINDELTA','DELEND'] and key not in ['SBR']:
+                                if fitting_settings[key][fit_key][i] < Configuration['MIN_ERROR'][key][0]*0.05:
+                                    fitting_settings[key][fit_key][i] = Configuration['MIN_ERROR'][key][0]*0.05
+                            if not Configuration['ACCEPTED_TIRIFIC'] and fit_key == 'MINDELTA':
+                                fitting_settings[key][fit_key][i] = fitting_settings[key][fit_key][i]*set_limits(Configuration['LOOPS']-7,1,4)
+
+
+
 
 
 

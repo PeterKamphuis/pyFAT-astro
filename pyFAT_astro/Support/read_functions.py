@@ -436,7 +436,7 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, smoot
                 pa_av.append(pa_tmp)
                 int_weight.append(mod/beam_check[0]*0.25)
                 maj_extent_av.append(maj_extent_tmp)
-       
+
         if np.isnan(np.array(inclination_av,dtype=float)).all():
             print_log(f'''GUESS_ORIENTATION: We are unable to find an  inclination.
 ''',Configuration['OUTPUTLOG'])
@@ -657,7 +657,7 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, smoot
     if debug:
         print_log(f'''GUESS_ORIENTATION: this is the pa {pa} and the vel_pa {vel_pa}
 ''' , Configuration['OUTPUTLOG'],screen=True)
-    
+
     if abs(pa[0]-vel_pa[0]) > 300.:
         if pa[0] > 180.:
             vel_pa[0] += 360.
@@ -979,6 +979,8 @@ def read_cube(Configuration,cube,debug=False):
     Configuration['CHANNEL_WIDTH'] = cube_hdr['CDELT3']/1000.
     Configuration['PIXEL_SIZE'] = np.mean([abs(cube_hdr['CDELT1']),abs(cube_hdr['CDELT2'])])
     Configuration['NAXES'] = [cube_hdr['NAXIS1'],cube_hdr['NAXIS2'], cube_hdr['NAXIS3']]
+    '''
+    The center should be limited to the sofia values
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         coordinate_frame = WCS(cube_hdr)
@@ -990,6 +992,7 @@ def read_cube(Configuration,cube,debug=False):
         set_boundaries(Configuration,'VSYS',*zlim,input=True,debug=debug)
         set_boundaries(Configuration,'XPOS',*xlim,input=True,debug=debug)
         set_boundaries(Configuration,'YPOS',*ylim,input=True,debug=debug)
+    '''
     if np.sum(Configuration['VROT_INPUT_BOUNDARY']) == 0.:
         set_boundaries(Configuration,'VROT',Configuration['CHANNEL_WIDTH'],600.,input=True,debug=debug)
     if np.sum(Configuration['SDIS_INPUT_BOUNDARY']) == 0.:

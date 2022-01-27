@@ -332,7 +332,6 @@ def main(argv):
 
             # Let's see if our base cube exists, Note that cleanup removes it if we want to start from the original dir so no need to check start_point
             if not os.path.exists(f"{Configuration['FITTING_DIR']}{Fits_Files['FITTING_CUBE']}"):
-                print(f"We doing this")
                 try:
                     ff.create_fat_cube(Configuration, Fits_Files)
                 except Exception as e:

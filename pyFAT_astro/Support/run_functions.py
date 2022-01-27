@@ -59,7 +59,7 @@ the maximum change is {float(Configuration['MIN_ERROR'][key][0])*float(angles[ke
         else:
             fixed =False
         old_boun = np.array(Configuration[f'{key}_CURRENT_BOUNDARY'])
-        set_boundary_limits(Configuration,Tirific_Template,key, tolerance = 0.1\
+        set_boundary_limits(Configuration,Tirific_Template,key, tolerance = 0.01\
                     ,fixed = fixed,debug=debug)
         new_boun = np.array(Configuration[f'{key}_CURRENT_BOUNDARY'])
 
@@ -78,6 +78,10 @@ the maximum change is {float(Configuration['MIN_ERROR'][key][0])*float(angles[ke
             print_log(f'''CHECK_ANGLE_CONVERGENCE: The angles were modified in check_angles
 ''',Configuration['OUTPUTLOG'])
         angles_ok = False
+    else:
+        if debug:
+            print_log(f'''CHECK_ANGLE_CONVERGENCE: The angles were unchanged in check_angles
+''',Configuration['OUTPUTLOG'])
     return angles_ok
 check_angle_convergence.__doc__ =f'''
  NAME:
@@ -497,6 +501,10 @@ def check_source(Configuration, Fits_Files, debug = False):
 {"":8s}CHECK_SOURCE: DEC center = {dec} with boundaries {','.join(convert_type(DECboun,type='str'))}
 {"":8s}CHECK_SOURCE: V_sys center = {v_app:.2f} with boundaries {','.join(convert_type(VELboun/1000.,type='str'))}
 ''', Configuration['OUTPUTLOG'])
+    set_boundaries(Configuration,'XPOS',*RAboun,input=True,debug=debug)
+    set_boundaries(Configuration,'YPOS',*DECboun,input=True,debug=debug)
+    set_boundaries(Configuration,'VSYS',*VELboun/1000.,input=True,debug=debug)
+
     if np.sum(pa) == 0. or any(np.isnan(pa)) or \
         np.sum(inclination) == 0. or any(np.isnan(inclination)) or \
         np.sum(maj_extent) == 0. or np.isnan(maj_extent) or \
@@ -912,6 +920,14 @@ def one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run, de
     #First we run tirific
     accepted,current_run = run_tirific(Configuration,current_run,stage = stage, fit_type = fit_type, debug= debug)
 
+    if not accepted:
+        Configuration['ACCEPTED_TIRIFIC'] = False
+        if Configuration['LOOPS'] < 15.:
+            print_log(f'''ONE_STEP_CONVERGENCE: Tirific ran the maximum amount of loops ({Configuration['LOOPS']}) increasing this by 1.
+''',Configuration['OUTPUTLOG'])
+            Configuration['LOOPS'] += 1
+    else:
+        Configuration['ACCEPTED_TIRIFIC'] = True
     #Then we load the produced output into our template
     write_new_to_template(Configuration,f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def" , Tirific_Template, debug = debug)
     #Check that the centre does not deviate too much
@@ -922,20 +938,21 @@ def one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run, de
         Configuration['CENTRAL_CONVERGENCE_COUNTER'] += 1.
         Configuration['CENTRAL_FIX'] = []
 
-    # Check whether the central INCL and PA are stable.
-    accepted_angle = check_angle_convergence(Configuration,Tirific_Template, fit_type = fit_type,debug=debug)
     # Check whether we have the correct sizes,
     if not Configuration['FIX_SIZE']:
         accepted_size = check_size(Configuration,Tirific_Template, fit_type = fit_type, stage = stage, current_run = current_run, debug=debug,Fits_Files=Fits_Files)
     else:
         accepted_size = True
+    # Check whether the central INCL and PA are stable.
+    accepted_angle = check_angle_convergence(Configuration,Tirific_Template, fit_type = fit_type,debug=debug)
+
     if accepted and accepted_size and accepted_central and accepted_angle:
         Configuration['ACCEPTED'] = True
     else:
         Configuration['ACCEPTED'] = False
         if Configuration['ITERATIONS'] > Configuration['MAX_ITERATIONS']:
                 print_log(f'''ONE_STEP_CONVERGENCE: We have ran the convergence more than {Configuration['MAX_ITERATIONS']} times aborting the fit.
-    ''',Configuration['OUTPUTLOG'])
+''',Configuration['OUTPUTLOG'])
                 return current_run
         if not accepted:
             print_log(f'''ONE_STEP_CONVERGENCE: Tirific ran the maximum amount of loops hence we do not accept and we smooth and retry.
@@ -974,11 +991,7 @@ def one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run, de
 
         set_fitting_parameters(Configuration, Tirific_Template,stage = 'run_os',\
                              debug = debug)
-        print_log(f'''CHECK THAT WE CAHANGE !!!!!!
-        {Tirific_Template['VROT']}
-        {Tirific_Template['PA']}
-        {Tirific_Template['XPOS']}
-        ''',Configuration['OUTPUTLOG'])
+
         wf.tirific(Configuration,Tirific_Template,name = f"{Configuration['USED_FITTING']}_In.def",debug = debug)
     return current_run
 one_step_converge.__doc__ =f'''

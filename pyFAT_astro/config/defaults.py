@@ -53,7 +53,7 @@ class Output:
 class Advanced:
     start_directory: str =f'{os.getcwd()}'
     max_iterations: int=15 #The maximum number of iterations that FAT tries to calls trific bfeore it call it quits
-    loops: int =10 #The number of full loops set for tirific in a  single iteration
+    loops: int = 5 #The number of full loops set for tirific in a  single iteration, this is increased every time the maximum is reach upto max 15 loops
     minimum_warp_size: float = 3. # if the number of beams across the major axis/2. is less than this size we will only fit a flat disc,set here.
     minimum_rings: int = 3  # we need at least this amount of rings (Including 0 and 1/5 beam), set here
     too_small_galaxy: float = 1. # if the number of beams across the major axis/2 is less than this we will not fit the galaxy, set here
