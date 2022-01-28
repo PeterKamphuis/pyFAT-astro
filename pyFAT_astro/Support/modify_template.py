@@ -2036,6 +2036,7 @@ def set_fitting_parameters(Configuration, Tirific_Template, parameters_to_adjust
             initial_estimates = {}
     except KeyError:
         pass
+    Tirific_Template['LOOPS'] = Configuration['LOOPS']
     fitting_settings = {}
     fitting_keys = ['VARY','VARINDX','MODERATE','DELEND','DELSTART','MINDELTA','PARMAX','PARMIN']
 
