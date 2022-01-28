@@ -2036,7 +2036,10 @@ def set_fitting_parameters(Configuration, Tirific_Template, parameters_to_adjust
             initial_estimates = {}
     except KeyError:
         pass
-    Tirific_Template['LOOPS'] = Configuration['LOOPS']
+    if Configuration['ITERATIONS'] < 3:
+        Tirific_Template['LOOPS'] = "10"
+    else:
+        Tirific_Template['LOOPS'] = f"{Configuration['LOOPS']}"
     fitting_settings = {}
     fitting_keys = ['VARY','VARINDX','MODERATE','DELEND','DELSTART','MINDELTA','PARMAX','PARMIN']
 
@@ -2284,7 +2287,7 @@ def set_fitting_parameters(Configuration, Tirific_Template, parameters_to_adjust
                                 if fitting_settings[key][fit_key][i] < Configuration['MIN_ERROR'][key][0]*0.05:
                                     fitting_settings[key][fit_key][i] = Configuration['MIN_ERROR'][key][0]*0.05
                             if not Configuration['ACCEPTED_TIRIFIC'] and fit_key == 'MINDELTA':
-                                fitting_settings[key][fit_key][i] = fitting_settings[key][fit_key][i]*set_limits(Configuration['LOOPS']-7,1,4)
+                                fitting_settings[key][fit_key][i] = fitting_settings[key][fit_key][i]*set_limits(Configuration['LOOPS']-9,1,4)
 
 
 

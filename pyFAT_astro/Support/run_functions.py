@@ -922,7 +922,7 @@ def one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run, de
 
     if not accepted:
         Configuration['ACCEPTED_TIRIFIC'] = False
-        if Configuration['LOOPS'] < 15.:
+        if Configuration['LOOPS'] < 20.:
             print_log(f'''ONE_STEP_CONVERGENCE: Tirific ran the maximum amount of loops ({Configuration['LOOPS']}) increasing this by 1.
 ''',Configuration['OUTPUTLOG'])
             Configuration['LOOPS'] += 1
