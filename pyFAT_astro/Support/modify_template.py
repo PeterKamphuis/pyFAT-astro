@@ -554,11 +554,13 @@ def fit_arc(Configuration,radii,sm_profile,error, function_to_fit,key, debug = F
         absolute_sigma = False
     else:
         absolute_sigma = True
-    try:
-        arc_par,arc_cov  =  curve_fit(function_to_fit, radii, sm_profile,p0=[est_center,est_length,est_amp,est_mean]\
-                                    ,sigma=error,absolute_sigma=absolute_sigma)
-    except OptimizeWarning:
-        pass
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", OptimizeWarning)
+        try:
+            arc_par,arc_cov  =  curve_fit(function_to_fit, radii, sm_profile,p0=[est_center,est_length,est_amp,est_mean]\
+                                        ,sigma=error,absolute_sigma=absolute_sigma)
+        except OptimizeWarning:
+            pass
     new_profile = function_to_fit(radii,*arc_par)
 
     new_profile[:3] = np.mean(new_profile[:3])
@@ -2927,7 +2929,7 @@ def set_sbr_fitting(Configuration,Tirific_Template, stage = 'no_stage',debug = F
         if Configuration['SIZE_IN_BEAMS'] < max_size:
             fact=1.5
         else:
-            fact=4.
+            fact=2.
         format = set_format('SBR')
         for i in [0,1]:
             sbr_profile[i,inner_ring:] = [set_limits(sbr_profile[i,x],sbr_ring_limits[x]/fact*2.,1.) for x in range(len(radii)-1,inner_ring-1,-1)]

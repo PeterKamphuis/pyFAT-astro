@@ -3,7 +3,8 @@
 
 from pyFAT_astro.Support.fat_errors import SupportRunError,SmallSourceError,\
                                               FileNotFoundError,TirificKillError,\
-                                              InputError,ProgramError,DefFileError
+                                              InputError,ProgramError,DefFileError,\
+                                              BadHeaderError
 from collections import OrderedDict #used in Proper_Dictionary
 from inspect import getframeinfo,stack
 
@@ -35,8 +36,7 @@ import re
 import subprocess
 
 from datetime import datetime
-class BadHeaderError(Exception):
-    pass
+
 # A class of ordered dictionary where keys can be inserted in at specified locations or at the end.
 class Proper_Dictionary(OrderedDict):
     def __setitem__(self, key, value):
