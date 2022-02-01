@@ -3150,7 +3150,7 @@ def setup_configuration(cfg):
                'NAXES': [0.,0.,0.], #  Size of the cube in pixels x,y,z arranged like sane people not python, set in main
                'MAX_ERROR': {}, #The maximum allowed errors for the parameters, set in main derived from cube
                'MIN_ERROR': {}, #The minumum allowed errors for the parameters, initially set in check_source but can be modified through out INCL,PA,SDSIS,Z0 errors change when the parameters is fixed or release
-               'MAX_CHANGE': {'INCL': 6.25, 'PA': 50.}, #The maximum change in a parameter in unit/kpc
+               'MAX_CHANGE': {'INCL': 6.25, 'PA': 25.}, #The maximum change in a parameter in unit/kpc
                'CHANNEL_WIDTH': 0., #Width of the channel in the cube in km/s, set in main derived from cube
                'PIXEL_SIZE': 0., #'Size of the pixels in degree'
                }
