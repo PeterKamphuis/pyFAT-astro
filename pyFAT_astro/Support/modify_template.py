@@ -1843,13 +1843,17 @@ def set_boundary_limits(Configuration,Tirific_Template,key,values = [0.,0.],  to
                     *np.array([tolerance,0.25],dtype=float)
             if debug:
                 print_log(f'''SET_BOUNDARY_LIMITS: Using a buffer of {buffer[0]} and a change of {buffer[1]}.
-    ''',Configuration['OUTPUTLOG'])
+''',Configuration['OUTPUTLOG'])
             if i == 0:
-                profile_part = profile[0,:int(np.mean(Configuration['INNER_FIX']))+1]
+                profile_part = profile[0,:int(np.min(Configuration['INNER_FIX']))+1]
+                infix = np.min(Configuration['INNER_FIX'])
             else:
-                profile_part = profile[i-1,Configuration['INNER_FIX'][i-1]:Configuration['LAST_RELIABLE_RINGS'][i-1]]
+                profile_part = profile[i-1,Configuration['INNER_FIX'][i-1]:]
+                infix = Configuration['INNER_FIX'][i-1]
+                #Configuration['LAST_RELIABLE_RINGS'][i-1]]
             if debug:
                 print_log(f'''SET_BOUNDARY_LIMITS: Checking {profile_part}.
+{'':8s} because for this part the inner fix = {infix}
     ''',Configuration['OUTPUTLOG'])
             #check the upper bounderies
             on_boundary = np.where(profile_part > float(current_boundaries[i][1])-buffer[0])[0]
@@ -1884,6 +1888,11 @@ def set_boundary_limits(Configuration,Tirific_Template,key,values = [0.,0.],  to
         # for inclination the other boundaries are bracketed by the input boundary
         high = [x if x > 170. else 170. for x in high]
         low = [x if x < 190. else 190. for x in low]
+        if abs(high[1]-high[2]) > 30:
+            high[1:] = [np.max(high[1:]) for x in high[1:]]
+        if abs(low[1]-low[2]) > 30:
+            low[1:] = [np.min(low[1:]) for x in low[1:]]
+
     set_boundaries(Configuration,key,low,high,debug=debug)
     #Configuration[f"{key}_CURRENT_BOUNDARY"] = current_boundaries
     if debug:
@@ -2068,7 +2077,19 @@ def set_fitting_parameters(Configuration, Tirific_Template, parameters_to_adjust
             if Configuration['ITERATIONS'] == 0:
                 parameters_to_adjust = ['SBR','VROT','SDIS','INCL','PA','VSYS','XPOS','YPOS','Z0']
             else:
-                parameters_to_adjust = ['VSYS','XPOS','YPOS','INCL','PA','SBR','VROT','SDIS','Z0']
+                if initial_estimates['INCL'][0] < 30.:
+                    parameters_to_adjust = ['SBR','PA','SDIS','INCL','VROT']
+                elif initial_estimates['INCL'][0] < 50.:
+                    parameters_to_adjust = ['SBR','PA','SDIS','VROT','INCL']
+                elif initial_estimates['INCL'][0] > 75.:
+                    parameters_to_adjust = ['VROT','SBR','PA','INCL','SDIS','Z0']
+                else:
+                    parameters_to_adjust = ['SBR','VROT','PA','INCL','SDIS','Z0']
+
+                if Configuration['CENTRAL_CONVERGENCE']:
+                    parameters_to_adjust = parameters_to_adjust+['VSYS','XPOS','YPOS']
+                else:
+                    parameters_to_adjust = ['VSYS','XPOS','YPOS']+parameters_to_adjust
         else:
             if debug:
                 print_log(f'''SET_FITTING_PARAMETERS: No default adjustment for unknown stage.
@@ -2926,8 +2947,11 @@ def set_sbr_fitting(Configuration,Tirific_Template, stage = 'no_stage',debug = F
         elif stage in ['initialize_ec','run_ec','initialize_os','run_os']:
             max_size = 2.
         #Make sure the SBR profile is not dropping below the minimum we are setting
-        if Configuration['SIZE_IN_BEAMS'] < max_size:
-            fact=1.5
+
+        if stage in ['initialize_os']:
+            fact = 0.75
+        elif Configuration['SIZE_IN_BEAMS'] < max_size:
+            fact=2.5
         else:
             fact=2.
         format = set_format('SBR')
@@ -2943,11 +2967,12 @@ def set_sbr_fitting(Configuration,Tirific_Template, stage = 'no_stage',debug = F
         sbr_smoothed_profile = smooth_profile(Configuration,Tirific_Template,'SBR',
                                 min_error= [sbr_ring_limits,sbr_ring_limits],no_apply = True,
                                 fix_sbr_call = True,profile_in = sbr_profile ,debug=debug)
+        sbr_av_smoothed = [(x+y)/2. for x,y in zip(sbr_smoothed_profile[0],sbr_smoothed_profile[1])]
         if Configuration['SIZE_IN_BEAMS'] < max_size:
             sbr_input['VARY'] =  np.array([f"SBR {x+1} SBR_2 {x+1}" for x in range(len(radii)-1,inner_ring-1,-1)],dtype=str)
 
 
-            sbr_input['PARMAX'] = np.array([set_limits(np.mean([sbr_smoothed_profile[0,x-1],sbr_smoothed_profile[1,x-1]])*10.,sbr_ring_limits[x]*15.,1.) for x in range(len(radii)-1,inner_ring-1,-1)],dtype=float)
+            sbr_input['PARMAX'] = np.array([set_limits(sbr_av_smoothed[x-1]*10.,sbr_ring_limits[x]*15.,1.) for x in range(len(radii)-1,inner_ring-1,-1)],dtype=float)
             #if stage in ['initial','run_cc']:
             #    sbr_input['PARMIN'] = np.array([sbr_ring_limits[x]/2. if x <= (3./4.)*len(radii) else 0 for x in range(len(radii)-1,inner_ring-1,-1)])
             #elif stage in ['initialize_ec','run_ec']:
@@ -2960,8 +2985,9 @@ def set_sbr_fitting(Configuration,Tirific_Template, stage = 'no_stage',debug = F
         else:
             sbr_input['VARY'] =  np.array([[f"SBR {x+1}",f"SBR_2 {x+1}"] for x in range(len(radii)-1,inner_ring-1,-1)],dtype=str).reshape((len(radii)-inner_ring)*2)
 
-
-            sbr_input['PARMAX'] = np.array([[set_limits(sbr_smoothed_profile[0,x-1]*20.,sbr_ring_limits[x]*30.,1.),set_limits(sbr_smoothed_profile[1,x-1]*20.,sbr_ring_limits[x]*30.,1.)] for x in range(len(radii)-1,inner_ring-1,-1)],dtype=float).reshape((len(radii)-inner_ring)*2)
+            pmax = np.array([np.full(2,set_limits(sbr_av_smoothed[x-1]*20.,sbr_ring_limits[x]*30.,1.)) for x in range(len(radii)-1,inner_ring-1,-1)], dtype=float)
+            sbr_input['PARMAX']  = pmax.reshape((len(radii)-inner_ring)*2)
+            #sbr_input['PARMAX'] = np.array([[set_limits(sbr_smoothed_profile[0,x-1]*20.,sbr_ring_limits[x]*30.,1.),set_limits(sbr_smoothed_profile[1,x-1]*20.,sbr_ring_limits[x]*30.,1.)] for x in range(len(radii)-1,inner_ring-1,-1)],dtype=float).reshape((len(radii)-inner_ring)*2)
         #if stage in ['initial','run_cc']:
             #    sbr_input['PARMIN'] = np.array([[sbr_ring_limits[x]/2.,sbr_ring_limits[x]/2.] if x <= (3./4.)*len(radii) else [0.,0.] for x in range(len(radii)-1,inner_ring-1,-1)]).reshape((len(radii)-inner_ring)*2)
             #elif stage in ['initialize_ec','run_ec']:

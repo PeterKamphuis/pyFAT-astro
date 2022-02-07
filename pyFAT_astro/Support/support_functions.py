@@ -3137,7 +3137,7 @@ def setup_configuration(cfg):
 
                'NO_POINTSOURCES': 0. , # Number of point sources, set in run_tirific
 
-               'INNER_FIX': [4.,4.], #Number of rings that are fixed in the inner part for the INCL and PA, , adapted after every run in get_inner_fix in support_functions and for both sides
+               'INNER_FIX': [4,4], #Number of rings that are fixed in the inner part for the INCL and PA, , adapted after every run in get_inner_fix in support_functions and for both sides
                'CENTRAL_FIX': [], #Parameters of the center to fix. This set in check_cantral_convergence
                'WARP_SLOPE': [None, None], #Ring numbers from which outwards the warping should be fitted as a slope, set in get_warp_slope in modify_template
                'OUTER_SLOPE_START': 1, # Ring number from where the RC is fitted as a slope

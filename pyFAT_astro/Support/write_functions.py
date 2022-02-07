@@ -3,7 +3,7 @@
 
 from pyFAT_astro.Support.support_functions import print_log,convertRADEC,convertskyangle,\
                                 set_limit_modifier,columndensity,set_limits,\
-                                get_inner_fix,linenumber
+                                linenumber
 from pyFAT_astro.Support.modify_template import set_model_parameters, set_overall_parameters,\
                                 set_fitting_parameters,get_warp_slope, update_disk_angles
 from pyFAT_astro.Support.fits_functions import extract_pv
@@ -174,7 +174,7 @@ def initialize_def_file(Configuration, Fits_Files,Tirific_Template,Initial_Param
 
         # Finally we set how these parameters are fitted.
         set_limit_modifier(Configuration,Tirific_Template, debug=debug)
-        get_inner_fix(Configuration,Tirific_Template, debug=debug)
+        #get_inner_fix(Configuration,Tirific_Template, debug=debug)
         get_warp_slope(Configuration,Tirific_Template, debug=debug)
         if Configuration['OUTER_RINGS_DOUBLED']:
             Initial_Parameters['XPOS'][1]= set_limits(Initial_Parameters['XPOS'][1],Configuration['BEAM'][0]/3600.,Configuration['BEAM'][0]/3600.*5)
