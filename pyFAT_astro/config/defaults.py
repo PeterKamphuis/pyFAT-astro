@@ -1,11 +1,15 @@
 # -*- coding: future_fstrings -*-
 
-from dataclasses import dataclass,field
 import omegaconf
-from omegaconf import MISSING
-from typing import List,Optional
 import os
+
+from dataclasses import dataclass,field
 from datetime import datetime
+from omegaconf import MISSING
+from multiprocessing import cpu_count
+from typing import List,Optional
+
+
 
 @dataclass
 class Fitting:
@@ -24,7 +28,8 @@ class Fitting:
     ring_size: float = 1.1 # The size of the rings in number of beams
     fixed_parameters:  List = field(default_factory=lambda: ['Z0','XPOS','YPOS','VSYS']) #Options are INCL, PA, SDIS, SBR
     opt_pixel_beam: int=4
-    ncpu: int = 6
+    #We do not want to use too many cores per galaxy.
+    per_galaxy_ncpu: int = 4
     distance: float = -1. # Distance to the galaxy, set from the catalogue at start of loop in case of batch fitting
 
 @dataclass
@@ -60,6 +65,7 @@ class Advanced:
     unreliable_size: float = 2. #If the final diameter is smaller than this the fit is considered unreliable
     unreliable_inclination: float = 10. #If the final inclination is below this the fit is considered unreliable
     shaker_iterations: int = 20
+
     # Allow for the user to set the boundaries in the fitting
     pa_input_boundary:  List[float] = field(default_factory=lambda: [[0.,0.],[0.,0.],[0.,0.]])
     incl_input_boundary:  List[float] = field(default_factory=lambda: [[0.,0.],[0.,0.],[0.,0.]])
@@ -73,6 +79,7 @@ class Advanced:
     # Add the channel dependency, minimum inclination,
 @dataclass
 class defaults:
+    ncpu: int = cpu_count()-1
     print_examples: bool=False
     installation_check: bool=False
     cube_name: Optional[str] = None

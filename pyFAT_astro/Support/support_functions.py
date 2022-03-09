@@ -131,6 +131,59 @@ calc_rings.__doc__ =f'''
 
  NOTE:
 '''
+def calculate_number_processes(Configuration):
+
+    Configuration['CATALOGUE_END_ID'] = 156
+    no_process= int(np.floor(Configuration['NCPU']/ Configuration['PER_GALAXY_NCPU']))
+    no_galaxies = Configuration['CATALOGUE_END_ID']-Configuration['CATALOGUE_START_ID']
+    while no_process > no_galaxies:
+        no_process -= 1
+    extra_cores=  Configuration['NCPU']-  Configuration['PER_GALAXY_NCPU']*no_process
+    plus_core = 0
+    while plus_core*no_process < extra_cores:
+        plus_core += 1
+
+    print(f"We use {no_process} processes for {no_galaxies} galaxies")
+    cfgs=[]
+    for i in range(no_process):
+        proc_conf=copy.deep_copy()
+        cores = Configuration['PER_GALAXY_NCPU']
+        if extra_cores >= plus_core:
+            cores += plus_core
+            extra_cores -= plus_core
+        if cores > 20:
+            cores = 20.
+        print(f" Process {i} with {cores} cores")
+        key=f"Conf_{i:d}"
+        cfgsConfiguration
+    exit()
+    return cfgs,numproc
+
+calculate_number_processes.__doc__ =f'''
+ NAME:
+    calculate_number_processes
+
+ PURPOSE:
+    Calculate the optimal number of processs and create Configurations for each of them.
+
+ CATEGORY:
+    support_functions
+
+ INPUTS:
+    Configuration = Standard Original FAT configuration
+
+ OPTIONAL INPUTS:
+
+ OUTPUTS:
+    a set of Configurations for each process.
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
 
 def check_sofia(Configuration,Fits_Files,debug=False):
     files =['_mask.fits','_mom0.fits','_mom1.fits','_chan.fits','_mom2.fits','_cat.txt']

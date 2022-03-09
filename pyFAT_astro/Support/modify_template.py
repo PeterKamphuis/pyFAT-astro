@@ -2860,7 +2860,7 @@ def set_overall_parameters(Configuration, Fits_Files,Tirific_Template,stage = 'i
                 Tirific_Template['NCORES'] = '6'
             '''
 
-            Tirific_Template['NCORES'] = Configuration['NCPU']
+            Tirific_Template['NCORES'] = Configuration['PER_GALAXY_NCPU']
 
             Tirific_Template['LOOPS'] = f"{Configuration['LOOPS']}"
             Tirific_Template['DISTANCE'] = f"{Configuration['DISTANCE']}"

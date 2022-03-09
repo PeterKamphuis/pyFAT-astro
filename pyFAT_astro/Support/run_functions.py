@@ -28,7 +28,6 @@ import pyFAT_astro.Support.read_functions as rf
 import pyFAT_astro.Support.write_functions as wf
 import os
 import sys
-import time
 import copy
 
 import subprocess

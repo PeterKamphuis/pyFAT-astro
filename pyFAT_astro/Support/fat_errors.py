@@ -8,6 +8,8 @@ class BadSourceError(Exception):
     pass
 class BadHeaderError(Exception):
     pass
+class CatalogError(Exception):
+    pass
 class CfluxError(Exception):
     pass
 class DefFileError(Exception):
@@ -22,9 +24,11 @@ class InitializeError(Exception):
     pass
 class InputError(Exception):
     pass
-class ProgramError(Exception):
-    pass
 class NoConfigFile(Exception):
+    pass
+class MissingProgramError(Exception):
+    pass
+class ProgramError(Exception):
     pass
 class SmallSourceError(Exception):
     pass
