@@ -3777,8 +3777,8 @@ sofia_output_exists.__doc__ =f'''
 
 def update_statistic(Configuration,process= None,message = None ,debug=False):
     if Configuration['TIMING']:
-        function,variable,empty = traceback.format_stack()[-2].split('\n')
-        function = function.split()[-1].strip()
+        function = traceback.format_stack()[-2].split('\n')
+        function = function[0].split()[-1].strip()
         if not process:
             process = Configuration['FAT_PSUPROCESS']
             program = 'pyFAT'
