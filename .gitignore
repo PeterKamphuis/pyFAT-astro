@@ -201,6 +201,7 @@ pyFAT.egg-info/
 # Backup files #
 ################
 README.md~
+Tests.py
 
 # Images #
 ################
