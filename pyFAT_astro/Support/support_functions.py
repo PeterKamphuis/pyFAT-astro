@@ -145,9 +145,10 @@ def calculate_number_processes(Configuration):
 
     print(f"We use {no_process} processes for {no_galaxies} galaxies")
     cfgs=[]
+
     for i in range(no_process):
-        proc_conf=copy.deep_copy()
-        cores = Configuration['PER_GALAXY_NCPU']
+        proc_conf=copy.deep_copy(Configuration)
+        cores = proc_conf['PER_GALAXY_NCPU']
         if extra_cores >= plus_core:
             cores += plus_core
             extra_cores -= plus_core
@@ -155,9 +156,11 @@ def calculate_number_processes(Configuration):
             cores = 20.
         print(f" Process {i} with {cores} cores")
         key=f"Conf_{i:d}"
-        cfgsConfiguration
+        proc_conf['PER_GALAXY_NCPU'] = cores
+
+        cfgs.append(proc_conf)
     exit()
-    return cfgs,numproc
+    return cfgs,no_process
 
 calculate_number_processes.__doc__ =f'''
  NAME:
