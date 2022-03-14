@@ -348,7 +348,7 @@ def check_size(Configuration,Tirific_Template, fit_type = 'Undefined', stage = '
     print_log(f'''CHECK_SIZE: We find the following size in beams {size_in_beams:.1f} with size {ring_size:.2f}.
 {'':8s}CHECK_SIZE: The previous iteration had a size of {Configuration['SIZE_IN_BEAMS']:.1f} with rings  {Configuration['RING_SIZE']:.2f} times the beam.
 {'':8s}CHECK_SIZE: This results in {int(number_of_rings):d} rings in the model compared to {int(Configuration['NO_RINGS']):d} previously.
-''', Configuration['OUTPUTLOG'],screen=True)
+''', Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
     if f"{ring_size:.1f}" != f"{Configuration['RING_SIZE']:.1f}":
         Configuration['NEW_RING_SIZE'] = True
     else:
@@ -391,7 +391,7 @@ def check_size(Configuration,Tirific_Template, fit_type = 'Undefined', stage = '
     Configuration['SIZE_IN_BEAMS'] = size_in_beams
     Configuration['NO_RINGS'] = calc_rings(Configuration,debug=debug)
     print_log(f'''CHECK_SIZE: We need to modify the number of rings in the model.
-''', Configuration['OUTPUTLOG'],screen=True)
+''', Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
 
     if Configuration['RC_UNRELIABLE'] > Configuration['NO_RINGS']:
         Configuration['RC_UNRELIABLE'] = Configuration['NO_RINGS']
@@ -823,7 +823,7 @@ def fix_profile(Configuration, key, profile, Tirific_Template, debug= False, inn
 
     if key == 'SBR':
         print_log(f'''FIX_PROFILE: To fix sbr profiles use FIX_SBR.
-''', Configuration['OUTPUTLOG'],screen=True)
+''', Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
         raise FunctionCallError("FIX_PROFILE: To fix sbr profiles use check SBR.")
     if singular:
         indexes = [0]
@@ -1940,7 +1940,7 @@ def set_cflux(Configuration,Tirific_Template,debug = False):
     if any(np.isnan(Configuration['NO_POINTSOURCES'])):
         print_log(f'''SET_CFLUX: We detected an infinite number of model point sources.
 {"":8s}SET_CFLUX: This must be an error. Exiting the fitting.
-''',Configuration['OUTPUTLOG'],screen = True)
+''',Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
         raise CfluxError('The model had infinite point sources')
     if Configuration['SIZE_IN_BEAMS'] < 15:
         factor = 1.
@@ -3148,7 +3148,7 @@ def smooth_profile(Configuration,Tirific_Template,key,min_error = 0.,debug=False
 
     if key == 'SBR' and not fix_sbr_call:
         error_message = f'''SMOOTH_PROFILE: Do not use smooth_profile for the SBR, SBR is regularised in fix_sbr'''
-        print_log(error_message,Configuration['OUTPUTLOG'],screen=True,debug = debug)
+        print_log(error_message,Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'],debug = debug)
         raise FunctionCallError(error_message)
 
     if debug:

@@ -1129,8 +1129,8 @@ def plot_usage_stats(Configuration,debug = False):
         labels_times=np.array([x for x, _ in sorted(zip(comb_list, comb_label))],dtype=float)
         labels_comb = [x for _, x in sorted(zip(comb_list, comb_label))]
 
-        fig, ax1 = plt.subplots(figsize = (8,4))
-        fig.subplots_adjust(left = 0.1, right = 0.9, bottom = 0.15, top = 0.7)
+        fig, ax1 = plt.subplots(figsize = (8,6))
+        fig.subplots_adjust(left = 0.1, right = 0.9, bottom = 0.3, top = 0.7)
 
 
         ax1.plot(combined_time,combined_loads['Tirific']['MEM'],'b-',lw=0.5)
@@ -1142,6 +1142,7 @@ def plot_usage_stats(Configuration,debug = False):
         ax1.set_xlabel('time (min)', color='k',zorder=5)
         ax2 = ax1.twinx()
         ax2.plot(combined_time,combined_loads['Tirific']['CPU'],'r-',lw=0.5)
+        ax2.plot(combined_time,combined_loads['FAT']['CPU'],'r--',lw=0.5)
         #ax2.plot(combined_time,combined_loads['FAT']['CPU'],'r--',lw=0.5)
         ax2.set_ylabel('CPUs (%)',color='r')
         ax2miny,ax2maxy = ax2.get_ylim()
@@ -1161,24 +1162,21 @@ def plot_usage_stats(Configuration,debug = False):
 
             if label in labels['Tirific']['label']:
                 offset = 20.
+                xoffset = 0.05
                 vertical_start = ax2maxy
                 va= 'bottom'
                 ha= 'left'
-
+                color = 'k'
+                linest = '-'
             else:
                 offset=-50
+                xoffset = 0.025
                 vertical_start = ax2miny
                 va= 'top'
                 ha='right'
-
-            if color == '0.5':
-                color = 'k'
-            elif color == 'k':
                 color = '0.5'
-            if linest == '--':
-                linest = '-'
-            elif linest == '-':
                 linest = '--'
+
 
             if (prev_label == 'Initializing tmp_incl_check' or prev_label == 'Ended tmp_incl_check'):
                 if (label != 'Initializing tmp_incl_check' and label != 'Ended tmp_incl_check') or \
@@ -1192,7 +1190,7 @@ def plot_usage_stats(Configuration,debug = False):
                             last_label = last_label_bottom = max(prev_time,last_label_bottom+label_sep)
                         ax2.text(last_label,vertical_start+offset,prev_label, va=va,ha=ha,rotation= 60, color='black',
                               bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7,fontdict = labelfont)
-                        ax2.plot([prev_time,last_label+0.1],[vertical_start,vertical_start+offset],linest,color=color,linewidth=0.05,clip_on=False)
+                        ax2.plot([prev_time,last_label+xoffset],[vertical_start,vertical_start+offset],linest,color=color,linewidth=0.05,clip_on=False)
                     ax2.axvline(x=time, linestyle=linest, color=color, linewidth=0.05)
                     if label in labels['Tirific']['label']:
                         last_label = last_label_top = max(time,last_label_top+label_sep)
@@ -1200,7 +1198,7 @@ def plot_usage_stats(Configuration,debug = False):
                         last_label = last_label_bottom = max(time,last_label_bottom+label_sep)
                     ax2.text(last_label,vertical_start+offset,label, va=va,ha=ha,rotation= 60, color='black',
                           bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7,fontdict = labelfont)
-                    ax2.plot([time,last_label+0.1],[vertical_start,vertical_start+offset],linest,color=color,linewidth=0.05,clip_on=False)
+                    ax2.plot([time,last_label+xoffset],[vertical_start,vertical_start+offset],linest,color=color,linewidth=0.05,clip_on=False)
                 else:
                     prev_time = time
             elif (prev_label == 'Initializing Error_Shaker' or prev_label == 'Ended Error_Shaker' or prev_label == 'Started Error_Shaker'):
@@ -1219,7 +1217,7 @@ def plot_usage_stats(Configuration,debug = False):
                         last_label = last_label_bottom = max(time,last_label_bottom+label_sep)
                     ax2.text(last_label,vertical_start+offset,label, va=va,ha=ha,rotation= 60, color='black',
                           bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7,fontdict = labelfont)
-                    ax2.plot([time,last_label+0.1],[vertical_start,vertical_start+offset],linest,color=color,linewidth=0.05,clip_on=False)
+                    ax2.plot([time,last_label+xoffset],[vertical_start,vertical_start+offset],linest,color=color,linewidth=0.05,clip_on=False)
                 else:
                     prev_label = label
                     prev_time = time
@@ -1231,7 +1229,8 @@ def plot_usage_stats(Configuration,debug = False):
                     last_label = last_label_bottom= max(time,last_label_bottom+label_sep)
                 ax2.text(last_label,vertical_start+offset,label,va=va,ha=ha,rotation= 60, color='black',
                       bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7,fontdict = labelfont)
-                ax2.plot([time,last_label+0.1],[vertical_start,vertical_start+offset],linest,color=color,linewidth=0.05,clip_on=False)
+                #This should be the line to the label
+                ax2.plot([time,last_label+xoffset],[vertical_start,vertical_start+offset],linest,color=color,linewidth=0.05,clip_on=False)
             prev_label = label
 
 
@@ -1360,7 +1359,7 @@ tirific.__doc__ =f'''
 def write_config(file,Configuration,debug = False):
     if debug:
         print_log(f'''WRITE_CONFIG: writing the configuration to {file}
-''',Configuration['OUTPUTLOG'], screen = True)
+''',Configuration['OUTPUTLOG'], screen=Configuration['VERBOSE'])
     # Separate the keyword names
     with open(file,'w') as tmp:
         for key in Configuration:

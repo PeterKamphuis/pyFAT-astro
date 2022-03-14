@@ -27,7 +27,7 @@ def check_mask(Configuration,id,Fits_Files,debug=False):
 
     if float(id) not in mask[0].data:
         print_log(f'''CHECK_MASK: We cannot find the selected source in the mask. This will lead to errors. Aborting the fit.
-''',Configuration['OUTPUTLOG'],screen = True,debug=debug)
+''',Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'],debug=debug)
         BadMaskError(f" We can not find the sofia source id in the mask.")
     else:
         data = copy.deepcopy(mask[0].data)
@@ -37,7 +37,7 @@ def check_mask(Configuration,id,Fits_Files,debug=False):
         if len(neg_index) != 0:
             if debug:
                 print_log(f'''CHECK_MASK: The initial mask had more than a single source. redoing the mask.
-''',Configuration['OUTPUTLOG'],screen = True)
+''',Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
             mask[0].data = data
             fits.writeto(f"{Configuration['FITTING_DIR']}/Sofia_Output/{Fits_Files['MASK']}",mask[0].data,mask[0].header, overwrite = True)
 # to ensure compatible units and calculations with th models we make the maps ourselves
@@ -184,7 +184,7 @@ def cut_cubes(Configuration, Fits_Files, galaxy_box, debug = False):
         for file in files_to_cut:
             if debug:
                 print_log(f'''CUT_CUBES: We are cutting the file {file}
-''', Configuration['OUTPUTLOG'],screen=True)
+''', Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
             if os.path.exists(f"{Configuration['FITTING_DIR']}{file}"):
                 cutout_cube(Configuration,file,new_cube,debug=debug)
             else:
@@ -495,7 +495,7 @@ def prep_cube(Configuration,hdr,data, debug = False):
             hdr['NAXIS3'] = hdr['NAXIS3']-1
             if hdr['NAXIS3'] < 5:
                 print_log(f'''PREPROCESSING: This cube has too many blanked channels.
-''', Configuration['OUTPUTLOG'],screen=True)
+''', Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
                 raise BadCubeError("The cube has too many blanked channels")
             log_statement = f'''PREPROCESSING: We are cutting the cube as the first channel is completely blank.
 '''
@@ -506,7 +506,7 @@ def prep_cube(Configuration,hdr,data, debug = False):
             hdr['NAXIS3'] = hdr['NAXIS3']-1
             if hdr['NAXIS3'] < 5:
                 print_log(f'''PREPROCESSING: This cube has too many blanked channels.
-''', Configuration['OUTPUTLOG'],screen = True)
+''', Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
                 raise BadCubeError("The cube has too many blanked channels")
             print_log(f'''PREPROCESSING: We are cutting the cube as the last channel is completely blank.
 ''', Configuration['OUTPUTLOG'])
@@ -564,11 +564,11 @@ def prep_cube(Configuration,hdr,data, debug = False):
 ''',Configuration['OUTPUTLOG'])
             if hdr['NAXIS3'] < 5:
                 print_log(f'''PREPROCESSING: This cube has noise statistics that cannot be dealt with.
-''',Configuration['OUTPUTLOG'],screen=True)
+''',Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
                 raise BadCubeError('The Cube has noise statistics that cannot be dealt with')
     if ~np.isfinite(noise_corner):
         print_log(f'''PREPROCESSING: This cube has noise statistics that cannot be dealt with.
-''',Configuration['OUTPUTLOG'],screen=True)
+''',Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
         raise BadCubeError('The Cube has noise statistics that cannot be dealt with')
     #hdr['FATNOISE'] = noise_corner
     with warnings.catch_warnings():

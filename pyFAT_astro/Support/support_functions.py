@@ -132,22 +132,30 @@ calc_rings.__doc__ =f'''
  NOTE:
 '''
 def calculate_number_processes(Configuration):
-
-    Configuration['CATALOGUE_END_ID'] = 156
-    no_process= int(np.floor(Configuration['NCPU']/ Configuration['PER_GALAXY_NCPU']))
-    no_galaxies = Configuration['CATALOGUE_END_ID']-Configuration['CATALOGUE_START_ID']
-    while no_process > no_galaxies:
-        no_process -= 1
-    extra_cores=  Configuration['NCPU']-  Configuration['PER_GALAXY_NCPU']*no_process
+    cores_set = False
+    no_galaxies = Configuration['CATALOGUE_END_ID']-Configuration['CATALOGUE_START_ID']-1
+    while not cores_set:
+        no_process= int(np.floor(Configuration['NCPU']/ Configuration['PER_GALAXY_NCPU']))
+        while no_process > no_galaxies:
+            no_process -= 1
+            cores_set =True
+        extra_cores=  Configuration['NCPU']-  Configuration['PER_GALAXY_NCPU']*no_process
+        if not cores_set and \
+            extra_cores > Configuration['PER_GALAXY_NCPU']*no_process/2. and \
+            Configuration['PER_GALAXY_NCPU'] > 3.:
+            Configuration['PER_GALAXY_NCPU'] -= 1
+        else:
+            cores_set = True
     plus_core = 0
     while plus_core*no_process < extra_cores:
         plus_core += 1
 
     print(f"We use {no_process} processes for {no_galaxies} galaxies")
     cfgs=[]
-
+    start_id =  Configuration['CATALOGUE_START_ID']
+    no_galaxies_per_process = int(np.ceil(no_galaxies/no_process))
     for i in range(no_process):
-        proc_conf=copy.deep_copy(Configuration)
+        proc_conf=copy.deepcopy(Configuration)
         cores = proc_conf['PER_GALAXY_NCPU']
         if extra_cores >= plus_core:
             cores += plus_core
@@ -157,9 +165,17 @@ def calculate_number_processes(Configuration):
         print(f" Process {i} with {cores} cores")
         key=f"Conf_{i:d}"
         proc_conf['PER_GALAXY_NCPU'] = cores
-
+        proc_conf['CATALOGUE_START_ID'] = start_id
+        proc_conf['CATALOGUE_END_ID'] = start_id+no_galaxies_per_process
+        if proc_conf['CATALOGUE_END_ID']  > Configuration['CATALOGUE_END_ID']:
+            proc_conf['CATALOGUE_END_ID'] = Configuration['CATALOGUE_END_ID']
+        start_id = proc_conf['CATALOGUE_END_ID']+1
+        proc_conf['OUTPUT_CATALOGUE'] = f"{proc_conf['OUTPUT_CATALOGUE']}_loop{i:d}"
+        with open(proc_conf['OUTPUT_CATALOGUE'],'w') as file:
+            comment = 'Comments on Fit Result'
+            AC1 = 'OS'
+            file.write(f"{'Directory Name':<{Configuration['MAXIMUM_DIRECTORY_LENGTH']}s} {AC1:>6s} {comment}\n")
         cfgs.append(proc_conf)
-    exit()
     return cfgs,no_process
 
 calculate_number_processes.__doc__ =f'''
@@ -285,7 +301,7 @@ def clean_header(Configuration,hdr_in,two_dim=False,mask_file=False, debug = Fal
     hdr = copy.deepcopy(hdr_in)
     if debug:
         print_log(f'''CLEAN_HEADER: Starting to clean the header.
-''',Configuration['OUTPUTLOG'],debug=True)
+''',Configuration['OUTPUTLOG'],debug=Configuration['VERBOSE'])
     keywords = ['CDELT','CUNIT','CRPIX','CRVAL','CTYPE']
     for key in keywords:
         try:
@@ -303,7 +319,7 @@ def clean_header(Configuration,hdr_in,two_dim=False,mask_file=False, debug = Fal
 {"":8s} We have set it to {hdr['CUNIT3']}. Please ensure that is correct.'
 ''',Configuration['OUTPUTLOG'])
         if hdr['CUNIT3'].upper() == 'HZ' or hdr['CTYPE3'].upper() == 'FREQ':
-            print_log('CLEAN_HEADER: FREQUENCY IS NOT A SUPPORTED VELOCITY AXIS.', Configuration['OUTPUTLOG'],screen=True)
+            print_log('CLEAN_HEADER: FREQUENCY IS NOT A SUPPORTED VELOCITY AXIS.', Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
             raise BadHeaderError('The Cube has frequency as a velocity axis this is not supported')
 
         vel_types = ['VELO-HEL','VELO-LSR','VELO', 'VELOCITY']
@@ -311,7 +327,7 @@ def clean_header(Configuration,hdr_in,two_dim=False,mask_file=False, debug = Fal
             if hdr['CTYPE3'].split('-')[0].upper() in ['RA','DEC']:
                 print_log(f'''CLEAN_HEADER: Your zaxis is a spatial axis not a velocity axis.
 {"":8s}CLEAN_HEADER: Please arrange your cube logically
-''',Configuration['OUTPUTLOG'],screen=True)
+''',Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
                 raise BadHeaderError("The Cube's third axis is not a velocity axis")
             hdr['CTYPE3'] = 'VELO'
             print_log(f'''CLEAN_HEADER: Your velocity projection is not standard. The keyword is changed to VELO (relativistic definition). This might be dangerous.
@@ -367,22 +383,22 @@ def clean_header(Configuration,hdr_in,two_dim=False,mask_file=False, debug = Fal
                         break
             if not found:
                 print_log(f'''CLEAN_HEADER: WE CANNOT FIND THE MAJOR AXIS FWHM IN THE HEADER
-''',Configuration['OUTPUTLOG'],screen=True)
+''',Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
                 raise BadHeaderError("The Cube has no major axis FWHM in the header.")
     if not 'CTYPE1' in hdr or not 'CTYPE2' in hdr:
         print_log(f'''CLEAN_HEADER: Your spatial axes have no ctype. this can lead to errors.
-''',Configuration['OUTPUTLOG'],screen=True)
+''',Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
         raise BadHeaderError("The Cube header has no ctypes.")
 
     if hdr['CTYPE1'].split('-')[0].upper() in ['DEC']:
         print_log(f'''CLEAN_HEADER: !!!!!!!!!!Your declination is in the first axis. !!!!!!!!!!!!!!!!!
 {"":8s}CLEAN_HEADER: !!!!!!!!!!         This will not work.          !!!!!!!!!!!!!!!!
-''',Configuration['OUTPUTLOG'],screen = True)
+''',Configuration['OUTPUTLOG'],screen = Configuration['VERBOSE'])
         raise BadHeaderError("Your spatial axes are reversed")
     if hdr['CTYPE2'].split('-')[0].upper() in ['RA']:
         print_log( f'''CLEAN_HEADER: !!!!!!!!!!Your right ascension is on the second axis. !!!!!!!!!!!!!!!!!
 {"":8s}CLEAN_HEADER: !!!!!!!!!!         This will not work.          !!!!!!!!!!!!!!!!
-''',Configuration['OUTPUTLOG'],screen = True)
+''',Configuration['OUTPUTLOG'],screen = Configuration['VERBOSE'])
         raise BadHeaderError("Your spatial axes are reversed")
     if hdr['CRVAL1'] < 0.:
         print_log(f'''CLEAN_HEADER: your RA crval is negative, this can lead to errors. Adding 360. deg
@@ -728,8 +744,8 @@ def convertskyangle(Configuration, angle, distance=-1., unit='arcsec', distance_
     elif distance_unit.lower() == 'pc':
         distance = distance / (10 ** 3)
     else:
-        print_log('CONVERTSKYANGLE: ' + distance_unit + ' is an unknown unit to convertskyangle.\n',Configuration['OUTPUTLOG'],screen=True)
-        print_log('CONVERTSKYANGLE: please use Mpc, kpc or pc.\n',Configuration['OUTPUTLOG'],screen=True)
+        print_log('CONVERTSKYANGLE: ' + distance_unit + ' is an unknown unit to convertskyangle.\n',Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
+        print_log('CONVERTSKYANGLE: please use Mpc, kpc or pc.\n',Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
         raise SupportRunError('CONVERTSKYANGLE: ' + distance_unit + ' is an unknown unit to convertskyangle.')
     if not physical:
         if unit.lower() == 'arcsec':
@@ -739,8 +755,8 @@ def convertskyangle(Configuration, angle, distance=-1., unit='arcsec', distance_
         elif unit.lower() == 'degree':
             radians = angle * ((2. * np.pi) / 360.)
         else:
-            print_log('CONVERTSKYANGLE: ' + unit + ' is an unknown unit to convertskyangle.\n',Configuration['OUTPUTLOG'],screen=True)
-            print_log('CONVERTSKYANGLE: please use arcsec, arcmin or degree.\n',Configuration['OUTPUTLOG'],screen=True)
+            print_log('CONVERTSKYANGLE: ' + unit + ' is an unknown unit to convertskyangle.\n',Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
+            print_log('CONVERTSKYANGLE: please use arcsec, arcmin or degree.\n',Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
             raise SupportRunError('CONVERTSKYANGLE: ' + unit + ' is an unknown unit to convertskyangle.')
 
 
@@ -753,8 +769,8 @@ def convertskyangle(Configuration, angle, distance=-1., unit='arcsec', distance_
         elif unit.lower() == 'pc':
             kpc = angle * (10 ** 3)
         else:
-            print_log('CONVERTSKYANGLE: ' + unit + ' is an unknown unit to convertskyangle.\n',Configuration['OUTPUTLOG'],screen=True)
-            print_log('CONVERTSKYANGLE: please use kpc, Mpc or pc.\n',Configuration['OUTPUTLOG'],screen=True)
+            print_log('CONVERTSKYANGLE: ' + unit + ' is an unknown unit to convertskyangle.\n',Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
+            print_log('CONVERTSKYANGLE: please use kpc, Mpc or pc.\n',Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
             raise SupportRunError('CONVERTSKYANGLE: ' + unit + ' is an unknown unit to convertskyangle.')
 
         radians = 2. * np.arctan(kpc / (2. * distance))
@@ -819,7 +835,7 @@ def copy_homemade_sofia(Configuration,no_cat=False,debug=False):
                 print_log(f'''COPY_HOMEMADE_SOFIA: Something went wrong copying the file  {Configuration['SOFIA_DIR']}{Configuration['SOFIA_BASENAME']+file}
 {'':8s} to the file {Configuration['FITTING_DIR']}Sofia_Output/{Configuration['BASE_NAME']+file}.
 {'':8s}We are aborting this fit as we cannot make it without Sofia input.
-''',Configuration['OUTPUTLOG'],screen=True,debug=debug )
+''',Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'],debug=debug )
                 raise SofiaMissingError("Either the sofia mask or catalogue is missing. We can not run without it")
             else:
                 pass
@@ -1069,7 +1085,7 @@ def finish_current_run(Configuration,current_run,debug=False):
                 print_log(f"FINISH_CURRENT_RUN: We killed the current run although we failed on the PID = {Configuration['TIRIFIC_PID']}. \n",\
                           Configuration['OUTPUTLOG'])
             except AttributeError:
-                print_log(f"FINISH_CURRENT_RUN: We failed to kill the current run with PID {Configuration['TIRIFIC_PID']} even though we have tirific running",Configuration['OUTPUTLOG'],screen=True)
+                print_log(f"FINISH_CURRENT_RUN: We failed to kill the current run with PID {Configuration['TIRIFIC_PID']} even though we have tirific running",Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
                 raise TirificKillError('FINISH_CURRENT_RUN: Despite having an initialized tirific we could not kill it. This should not happen.')
         Configuration['TIRIFIC_RUNNING'] = False
         Configuration['TIRIFIC_PID'] = 'Not Initialized'
@@ -1637,19 +1653,6 @@ def get_inclination_pa(Configuration, Image, center, cutoff = 0., debug = False,
         '''
         ratios=sin_ratios
 
-        #if debug:
-        #    if i == 0:
-        #        print_log(f'''GET_INCLINATION_PA: We initially find radius of {maj_extent*3600./(Configuration['BEAM'][0])} beams.
-#''',Configuration['OUTPUTLOG'], debug = True)
-#                print_log(f'''GET_INCLINATION_PA: We initially find the ratios:
-#{'':8s} ratios = {ratios}
-#''',Configuration['OUTPUTLOG'])
-#            else:
-#                print_log(f'''GET_INCLINATION_PA: From the cleaned map we find radius of {maj_extent*3600./Configuration['BEAM'][0]} beams.
-#''',Configuration['OUTPUTLOG'])
-#                print_log(f'''GET_INCLINATION_PA: We  find these ratios from the cleaned map:
-#{'':8s} ratios = {ratios}
-#''',Configuration['OUTPUTLOG'])
         max_index = np.where(ratios == np.nanmax(ratios))[0]
         if max_index.size > 1:
             max_index =int(max_index[0])
@@ -1668,10 +1671,10 @@ def get_inclination_pa(Configuration, Image, center, cutoff = 0., debug = False,
         if debug:
             if i == 0:
                 print_log(f'''GET_INCLINATION_PA: We initially find these indeces min {min_index } {angles[min_index]} max {max_index} {angles[max_index]}.
-''',Configuration['OUTPUTLOG'],screen=True)
+''',Configuration['OUTPUTLOG'])
             else:
                 print_log(f'''GET_INCLINATION_PA: From the cleaned map we find these indeces min {min_index }  {angles[min_index]} max {max_index} {angles[max_index]}.
-''',Configuration['OUTPUTLOG'],screen=True)
+''',Configuration['OUTPUTLOG'])
         #get a 10% bracket
 
         tenp_max_index = np.where(ratios > np.nanmax(ratios)*0.9)[0]
@@ -2901,7 +2904,8 @@ rotateImage.__doc__ =f'''
 
 def run_tirific(Configuration, current_run, stage = 'initial',fit_type = 'Undefined',deffile='Undefined', debug = False):
     if debug:
-        print_log(f'''RUN_TIRIFIC: Starting a new run in stage {stage} and fit_type {fit_type}
+        print_log(f'''RUN_TIRIFIC: For the galaxy {Configuration['ID']} in directory {Configuration['SUB_DIR']} we are starting a new TiRiFiC.
+We are in in stage {stage} and fit_type {fit_type} and have done {Configuration['ITERATIONS']} loops
 ''',Configuration['OUTPUTLOG'], screen = True,debug = debug)
     if deffile == 'Undefined':
         deffile=f"{fit_type}_In.def"
@@ -2917,13 +2921,13 @@ def run_tirific(Configuration, current_run, stage = 'initial',fit_type = 'Undefi
         work_dir = Configuration['FITTING_DIR']
     if Configuration['TIRIFIC_RUNNING']:
         print_log(f'''RUN_TIRIFIC: We are using an initialized tirific in {Configuration['FITTING_DIR']}
-''',Configuration['OUTPUTLOG'], screen = True)
+''',Configuration['OUTPUTLOG'], screen=Configuration['VERBOSE'])
 
         with open(restart_file,'a') as file:
             file.write("Restarting from previous run \n")
     else:
         print_log(f'''RUN_TIRIFIC: We are starting a new TiRiFiC in {Configuration['FITTING_DIR']}
-''',Configuration['OUTPUTLOG'], screen = True)
+''',Configuration['OUTPUTLOG'], screen=Configuration['VERBOSE'])
         with open(restart_file,'w') as file:
             file.write("Initialized a new run \n")
         current_run = subprocess.Popen([Configuration['TIRIFIC'],f"DEFFILE={deffile}","ACTION= 1"],\
@@ -3168,7 +3172,11 @@ def setup_configuration(cfg):
                'FITTING_DIR': 'Unset', # Full path of the directory in which the fitting takes place, set at start of loop
                'BASE_NAME': 'Unset', #Basename for FAT products, typically {input_cube}_FAT, set at start of loop
                'LOG_DIR': 'Unset', #Directory to put log files from run, set at start of loop
-
+               'STOP_INDIVIDUAL_ERRORS': ['SmallSourceError','BadSourceError'\
+                                        ,'SofiaFaintError','BadHeaderError',\
+                                        'BadCubeError','BadMaskError',\
+                                        'BadCatalogueError'],
+               'MAXIMUM_DIRECTORY_LENGTH': len('Directory Name'),
                'PREP_END_TIME': 'Not completed',
                'START_TIME':'Not completed',
                'END_TIME':'Not completed',
@@ -3591,7 +3599,7 @@ def set_ring_size(Configuration, debug = False, size_in_beams = 0., check_set_ri
         if Configuration['NO_RINGS'] < Configuration['MINIMUM_RINGS']:
             print_log(f'''SET_RING_SIZE: With a ring size of {Configuration['RING_SIZE']} we still only find {Configuration['NO_RINGS']}.
 {"":8s}SET_RING_SIZE: This is not enough for a fit.
-''',Configuration['OUTPUTLOG'],screen=True)
+''',Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
             raise SmallSourceError('This source is too small to reliably fit.')
 
 set_ring_size.__doc__ =f'''
@@ -3642,7 +3650,7 @@ def set_rings(Configuration,ring_size = 0. , debug = False):
 ''', Configuration['OUTPUTLOG'])
     if Configuration['OUTER_RINGS_DOUBLED']:
         print_log(f'''SET_RINGS: This is a large galaxy. Therefore we use twice the ring size in the outer parts.
-''',Configuration['OUTPUTLOG'],screen =True)
+''',Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
         radii = [0.,1./5.*Configuration['BEAM'][0]]
         radii = np.hstack((radii,(np.linspace(Configuration['BEAM'][0]*ring_size,Configuration['BEAM'][0]*10.*ring_size, \
                                         10)+1./5*Configuration['BEAM'][0])))
@@ -3741,12 +3749,12 @@ def sofia_output_exists(Configuration,Fits_Files, debug = False):
             continue
         else:
             log_statement = f"SOFIA_OUTPUT_EXISTS: The file {Configuration['FITTING_DIR']+'Sofia_Output/'+Fits_Files[file]} is not found."
-            print_log(log_statement, Configuration['OUTPUTLOG'],screen =True)
+            print_log(log_statement, Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
             raise FileNotFoundError(log_statement)
 
     if not os.path.exists(Configuration['FITTING_DIR']+'Sofia_Output/'+Configuration['BASE_NAME']+'_cat.txt'):
         log_statement = f"SOFIA_OUTPUT_EXISTS: The file {Configuration['FITTING_DIR']+'Sofia_Output/'+Configuration['BASE_NAME']+'_cat.txt'} is not found."
-        print_log(log_statement, Configuration['OUTPUTLOG'],screen =True)
+        print_log(log_statement, Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
         raise FileNotFoundError(log_statement)
 
 sofia_output_exists.__doc__ =f'''

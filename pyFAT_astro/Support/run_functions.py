@@ -415,7 +415,7 @@ def check_source(Configuration, Fits_Files, debug = False):
     # Need to check for that here if NaNs are included
     if f_sum < 0.:
         print_log(f'''CHECK_SOURCE: This galaxy has negative total flux. That will not work. Aborting.
-''',Configuration['OUTPUTLOG'],screen = True)
+''',Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
         raise BadSourceError('We found an initial negative total flux.')
 
     if debug:
@@ -544,9 +544,8 @@ def check_source(Configuration, Fits_Files, debug = False):
     #Check that the source is bright enough
     Max_SNR = np.nanmax(data)/Configuration['NOISE']
     if Max_SNR < 2.5:
-        log_statement = f'''CHECK_SOURCE: The maximum Signal to Noise in this cube is {Max_SNR} that is not enough for a fit.
-'''
-        print_log(log_statement, Configuration['OUTPUTLOG'],screen = True)
+        print_log(f'''CHECK_SOURCE: The maximum Signal to Noise in this cube is {Max_SNR} that is not enough for a fit.
+''', Configuration['OUTPUTLOG'], screen=Configuration['VERBOSE'])
         raise BadSourceError(log_statement)
 
     # Size of the galaxy in beams
@@ -686,7 +685,7 @@ def fitting_osc(Configuration,Fits_Files,Tirific_Template,Initial_Parameters):
                            fit_type=Configuration['USED_FITTING'],\
                            debug=Configuration['DEBUG'])
     print_log(f'''FITTING_OSC: The initial def file is written and we will now start fitting.
-''' ,Configuration['OUTPUTLOG'], screen =True, debug = Configuration['DEBUG'])
+''' ,Configuration['OUTPUTLOG'], screen=Configuration['VERBOSE'], debug = Configuration['DEBUG'])
     Configuration['PREP_END_TIME'] = datetime.now()
         # If we have no directory to put the output we create it
 
@@ -705,13 +704,13 @@ def fitting_osc(Configuration,Fits_Files,Tirific_Template,Initial_Parameters):
 
     if Configuration['ACCEPTED']:
         print_log(f'''FITTING_OSC: The model has converged in center and extent and we make a smoothed version.
-''',Configuration['OUTPUTLOG'],screen =True)
+''',Configuration['OUTPUTLOG'], screen=Configuration['VERBOSE'])
         current_run = fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run,stage = 'after_os', fit_type = Configuration['USED_FITTING'],debug = Configuration['DEBUG'])
         if Configuration['OPTIMIZED']:
             make_full_resolution(Configuration,Tirific_Template,Fits_Files,current_run = current_run,fit_type = Configuration['USED_FITTING'],debug=Configuration['DEBUG'])
     elif Configuration['INSTALLATION_CHECK']:
         print_log(f'''FITTING_OSC: The Installation_check has run a fit successfully.
-''',Configuration['OUTPUTLOG'],screen =True)
+''',Configuration['OUTPUTLOG'], screen=Configuration['VERBOSE'])
     else:
         Configuration['FINAL_COMMENT'] = 'We could not converge on the extent or centre of the galaxy'
         Configuration['OUTPUT_QUANTITY'] = 5
@@ -912,8 +911,8 @@ make_full_resolution.__doc__ =f'''
 
 def one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run, debug = False):
 
-    print_log(f'''ONE_STEP_CONVERGENCE: Starting with loop {Configuration['ITERATIONS']} out of maximum {Configuration['MAX_ITERATIONS']}.
-''',Configuration['OUTPUTLOG'],screen=True,debug = debug)
+    print_log(f'''ONE_STEP_CONVERGENCE: For {Configuration['ID']} we are starting loop {Configuration['ITERATIONS']} out of maximum {Configuration['MAX_ITERATIONS']}.
+''',Configuration['OUTPUTLOG'], screen=Configuration['VERBOSE'],debug = debug)
     fit_type = 'Fit_Tirific_OSC'
     stage = 'run_os'
     #First we run tirific
@@ -1054,7 +1053,7 @@ def sofia(Configuration, Fits_Files, debug = False):
         clean_before_sofia(Configuration,debug=debug)
         sofia_template['scfind.threshold'] = str(threshold)
         wf.sofia(sofia_template,'sofia_input.par')
-        print_log("RUN_SOFIA: Running SoFiA. \n",Configuration['OUTPUTLOG'],screen = True)
+        print_log("RUN_SOFIA: Running SoFiA. \n",Configuration['OUTPUTLOG'], screen=Configuration['VERBOSE'])
         # Check which sofia to start
         sfrun = subprocess.Popen([Configuration['SOFIA2'],'sofia_input.par'], stdout = subprocess.PIPE, stderr = subprocess.PIPE)
         sofia_run, sofia_warnings_are_annoying = sfrun.communicate()

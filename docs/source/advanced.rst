@@ -178,12 +178,6 @@ Fitting Keywords
 
   FAT can regrid the input cubes to have lesser pixels per FWHM of the gaussian clean beam. This can be useful to speed up the fitting process (See Kamphuis et al. 2015). If you want to prevent this set a high number of pixels. FAT will never increase the amount of pixels per FWHM.
 
-**ncpu**:
-
-  *int, optional, default = 6*
-
-  Number CPUs used for tirific fitting. A high number of cores can be beneficial for speeding up the fitting of larger galaxies however, for smaller galaxies less so.
-
 **distance**:
 
   *float, optional, default = -1.*
@@ -252,9 +246,32 @@ Advanced Keywords
 
   If the Tirshaker model is set this keyword controls the amount of iterations.
 
+**multiprocessing**:
+
+  *bool, optional, default = True*
+
+  Use multiprocessing
+
+**per_galaxy_ncpu**
+
+  *int, optional, default = 4
+
+  When multiprocessing is on pyFAT will attempt to find a good balence between the number of simultaneuous processes, the total allowed number of cpus and the number of cpus available in tirific.
+  when multiprocessing is off this number will be set to the global ncpu parameter.
+  A high number of cores per galaxy can be beneficial for speeding up the fitting of larger galaxies however, for smaller galaxies less so.
+
+
+
 Individual Keywords
  --------
 *No specifier*
+
+**ncpu**:
+
+  *int, optional, default = number of cores -1*
+
+  Number CPUs used for fitting. In the default mode pyFAT will distribute the input across several calls to the main code.
+  to set the number of cores used by tirific you can use the per_galaxy_ncpu parameter in the advanced section.
 
 **print_examples**:
 

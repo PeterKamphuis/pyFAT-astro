@@ -228,7 +228,7 @@ def cleanup(Configuration,Fits_Files, debug = False):
         file_ext=['_mask.fits','_mom0.fits','_mom1.fits','_mom2.fits','_chan.fits','_cat.txt','_sofia_xv.fits']
         print_log(f'''CLEANUP: We are cleaning the following files in the directory {dir}:
 {"":8s}CLEANUP: sofia_input.par,{','.join([f'{Configuration["SOFIA_BASENAME"]}{x}' for x in file_ext])}
-''',Configuration['OUTPUTLOG'], screen =True,debug=debug)
+''',Configuration['OUTPUTLOG'], screen=Configuration['VERBOSE'],debug=debug)
         for extension in file_ext:
             try:
                 os.remove(f'{dir}{Configuration["BASE_NAME"]}{extension}')
@@ -249,7 +249,7 @@ def cleanup(Configuration,Fits_Files, debug = False):
 {"":8s}CLEANUP: {','.join(directories)}
 {"":8s}CLEANUP: and the following files:
 {"":8s}CLEANUP: {','.join(files)}
-''',Configuration['OUTPUTLOG'], screen =True,debug=debug)
+''',Configuration['OUTPUTLOG'], screen=Configuration['VERBOSE'],debug=debug)
 
 
         ext=['.fits','_Prev.fits','.log','.ps','.def']
@@ -508,7 +508,7 @@ installation_check.__doc__ =f'''
  NOTE:
 '''
 
-def finish_galaxy(Configuration,maximum_directory_length,current_run = 'Not initialized', Fits_Files= None, debug = False,exiting = None):
+def finish_galaxy(Configuration,current_run = 'Not initialized', Fits_Files= None, debug = False,exiting = None):
     Configuration['END_TIME'] = datetime.now()
     if debug:
         print_log(f'''FINISH_GALAXY: These fits files are used:
@@ -525,7 +525,7 @@ def finish_galaxy(Configuration,maximum_directory_length,current_run = 'Not init
     # Need to write to results catalog
     if Configuration['OUTPUT_CATALOGUE']:
         with open(Configuration['OUTPUT_CATALOGUE'],'a') as output_catalogue:
-            output_catalogue.write(f"{Configuration['FITTING_DIR'].split('/')[-2]:{maximum_directory_length}s} {str(Configuration['ACCEPTED']):>6s} {Configuration['FINAL_COMMENT']} \n")
+            output_catalogue.write(f"{Configuration['FITTING_DIR'].split('/')[-2]:{Configuration['MAXIMUM_DIRECTORY_LENGTH']}s} {str(Configuration['ACCEPTED']):>6s} {Configuration['FINAL_COMMENT']} \n")
 
     if Configuration['OUTPUT_QUANTITY'] == 'error':
         error_message = '''
@@ -541,8 +541,8 @@ def finish_galaxy(Configuration,maximum_directory_length,current_run = 'Not init
 {"":8s}The detected exit reason is {Configuration['FINAL_COMMENT']}.
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 '''
-        print_log(log_statement,Configuration['OUTPUTLOG'], screen = True)
-        print_log(error_message,Configuration['OUTPUTLOG'], screen = True)
+        print_log(log_statement,Configuration['OUTPUTLOG'], screen=Configuration['VERBOSE'])
+        print_log(error_message,Configuration['OUTPUTLOG'], screen=Configuration['VERBOSE'])
 
         if exiting:
             with open(Configuration['OUTPUTLOG'],'a') as log_file:
@@ -550,14 +550,13 @@ def finish_galaxy(Configuration,maximum_directory_length,current_run = 'Not init
             traceback.print_tb(exiting.__traceback__)
         sys.exit(1)
     elif Configuration['OUTPUT_QUANTITY'] == 5:
-        log_statement = f'''
+        print_log(f'''
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 {"":8s}FAT did not run the full fitting routines for the galaxy in directory {Configuration['FITTING_DIR']}.
-{"":8s}Please check this log and output_catalogue carefully for what went wrong.
+{"":8s}Please check this the log in {Configuration['LOG_DIRECTORY']} and the output_catalogue carefully for what went wrong.
 {"":8s}The detected exit reason is {Configuration['FINAL_COMMENT']}.
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-'''
-        print_log(log_statement,Configuration['OUTPUTLOG'])
+''',Configuration['OUTPUTLOG'],screen=True)
         #No traceback as it is a proper exiting error
         #if exiting:
         #    with open(Configuration['OUTPUTLOG'],'a') as log_file:
@@ -565,7 +564,7 @@ def finish_galaxy(Configuration,maximum_directory_length,current_run = 'Not init
         #    traceback.print_tb(exiting.__traceback__)
     elif Configuration['OUTPUT_QUANTITY'] < 4:
         print_log( f'''Producing final output in {Configuration['FITTING_DIR']}.
-''',Configuration['OUTPUTLOG'], screen = True)
+''',Configuration['OUTPUTLOG'], screen=Configuration['VERBOSE'])
         # We need to produce a FinalModel Directory with moment maps and an XV-Diagram of the model.
         if any([True if 'fit_' in x else False for x in Configuration['FITTING_STAGES']]):
             create_directory('Finalmodel',Configuration['FITTING_DIR'])
@@ -580,9 +579,9 @@ def finish_galaxy(Configuration,maximum_directory_length,current_run = 'Not init
                 make_moments(Configuration,Fits_Files,fit_type = 'Generic_Final',vel_unit = 'm/s',debug=debug)
                 make_overview_plot(Configuration,Fits_Files,debug=debug)
 
-    log_statement = f'''Finished final output in {Configuration['FITTING_DIR']}.
-'''
-    print_log(log_statement,Configuration['OUTPUTLOG'], screen = True)
+
+    print_log(f'''Finished final output in {Configuration['FITTING_DIR']}.
+''',Configuration['OUTPUTLOG'], screen=True)
     # Need to organize the fitting output orderly
     # Need to write date and Time to timing log
     if Configuration['TIMING']:
@@ -595,9 +594,9 @@ Finished preparations at {Configuration['PREP_END_TIME']} \n''')
         timing_result.write(f'''It finished the whole process at {datetime.now()}
 ''')
         timing_result.close()
-        log_statement = f'''Finished timing statistics for the galaxy in {Configuration['FITTING_DIR']}.
-'''
-        print_log(log_statement,Configuration['OUTPUTLOG'], screen = True)
+
+        print_log(f'''Finished timing statistics for the galaxy in {Configuration['FITTING_DIR']}.
+''',Configuration['OUTPUTLOG'], screen=Configuration['VERBOSE'])
 
     cleanup_final(Configuration,Fits_Files, debug=debug)
 
@@ -613,7 +612,7 @@ finish_galaxy.__doc__ =f'''
 
  INPUTS:
     Configuration = Standard FAT configuration
-    maximum_directory_length = the maximum string length of the input directory names
+
 
  OPTIONAL INPUTS:
     debug = False

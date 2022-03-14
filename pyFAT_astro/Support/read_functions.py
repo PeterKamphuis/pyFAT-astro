@@ -341,7 +341,7 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, smoot
     #open the moment 0
 
     print_log(f'''GUESS_ORIENTATION: starting extraction of initial parameters.
-''',Configuration['OUTPUTLOG'], debug = debug, screen =True)
+''',Configuration['OUTPUTLOG'], debug = debug, screen=Configuration['VERBOSE'])
     update_statistic(Configuration, message= "Starting the guess orientation run", debug=debug)
 
     Image = fits.open(f"{Configuration['FITTING_DIR']}Sofia_Output/{Fits_Files['MOMENT0']}",\
@@ -408,7 +408,7 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, smoot
     center_counter = 0.
     original_center = copy.deepcopy(center)
     print_log(f'''GUESS_ORIENTATION: Looking for the center, pa and inclination
-''',Configuration['OUTPUTLOG'], debug = debug, screen =True)
+''',Configuration['OUTPUTLOG'], debug = debug, screen=Configuration['VERBOSE'])
 
     update_statistic(Configuration, message= "Starting the initial search for the pa, inclination and center.", debug=debug)
 
@@ -421,7 +421,7 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, smoot
         if debug:
             print_log(f'''GUESS_ORIENTATION: From the the initial guess with center {center}.
 {'':8s} We get pa = {pa_av}, inclination = {inclination_av}, maj_extent_av {maj_extent_av}
-''',Configuration['OUTPUTLOG'],screen =True)
+''',Configuration['OUTPUTLOG'])
         for mod in beam_check:
 
             for i in [[-1,-1],[-1,1],[1,-1],[1,1]]:
@@ -429,7 +429,7 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, smoot
 
                 if debug:
                     print_log(f'''GUESS_ORIENTATION: Checking at location RA = {center_tmp[0]} pix, DEC = {center_tmp[1]} pix
-''',Configuration['OUTPUTLOG'],screen =True)
+''',Configuration['OUTPUTLOG'])
 
                 inclination_tmp, pa_tmp, maj_extent_tmp= get_inclination_pa(Configuration, mom0, center_tmp, cutoff = scale_factor* median_noise_in_map, figure_name=f'{Configuration["LOG_DIRECTORY"]}loc_{center_tmp[0]:.2f}_{center_tmp[1]:.2f}',debug = False)
                 inclination_av.append(inclination_tmp)
@@ -509,7 +509,7 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, smoot
         if debug:
             print_log(f'''GUESS_ORIENTATION:'BMAJ in pixels, center of the profile, current center, difference between pos and neg
 {'':8s}{Configuration['BEAM_IN_PIXELS'][0]} {center_of_profile} {center} {diff}
-''',Configuration['OUTPUTLOG'],screen=True)
+''',Configuration['OUTPUTLOG'])
 
         # if the center of the profile is more than half a beam off from the Sofia center let's see which on provides a more symmetric profile
         #if False:
@@ -545,7 +545,7 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, smoot
 ''',Configuration['OUTPUTLOG'])
             center_stable = True
     print_log(f'''GUESS_ORIENTATION: Looking for the Initial surface brightness profile.
-''',Configuration['OUTPUTLOG'], debug = debug, screen =True)
+''',Configuration['OUTPUTLOG'], debug = debug, screen=Configuration['VERBOSE'])
     update_statistic(Configuration, message= "Starting the initial search for the SBR and VROT.", debug=debug)
 
     ring_size_req = Configuration['BEAM_IN_PIXELS'][0]/maj_resolution
@@ -559,7 +559,7 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, smoot
 
 
     print_log(f'''GUESS_ORIENTATION: Looking for the Initial Rotation Curve.
-''',Configuration['OUTPUTLOG'], debug = debug, screen =True)
+''',Configuration['OUTPUTLOG'], debug = debug, screen=Configuration['VERBOSE'])
     Image = fits.open(f"{Configuration['FITTING_DIR']}Sofia_Output/{Fits_Files['MOMENT1']}",\
             uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
     map = copy.deepcopy(Image[0].data)
@@ -656,7 +656,7 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, smoot
 
     if debug:
         print_log(f'''GUESS_ORIENTATION: this is the pa {pa} and the vel_pa {vel_pa}
-''' , Configuration['OUTPUTLOG'],screen=True)
+''' , Configuration['OUTPUTLOG'])
 
     if abs(pa[0]-vel_pa[0]) > 300.:
         if pa[0] > 180.:
@@ -694,7 +694,7 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, smoot
 
     if debug:
         print_log(f'''GUESS_ORIENTATION: We subtract {map_vsys:.2f} km/s from the moment 1 map to get the VROT
-''' , Configuration['OUTPUTLOG'],screen=True)
+''' , Configuration['OUTPUTLOG'])
 
     map = map  - map_vsys
     VROT_initial = extract_vrot(Configuration,map ,pa[0],center, debug= debug)
@@ -1060,7 +1060,7 @@ def sofia_catalogue(Configuration,Fits_Files, Variables =['id','x','x_min','x_ma
 {"":8s}SOFIA_CATALOGUE:    In this case please file a bug report at https://github.com/PeterKamphuis/FAT/issues/'
 {"":8s}SOFIA_CATALOGUE: c) You are using pre processed SoFiA output of your own and do not have all the output'
 {"":8s}SOFIA_CATALOGUE:    Required output is {','.join(Variables)})
-''',Configuration['OUTPUTLOG'],screen= True)
+''',Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
                             raise BadCatalogueError("SOFIA_CATALOGUE: The required columns could not be found in the sofia catalogue.")
             else:
                 for col in Variables:
@@ -1133,12 +1133,12 @@ def sofia_catalogue(Configuration,Fits_Files, Variables =['id','x','x_min','x_ma
                             if source_size/cube > 0.5:
                                 print_log(f'''SOFIA_CATALOGUE: We discarded a very large source, so we will restore is and try for that.
 !!!!!!!!!!!!!!!!!!!!!!!!! This means your original cube is in principle too small!!!!!!!!!!!!!!!!!!!!!!!!
-''',Configuration['OUTPUTLOG'],screen=True)
+''',Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
                                 many_sources[Variables.index('f_sum')][i]=outlist[Variables.index('f_sum')][i]
                         if np.nansum(many_sources[Variables.index('f_sum')]) == 0.:
                             print_log(f'''SOFIA_CATALOGUE:The found sources are too close to the edges of the cube. And not large enough to warrant trying them.
 {'':8s} The edge limits were {beam_edge} beams spatially and {vel_edge} channels.
-''',Configuration['OUTPUTLOG'],screen=True)
+''',Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
                             raise BadCatalogueError("The found sources are too close to the edges of the cube. And not large enough to warrant trying them.")
                         else:
                             found = True
@@ -1270,7 +1270,7 @@ def sofia_input_catalogue(Configuration,debug=False):
 {"":8s}SOFIA_CATALOGUE:    In this case please file a bug report at https://github.com/PeterKamphuis/FAT/issues/'
 {"":8s}SOFIA_CATALOGUE: c) You are using pre processed SoFiA output of your own and do not have all the output'
 {"":8s}SOFIA_CATALOGUE:    Required output is {','.join(Variables)})
-''',Configuration['OUTPUTLOG'],screen= True)
+''',Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
                             raise BadCatalogueError("SOFIA_CATALOGUE: The required columns could not be found in the sofia catalogue.")
             else:
 

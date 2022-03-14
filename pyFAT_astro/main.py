@@ -2,12 +2,16 @@
 
 # This is the python version of FAT
 
+import numpy as np
 import os
 import pyFAT_astro.Support.support_functions as sf
+import pyFAT_astro.Support.read_functions as rf
 import warnings
 
 from datetime import datetime
+from multiprocessing import Pool,get_context
 from omegaconf import OmegaConf
+from pyFAT_astro.FAT_Galaxy_Loops import FAT_Galaxy_Loops
 from pyFAT_astro.config.defaults import defaults
 from pyFAT_astro.Support.fat_errors import ProgramError
 
@@ -136,15 +140,13 @@ def main(argv):
             Full_Catalogue = rf.sofia_input_catalogue(Original_Configuration)
         else:
             Full_Catalogue = rf.catalogue(Original_Configuration['CATALOGUE'])
-        stop_individual_errors = ['SmallSourceError','BadSourceError','SofiaFaintError','BadHeaderError','BadCubeError','BadMaskError','BadCatalogueError']
         # Get the longest directory name to format the output directory properlyFit_Tirific_OSC
-        dirname = 'Directory Name'
-        maximum_directory_length = len(dirname)
+
         for directory in Full_Catalogue['DIRECTORYNAME']:
             if directory == './':
                 directory = Original_Configuration['MAIN_DIRECTORY'].split('/')[-2]
-            if len(directory) > maximum_directory_length:
-                maximum_directory_length = len(directory)
+            if len(directory) > Original_Configuration['MAXIMUM_DIRECTORY_LENGTH']:
+                Original_Configuration['MAXIMUM_DIRECTORY_LENGTH'] = len(directory)
 
         # Create a file to write the results to if if required
         if Original_Configuration['OUTPUT_CATALOGUE']:
@@ -154,7 +156,7 @@ def main(argv):
                 with open(Original_Configuration['OUTPUT_CATALOGUE'],'w') as output_catalogue:
                     comment = 'Comments on Fit Result'
                     AC1 = 'OS'
-                    output_catalogue.write(f"{dirname:<{maximum_directory_length}s} {AC1:>6s} {comment}\n")
+                    output_catalogue.write(f"{'Directory Name':<{Original_Configuration['MAXIMUM_DIRECTORY_LENGTH']}s} {AC1:>6s} {comment}\n")
 
         if Original_Configuration['TIMING']:
             with open(Original_Configuration['MAIN_DIRECTORY']+'Timing_Result.txt','w') as timing_result:
@@ -177,10 +179,23 @@ def main(argv):
         if float(Original_Configuration['CATALOGUE_START_ID']) > float(Original_Configuration['CATALOGUE_END_ID']):
             raise CatalogError(f''' Your starting galaxy (Line nr = {Original_Configuration['CATALOGUE_START_ID']}) is listed after your ending galaxy (Line nr = {Original_Configuration['CATALOGUE_END_ID']}), maybe you have double catalogue ids?''')
             sys.exit(1)
-        Original_Configrations,no_processes = sf.calculate_number_processes(Original_Configuration)
-        print(Original_Configrations,no_processes)
+        if Original_Configuration['MULTIPROCESSING']:
+            Original_Configurations,no_processes = sf.calculate_number_processes(Original_Configuration)
+            to_maps = [(x,Full_Catalogue ) for x in Original_Configurations]
+            with get_context("spawn").Pool(processes=no_processes) as pool:
+                results = pool.starmap(FAT_Galaxy_Loops, to_maps)
+            #Stitch all temporary outpu catalogues back together
+            with open(Original_Configuration['OUTPUT_CATALOGUE'],'a') as catalogue:
+                for x in Original_Configurations:
+                    with open(x['OUTPUT_CATALOGUE']) as tmp:
+                        lines = tmp.readlines()
+                    catalogue.writelines(lines[1:])
+                    #clean up
+                    os.remove(x['OUTPUT_CATALOGUE'])
+        else:
+            Original_Configuration['PER_GALAXY_NCPU'] = sf.set_limits(Original_Configuration['NCPU'],1,20)
+            FAT_Galaxy_Loops(Original_Configuration,Full_Catalogue)
     except:
-
         raise ProgramError(f'''Something went wrong in the main. This should not happen. Please list an issue on github.''')
 
 main.__doc__ = '''
