@@ -7,7 +7,7 @@ from pyFAT_astro.Support.support_functions import print_log, convert_type,set_li
                               set_ring_size,calc_rings,get_inner_fix,convertskyangle,\
                               finish_current_run, remove_inhomogeneities,set_format, \
                               set_rings, convertRADEC, create_directory,get_system_string,\
-                              get_fit_groups,run_tirific,update_statistic,set_boundaries
+                              get_fit_groups,run_tirific,update_statistic,set_boundaries,get_from_template
 from pyFAT_astro.Support.clean_functions import clean_before_sofia,clean_after_sofia
 from pyFAT_astro.Support.fits_functions import cut_cubes,extract_pv,make_moments
 from pyFAT_astro.Support.read_functions import load_template,tirific_template
@@ -196,7 +196,7 @@ check_central_convergence.__doc__ =f'''
 
  INPUTS:
     Configuration = Standard FAT configuration
-    Fits_Files = Standard FAT dictionary with filenames
+    Tirific_Template = Standard FAT dictionary with the tirific Template
 
  OPTIONAL INPUTS:
     debug = False
@@ -677,6 +677,54 @@ check_source.__doc__='''
  NOTE:
 '''
 
+def check_vobs(Configuration,Tirific_Template,fit_type = 'Undefined', debug = False):
+    passed = False
+    vrot,incl,incl_2 =  np.array(get_from_template(Configuration,Tirific_Template, ['VROT','INCL','INCL_2'],debug=debug),dtype=float)
+    #print(vrot,incl,incl_2)
+    vobs= [[x*np.sin(np.radians(y)),x*np.sin(np.radians(z))] for x,y,z in zip(vrot,incl,incl_2)]
+    delta = [[abs(x-x1),abs(y-y1),abs(z-z1)] for x,y,z,x1,y1,z1 in zip(vrot,incl,incl_2,vrot[1:],incl[1:],incl_2[1:]) ]
+    #print(delta)
+
+    if debug:
+        for i,pair in enumerate(vobs):
+            print_log(f'''CHECK_VOBS:For ring {i} we find vobs {pair}
+{'':8s} And the differences {[delta[i-1] if i >0 else [0,0,0]]}.
+''',Configuration['OUTPUTLOG'])
+
+    passed=True
+    return passed
+
+check_vobs.__doc__='''
+ NAME:
+    check_vobs.
+
+ PURPOSE:
+    Check that the current vrot*sin(i) corresponds to the minimal changes in vrot and incl
+
+ CATEGORY:
+    run_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    Tirific_Template = Standard FAT dictionary with the tirific Template
+
+ OPTIONAL INPUTS:
+    debug = False
+
+    fit_type = 'Undefined'
+    type of fitting being done.
+
+ OUTPUTS:
+    Returns a boolean that is true when the change is within the limits false when not
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
+
 def fitting_osc(Configuration,Fits_Files,Tirific_Template,Initial_Parameters):
     current_run = 'Not Initialized'
     create_directory(Configuration['USED_FITTING'],Configuration['FITTING_DIR'])
@@ -941,10 +989,11 @@ def one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run, de
         accepted_size = check_size(Configuration,Tirific_Template, fit_type = fit_type, stage = stage, current_run = current_run, debug=debug,Fits_Files=Fits_Files)
     else:
         accepted_size = True
+    accepted_proj_vrot = check_vobs(Configuration,Tirific_Template, fit_type = fit_type,debug=debug)
     # Check whether the central INCL and PA are stable.
     accepted_angle = check_angle_convergence(Configuration,Tirific_Template, fit_type = fit_type,debug=debug)
 
-    if accepted and accepted_size and accepted_central and accepted_angle:
+    if accepted and accepted_size and accepted_central and accepted_angle and accepted_proj_vrot:
         Configuration['ACCEPTED'] = True
     else:
         Configuration['ACCEPTED'] = False
@@ -964,7 +1013,9 @@ def one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run, de
         if not accepted_angle:
             print_log(f'''ONE_STEP_CONVERGENCE: The central disk PA or INCL have changed too much.
 ''',Configuration['OUTPUTLOG'])
-
+        if not accepted_angle:
+            print_log(f'''ONE_STEP_CONVERGENCE: The outer VROT and INCL did not converge on the minimumal change that allows for VROT*Sin(INCL)
+''',Configuration['OUTPUTLOG'])
 
 
                     # First we fix the SBR we are left with also to set the reliable ring to configuration.

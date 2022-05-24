@@ -522,10 +522,6 @@ def finish_galaxy(Configuration,current_run = 'Not initialized', Fits_Files= Non
     if Configuration['USED_FITTING']:
         check_legitimacy(Configuration,debug=debug)
 
-    # Need to write to results catalog
-    if Configuration['OUTPUT_CATALOGUE']:
-        with open(Configuration['OUTPUT_CATALOGUE'],'a') as output_catalogue:
-            output_catalogue.write(f"{Configuration['FITTING_DIR'].split('/')[-2]:{Configuration['MAXIMUM_DIRECTORY_LENGTH']}s} {str(Configuration['ACCEPTED']):>6s} {Configuration['FINAL_COMMENT']} \n")
 
     if Configuration['OUTPUT_QUANTITY'] == 'error':
         error_message = '''
@@ -599,6 +595,10 @@ Finished preparations at {Configuration['PREP_END_TIME']} \n''')
 ''',Configuration['OUTPUTLOG'], screen=Configuration['VERBOSE'])
 
     cleanup_final(Configuration,Fits_Files, debug=debug)
+    # Need to write to results catalog
+    if Configuration['OUTPUT_CATALOGUE']:
+        with open(Configuration['OUTPUT_CATALOGUE'],'a') as output_catalogue:
+            output_catalogue.write(f"{Configuration['FITTING_DIR'].split('/')[-2]:{Configuration['MAXIMUM_DIRECTORY_LENGTH']}s} {str(Configuration['ACCEPTED']):>6s} {Configuration['FINAL_COMMENT']} \n")
 
 finish_galaxy.__doc__ =f'''
  NAME:
