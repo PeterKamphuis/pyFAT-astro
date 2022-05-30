@@ -358,9 +358,11 @@ def clean_header(Configuration,hdr_in,two_dim=False,mask_file=False, debug = Fal
             hdr['EPOCH'] = 2000.
 
 
-
+    #FAT cannot deal with the PC nonsense
     if f'PC01_01' in hdr:
         del hdr['PC0*_0*']
+    if f'PC1_1' in hdr:
+        del hdr['PC*_*']
 
 
     # Check for the beam
@@ -3123,6 +3125,7 @@ def setup_configuration(cfg):
                 tmp.write(data)
     if cfg.cube_name:
         cfg.input.catalogue = None
+        cfg.advanced.multiprocessing = False
         cfg.fitting.catalogue_start_id= '-1'
         cfg.fitting.catalogue_end_id= '-1'
 

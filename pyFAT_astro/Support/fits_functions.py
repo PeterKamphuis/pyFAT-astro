@@ -493,6 +493,7 @@ def prep_cube(Configuration,hdr,data, debug = False):
         while np.isnan(data[0,:,:]).all():
             data=data[1:,:,:]
             hdr['NAXIS3'] = hdr['NAXIS3']-1
+            hdr['CRPIX3'] = hdr['CRPIX3'] - 1
             if hdr['NAXIS3'] < 5:
                 print_log(f'''PREPROCESSING: This cube has too many blanked channels.
 ''', Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
