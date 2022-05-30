@@ -119,9 +119,9 @@ def main(argv):
                     ,cfg.print_examples,cfg.input.catalogue]):
             print(help_message)
             sys.exit()
-        #Let's write and input example to the logs directory
+        #Let's write and input example to the main directory
         if cfg.output.debug:
-            with open(f'{cfg.input.main_directory}/FAT_Inputs-{datetime.now().strftime("%d-%m-%Y")}.yml','w') as default_write:
+            with open(f'{cfg.input.main_directory}/FAT_Inputs-Run_{datetime.now().strftime("%d-%m-%Y")}.yml','w') as default_write:
                 default_write.write(OmegaConf.to_yaml(cfg))
 
         #Transform all to a Configuration dictionary

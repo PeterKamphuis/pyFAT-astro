@@ -582,7 +582,14 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, smoot
     if debug:
         print_log(f'''GUESS_ORIENTATION: This is the amount of values we find after blanking low SNR {len(map[~np.isnan(map)])}
 ''',Configuration['OUTPUTLOG'])
-    if len(map[~np.isnan(map)]) < 5:
+    if v_sys == -1 or center_counter > 0.:
+        #As python is utterly moronic the center goes in back wards to the map
+        map_vsys = np.nanmean(map[int(round(center[1]-buffer)):int(round(center[1]+buffer)),int(round(center[0]-buffer)):int(round(center[0]+buffer))])
+        if Configuration['SIZE_IN_BEAMS'] < 10.:
+            map_vsys = (v_sys+map_vsys)/2.
+    else:
+        map_vsys = v_sys
+    if len(map[~np.isnan(map)]) < 10 or np.isnan(map_vsys):
         no_values  = True
         noise_level = 2.5
         sigma = [0.5,0.5]
@@ -599,8 +606,7 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, smoot
                 map_vsys = np.nanmean(tmp[int(round(center[1]-buffer)):int(round(center[1]+buffer)),int(round(center[0]-buffer)):int(round(center[0]+buffer))])
                 if Configuration['SIZE_IN_BEAMS'] < 10.:
                     map_vsys = (v_sys+map_vsys)/2.
-            else:
-                map_vsys = v_sys
+
 
             if debug:
                 print_log(f'''GUESS_ORIENTATION: We used the threshold {noise_level} and sigma = {sigma}
