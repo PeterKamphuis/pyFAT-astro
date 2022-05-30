@@ -373,9 +373,7 @@ def extract_pv(Configuration,cube_in,angle,center=[-1,-1,-1],finalsize=[-1,-1],c
         zend = set_limits(int(zcenter+finalsize[1]/2.),0,int(nz))
         xstart = set_limits(int(xcenter-finalsize[0]/2.),0,int(nx))
         xend = set_limits(int(xcenter+finalsize[0]/2.),0,int(nx))
-        print(zcenter,zstart,zend)
-        print('The x values')
-        print(xcenter,xstart,xend)
+    
         PV =  PV[zstart:zend, xstart:xend]
         TwoD_hdr['NAXIS2'] = int(finalsize[1])
         TwoD_hdr['NAXIS1'] = int(finalsize[0])

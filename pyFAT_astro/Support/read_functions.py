@@ -577,6 +577,7 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, smoot
 ''',Configuration['OUTPUTLOG'])
     #Image.close()
     #map[3*minimum_noise_in_map > noise_map] = float('NaN')
+
     map[3.*minimum_noise_in_map > noise_map] = float('NaN')
     if debug:
         print_log(f'''GUESS_ORIENTATION: This is the amount of values we find after blanking low SNR {len(map[~np.isnan(map)])}
@@ -592,11 +593,20 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, smoot
             tmp = copy.deepcopy(Image[0].data)
             tmp =  ndimage.gaussian_filter(Image[0].data, sigma=(sigma[1], sigma[0]), order=0)
             tmp[noise_level*minimum_noise_in_map > noise_map] =  float('NaN')
+            #We need the cnter to be found else we get a crash
+            if v_sys == -1 or center_counter > 0.:
+                #As python is utterly moronic the center goes in back wards to the map
+                map_vsys = np.nanmean(tmp[int(round(center[1]-buffer)):int(round(center[1]+buffer)),int(round(center[0]-buffer)):int(round(center[0]+buffer))])
+                if Configuration['SIZE_IN_BEAMS'] < 10.:
+                    map_vsys = (v_sys+map_vsys)/2.
+            else:
+                map_vsys = v_sys
+
             if debug:
                 print_log(f'''GUESS_ORIENTATION: We used the threshold {noise_level} and sigma = {sigma}
-{'':8s}We find the len {len(tmp[~np.isnan(tmp)])}
+{'':8s}We find the len {len(tmp[~np.isnan(tmp)])} and the central velocity {map_vsys}
 ''',Configuration['OUTPUTLOG'])
-            if len(tmp[~np.isnan(tmp)]) < 5:
+            if len(tmp[~np.isnan(tmp)]) < 10 or np.isnan(map_vsys):
                 sigma = [sigma[0]+0.5,sigma[0]+0.5]
                 noise_level -= 0.5
             else:
@@ -683,13 +693,13 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, smoot
         print_log(f'''GUESS_ORIENTATION: We start with vsys = {v_sys:.2f} km/s
 ''' , Configuration['OUTPUTLOG'])
 
-    if v_sys == -1 or center_counter > 0.:
+    #if v_sys == -1 or center_counter > 0.:
         #As python is utterly moronic the center goes in back wards to the map
-        map_vsys = np.nanmean(map[int(round(center[1]-buffer)):int(round(center[1]+buffer)),int(round(center[0]-buffer)):int(round(center[0]+buffer))])
-        if Configuration['SIZE_IN_BEAMS'] < 10.:
-            map_vsys = (v_sys+map_vsys)/2.
-    else:
-        map_vsys = v_sys
+    #    map_vsys = np.nanmean(map[int(round(center[1]-buffer)):int(round(center[1]+buffer)),int(round(center[0]-buffer)):int(round(center[0]+buffer))])
+    #    if Configuration['SIZE_IN_BEAMS'] < 10.:
+    #        map_vsys = (v_sys+map_vsys)/2.
+    #else:
+    #    map_vsys = v_sys
 
 
     if debug:

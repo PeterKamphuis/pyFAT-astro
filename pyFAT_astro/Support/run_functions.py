@@ -488,7 +488,6 @@ def check_source(Configuration, Fits_Files, debug = False):
     pa, inclination, SBR_initial, maj_extent,x_new,y_new,new_vsys,VROT_initial = rf.guess_orientation(Configuration,Fits_Files, v_sys= v_app, smooth = smooth_field,center = [x,y],debug=debug)
 
     if x_new != x or y_new != y or new_vsys != v_app:
-
         x,y,z_new=cube_wcs.wcs_world2pix(ra,dec,new_vsys*1000.,1)
         x=float(x_new)
         y=float(y_new)
@@ -521,11 +520,12 @@ def check_source(Configuration, Fits_Files, debug = False):
      # Determine whether the centre is blanked or not
 
 
-    #if debug:
-    #    print_log(f'''CHECK_SOURCE: In the center we find the vsys {Central_Velocity} km/s around the location:
-#{"":8s}CHECK_SOURCE: x,y,z = {int(round(x))}, {int(round(y))}, {int(round(z))}.
-#{'':8s}CHECK_SOURCE: we will use a systemic velocity of {v_app}
-#''',Configuration['OUTPUTLOG'])
+    if debug:
+        print_log(f'''CHECK_SOURCE: In the center we find the vsys {new_vsys} km/s around the location:
+# {"":8s}CHECK_SOURCE: x,y,z = {int(round(x))}, {int(round(y))}, {int(round(z))}.
+# {'':8s}CHECK_SOURCE: we will use a systemic velocity of {v_app}
+# Checking the central flux in a box with size of {Configuration['BEAM_IN_PIXELS'][0]} in pixels around the central coordinates
+# ''',Configuration['OUTPUTLOG'])
     Central_Flux = np.mean(data[int(round(z-1)):int(round(z+1)),\
                                 int(round(y-Configuration['BEAM_IN_PIXELS'][0]/2.)):int(round(y+Configuration['BEAM_IN_PIXELS'][0]/2.)),\
                                 int(round(x-Configuration['BEAM_IN_PIXELS'][0]/2.)):int(round(x+Configuration['BEAM_IN_PIXELS'][0]/2.))])

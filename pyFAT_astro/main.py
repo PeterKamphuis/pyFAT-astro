@@ -7,6 +7,7 @@ import os
 import pyFAT_astro.Support.support_functions as sf
 import pyFAT_astro.Support.read_functions as rf
 import sys
+import traceback
 import warnings
 
 
