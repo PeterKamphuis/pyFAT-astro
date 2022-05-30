@@ -544,8 +544,11 @@ def finish_galaxy(Configuration,current_run = 'Not initialized', Fits_Files= Non
             with open(Configuration['OUTPUTLOG'],'a') as log_file:
                 traceback.print_tb(exiting.__traceback__,file=log_file)
             traceback.print_tb(exiting.__traceback__)
-        Configuration['ACCEPTED'] = False
-        Configuration['FINAL_COMMENT'] = f'The code crashed while fitting this galaxy please check it's log'}
+        if Configuration['MULTIPROCESSING']:
+            Configuration['ACCEPTED'] = False
+            Configuration['FINAL_COMMENT'] = f"The code crashed while fitting this galaxy please check it's log."
+        else:
+            sys.exit(1)
     elif Configuration['OUTPUT_QUANTITY'] == 5:
         print_log(f'''
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
