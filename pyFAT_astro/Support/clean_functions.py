@@ -547,6 +547,7 @@ def finish_galaxy(Configuration,current_run = 'Not initialized', Fits_Files= Non
         if Configuration['MULTIPROCESSING']:
             Configuration['ACCEPTED'] = False
             Configuration['FINAL_COMMENT'] = f"The code crashed while fitting this galaxy please check it's log."
+            Configuration['OUTPUT_QUANTITY'] = 5
         else:
             sys.exit(1)
     elif Configuration['OUTPUT_QUANTITY'] == 5:
