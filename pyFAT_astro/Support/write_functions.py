@@ -359,8 +359,11 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
         momlevel = np.array([1,4,8,12],dtype=float)* mindism0
     elif maxdism0 < 32*mindism0:
         momlevel = np.array([1,4,8,16,24,32],dtype=float)* mindism0
-    else:
+    elif maxdism0 < 256*mindism0:
         momlevel = np.array([1,4,8,32,64,128],dtype=float) * mindism0
+    else:
+        momlevel = np.array([0,1,2,3,4,5,6,7],dtype=float) * (maxdism0-mindism0)/7+ mindism0
+
     #print("We find this {} as the minimum of the moment0 map".format(mindism0))
     momlevel = np.array([x for x in momlevel if x < np.max(moment0[0].data)*0.95],dtype=float)
     if momlevel.size == 0:
@@ -620,8 +623,11 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
 
     #Add some contours
     neg_cont = np.array([-3,-1.5],dtype=float)*Configuration['NOISE']
-    pos_cont =  np.array([1.5,3.,6,12,24,48,96],dtype=float)*Configuration['NOISE']
-    pos_cont = np.array([x for x in pos_cont if x < np.nanmax(PV[0].data) * 0.95],dtype=float)
+    if  np.nanmax(PV[0].data) * 0.95 < 96*Configuration['NOISE']:
+        pos_cont =  np.array([1.5,3.,6,12,24,48,96],dtype=float)*Configuration['NOISE']
+    else:
+        pos_cont =  np.array([0,1,2,3,4,5,6,7],dtype=float)*(np.nanmax(PV[0].data) * 0.95-3.*Configuration['NOISE'])/7. +3.*Configuration['NOISE']
+    pos_cont = np.array([x for x in pos_cont if x <= np.nanmax(PV[0].data) * 0.95],dtype=float)
     if debug:
             print_log(f'''MAKE_OVERVIEW_PLOT: postive {pos_cont}, negative {neg_cont}, noise {Configuration['NOISE']}
     ''',Configuration['OUTPUTLOG'],debug =True )

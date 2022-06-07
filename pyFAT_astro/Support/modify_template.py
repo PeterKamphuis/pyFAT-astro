@@ -2708,23 +2708,28 @@ def set_new_size(Configuration,Tirific_Template, Fits_Files, fit_type = 'Undefin
             Tirific_Template[key] = f" {' '.join([f'{x:.2f}' for x in radii])}"
         else:
             if interpolate:
+                radii_int=np.array(radii,dtype=float)
+                old_radii_int = np.array(old_radii,dtype=float)
+                parameters_int = copy.deepcopy(parameters[i])
                 if debug:
-                    print_log(f'''SET_NEW_SIZE: We are interpolating par = {parameters[i]} old radii={old_radii} new radii={radii}
+                    print_log(f'''SET_NEW_SIZE: We are interpolating par = {parameters_int} old radii={old_radii_int} new radii={radii_int}
     ''',Configuration['OUTPUTLOG'])
-                if len(parameters[i]) > len(old_radii):
+                if len(parameters_int) > len(old_radii_int):
                     if debug:
                         print_log(f'''SET_NEW_SIZE: The parameters have more values than the radii. Cutting the end.
     ''',Configuration['OUTPUTLOG'])
-                        parameters[i] = parameters[i][:len(old_radii)-1]
-                elif len(parameters[i]) < len(old_radii):
+                    parameters_int = parameters_int[:len(old_radii)-1]
+                elif len(parameters_int) < len(old_radii_int):
                     if debug:
                         print_log(f'''SET_NEW_SIZE: The parameters have less values than the radii. Adding the last value until match.
     ''',Configuration['OUTPUTLOG'])
-                        while len(parameters[i]) < len(old_radii):
-                            parameters[i].append(parameters[i][-1])
+                    while len(parameters_int) < len(old_radii_int):
+                        parameters_int.append(parameters_int[-1])
 
-                parameters[i] = list(np.interp(np.array(radii,dtype=float),np.array(old_radii,dtype=float),np.array(parameters[i],dtype=float)))
-
+                parameters[i] = list(np.interp(radii_int,old_radii_int,np.array(parameters_int,dtype=float)))
+                del radii_int
+                del old_radii_int
+                del parameters_int
             format = set_format(key)
 
             if len(parameters[i]) > Configuration['NO_RINGS']-1:
