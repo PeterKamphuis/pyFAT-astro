@@ -130,9 +130,12 @@ def check_angles(Configuration,Tirific_Template, debug = False):
                     print_log(f'''CHECK_ANGLES: Several PA values were too small
 ''', Configuration['OUTPUTLOG'])
 
-        pa_tmp = max_profile_change(Configuration,rad,pa[side],'PA',slope = Configuration['WARP_SLOPE'][side],debug=debug)
+        pa_tmp,incl_tmp,changed_angles = check_angular_momentum_vector(Configuration,\
+                                            rad,pa[side],incl[side],angle_check= changed_angles,\
+                                            side=side,debug=debug)
+        #pa_tmp = max_profile_change(Configuration,rad,pa[side],'PA',slope = Configuration['WARP_SLOPE'][side],debug=debug)
         pa[side] = pa_tmp
-        incl_tmp = max_profile_change(Configuration,rad,incl[side],'INCL',slope = Configuration['WARP_SLOPE'][side],debug=debug)
+        #incl_tmp = max_profile_change(Configuration,rad,incl[side],'INCL',slope = Configuration['WARP_SLOPE'][side],debug=debug)
         incl[side] = incl_tmp
     #Ensure that we have not made PA differences
     if pa[0][0] != pa[1][0]:

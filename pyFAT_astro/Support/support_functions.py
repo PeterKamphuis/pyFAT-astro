@@ -204,6 +204,112 @@ calculate_number_processes.__doc__ =f'''
  NOTE:
 '''
 
+def check_angular_momentum_vector(Configuration,radius_in,pa_in,inclination_in,\
+                                    modified= False,debug=False,side=0):
+
+    inclination = np.array(inclination_in)
+    pa = np.array(pa_in)
+    radius = np.array(radius_in)
+
+    inclination=90-inclination
+    # For this the PA has to be between 0-90
+    mult=np.floor(pa[0]/90.)
+    inPA= pa-mult*90.
+        #avoid singularities
+    inPA[np.where(inPA == 0.)] = 0.001
+    inclination[np.where(inclination == 0.)] = 0.001
+
+    radkpc = np.array([convertskyangle(Configuration,float(x)) for x in radius],dtype=float)
+    max_theta = np.arctan(np.tan(Configuration['MAX_CHANGE']['INCL']*(np.pi/180.))\
+                    *np.tan(Configuration['MAX_CHANGE']['PA']*(np.pi/180.)))
+    #phi is dependent one theta but the max change should be the same
+
+    # define the angular momentum vector of the plane and the outer most ring
+    succes = False
+    while not succes:
+        if debug:
+            print_log(f'''CHECK_ANGULAR_MOMENTUM_VECTOR: Looking for phi and theta.
+PA = {inPA}
+Inclination = {inclination}
+''',Configuration['OUTPUTLOG'])
+        theta=np.arctan(np.tan(inclination*(np.pi/180.))*np.tan(inPA*(np.pi/180.)))
+        new_theta = max_profile_change(Configuration,radius,theta,'ARBITRARY',\
+            slope = Configuration['WARP_SLOPE'][side],max_change=max_theta, debug=False)
+        phi = np.arctan(np.tan(inPA*(np.pi/180.))/np.sin(new_theta))
+        new_phi = max_profile_change(Configuration,radius,phi,'ARBITRARY',\
+            slope = Configuration['WARP_SLOPE'][side],max_change=max_theta, debug=False)
+        diff_phi = np.array([abs(x-y) for x,y in zip(phi,new_phi) ],dtype=float)
+        diff_theta = np.array([abs(x-y) for x,y in zip(theta,new_theta)],dtype=float)
+        if debug:
+            print_log(f'''CHECK_ANGULAR_MOMENTUM_VECTOR:
+#diff_theta {diff_theta} len = {diff_theta.size()} {np.where(diff_theta != 0.)}
+#diff_phi {diff_phi} len = {diff_phi.size()} {np.where(diff_phi != 0.)}
+#''',Configuration['OUTPUTLOG'])
+
+        if diff_phi.size() != 0. or \
+            diff_theta.size() != 0.:
+            if (new_phi[0] < np.pi/2.) and (new_phi[-1] > np.pi/2) and (inclination[0] < 5.):
+                inPA= np.arctan(np.sin(new_theta)*np.tan(new_phi-np.pi/2.))*(360./(2*np.pi))\
+                    +mult*90+np.arctan(np.sin(new_theta[0])*np.tan(new_phi[0]))*(360./(2*np.pi))
+            else:
+                inPA= np.arctan(np.sin(new_theta)*np.tan(new_phi))*(360./(2*np.pi))+mult*90
+            inPA[new_phi > 0.5*np.pi]=inPA[new_phi > 0.5*np.pi]+180.
+
+                # return inclination
+            inclination=90-np.arctan(1./(np.cos(new_theta)*np.tan(new_phi)))*(360./(2*np.pi))
+        # return inclination boundary adjustements
+            inclination[np.where(inclination > 90.)] = 180 - inclination[np.where(inclination > 90.)]
+            inclination[np.where(inclination < 0.)] = -1 * inclination[np.where(inclination < 0.)]
+            #if debug:
+            #    print_log(f'''CHECK_ANGULAR_MOMENTUM_VECTOR: We had to change theta.
+#we changed the PA to {inPA}
+#we changed the incination to {inclination}
+#''',Configuration['OUTPUTLOG'])
+            continue
+        else:
+            succes = True
+
+    if len(np.where(np.array([abs(x-y) for x,y in zip(pa_in,pa) ],dtype=float) != 0.)) != 0. or \
+        len(np.where(np.array([abs(x-y) for x,y in zip(inclination_in,inclination) ],dtype=float) != 0.)) != 0.:
+        modified= True
+    return pa_new,incl_new, modified
+check_angular_momentum_vector.__doc__ =f'''
+ NAME:
+    check_angular_momentum_vector
+
+ PURPOSE:
+    Check the output warp by ensuring that the angular momentum is varying smoothly
+
+ CATEGORY:
+    support_functions
+
+ INPUTS:
+    Configuration = Standard Original FAT configuration
+    radius = radius of the model
+    pa = PA of the model
+    inclination = inclination of the model
+
+ OPTIONAL INPUTS:
+    angle_check = False
+    indicates whether we have modified the angles
+
+    debug = debug
+
+ OUTPUTS:
+    pa_new = the modfied PA
+    incl_new= the modified incl
+    modified = boolean indicating whether the PA and incl ave beet modfied.
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
+
+
+
 def check_sofia(Configuration,Fits_Files,debug=False):
     files =['_mask.fits','_mom0.fits','_mom1.fits','_chan.fits','_mom2.fits','_cat.txt']
     for file in files:
@@ -2428,17 +2534,23 @@ make_tiltogram.__doc__ =f'''
 
 '''
 
-def max_profile_change(Configuration,radius,profile,key,slope = None,debug=False):
+
+
+def max_profile_change(Configuration,radius,profile,key,max_change=None,\
+                        slope = None,debug=False):
     radkpc =[convertskyangle(Configuration,float(x)) for x in radius]
     new_profile = copy.deepcopy(profile)
     sm_profile = savgol_filter(profile, 3, 1)
-
+    if key == 'ARBITRARY' and not max_change:
+        raise InputError('For arbitray checks you have to set the max_change.')
+    if key != 'ARBITRARY':
+        max_change=Configuration['MAX_CHANGE'][key]
     diff_rad =  [float(y-x) for x,y in zip(radkpc,radkpc[1:])]
     diff_profile = [float(y-x) for x,y in zip(profile,profile[1:])]
     diff_sm_profile = [float(y-x) for x,y in zip(sm_profile,sm_profile[1:])]
     if debug:
         print_log(f'''MAX_CHANGE_PROFILE: The profile {key} starts with.
-{'':8s} {key} = {new_profile}
+{'':8s} {key} = {new_profile} and max change = {max_change}
 {'':8s} smoothed {key}  = {sm_profile}
 {'':8s} diff per ring = {diff_profile}
 {'':8s} smoothed dif per ring = {diff_sm_profile}
@@ -2447,31 +2559,31 @@ def max_profile_change(Configuration,radius,profile,key,slope = None,debug=False
 ''', Configuration['OUTPUTLOG'],debug=True)
 
     for i,diff in enumerate(diff_profile):
-        if abs(diff)/diff_rad[i] > Configuration['MAX_CHANGE'][key]:
+        if abs(diff)/diff_rad[i] > max_change:
 
             #if it is the last point we simply limit it
             if i == len(diff_profile)-1:
-                new_profile[i+1] = profile[i]+ diff/abs(diff)*(Configuration['MAX_CHANGE'][key]*0.5*diff_rad[i])
+                new_profile[i+1] = profile[i]+ diff/abs(diff)*(max_change*0.5*diff_rad[i])
             elif i+1 == slope:
                 # if we have the start of the slope on the max_change then put it to value of the previous ring
                 new_profile[i+1] = new_profile[i]
-            elif diff_sm_profile[i]/diff_rad[i] < Configuration['MAX_CHANGE'][key]*0.5:
+            elif diff_sm_profile[i]/diff_rad[i] < max_change*0.5:
                 new_profile[i+1] = sm_profile[i+1]
             elif diff_profile[i+1] == 0:
-                new_profile[i+1] = profile[i]+ diff/abs(diff)*(Configuration['MAX_CHANGE'][key]*0.9*diff_rad[i])
+                new_profile[i+1] = profile[i]+ diff/abs(diff)*(max_change*0.9*diff_rad[i])
                 #If the change does not reverse we simply limit
             elif diff/abs(diff) == diff_profile[i+1]/abs(diff_profile[i+1]):
-                new_profile[i+1] = profile[i]+ diff/abs(diff)*(Configuration['MAX_CHANGE'][key]*0.9*diff_rad[i])
+                new_profile[i+1] = profile[i]+ diff/abs(diff)*(max_change*0.9*diff_rad[i])
             else:
                 if abs(diff) > abs(diff_profile[i+1]):
                     gapped_diff = radkpc[i+2] - radkpc[i]
-                    if abs(new_profile[i]-new_profile[i+2])/gapped_diff < Configuration['MAX_CHANGE'][key]:
+                    if abs(new_profile[i]-new_profile[i+2])/gapped_diff < max_change:
                         new_profile[i+1] = np.mean([new_profile[i],new_profile[i+2]])
                     else:
                         new_profile[i+1] = new_profile[i]
                 else:
 
-                    new_profile[i+1] = profile[i]+ diff/abs(diff)*(Configuration['MAX_CHANGE'][key]*0.9*diff_rad[i])
+                    new_profile[i+1] = profile[i]+ diff/abs(diff)*(max_change*0.9*diff_rad[i])
 
             if i < len(diff_profile)-1:
                 diff_profile[i+1] = float(new_profile[i+2]-new_profile[i+1])
