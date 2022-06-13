@@ -204,67 +204,110 @@ calculate_number_processes.__doc__ =f'''
  NOTE:
 '''
 
+def calculate_am_vector(Configuration,PA_in,Inclination_in,multiple = None, invert=False,debug=False):
+    if not multiple and invert:
+        print_log(f'''CALCULATE_AM_VECTOR: inverting phi and theta without the multiple will result in all PAs being in the first quadrant.
+''',Configuration['OUTPUTLOG'])
+        multiple=0.
+
+    if invert:
+        Theta=np.array(PA_in,dtype=float)
+        Phi=np.array(Inclination_in,dtype=float)
+        Inclination=90-np.arctan(1./(np.cos(Theta)*np.tan(Phi)))*(360./(2*np.pi))
+    # return inclination boundary adjustements
+        Inclination[np.where(Inclination > 90.)] = 180 - Inclination[np.where(Inclination > 90.)]
+        Inclination[np.where(Inclination < 0.)] = -1 * Inclination[np.where(Inclination < 0.)]
+        if (Phi[0] < np.pi/2.) and (Phi[-1] > np.pi/2) and (Inclination[0] < 5.):
+            PA= np.arctan(np.sin(Theta)*np.tan(Phi-np.pi/2.))*(360./(2*np.pi))\
+                        +multiple*90.+np.arctan(np.sin(Theta[0])*np.tan(Phi[0]))*(360./(2*np.pi))
+        else:
+            PA= np.arctan(np.sin(Theta)*np.tan(Phi))*(360./(2*np.pi))+multiple*90.
+        return PA,Inclination
+    else:
+        # For this the PA has to be between 0-90
+        PA=np.array(PA_in,dtype=float)
+        Inclination=np.array(Inclination_in,dtype=float)
+        multiple=np.floor(PA[0]/90.)
+        PA= PA-multiple*90.
+        Inclination=90-Inclination
+        PA[np.where(PA == 0.)] = 0.001
+        Inclination[np.where(Inclination == 0.)] = 0.001
+        Theta=np.arctan(np.tan(Inclination*(np.pi/180.))*np.tan(PA*(np.pi/180.)))
+        Phi = np.arctan(np.tan(PA*(np.pi/180.))/np.sin(Theta))
+        return Theta,Phi,multiple
+calculate_am_vector.__doc__ =f'''
+ NAME:
+    calculate_am_vector
+
+ PURPOSE:
+    Calculate the optimal number of processs and create Configurations for each of them.
+
+ CATEGORY:
+    support_functions
+
+ INPUTS:
+    Configuration = Standard Original FAT configuration
+
+ OPTIONAL INPUTS:
+
+ OUTPUTS:
+    a set of Configurations for each process.
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
+
+
 def check_angular_momentum_vector(Configuration,radius_in,pa_in,inclination_in,\
                                     modified= False,debug=False,side=0):
 
     inclination = np.array(inclination_in)
     pa = np.array(pa_in)
     radius = np.array(radius_in)
-
-    inclination=90-inclination
-    # For this the PA has to be between 0-90
-    mult=np.floor(pa[0]/90.)
-    inPA= pa-mult*90.
-        #avoid singularities
-    inPA[np.where(inPA == 0.)] = 0.001
-    inclination[np.where(inclination == 0.)] = 0.001
-
     radkpc = np.array([convertskyangle(Configuration,float(x)) for x in radius],dtype=float)
-    max_theta = np.arctan(np.tan(Configuration['MAX_CHANGE']['INCL']*(np.pi/180.))\
-                    *np.tan(Configuration['MAX_CHANGE']['PA']*(np.pi/180.)))
     #phi is dependent one theta but the max change should be the same
-
-    # define the angular momentum vector of the plane and the outer most ring
+    max_shift = np.arctan(np.tan(Configuration['MAX_CHANGE']['INCL']*(np.pi/180.))\
+                    *np.tan(Configuration['MAX_CHANGE']['PA']*(np.pi/180.)))
+    if debug:
+            print_log(f'''CHECK_ANGULAR_MOMENTUM_VECTOR: The maximum alowwed shift = {max_shift}.
+''',Configuration['OUTPUTLOG'])
     succes = False
     while not succes:
         if debug:
             print_log(f'''CHECK_ANGULAR_MOMENTUM_VECTOR: Looking for phi and theta.
-PA = {inPA}
+PA = {pa}
 Inclination = {inclination}
 ''',Configuration['OUTPUTLOG'])
-        theta=np.arctan(np.tan(inclination*(np.pi/180.))*np.tan(inPA*(np.pi/180.)))
-        new_theta = max_profile_change(Configuration,radius,theta,'ARBITRARY',\
-            slope = Configuration['WARP_SLOPE'][side],max_change=max_theta, debug=False)
-        phi = np.arctan(np.tan(inPA*(np.pi/180.))/np.sin(new_theta))
-        new_phi = max_profile_change(Configuration,radius,phi,'ARBITRARY',\
-            slope = Configuration['WARP_SLOPE'][side],max_change=max_theta, debug=False)
-        diff_phi = np.array([abs(x-y) for x,y in zip(phi,new_phi) ],dtype=float)
-        diff_theta = np.array([abs(x-y) for x,y in zip(theta,new_theta)],dtype=float)
-        if debug:
-            print_log(f'''CHECK_ANGULAR_MOMENTUM_VECTOR:
-#diff_theta {diff_theta} len = {diff_theta.size()} {np.where(diff_theta != 0.)}
-#diff_phi {diff_phi} len = {diff_phi.size()} {np.where(diff_phi != 0.)}
-#''',Configuration['OUTPUTLOG'])
+        Theta,Phi,quadrant = calculate_am_vector(Configuration,pa,inclination,debug=debug)
+        new_theta = max_profile_change(Configuration,radius,Theta,'ARBITRARY',\
+            slope = Configuration['WARP_SLOPE'][side],max_change=max_shift, debug=debug)
+        new_phi = max_profile_change(Configuration,radius,Phi,'ARBITRARY',\
+            slope = Configuration['WARP_SLOPE'][side],max_change=max_shift, debug=debug)
+        diff_phi = np.array(np.where(np.array([abs(x-y) for x,y in zip(Phi,new_phi) ],dtype=float) != 0.))
+        diff_theta = np.array(np.where(np.array([abs(x-y) for x,y in zip(Theta,new_theta)],dtype=float) != 0.))
 
-        if diff_phi.size() != 0. or \
-            diff_theta.size() != 0.:
-            if (new_phi[0] < np.pi/2.) and (new_phi[-1] > np.pi/2) and (inclination[0] < 5.):
-                inPA= np.arctan(np.sin(new_theta)*np.tan(new_phi-np.pi/2.))*(360./(2*np.pi))\
-                    +mult*90+np.arctan(np.sin(new_theta[0])*np.tan(new_phi[0]))*(360./(2*np.pi))
-            else:
-                inPA= np.arctan(np.sin(new_theta)*np.tan(new_phi))*(360./(2*np.pi))+mult*90
-            inPA[new_phi > 0.5*np.pi]=inPA[new_phi > 0.5*np.pi]+180.
 
-                # return inclination
-            inclination=90-np.arctan(1./(np.cos(new_theta)*np.tan(new_phi)))*(360./(2*np.pi))
-        # return inclination boundary adjustements
-            inclination[np.where(inclination > 90.)] = 180 - inclination[np.where(inclination > 90.)]
-            inclination[np.where(inclination < 0.)] = -1 * inclination[np.where(inclination < 0.)]
-            #if debug:
-            #    print_log(f'''CHECK_ANGULAR_MOMENTUM_VECTOR: We had to change theta.
-#we changed the PA to {inPA}
-#we changed the incination to {inclination}
-#''',Configuration['OUTPUTLOG'])
+        if diff_phi.size != 0. or \
+            diff_theta.size != 0.:
+            if debug:
+                print_log(f'''CHECK_ANGULAR_MOMENTUM_VECTOR
+{'':8s} Phi = {Phi}, new_phi = {new_phi}
+{'':8s} Phi diff = {np.array([abs(x-y) for x,y in zip(Phi,new_phi) ],dtype=float)}{'':8s}
+{'':8s} Theta = {Theta}, new_theta = {new_theta}
+{'':8s} Theta diff = {np.array([abs(x-y) for x,y in zip(Theta,new_theta) ],dtype=float)}
+''',Configuration['OUTPUTLOG'])
+
+
+            pa,inclination = calculate_am_vector(Configuration,new_theta,new_phi,\
+                                multiple=quadrant,invert=True, debug=debug)
+            print_log(f'''CHECK_ANGULAR_MOMENTUM_VECTOR: new PA and inclination
+PA = {pa}
+Inclination = {inclination}
+''',Configuration['OUTPUTLOG'])
             continue
         else:
             succes = True
@@ -272,7 +315,7 @@ Inclination = {inclination}
     if len(np.where(np.array([abs(x-y) for x,y in zip(pa_in,pa) ],dtype=float) != 0.)) != 0. or \
         len(np.where(np.array([abs(x-y) for x,y in zip(inclination_in,inclination) ],dtype=float) != 0.)) != 0.:
         modified= True
-    return pa_new,incl_new, modified
+    return pa,inclination, modified
 check_angular_momentum_vector.__doc__ =f'''
  NAME:
     check_angular_momentum_vector
@@ -2542,7 +2585,7 @@ def max_profile_change(Configuration,radius,profile,key,max_change=None,\
     new_profile = copy.deepcopy(profile)
     sm_profile = savgol_filter(profile, 3, 1)
     if key == 'ARBITRARY' and not max_change:
-        raise InputError('For arbitray checks you have to set the max_change.')
+        raise InputError('For arbitrary checks you have to set the max_change.')
     if key != 'ARBITRARY':
         max_change=Configuration['MAX_CHANGE'][key]
     diff_rad =  [float(y-x) for x,y in zip(radkpc,radkpc[1:])]
@@ -2560,7 +2603,7 @@ def max_profile_change(Configuration,radius,profile,key,max_change=None,\
 
     for i,diff in enumerate(diff_profile):
         if abs(diff)/diff_rad[i] > max_change:
-
+            print(f'Befor {diff} i= {i}')
             #if it is the last point we simply limit it
             if i == len(diff_profile)-1:
                 new_profile[i+1] = profile[i]+ diff/abs(diff)*(max_change*0.5*diff_rad[i])
@@ -2587,10 +2630,12 @@ def max_profile_change(Configuration,radius,profile,key,max_change=None,\
 
             if i < len(diff_profile)-1:
                 diff_profile[i+1] = float(new_profile[i+2]-new_profile[i+1])
+                print(f'After {diff} i= {i}  {diff_profile[i+1]}')
     if debug:
         print_log(f'''MAX_CHANGE_PROFILE: The returned profile is:
 {'':8s}{key} = {new_profile}
 ''', Configuration['OUTPUTLOG'],debug=True)
+    exit()
     return new_profile
 max_profile_change.__doc__ =f'''
  NAME:

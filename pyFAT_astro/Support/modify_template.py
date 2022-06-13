@@ -6,7 +6,7 @@
 import copy
 from pyFAT_astro.Support.support_functions import set_rings,convertskyangle,sbr_limits,set_limits,print_log,set_limit_modifier,\
                               set_ring_size,calc_rings,finish_current_run,set_format,get_from_template,gaussian_function,fit_gaussian,\
-                              get_ring_weights,set_boundaries,max_profile_change
+                              get_ring_weights,set_boundaries,max_profile_change,check_angular_momentum_vector
 from pyFAT_astro.Support.fat_errors import InitializeError,CfluxError,FunctionCallError,BadConfigurationError
 import numpy as np
 import os
@@ -129,9 +129,9 @@ def check_angles(Configuration,Tirific_Template, debug = False):
                 if debug:
                     print_log(f'''CHECK_ANGLES: Several PA values were too small
 ''', Configuration['OUTPUTLOG'])
-
+        pa[side][4] = pa[side][4]-20.
         pa_tmp,incl_tmp,changed_angles = check_angular_momentum_vector(Configuration,\
-                                            rad,pa[side],incl[side],angle_check= changed_angles,\
+                                            rad,pa[side],incl[side],modified= changed_angles,\
                                             side=side,debug=debug)
         #pa_tmp = max_profile_change(Configuration,rad,pa[side],'PA',slope = Configuration['WARP_SLOPE'][side],debug=debug)
         pa[side] = pa_tmp
