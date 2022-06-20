@@ -103,6 +103,7 @@ def check_angles(Configuration,Tirific_Template, debug = False):
 {'':8s} INCL appr = {incl[0]}
 {'':8s} INCL rec = {incl[1]}
 ''', Configuration['OUTPUTLOG'],debug=True)
+
     for side in [0,1]:
         incl_too_large = (np.array(incl[side],dtype=float) > 90.)
         if incl_too_large.any():
@@ -129,7 +130,6 @@ def check_angles(Configuration,Tirific_Template, debug = False):
                 if debug:
                     print_log(f'''CHECK_ANGLES: Several PA values were too small
 ''', Configuration['OUTPUTLOG'])
-        pa[side][4] = pa[side][4]-20.
         pa_tmp,incl_tmp,changed_angles = check_angular_momentum_vector(Configuration,\
                                             rad,pa[side],incl[side],modified= changed_angles,\
                                             side=side,debug=debug)
@@ -137,6 +137,9 @@ def check_angles(Configuration,Tirific_Template, debug = False):
         pa[side] = pa_tmp
         #incl_tmp = max_profile_change(Configuration,rad,incl[side],'INCL',slope = Configuration['WARP_SLOPE'][side],debug=debug)
         incl[side] = incl_tmp
+
+        #exit()
+
     #Ensure that we have not made PA differences
     if pa[0][0] != pa[1][0]:
         if (pa[0][0] > 360. and pa[1][0] < 360.) or \
@@ -154,6 +157,7 @@ def check_angles(Configuration,Tirific_Template, debug = False):
     Tirific_Template['INCL_2'] = f"{' '.join(f'{x:.2e}' for x in incl[1])}"
     Tirific_Template['PA'] = f"{' '.join(f'{x:.2e}' for x in pa[0])}"
     Tirific_Template['PA_2'] = f"{' '.join(f'{x:.2e}' for x in pa[1])}"
+    debug=True
     if debug:
         print_log(f'''CHECK_ANGLES: We wrote to the template
 {'':8s} PA appr = {Tirific_Template['PA']}
@@ -161,6 +165,7 @@ def check_angles(Configuration,Tirific_Template, debug = False):
 {'':8s} INCL appr = {Tirific_Template['INCL']}
 {'':8s} INCL rec = {Tirific_Template['INCL_2']}
 ''', Configuration['OUTPUTLOG'])
+
     return changed_angles
 
 

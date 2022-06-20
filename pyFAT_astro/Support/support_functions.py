@@ -276,6 +276,7 @@ def check_angular_momentum_vector(Configuration,radius_in,pa_in,inclination_in,\
             print_log(f'''CHECK_ANGULAR_MOMENTUM_VECTOR: The maximum alowwed shift = {max_shift}.
 ''',Configuration['OUTPUTLOG'])
     succes = False
+
     while not succes:
         if debug:
             print_log(f'''CHECK_ANGULAR_MOMENTUM_VECTOR: Looking for phi and theta.
@@ -283,13 +284,59 @@ PA = {pa}
 Inclination = {inclination}
 ''',Configuration['OUTPUTLOG'])
         Theta,Phi,quadrant = calculate_am_vector(Configuration,pa,inclination,debug=debug)
-        new_theta = max_profile_change(Configuration,radius,Theta,'ARBITRARY',\
-            slope = Configuration['WARP_SLOPE'][side],max_change=max_shift, debug=debug)
-        new_phi = max_profile_change(Configuration,radius,Phi,'ARBITRARY',\
-            slope = Configuration['WARP_SLOPE'][side],max_change=max_shift, debug=debug)
-        diff_phi = np.array(np.where(np.array([abs(x-y) for x,y in zip(Phi,new_phi) ],dtype=float) != 0.))
-        diff_theta = np.array(np.where(np.array([abs(x-y) for x,y in zip(Theta,new_theta)],dtype=float) != 0.))
+        theta_zero = Theta[0]
+        phi_zero = Phi[0]
 
+        #Let's combine the variation as fraction of the existing angle
+        theta_change= np.array([float(x-theta_zero) for x in Theta],dtype=float)
+        phi_change= np.array([float(x-phi_zero) for x in Phi],dtype=float)
+        theta_factor = np.sqrt(theta_change**2/(theta_change**2+phi_change**2))\
+                        *(theta_change)/abs(theta_change)\
+
+        phi_factor = np.sqrt(phi_change**2/(theta_change**2+phi_change**2))*(phi_change)/abs(phi_change)
+        in_zero = np.where(np.array(theta_change+phi_change) == 0.)
+        phi_factor[in_zero]=0.
+        theta_factor[in_zero]=0.
+        #print(f'theta factor {theta_factor} phi factor{phi_factor}')
+
+        #change_angle = ((Theta - theta_zero)*theta_zero+ (Phi-phi_zero)*phi_zero)/(theta_zero+phi_zero)
+        #change_angle = np.array([(x**2+y**2)/(x+y) for x,y in zip(theta_change,phi_change) if (x != 0. or y != 0.) else 0.],dtype=float )
+
+        change_angle = np.sqrt(theta_change**2+phi_change**2)
+        #*((theta_change+phi_change)/abs(theta_change+phi_change))
+
+        in_zero = np.where(np.array(theta_change+phi_change) == 0.)
+        change_angle[in_zero] =0.
+        #print(change_angle)
+        new_change_angle = max_profile_change(Configuration,radius,change_angle,'ARBITRARY',\
+            slope = Configuration['WARP_SLOPE'][side],max_change=max_shift, debug=False)
+
+        #if np.sum(new_change_angle) ==
+        #new_theta_change = np.sqrt(new_change_angle**2-(phi_change)**2*new_change_angle/change_angle)*((theta_change)/abs(theta_change))
+        #new_theta_change[in_zero] = 0.
+        #print(new_change_angle)
+        #print(f'Factors theta = {theta_factor} ,phi = {phi_factor}')
+        new_theta_change = new_change_angle*theta_factor
+        new_phi_change = new_change_angle*phi_factor
+        new_theta = theta_zero+new_theta_change
+        new_phi = phi_zero+new_phi_change
+        print(f''' We put in the difference of
+phi {phi_change}, theta {theta_change}, angle {change_angle}
+new values
+phi {new_phi_change}, theta {new_theta_change}, angle {new_change_angle}''')
+            #print(f"Are we doing this correct")
+        #print(np.sqrt(new_theta_change**2+new_phi_change**2)*((new_theta_change+new_phi_change)/abs(new_theta_change+new_phi_change))
+
+        #print(Theta,new_theta)
+        #exit()
+        #debug=False
+        #new_theta = max_profile_change(Configuration,radius,Theta,'ARBITRARY',\
+        #    slope = Configuration['WARP_SLOPE'][side],max_change=max_shift, debug=debug)
+        #new_phi = max_profile_change(Configuration,radius,Phi,'ARBITRARY',\
+        #    slope = Configuration['WARP_SLOPE'][side],max_change=max_shift, debug=debug)
+
+        diff_phi = np.array(np.where(np.array([abs(x-y) for x,y in zip(Phi,new_phi) ],dtype=float) > 1e-6))
+        diff_theta = np.array(np.where(np.array([abs(x-y) for x,y in zip(Theta,new_theta)],dtype=float) > 1e-6))
 
         if diff_phi.size != 0. or \
             diff_theta.size != 0.:
@@ -304,11 +351,14 @@ Inclination = {inclination}
 
             pa,inclination = calculate_am_vector(Configuration,new_theta,new_phi,\
                                 multiple=quadrant,invert=True, debug=debug)
-            print_log(f'''CHECK_ANGULAR_MOMENTUM_VECTOR: new PA and inclination
+            if debug:
+                print_log(f'''CHECK_ANGULAR_MOMENTUM_VECTOR: new PA and inclination
 PA = {pa}
 Inclination = {inclination}
 ''',Configuration['OUTPUTLOG'])
+
             continue
+
         else:
             succes = True
 
@@ -658,6 +708,7 @@ def columndensity(Configuration,levels,systemic = 100.,beam=[-1.,-1.],channel_wi
         systemic = systemic/1000.
     f = f0 * (1 - (systemic / c)) #Systemic frequency
     if arcsquare:
+        #Should we have the (f0/f)**2 factor here????
         HIconv = 605.7383 * 1.823E18 * (2. *np.pi / (np.log(256.)))
         if column:
             # If the input is in solarmass we want to convert back to column densities
@@ -734,7 +785,7 @@ columndensity.__doc__ =f'''
  PROCEDURES CALLED:
     Unspecified
 
- NOTE:
+ NOTE: Cosmological column densities are taken from Meyer et al 2017
 '''
 
         # a Function to convert the RA and DEC into hour angle (invert = False) and vice versa (default)
@@ -2635,7 +2686,6 @@ def max_profile_change(Configuration,radius,profile,key,max_change=None,\
         print_log(f'''MAX_CHANGE_PROFILE: The returned profile is:
 {'':8s}{key} = {new_profile}
 ''', Configuration['OUTPUTLOG'],debug=True)
-    exit()
     return new_profile
 max_profile_change.__doc__ =f'''
  NAME:
