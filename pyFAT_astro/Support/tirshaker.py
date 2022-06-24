@@ -69,6 +69,8 @@ def tirshaker(Configuration, Tirific_Template, outfilename = 'test_out.def', \
     Tirific_Template['LOGNAME'] = 'Error_Shaker.log'
     Tirific_Template['TIRDEF'] = 'Error_Shaker_Out.def'
     current_run='not set'
+    original_running = copy.deepcopy(Configuration['TIRIFIC_RUNNING'])
+    Configuration['TIRIFIC_RUNNING'] = False
     for i in range(iterations):
         Current_Template = copy.deepcopy(Tirific_Template)
         Current_Template['RESTARTID']= i
@@ -219,8 +221,11 @@ def tirshaker(Configuration, Tirific_Template, outfilename = 'test_out.def', \
 
     # Put them into the output file
     # Write it to a copy of the file replacing the parameters
+
+
     finish_current_run(Configuration, current_run)
     write_tirific(Configuration,Tirific_Template, name =f'Error_Shaker/{outfilename}' , debug = debug)
+    Configuration['TIRIFIC_RUNNING'] = original_running
 
 tirshaker.__doc__ =f'''
  NAME:
