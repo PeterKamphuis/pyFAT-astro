@@ -3149,7 +3149,9 @@ We are in in stage {stage} and fit_type {fit_type} and have done {Configuration[
     currentloop =1
     max_loop = 0
     counter = 0
+
     current_process= psu.Process(current_run.pid)
+
     if Configuration['TIMING']:
         time.sleep(0.1)
         with open(f"{Configuration['LOG_DIRECTORY']}Usage_Statistics.txt",'a') as file:
