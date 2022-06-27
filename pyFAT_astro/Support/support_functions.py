@@ -133,12 +133,14 @@ calc_rings.__doc__ =f'''
 '''
 def calculate_number_processes(Configuration):
     cores_set = False
-    no_galaxies = Configuration['CATALOGUE_END_ID']-Configuration['CATALOGUE_START_ID']-1
+    no_galaxies = set_limits(Configuration['CATALOGUE_END_ID']-Configuration['CATALOGUE_START_ID']-1,1,float('inf'))
+
     while not cores_set:
         no_process= int(np.floor(Configuration['NCPU']/ Configuration['PER_GALAXY_NCPU']))
+
         while no_process > no_galaxies:
             no_process -= 1
-            cores_set =True
+            cores_set = True
         extra_cores=  Configuration['NCPU']-  Configuration['PER_GALAXY_NCPU']*no_process
         if not cores_set and \
             extra_cores > Configuration['PER_GALAXY_NCPU']*no_process/2. and \
@@ -146,9 +148,11 @@ def calculate_number_processes(Configuration):
             Configuration['PER_GALAXY_NCPU'] -= 1
         else:
             cores_set = True
+
     plus_core = 0
     while plus_core*no_process < extra_cores:
         plus_core += 1
+
 
     print(f"We use {no_process} processes for {no_galaxies} galaxies")
     cfgs=[]
@@ -162,7 +166,7 @@ def calculate_number_processes(Configuration):
             extra_cores -= plus_core
         if cores > 20:
             cores = 20.
-        print(f" Process {i} with {cores} cores")
+        print(f"Process {i} with {cores} cores")
         key=f"Conf_{i:d}"
         proc_conf['PER_GALAXY_NCPU'] = cores
         proc_conf['CATALOGUE_START_ID'] = start_id

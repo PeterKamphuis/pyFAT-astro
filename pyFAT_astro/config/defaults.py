@@ -81,21 +81,21 @@ class Advanced:
     #We do not want to use too many cores per galaxy.
     per_galaxy_ncpu: int = 4
     # Allow for the user to set the boundaries in the fitting
-    pa_input_boundary:  List[float] = field(
+    pa_input_boundary:  List = field(
         default_factory=lambda: [[0., 0.], [0., 0.], [0., 0.]])
-    incl_input_boundary:  List[float] = field(
+    incl_input_boundary:  List = field(
         default_factory=lambda: [[0., 0.], [0., 0.], [0., 0.]])
-    sdis_input_boundary:  List[float] = field(
+    sdis_input_boundary:  List = field(
         default_factory=lambda: [[0., 0.], [0., 0.], [0., 0.]])
-    z0_input_boundary:  List[float] = field(
+    z0_input_boundary:  List = field(
         default_factory=lambda: [[0., 0.], [0., 0.], [0., 0.]])
-    vsys_input_boundary:  List[float] = field(
+    vsys_input_boundary:  List = field(
         default_factory=lambda: [[0., 0.], [0., 0.], [0., 0.]])
-    xpos_input_boundary:  List[float] = field(
+    xpos_input_boundary:  List = field(
         default_factory=lambda: [[0., 0.], [0., 0.], [0., 0.]])
-    ypos_input_boundary:  List[float] = field(
+    ypos_input_boundary:  List = field(
         default_factory=lambda: [[0., 0.], [0., 0.], [0., 0.]])
-    vrot_input_boundary: List[float] = field(
+    vrot_input_boundary: List = field(
         default_factory=lambda: [[0., 0.], [0., 0.], [0., 0.]])
 
     # Add the channel dependency, minimum inclination,
