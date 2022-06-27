@@ -2062,7 +2062,9 @@ def set_fitting_parameters(Configuration, Tirific_Template, parameters_to_adjust
             initial_estimates = {}
     except KeyError:
         pass
-    if Configuration['ITERATIONS'] < 3:
+    if Configuration['INSTALLATION_CHECK']:
+        Tirific_Template['LOOPS'] = "1"
+    elif Configuration['ITERATIONS'] < 3:
         Tirific_Template['LOOPS'] = "10"
     else:
         Tirific_Template['LOOPS'] = f"{Configuration['LOOPS']}"

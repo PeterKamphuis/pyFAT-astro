@@ -569,7 +569,7 @@ def finish_galaxy(Configuration,current_run = 'Not initialized', Fits_Files= Non
         # We need to produce a FinalModel Directory with moment maps and an XV-Diagram of the model.
         if any([True if 'fit_' in x else False for x in Configuration['FITTING_STAGES']]):
             create_directory('Finalmodel',Configuration['FITTING_DIR'])
-            if 'tirshaker' not in Configuration['FITTING_STAGES']:
+            if 'tirshaker' not in Configuration['FITTING_STAGES'] and not Configuration['INSTALLATION_CHECK']:
                 transfer_errors(Configuration,fit_type=Configuration['USED_FITTING'],debug=debug)
             linkname = f"../{Configuration['USED_FITTING']}/{Configuration['USED_FITTING']}"
             os.symlink(f"{linkname}.fits",f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel.fits")
