@@ -883,7 +883,7 @@ def fix_profile(Configuration, key, profile, Tirific_Template, debug= False, inn
             #if key in ['PA','INCL']:
             #    profile[i,:] = max_profile_change(Configuration,rad,profile[i,:],key,debug=debug)
         if debug:
-            print_log(f'''FIX_PROFILE:After smoothe transition
+            print_log(f'''FIX_PROFILE:After smoothed transition
 {'':8s} profile = {profile[i,:]}
 ''', Configuration['OUTPUTLOG'])
         #profile[:,:Configuration['INNER_FIX']] = np.nanmean(profile[:,:Configuration['INNER_FIX']])
@@ -1692,12 +1692,20 @@ no_declining_vrot.__doc__ =f'''
  NOTE:
 '''
 
-def regularise_profile(Configuration,Tirific_Template, key,min_error= [0.],debug = False, no_apply =False):
+def regularise_profile(Configuration,Tirific_Template, key,min_error= [0.,0.],debug = False, no_apply =False):
     # We start by getting an estimate for the errors
     min_error=np.array(min_error,dtype=float)
-    profile = np.array(get_from_template(Configuration,Tirific_Template, [key,f"{key}_2"]),dtype=float)
     weights = get_ring_weights(Configuration,Tirific_Template,debug=debug)
+    if key in ['PA','INCL']:
+        profile = np.array(get_from_template(Configuration,Tirific_Template, [f"PA",f"INCL",f"PA_2",f"INCL_2"]),dtype=float)
+        diff = np.sum(profile[0]-profile[2])+np.sum(profile[1]-profile[3]) #Check that we have two profiles
+    else:
+        min_error=min_error[0]
+        profile = np.array(get_from_template(Configuration,Tirific_Template, [key,f"{key}_2"]),dtype=float)
+        diff = np.sum(profile[0]-profile[1])#Check that we have two profiles
 
+    if diff <1e-8:
+        diff =0.
 
     #First if we have an RC we flatten the curve
     if debug:
@@ -1712,8 +1720,7 @@ def regularise_profile(Configuration,Tirific_Template, key,min_error= [0.],debug
 
     error = get_error(Configuration,profile,sm_profile,key,min_error=min_error,weights = weights,debug=debug)
 
-    #Check that we have two profiles
-    diff = np.sum(profile[0]-profile[1])
+
     if key in ['SDIS','VROT']:
         diff = False
     if diff:
