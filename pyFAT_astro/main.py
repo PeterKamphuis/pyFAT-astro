@@ -6,6 +6,8 @@ import numpy as np
 import os
 import pyFAT_astro.Support.support_functions as sf
 import pyFAT_astro.Support.read_functions as rf
+import sys
+import traceback
 import warnings
 
 from datetime import datetime
@@ -19,6 +21,12 @@ def warn_with_traceback(message, category, filename, lineno, file=None, line=Non
     log = file if hasattr(file,'write') else sys.stderr
     traceback.print_stack(file=log)
     log.write(warnings.formatwarning(message, category, filename, lineno, line))
+try:
+    from importlib.resources import files as import_pack_files
+except ImportError:
+    # Try backported to PY<37 `importlib_resources`.
+    # For Py<3.9 files is not available
+    from importlib_resources import files as import_pack_files
 
 
 # String syntax ''' '''for multiline strings. " " for string without break and ' ' for indexing dictionaries
@@ -195,6 +203,8 @@ def main(argv):
         else:
             Original_Configuration['PER_GALAXY_NCPU'] = sf.set_limits(Original_Configuration['NCPU'],1,20)
             FAT_Galaxy_Loops(Original_Configuration,Full_Catalogue)
+    except SystemExit:
+        pass
     except:
         raise ProgramError(f'''Something went wrong in the main. This should not happen. Please list an issue on github.''')
 
