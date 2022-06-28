@@ -41,13 +41,16 @@ This should also install all required python dependencies.
 We recommend the use of python virtual environments. If so desired a pyFAT installation would look like:
 
   	python3 -m venv FAT_venv
+
   	source FAT_venv/bin/activate.csh
-  	pip install pyFAT-astro
+
+    pip install pyFAT-astro
 
 (In case of bash the correct middle line is 	source FAT_venv/bin/activate)
 You might have to restart the env:
 
   	deactivate
+
   	source FAT_venv/bin/activate.csh
 
 Once you have installed FAT you can check that it has been installed properly by running FAT as.

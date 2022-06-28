@@ -273,7 +273,7 @@ def check_angular_momentum_vector(Configuration,radius_in,pa_in,inclination_in,\
     pa = np.array(pa_in)
     radius = np.array(radius_in)
     radkpc = np.array([convertskyangle(Configuration,float(x)) for x in radius],dtype=float)
-    #phi is dependent one theta but the max change should be the same
+    #phi is dependent on theta but the max change should be the same
     max_shift = np.arctan(np.tan(Configuration['MAX_CHANGE']['INCL']*(np.pi/180.))\
                     *np.tan(Configuration['MAX_CHANGE']['PA']*(np.pi/180.)))
     if debug:
@@ -295,7 +295,7 @@ Inclination = {inclination}
         theta_change= np.array([float(x-theta_zero) for x in Theta],dtype=float)
         phi_change= np.array([float(x-phi_zero) for x in Phi],dtype=float)
         theta_factor = np.sqrt(theta_change**2/(theta_change**2+phi_change**2))\
-                        *(theta_change)/abs(theta_change)\
+                        *(theta_change)/abs(theta_change)
 
         phi_factor = np.sqrt(phi_change**2/(theta_change**2+phi_change**2))*(phi_change)/abs(phi_change)
         in_zero = np.where(np.array(theta_change+phi_change) == 0.)
@@ -308,8 +308,6 @@ Inclination = {inclination}
 
         change_angle = np.sqrt(theta_change**2+phi_change**2)
         #*((theta_change+phi_change)/abs(theta_change+phi_change))
-
-        in_zero = np.where(np.array(theta_change+phi_change) == 0.)
         change_angle[in_zero] =0.
         #print(change_angle)
         new_change_angle = max_profile_change(Configuration,radius,change_angle,'ARBITRARY',\

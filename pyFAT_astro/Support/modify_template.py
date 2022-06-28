@@ -874,7 +874,7 @@ def fix_profile(Configuration, key, profile, Tirific_Template, debug= False, inn
 ''', Configuration['OUTPUTLOG'])
         if key == 'VROT':
             profile[i] =fix_outer_rotation(Configuration,profile[i],debug= debug)
-        if key in ['PA','INCL','Z0']:
+        elif inner_fix[i] != 0:
             xrange = set_limits((int(round(len(profile[0])-5.)/4.)),1,4)
         # need to make sure this connects smoothly
             for x in range(0,xrange):
@@ -1233,7 +1233,7 @@ def get_error(Configuration,profile,sm_profile,key,min_error = [0.],singular = F
                 error[i] = [np.nanmin([x,y]) for x,y in zip(error[i],Configuration['MAX_ERROR'][key])]
             else:
                 error[i] = [np.nanmin([x,float(Configuration['MAX_ERROR'][key][0])]) for x in error[i]]
-        if key in ['PA','INCL','Z0']:
+        if key in ['PA','INCL','Z0','ARBITRARY']:
             error[i][:Configuration['INNER_FIX'][i]+1] = [np.min(min_error) for x in error[i][:Configuration['INNER_FIX'][i]+1]]
     if singular:
         error = np.array(error[0],dtype=float)
@@ -1692,17 +1692,155 @@ no_declining_vrot.__doc__ =f'''
  NOTE:
 '''
 
-def regularise_profile(Configuration,Tirific_Template, key,min_error= [0.,0.],debug = False, no_apply =False):
-    # We start by getting an estimate for the errors
+def regularise_warp(Configuration,Tirific_Template, min_error= [0.,0.],debug = False, no_apply =False):
+        # We start by getting an estimate for the errors
     min_error=np.array(min_error,dtype=float)
     weights = get_ring_weights(Configuration,Tirific_Template,debug=debug)
-    if key in ['PA','INCL']:
-        profile = np.array(get_from_template(Configuration,Tirific_Template, [f"PA",f"INCL",f"PA_2",f"INCL_2"]),dtype=float)
-        diff = np.sum(profile[0]-profile[2])+np.sum(profile[1]-profile[3]) #Check that we have two profiles
+    profile = np.array(get_from_template(Configuration,Tirific_Template, [f"PA",f"PA_2",f"INCL",f"INCL_2"]),dtype=float)
+    diff = np.sum(profile[0]-profile[1])+np.sum(profile[2]-profile[3])  #Check that we have two profiles
+    if diff <1e-8:
+        diff = False
     else:
-        min_error=min_error[0]
-        profile = np.array(get_from_template(Configuration,Tirific_Template, [key,f"{key}_2"]),dtype=float)
-        diff = np.sum(profile[0]-profile[1])#Check that we have two profiles
+        diff = True
+    if debug:
+        print_log(f'''REGULARISE_WARP: profile of the warp before regularistion
+{'':8s}PA = {profile[0]}
+{'':8s}PA_2 = {profile[1]}
+{'':8s}INCL = {profile[2]}
+{'':8s}INCL_2 = {profile[3]}
+{'':8s}The minimal error is
+{'':8s}PA min Error = {min_error[0]}, INCL min Error = {min_error[1]}
+''',Configuration['OUTPUTLOG'],debug = True)
+    # get a smoothed profiles
+    Theta,Phi,multiple= calculate_am_vector(Configuration,profile[0],profile[2],debug=debug)
+    if diff:
+        plus_Theta,plus_Phi,plus_multiple= calculate_am_vector(Configuration,profile[1],profile[3],debug=debug)
+        Theta = np.array([Theta,plus_Theta],dtype=float)
+        Phi = np.array([Phi,plus_Phi],dtype=float)
+        multiple = np.array([multiple,plus_multiple],dtype=float)
+    else:
+        Theta = np.array([Theta],dtype=float)
+        Phi = np.array([Phi],dtype=float)
+        multiple = np.array([multiple],dtype=float)
+    high_theta,high_phi,high_multiple = calculate_am_vector(Configuration,profile[0]+min_error[0],profile[2]+min_error[1],debug=debug)
+    if high_multiple != multiple[0]:
+        high_theta,high_phi,high_multiple = calculate_am_vector(Configuration,profile[0]-min_error[0],profile[2]-min_error[1],debug=debug)
+
+    min_change_error = np.sqrt(np.min(np.array([abs(x-y) for x,y in zip(Theta[0],high_theta)],dtype=float))**2+\
+            np.min(np.array([abs(x-y) for x,y in zip(Phi[0],high_phi)],dtype=float))**2)
+    if diff:
+        if debug:
+            print_log(f'''REGULARISE_WARP: Treating both sides independently.
+''',Configuration['OUTPUTLOG'])
+        sides = [0,1]
+    else:
+        if debug:
+            print_log(f'''REGULARISE_WARP: Found symmetric profiles.
+''',Configuration['OUTPUTLOG'])
+        sides = [0]
+
+    radii =set_rings(Configuration,debug=debug)
+    for i in sides:
+        theta_zero = Theta[i]
+        phi_zero = Phi[i]
+        #Let's combine the variation as fraction of the existing angle
+        theta_change= np.array([float(x-theta_zero) for x in Theta[i]],dtype=float)
+        phi_change= np.array([float(x-phi_zero) for x in Phi[i]],dtype=float)
+        theta_factor = np.sqrt(theta_change**2/(theta_change**2+phi_change**2))\
+                    *(theta_change)/abs(theta_change)
+        phi_factor = np.sqrt(phi_change**2/(theta_change**2+phi_change**2))*(phi_change)/abs(phi_change)
+        in_zero = np.where(np.array(theta_change+phi_change) == 0.)
+        phi_factor[in_zero]=0.
+        theta_factor[in_zero]=0.
+        change_angle = np.sqrt(theta_change**2+phi_change**2)
+        change_angle[in_zero] =0.
+        sm_change_angle = smooth_profile(Configuration,Tirific_Template, 'ARBITRARY' ,profile_in=change_angle, min_error=min_change_error,debug=debug,no_apply=True)
+        error_change_angle = get_error(Configuration,change_angle,sm_change_angle,'ARBITRARY',min_error=min_change_error,weights = weights,debug=debug)
+    #print(change_angle)
+        new_change_angle = fit_polynomial(Configuration,radii,change_angle,sm_change_angle,error_change_angle,'ARBITRARY', Tirific_Template,\
+                                     inner_fix = Configuration['INNER_FIX'][i],min_error=min_error,\
+                                     boundary_limits= change_boundary,debug= debug)
+        new_theta_change = new_change_angle*theta_factor
+        new_phi_change = new_change_angle*phi_factor
+        Theta[i] = theta_zero+new_theta_change
+        Phi[i] = phi_zero+new_phi_change
+        pa,inclination=calculate_am_vector(Configuration,Theta[i],Phi[i],multiple = multiple[i], invert=True,debug=debug)
+        profile[i]=pa
+        profile[i+2]=inclination
+
+
+    if not diff:
+        profile[1] = profile[0]
+        profile[3] = profile[2]
+
+    error= copy.deepcopy(profile)
+    error[:] = 0
+    for i,key in enumerate(['PA','INCL']):
+        original = np.array(get_from_template(Configuration,Tirific_Template, [key,f"{key}_2"]),dtype=float)
+        error[2*i:2*i+1] = get_error(Configuration,original,profile[2*i:2*i+1],key,weights=weights,apply_max_error = True,min_error=min_error,debug=debug)
+        profile[2*i:2*i+1],error[2*i:2*i+1] = modify_flat(Configuration, profile[2*i:2*i+1], original, error[2*i:2*i+1],key,inner_fix= Configuration['INNER_FIX'],debug=debug)
+        format = set_format(key)
+        if not no_apply:
+            Tirific_Template[key]= f"{' '.join([f'{x:{format}}' for x in profile[2*i,:int(Configuration['NO_RINGS'])]])}"
+            Tirific_Template[f"{key}_2"]= f"{' '.join([f'{x:{format}}' for x in profile[2*i+1,:int(Configuration['NO_RINGS'])]])}"
+            Tirific_Template.insert(key,f"# {key}_ERR",f"{' '.join([f'{x:{format}}' for x in error[2*i,:int(Configuration['NO_RINGS'])]])}")
+            Tirific_Template.insert(f"{key}_2",f"# {key}_2_ERR",f"{' '.join([f'{x:{format}}' for x in error[2*i+1,:int(Configuration['NO_RINGS'])]])}")
+            #if key in ['INCL'] and np.mean( profile[:,int(Configuration['NO_RINGS']/2.):int(Configuration['NO_RINGS'])]) < 40.:
+        #    fix_vrot_for_incl_change(Configuration,Tirific_Template,original,profile,debug=debug)
+
+        if debug:
+            print_log(f'''REGULARISE_PROFILE: And this has gone to the template.
+{'':8s}{key} = {Tirific_Template[key]}
+{'':8s}{key}_2 ={Tirific_Template[f"{key}_2"]}
+{'':8s}# {key}_ERR ={Tirific_Template[f"# {key}_ERR"]}
+{'':8s}# {key}_2_ERR ={Tirific_Template[f"# {key}_2_ERR"]}
+''',Configuration['OUTPUTLOG'])
+    return profile
+regularise_warp.__doc__ =f'''
+ NAME:
+    regularise_profile
+
+ PURPOSE:
+    Regularise a the PA and INCL by smoothing the AM vector
+
+ CATEGORY:
+    modify_template
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    Fits_Files = Standard FAT dictionary with filenames
+    key = parameter to fix
+
+ OPTIONAL INPUTS:
+    debug = False
+
+    no_apply = false
+    if true do not apply the regularised profile to the template
+
+    min_error = [0.]
+    error should alway be larger than this
+
+ OUTPUTS:
+    the regularised profile
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE: Errors are not returned but they are written to the template
+'''
+
+
+def regularise_profile(Configuration,Tirific_Template, key,min_error= [0.],debug = False, no_apply =False):
+    if key in ['PA','INCL']:
+        raise FunctionCallError('The warp is regularised in regularise_warp. regularise profile is for singular profiles only.')
+
+        # We start by getting an estimate for the errors
+    min_error=np.array(min_error,dtype=float)
+    weights = get_ring_weights(Configuration,Tirific_Template,debug=debug)
+    profile = np.array(get_from_template(Configuration,Tirific_Template, [key,f"{key}_2"]),dtype=float)
+    diff = np.sum(profile[0]-profile[1])#Check that we have two profiles
 
     if diff <1e-8:
         diff =0.
@@ -3172,6 +3310,10 @@ def smooth_profile(Configuration,Tirific_Template,key,min_error = 0.,debug=False
         error_message = f'''SMOOTH_PROFILE: Do not use smooth_profile for the SBR, SBR is regularised in fix_sbr'''
         print_log(error_message,Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'],debug = debug)
         raise FunctionCallError(error_message)
+    if key in 'ARBITRARY' and (profile_in is None or no_apply is not True):
+        error_message = f'''SMOOTH_PROFILE: We cannot read or write an ARBITRARY profile from the template.'''
+        print_log(error_message,Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'],debug = debug)
+        raise FunctionCallError(error_message)
 
     if debug:
         print_log(f'''SMOOTH_PROFILE: Starting to smooth the {key} profile.
@@ -3186,14 +3328,14 @@ def smooth_profile(Configuration,Tirific_Template,key,min_error = 0.,debug=False
     min_error = np.array(min_error,dtype=float)
     if min_error.size == 1:
         min_error = np.full(profile.size,min_error)
-    if key in ['INCL','Z0', 'PA']:
+    if key in ['INCL','Z0', 'PA','ARBITRARY']:
         inner_fixed = Configuration['INNER_FIX']
     elif key in ['SDIS']:
         inner_fixed = [4,4]
     else:
         inner_fixed = [0,0]
 
-    #he sbr profile is already fixed before geting to the smoothing
+    #he sbr profile is already fixed before getting to the smoothing
     if not fix_sbr_call:
         profile =fix_profile(Configuration, key, profile, Tirific_Template,inner_fix = inner_fixed,debug=debug)
 

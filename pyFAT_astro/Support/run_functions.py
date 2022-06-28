@@ -813,9 +813,16 @@ def fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run, s
             else:
                 pars_to_smooth.append(parameter)
             min_error.append(Configuration['MIN_ERROR'][parameter])
-
+        warp_triggered = False
         for key,min_err in zip(pars_to_smooth,min_error):
-                smoothed = regularise_profile(Configuration,Tirific_Template,key,min_error = Configuration['MIN_ERROR'][parameter],debug = debug)
+                if key in ['PA','INCL'] and not warp_triggered:
+                    smoothed = regularise_warp(Configuration,Tirific_Template,\
+                        min_error = [Configuration['MIN_ERROR']['PA'],\
+                        Configuration['MIN_ERROR']['INCL']],\
+                        debug = debug)
+                    warp_triggered = True
+                else:
+                    smoothed = regularise_profile(Configuration,Tirific_Template,key,min_error = Configuration['MIN_ERROR'][parameter],debug = debug)
                 if key == 'VROT':
                     smoothed_vrot=copy.deepcopy(smoothed)
 
