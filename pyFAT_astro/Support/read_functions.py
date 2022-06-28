@@ -1012,7 +1012,7 @@ def read_cube(Configuration,cube,debug=False):
     if np.sum(Configuration['VROT_INPUT_BOUNDARY']) == 0.:
         set_boundaries(Configuration,'VROT',Configuration['CHANNEL_WIDTH'],600.,input=True,debug=debug)
     if np.sum(Configuration['SDIS_INPUT_BOUNDARY']) == 0.:
-        set_boundaries(Configuration,'SDIS',Configuration['CHANNEL_WIDTH'],25.,input=True,debug=debug)
+        set_boundaries(Configuration,'SDIS',Configuration['CHANNEL_WIDTH']/3.,25.,input=True,debug=debug)
 
     # We write the pixels per beam info to Configuration such that it is easily accesible
     beamarea=(np.pi*abs(cube_hdr['BMAJ']*cube_hdr['BMIN']))/(4.*np.log(2.))

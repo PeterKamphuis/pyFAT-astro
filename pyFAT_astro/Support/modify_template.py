@@ -102,6 +102,7 @@ def check_angles(Configuration,Tirific_Template, debug = False):
 {'':8s} PA rec = {pa[1]}
 {'':8s} INCL appr = {incl[0]}
 {'':8s} INCL rec = {incl[1]}
+{'':8s} Changed_Angle = {changed_angles}
 ''', Configuration['OUTPUTLOG'],debug=True)
 
     for side in [0,1]:
@@ -157,7 +158,6 @@ def check_angles(Configuration,Tirific_Template, debug = False):
     Tirific_Template['INCL_2'] = f"{' '.join(f'{x:.2e}' for x in incl[1])}"
     Tirific_Template['PA'] = f"{' '.join(f'{x:.2e}' for x in pa[0])}"
     Tirific_Template['PA_2'] = f"{' '.join(f'{x:.2e}' for x in pa[1])}"
-    debug=True
     if debug:
         print_log(f'''CHECK_ANGLES: We wrote to the template
 {'':8s} PA appr = {Tirific_Template['PA']}
@@ -2046,7 +2046,11 @@ def set_boundary_limits(Configuration,Tirific_Template,key,values = [0.,0.],  to
         if abs(low[1]-low[2]) > 30:
             low[1:] = [np.min(low[1:]) for x in low[1:]]
 
+    if debug:
+        print_log(f'''SET_BOUNDARY_LIMITS:We use these low = {low} and these high {high} to set {Configuration[f"{key}_CURRENT_BOUNDARY"]}.
+''',Configuration['OUTPUTLOG'])
     set_boundaries(Configuration,key,low,high,debug=debug)
+
     #Configuration[f"{key}_CURRENT_BOUNDARY"] = current_boundaries
     if debug:
         print_log(f'''SET_BOUNDARY_LIMITS: We have adjusted the boundaries to  {Configuration[f"{key}_CURRENT_BOUNDARY"]}.

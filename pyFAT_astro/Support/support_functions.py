@@ -271,6 +271,8 @@ def check_angular_momentum_vector(Configuration,radius_in,pa_in,inclination_in,\
 
     inclination = np.array(inclination_in)
     pa = np.array(pa_in)
+    inclination_in = np.array(inclination_in)
+    pa_in = np.array(pa_in)
     radius = np.array(radius_in)
     radkpc = np.array([convertskyangle(Configuration,float(x)) for x in radius],dtype=float)
     #phi is dependent on theta but the max change should be the same
@@ -283,7 +285,7 @@ def check_angular_momentum_vector(Configuration,radius_in,pa_in,inclination_in,\
 
     while not succes:
         if debug:
-            print_log(f'''CHECK_ANGULAR_MOMENTUM_VECTOR: Looking for phi and theta.
+            print_log(f'''CHECK_ANGULAR_MOMENTUM_VECTOR: Calculating Phi and Theta from these PA and inclination
 PA = {pa}
 Inclination = {inclination}
 ''',Configuration['OUTPUTLOG'])
@@ -311,31 +313,20 @@ Inclination = {inclination}
         change_angle[in_zero] =0.
         #print(change_angle)
         new_change_angle = max_profile_change(Configuration,radius,change_angle,'ARBITRARY',\
-            slope = Configuration['WARP_SLOPE'][side],max_change=max_shift, debug=False)
+            slope = Configuration['WARP_SLOPE'][side],max_change=max_shift, debug=debug)
 
-        #if np.sum(new_change_angle) ==
-        #new_theta_change = np.sqrt(new_change_angle**2-(phi_change)**2*new_change_angle/change_angle)*((theta_change)/abs(theta_change))
-        #new_theta_change[in_zero] = 0.
-        #print(new_change_angle)
-        #print(f'Factors theta = {theta_factor} ,phi = {phi_factor}')
+
         new_theta_change = new_change_angle*theta_factor
         new_phi_change = new_change_angle*phi_factor
         new_theta = theta_zero+new_theta_change
         new_phi = phi_zero+new_phi_change
-        print(f''' We put in the difference of
+        if debug:
+            print_log(f'''We put in the difference of
 phi {phi_change}, theta {theta_change}, angle {change_angle}
 new values
-phi {new_phi_change}, theta {new_theta_change}, angle {new_change_angle}''')
-            #print(f"Are we doing this correct")
-        #print(np.sqrt(new_theta_change**2+new_phi_change**2)*((new_theta_change+new_phi_change)/abs(new_theta_change+new_phi_change))
+phi {new_phi_change}, theta {new_theta_change}, angle {new_change_angle}
+''',Configuration['OUTPUTLOG'])
 
-        #print(Theta,new_theta)
-        #exit()
-        #debug=False
-        #new_theta = max_profile_change(Configuration,radius,Theta,'ARBITRARY',\
-        #    slope = Configuration['WARP_SLOPE'][side],max_change=max_shift, debug=debug)
-        #new_phi = max_profile_change(Configuration,radius,Phi,'ARBITRARY',\
-        #    slope = Configuration['WARP_SLOPE'][side],max_change=max_shift, debug=debug)
 
         diff_phi = np.array(np.where(np.array([abs(x-y) for x,y in zip(Phi,new_phi) ],dtype=float) > 1e-6))
         diff_theta = np.array(np.where(np.array([abs(x-y) for x,y in zip(Theta,new_theta)],dtype=float) > 1e-6))
@@ -363,9 +354,13 @@ Inclination = {inclination}
 
         else:
             succes = True
-
-    if len(np.where(np.array([abs(x-y) for x,y in zip(pa_in,pa) ],dtype=float) != 0.)) != 0. or \
-        len(np.where(np.array([abs(x-y) for x,y in zip(inclination_in,inclination) ],dtype=float) != 0.)) != 0.:
+    if debug:
+        print_log(f'''CHECK_ANGULAR_MOMENTUM_VECTOR: Before checking we have modified = {modified}
+''',Configuration['OUTPUTLOG'])
+    #if len(np.where(np.array([abs(x-y) for x,y in zip(pa_in,pa) ],dtype=float) != 0.)) != 0. or \
+    #    len(np.where(np.array([abs(x-y) for x,y in zip(inclination_in,inclination) ],dtype=float) != 0.)) != 0.:
+    if not np.isclose(pa_in,pa, atol=Configuration['MIN_ERROR']['PA']).any() or \
+        not np.isclose(inclination_in,inclination, atol=Configuration['MIN_ERROR']['INCL']).any():
         modified= True
     return pa,inclination, modified
 check_angular_momentum_vector.__doc__ =f'''

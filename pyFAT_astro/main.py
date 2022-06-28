@@ -31,8 +31,8 @@ except ImportError:
     from importlib_resources import files as import_pack_files
 # String syntax ''' '''for multiline strings. " " for string without break and ' ' for indexing dictionaries
 
-from memory_profiler import profile
-@profile
+#from memory_profiler import profile
+#@profile
 def main(argv):
     try:
         #Get default settings

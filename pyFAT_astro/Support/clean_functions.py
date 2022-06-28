@@ -534,7 +534,7 @@ def finish_galaxy(Configuration,current_run = 'Not initialized', Fits_Files= Non
 {"":8s}FAT did not run the full fitting routines for catalog entry {Configuration['ID']}.
 {"":8s}Which is the galaxy in directory {Configuration['FITTING_DIR']}.
 {"":8s}Please check this log and output_catalogue carefully for what went wrong.
-{"":8s}The detected exit reason is {Configuration['FINAL_COMMENT']}.
+{"":8s}The detected exit reason is: "{Configuration['FINAL_COMMENT']}".
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 '''
         print_log(log_statement,Configuration['OUTPUTLOG'], screen=Configuration['VERBOSE'])
@@ -553,9 +553,9 @@ def finish_galaxy(Configuration,current_run = 'Not initialized', Fits_Files= Non
     elif Configuration['OUTPUT_QUANTITY'] == 5:
         print_log(f'''
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-{"":8s}FAT did not run the full fitting routines for the galaxy in directory {Configuration['FITTING_DIR']}.
-{"":8s}Please check this the log in {Configuration['LOG_DIRECTORY']} and the output_catalogue carefully for what went wrong.
-{"":8s}The detected exit reason is {Configuration['FINAL_COMMENT']}.
+{"":8s}FAT could not find an acceptable model for the galaxy in directory {Configuration['FITTING_DIR']}.
+{"":8s}Please check the log in {Configuration['LOG_DIRECTORY']} and the output_catalogue carefully for more information.
+{"":8s}The detected exit reason is: "{Configuration['FINAL_COMMENT']}".
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ''',Configuration['OUTPUTLOG'],screen=True)
         #No traceback as it is a proper exiting error
