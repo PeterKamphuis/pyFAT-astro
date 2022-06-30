@@ -522,10 +522,6 @@ def finish_galaxy(Configuration,current_run = 'Not initialized', Fits_Files= Non
     if Configuration['USED_FITTING']:
         check_legitimacy(Configuration,debug=debug)
 
-    # Need to write to results catalog
-    if Configuration['OUTPUT_CATALOGUE']:
-        with open(Configuration['OUTPUT_CATALOGUE'],'a') as output_catalogue:
-            output_catalogue.write(f"{Configuration['FITTING_DIR'].split('/')[-2]:{Configuration['MAXIMUM_DIRECTORY_LENGTH']}s} {str(Configuration['ACCEPTED']):>6s} {Configuration['FINAL_COMMENT']} \n")
 
     if Configuration['OUTPUT_QUANTITY'] == 'error':
         error_message = '''
@@ -538,23 +534,31 @@ def finish_galaxy(Configuration,current_run = 'Not initialized', Fits_Files= Non
 {"":8s}FAT did not run the full fitting routines for catalog entry {Configuration['ID']}.
 {"":8s}Which is the galaxy in directory {Configuration['FITTING_DIR']}.
 {"":8s}Please check this log and output_catalogue carefully for what went wrong.
-{"":8s}The detected exit reason is {Configuration['FINAL_COMMENT']}.
+{"":8s}The detected exit reason is: "{Configuration['FINAL_COMMENT']}".
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 '''
-        print_log(log_statement,Configuration['OUTPUTLOG'], screen=Configuration['VERBOSE'])
-        print_log(error_message,Configuration['OUTPUTLOG'], screen=Configuration['VERBOSE'])
+        print_log(log_statement,Configuration['OUTPUTLOG'], screen=True)
+        print_log(error_message,Configuration['OUTPUTLOG'], screen=True)
 
         if exiting:
+            #with open(Configuration['OUTPUTLOG'],'a') as log_file:
+            #    traceback.print_tb(exiting.__traceback__,file=log_file)
+            #traceback.print_tb(exiting.__traceback__)
             with open(Configuration['OUTPUTLOG'],'a') as log_file:
-                traceback.print_tb(exiting.__traceback__,file=log_file)
-            traceback.print_tb(exiting.__traceback__)
-        sys.exit(1)
+                traceback.print_exception(type(exiting),exiting,exiting.__traceback__,file=log_file)
+            traceback.print_exception(type(exiting),exiting,exiting.__traceback__)
+        if Configuration['MULTIPROCESSING']:
+            Configuration['ACCEPTED'] = False
+            Configuration['FINAL_COMMENT'] = f"The code crashed while fitting this galaxy please check it's log."
+            Configuration['OUTPUT_QUANTITY'] = 5
+        else:
+            sys.exit(1)
     elif Configuration['OUTPUT_QUANTITY'] == 5:
         print_log(f'''
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-{"":8s}FAT did not run the full fitting routines for the galaxy in directory {Configuration['FITTING_DIR']}.
-{"":8s}Please check this the log in {Configuration['LOG_DIRECTORY']} and the output_catalogue carefully for what went wrong.
-{"":8s}The detected exit reason is {Configuration['FINAL_COMMENT']}.
+{"":8s}FAT could not find an acceptable model for the galaxy in directory {Configuration['FITTING_DIR']}.
+{"":8s}Please check the log in {Configuration['LOG_DIRECTORY']} and the output_catalogue carefully for more information.
+{"":8s}The detected exit reason is: "{Configuration['FINAL_COMMENT']}".
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ''',Configuration['OUTPUTLOG'],screen=True)
         #No traceback as it is a proper exiting error
@@ -599,6 +603,10 @@ Finished preparations at {Configuration['PREP_END_TIME']} \n''')
 ''',Configuration['OUTPUTLOG'], screen=Configuration['VERBOSE'])
 
     cleanup_final(Configuration,Fits_Files, debug=debug)
+    # Need to write to results catalog
+    if Configuration['OUTPUT_CATALOGUE']:
+        with open(Configuration['OUTPUT_CATALOGUE'],'a') as output_catalogue:
+            output_catalogue.write(f"{Configuration['FITTING_DIR'].split('/')[-2]:{Configuration['MAXIMUM_DIRECTORY_LENGTH']}s} {str(Configuration['ACCEPTED']):>6s} {Configuration['FINAL_COMMENT']} \n")
 
 finish_galaxy.__doc__ =f'''
  NAME:
