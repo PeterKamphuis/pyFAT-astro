@@ -15,7 +15,7 @@ from pyFAT_astro.Support.read_functions import load_template,tirific_template
 from pyFAT_astro.Support.modify_template import write_new_to_template,smooth_profile,set_cflux,fix_sbr, \
                                           regularise_profile,set_fitting_parameters,check_size, \
                                           no_declining_vrot,set_errors,get_warp_slope,check_angles,write_center,\
-                                          set_boundary_limits
+                                          set_boundary_limits,regularise_warp
 from pyFAT_astro.Support.constants import H_0
 from pyFAT_astro.Support.fat_errors import SofiaFaintError,BadConfigurationError,\
                                               InclinationRunError,SofiaRunError,BadSourceError

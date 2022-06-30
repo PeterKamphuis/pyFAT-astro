@@ -296,10 +296,16 @@ Inclination = {inclination}
         #Let's combine the variation as fraction of the existing angle
         theta_change= np.array([float(x-theta_zero) for x in Theta],dtype=float)
         phi_change= np.array([float(x-phi_zero) for x in Phi],dtype=float)
-        theta_factor = np.sqrt(theta_change**2/(theta_change**2+phi_change**2))\
-                        *(theta_change)/abs(theta_change)
 
-        phi_factor = np.sqrt(phi_change**2/(theta_change**2+phi_change**2))*(phi_change)/abs(phi_change)
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore",message="invalid value encountered in true_divide"\
+                                ,category=RuntimeWarning)
+            theta_factor = np.sqrt(theta_change**2/(theta_change**2+phi_change**2))\
+                        *(theta_change)/abs(theta_change)
+            theta_factor[np.where(np.array(theta_change) == 0.)] = 0.
+            phi_factor = np.sqrt(phi_change**2/(theta_change**2+phi_change**2))*(phi_change)/abs(phi_change)
+            phi_factor[np.where(np.array(phi_change) == 0.)] = 0.
+
         in_zero = np.where(np.array(theta_change+phi_change) == 0.)
         phi_factor[in_zero]=0.
         theta_factor[in_zero]=0.
@@ -3583,7 +3589,7 @@ def sbr_limits(Configuration, Tirific_Template , debug = False):
          sbr_ring_limits[1]=sbr_ring_limits[2]/2.
 
     if len(Configuration['LIMIT_MODIFIER']) == 1:
-        sbr_ring_limits= sbr_ring_limits*float(Configuration['LIMIT_MODIFIER'])
+        sbr_ring_limits= sbr_ring_limits*float(Configuration['LIMIT_MODIFIER'][0])
     else:
         mod_list = list(Configuration['LIMIT_MODIFIER'])
         while len(mod_list) < len(sbr_ring_limits):

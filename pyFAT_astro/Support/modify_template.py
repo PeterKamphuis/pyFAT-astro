@@ -6,7 +6,7 @@
 import copy
 from pyFAT_astro.Support.support_functions import set_rings,convertskyangle,sbr_limits,set_limits,print_log,set_limit_modifier,\
                               set_ring_size,calc_rings,finish_current_run,set_format,get_from_template,gaussian_function,fit_gaussian,\
-                              get_ring_weights,set_boundaries,max_profile_change,check_angular_momentum_vector
+                              get_ring_weights,set_boundaries,max_profile_change,check_angular_momentum_vector,calculate_am_vector
 from pyFAT_astro.Support.fat_errors import InitializeError,CfluxError,FunctionCallError,BadConfigurationError
 import numpy as np
 import os
@@ -821,7 +821,6 @@ fix_outer_rotation.__doc__ =f'''
 '''
 
 def fix_profile(Configuration, key, profile, Tirific_Template, debug= False, inner_fix = [4,4], singular = False,only_inner = False ):
-
     if isinstance(inner_fix,int):
         inner_fix = [inner_fix]
     if debug:
@@ -1713,21 +1712,67 @@ def regularise_warp(Configuration,Tirific_Template, min_error= [0.,0.],debug = F
 ''',Configuration['OUTPUTLOG'],debug = True)
     # get a smoothed profiles
     Theta,Phi,multiple= calculate_am_vector(Configuration,profile[0],profile[2],debug=debug)
-    if diff:
-        plus_Theta,plus_Phi,plus_multiple= calculate_am_vector(Configuration,profile[1],profile[3],debug=debug)
-        Theta = np.array([Theta,plus_Theta],dtype=float)
-        Phi = np.array([Phi,plus_Phi],dtype=float)
-        multiple = np.array([multiple,plus_multiple],dtype=float)
-    else:
-        Theta = np.array([Theta],dtype=float)
-        Phi = np.array([Phi],dtype=float)
-        multiple = np.array([multiple],dtype=float)
+    plus_Theta,plus_Phi,plus_multiple= calculate_am_vector(Configuration,profile[1],profile[3],debug=debug)
+    Theta = np.array([Theta,plus_Theta],dtype=float)
+    Phi = np.array([Phi,plus_Phi],dtype=float)
+    multiple = np.array([multiple,plus_multiple],dtype=float)
+
     high_theta,high_phi,high_multiple = calculate_am_vector(Configuration,profile[0]+min_error[0],profile[2]+min_error[1],debug=debug)
     if high_multiple != multiple[0]:
         high_theta,high_phi,high_multiple = calculate_am_vector(Configuration,profile[0]-min_error[0],profile[2]-min_error[1],debug=debug)
+    low_theta,low_phi,low_multiple = calculate_am_vector(Configuration,profile[1]+min_error[0],profile[3]+min_error[1],debug=debug)
+    if low_multiple != multiple[0]:
+        low_theta,high_phi,high_multiple = calculate_am_vector(Configuration,profile[1]-min_error[0],profile[3]-min_error[1],debug=debug)
 
-    min_change_error = np.sqrt(np.min(np.array([abs(x-y) for x,y in zip(Theta[0],high_theta)],dtype=float))**2+\
-            np.min(np.array([abs(x-y) for x,y in zip(Phi[0],high_phi)],dtype=float))**2)
+    min_change_error = np.sqrt(np.min(np.array([np.min([abs(x-y),abs(w-z)]) for x,y,w,z in zip(Theta[0],high_theta,Theta[1],low_theta)],dtype=float))**2+\
+            np.min(np.array([np.min([abs(x-y),abs(w-z)]) for x,y,w,z in zip(Phi[0],high_phi,Phi[1],low_phi)],dtype=float))**2)
+
+    if debug:
+        print_log(f'''REGULARISE_WARP: These converted arrays
+{'':8s}Theta = {Theta[0,:]}
+{'':8s}Theta_2 = {Theta[1,:]}
+{'':8s}Phi = {Phi[0,:]}
+{'':8s}Phi_2 = {Phi[1,:]}
+{'':8s}The minimal error is
+{'':8s}min change Error = {min_change_error}
+''',Configuration['OUTPUTLOG'],debug = True)
+
+    theta_zero = Theta[:,0]
+    phi_zero = Theta[:,0]
+     #Let's combine the variation as fraction of the existing angle
+    theta_change= np.array([[float(x-theta_zero[0]) for x in Theta[0]],\
+                            [float(x-theta_zero[1]) for x in Theta[1]]],dtype=float)
+    phi_change= np.array([[float(x-phi_zero[0]) for x in Phi[0]],\
+                            [float(x-phi_zero[0]) for x in Phi[0]]],dtype=float)
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore",message="invalid value encountered in true_divide"\
+                            ,category=RuntimeWarning)
+        theta_factor = np.sqrt(theta_change**2/(theta_change**2+phi_change**2))\
+                    *(theta_change)/abs(theta_change)
+        theta_factor[np.where(np.array(theta_change) == 0.)] = 0.
+        phi_factor = np.sqrt(phi_change**2/(theta_change**2+phi_change**2))*(phi_change)/abs(phi_change)
+        phi_factor[np.where(np.array(phi_change) == 0.)] = 0.
+    if debug:
+        print_log(f'''REGULARISE_WARP: These converted arrays
+{'':8s}Theta_factor = {theta_factor[0,:]}
+{'':8s}Theta_factor_2 = {theta_factor[1,:]}
+{'':8s}Phi_factor = {phi_factor[0,:]}
+{'':8s}Phi_factor_2 = {phi_factor[1,:]}
+''',Configuration['OUTPUTLOG'],debug = True)
+    in_zero = np.where(np.array(theta_change+phi_change) == 0.)
+    phi_factor[in_zero]=0.
+    theta_factor[in_zero]=0.
+    change_angle = np.sqrt(theta_change**2+phi_change**2)
+    change_angle[in_zero] =0.
+    sm_change_angle = smooth_profile(Configuration,Tirific_Template, 'ARBITRARY' ,profile_in=change_angle, min_error=min_change_error,debug=debug,no_apply=True)
+    sm_theta_factor = smooth_profile(Configuration,Tirific_Template, 'ARBITRARY' ,profile_in=theta_factor, min_error=0.01,debug=debug,no_apply=True)
+    sm_phi_factor = smooth_profile(Configuration,Tirific_Template, 'ARBITRARY' ,profile_in=phi_factor, min_error=0.01,debug=debug,no_apply=True)
+
+    error_change_angle = get_error(Configuration,change_angle,sm_change_angle,'ARBITRARY',min_error=min_change_error,weights = weights,debug=debug)
+    error_theta_factor = get_error(Configuration,theta_factor,sm_theta_factor,'ARBITRARY',min_error=0.01,weights = weights,debug=debug)
+    error_phi_factor = get_error(Configuration,phi_factor,sm_phi_factor,'ARBITRARY',min_error=0.01,weights = weights,debug=debug)
+
     if diff:
         if debug:
             print_log(f'''REGULARISE_WARP: Treating both sides independently.
@@ -1741,29 +1786,38 @@ def regularise_warp(Configuration,Tirific_Template, min_error= [0.,0.],debug = F
 
     radii =set_rings(Configuration,debug=debug)
     for i in sides:
-        theta_zero = Theta[i]
-        phi_zero = Phi[i]
-        #Let's combine the variation as fraction of the existing angle
-        theta_change= np.array([float(x-theta_zero) for x in Theta[i]],dtype=float)
-        phi_change= np.array([float(x-phi_zero) for x in Phi[i]],dtype=float)
-        theta_factor = np.sqrt(theta_change**2/(theta_change**2+phi_change**2))\
-                    *(theta_change)/abs(theta_change)
-        phi_factor = np.sqrt(phi_change**2/(theta_change**2+phi_change**2))*(phi_change)/abs(phi_change)
-        in_zero = np.where(np.array(theta_change+phi_change) == 0.)
-        phi_factor[in_zero]=0.
-        theta_factor[in_zero]=0.
-        change_angle = np.sqrt(theta_change**2+phi_change**2)
-        change_angle[in_zero] =0.
-        sm_change_angle = smooth_profile(Configuration,Tirific_Template, 'ARBITRARY' ,profile_in=change_angle, min_error=min_change_error,debug=debug,no_apply=True)
-        error_change_angle = get_error(Configuration,change_angle,sm_change_angle,'ARBITRARY',min_error=min_change_error,weights = weights,debug=debug)
-    #print(change_angle)
-        new_change_angle = fit_polynomial(Configuration,radii,change_angle,sm_change_angle,error_change_angle,'ARBITRARY', Tirific_Template,\
-                                     inner_fix = Configuration['INNER_FIX'][i],min_error=min_error,\
-                                     boundary_limits= change_boundary,debug= debug)
-        new_theta_change = new_change_angle*theta_factor
-        new_phi_change = new_change_angle*phi_factor
-        Theta[i] = theta_zero+new_theta_change
-        Phi[i] = phi_zero+new_phi_change
+
+        if debug:
+            print_log(f'''REGULARISE_WARP: For side {i} we are regularise the following profile.
+{'':8s} change_angle = {change_angle[i]}
+{'':8s} sm_change_angle = {sm_change_angle[i]}
+''',Configuration['OUTPUTLOG'])
+        new_change_angle = fit_polynomial(Configuration,radii,change_angle[i],sm_change_angle[i],error_change_angle[i],'ARBITRARY', Tirific_Template,\
+                                     inner_fix = Configuration['INNER_FIX'][i],min_error=min_change_error,\
+                                     debug= False)
+        new_theta_factor = fit_polynomial(Configuration,radii,theta_factor[i],sm_theta_factor[i],error_theta_factor[i],'ARBITRARY', Tirific_Template,\
+                                     inner_fix = Configuration['INNER_FIX'][i],min_error=0.01,\
+                                     debug= False)
+        new_phi_factor = fit_polynomial(Configuration,radii,phi_factor[i],sm_phi_factor[i],error_phi_factor[i],'ARBITRARY', Tirific_Template,\
+                                     inner_fix = Configuration['INNER_FIX'][i],min_error=0.01,\
+                                     debug= False)
+        if debug:
+            print_log(f'''REGULARISE_WARP:
+{'':8s} new_change_angle = {new_change_angle}
+{'':8s} new_theta_factor = {new_theta_factor}
+{'':8s} new_phi_factor  = {new_phi_factor}
+
+''',Configuration['OUTPUTLOG'])
+        new_theta_change = new_change_angle*new_theta_factor
+        new_phi_change = new_change_angle*new_phi_factor
+
+        Theta[i] = theta_zero[i]+new_theta_change
+        Phi[i] = phi_zero[i]+new_phi_change
+        if debug:
+            print_log(f'''REGULARISE_WARP:
+{'':8s} Theta = {Theta[i]}
+{'':8s} Phi = {Phi[i]}
+''',Configuration['OUTPUTLOG'])
         pa,inclination=calculate_am_vector(Configuration,Theta[i],Phi[i],multiple = multiple[i], invert=True,debug=debug)
         profile[i]=pa
         profile[i+2]=inclination
@@ -1772,13 +1826,21 @@ def regularise_warp(Configuration,Tirific_Template, min_error= [0.,0.],debug = F
     if not diff:
         profile[1] = profile[0]
         profile[3] = profile[2]
-
+    print('''This is the original output profile''')
+    print(profile)
+    #exit()
     error= copy.deepcopy(profile)
     error[:] = 0
     for i,key in enumerate(['PA','INCL']):
+        debug = False
+
         original = np.array(get_from_template(Configuration,Tirific_Template, [key,f"{key}_2"]),dtype=float)
-        error[2*i:2*i+1] = get_error(Configuration,original,profile[2*i:2*i+1],key,weights=weights,apply_max_error = True,min_error=min_error,debug=debug)
-        profile[2*i:2*i+1],error[2*i:2*i+1] = modify_flat(Configuration, profile[2*i:2*i+1], original, error[2*i:2*i+1],key,inner_fix= Configuration['INNER_FIX'],debug=debug)
+        #profile[2*i] = profile[2*i] - float(profile[2*i,0]-original[0,0])
+        #profile[2*i+1] = profile[2*i+1] - float(profile[2*i+1,0]-original[1,0])
+        print('''This is the adjusted output profile''')
+        print(profile)
+        error[2*i:2*i+2] = get_error(Configuration,original,profile[2*i:2*i+2],key,weights=weights,apply_max_error = True,min_error=min_error[i],debug=debug)
+        #profile[2*i:2*i+2],error[2*i:2*i+2] = modify_flat(Configuration, profile[2*i:2*i+2], original, error[2*i:2*i+2],key,inner_fix= Configuration['INNER_FIX'],debug=debug)
         format = set_format(key)
         if not no_apply:
             Tirific_Template[key]= f"{' '.join([f'{x:{format}}' for x in profile[2*i,:int(Configuration['NO_RINGS'])]])}"
@@ -1787,7 +1849,7 @@ def regularise_warp(Configuration,Tirific_Template, min_error= [0.,0.],debug = F
             Tirific_Template.insert(f"{key}_2",f"# {key}_2_ERR",f"{' '.join([f'{x:{format}}' for x in error[2*i+1,:int(Configuration['NO_RINGS'])]])}")
             #if key in ['INCL'] and np.mean( profile[:,int(Configuration['NO_RINGS']/2.):int(Configuration['NO_RINGS'])]) < 40.:
         #    fix_vrot_for_incl_change(Configuration,Tirific_Template,original,profile,debug=debug)
-
+        debug=True
         if debug:
             print_log(f'''REGULARISE_PROFILE: And this has gone to the template.
 {'':8s}{key} = {Tirific_Template[key]}
@@ -3308,8 +3370,10 @@ set_vrot_fitting.__doc__ =f'''
  NOTE:
 '''
 
-def smooth_profile(Configuration,Tirific_Template,key,min_error = 0.,debug=False ,profile_in = None, no_apply =False,fix_sbr_call = False):
-
+def smooth_profile(Configuration,Tirific_Template,key,min_error = 0.,debug=False \
+                    ,profile_in = None, no_apply =False,fix_sbr_call = False):
+    print('Weird 11')
+    print(profile_in)
     if key == 'SBR' and not fix_sbr_call:
         error_message = f'''SMOOTH_PROFILE: Do not use smooth_profile for the SBR, SBR is regularised in fix_sbr'''
         print_log(error_message,Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'],debug = debug)

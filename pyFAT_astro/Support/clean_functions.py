@@ -537,13 +537,16 @@ def finish_galaxy(Configuration,current_run = 'Not initialized', Fits_Files= Non
 {"":8s}The detected exit reason is: "{Configuration['FINAL_COMMENT']}".
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 '''
-        print_log(log_statement,Configuration['OUTPUTLOG'], screen=Configuration['VERBOSE'])
-        print_log(error_message,Configuration['OUTPUTLOG'], screen=Configuration['VERBOSE'])
+        print_log(log_statement,Configuration['OUTPUTLOG'], screen=True)
+        print_log(error_message,Configuration['OUTPUTLOG'], screen=True)
 
         if exiting:
+            #with open(Configuration['OUTPUTLOG'],'a') as log_file:
+            #    traceback.print_tb(exiting.__traceback__,file=log_file)
+            #traceback.print_tb(exiting.__traceback__)
             with open(Configuration['OUTPUTLOG'],'a') as log_file:
-                traceback.print_tb(exiting.__traceback__,file=log_file)
-            traceback.print_tb(exiting.__traceback__)
+                traceback.print_exception(type(exiting),exiting,exiting.__traceback__,file=log_file)
+            traceback.print_exception(type(exiting),exiting,exiting.__traceback__)
         if Configuration['MULTIPROCESSING']:
             Configuration['ACCEPTED'] = False
             Configuration['FINAL_COMMENT'] = f"The code crashed while fitting this galaxy please check it's log."

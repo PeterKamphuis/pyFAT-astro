@@ -204,6 +204,9 @@ def main(argv):
             FAT_Galaxy_Loops(Original_Configuration,Full_Catalogue)
     except SystemExit:
         pass
+    except KeyboardInterrupt:
+        traceback.print_exception(*sys.exc_info())
+        pass
     except:
         raise ProgramError(f'''Something went wrong in the main. This should not happen. Please list an issue on github.''')
 
