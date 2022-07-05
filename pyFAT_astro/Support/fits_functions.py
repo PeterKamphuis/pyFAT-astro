@@ -373,7 +373,7 @@ def extract_pv(Configuration,cube_in,angle,center=[-1,-1,-1],finalsize=[-1,-1],c
         zend = set_limits(int(zcenter+finalsize[1]/2.),0,int(nz))
         xstart = set_limits(int(xcenter-finalsize[0]/2.),0,int(nx))
         xend = set_limits(int(xcenter+finalsize[0]/2.),0,int(nx))
-    
+
         PV =  PV[zstart:zend, xstart:xend]
         TwoD_hdr['NAXIS2'] = int(finalsize[1])
         TwoD_hdr['NAXIS1'] = int(finalsize[0])
@@ -401,7 +401,7 @@ def extract_pv(Configuration,cube_in,angle,center=[-1,-1,-1],finalsize=[-1,-1],c
         else:
             TwoD_hdr['CUNIT2'] = hdr['CUNIT3']
             del (TwoD_hdr['CUNIT3'])
-    except:
+    except KeyError:
         print_log(f'''EXTRACT_PV: We could not find units in the header for the 3rd axis.
 ''', Configuration['OUTPUTLOG'])
     del (TwoD_hdr['CRPIX3'])
@@ -836,20 +836,20 @@ def regrid_cube(data,hdr,ratio):
         regrid_hdr['CDELT1'] =   regrid_hdr['CDELT1']*real_ratio[2]
         regrid_hdr['CDELT2'] =   regrid_hdr['CDELT2']*real_ratio[1]
         wcs_found = True
-    except:
+    except KeyError:
         print("No CDELT found")
     try:
         regrid_hdr['CD1_1'] =   regrid_hdr['CD1_1']*real_ratio[2]
         regrid_hdr['CD2_2'] =   regrid_hdr['CD2_2']*real_ratio[1]
         wcs_found = True
-    except:
+    except KeyError:
         if not wcs_found:
             print("No CD corr matrix found")
     try:
         regrid_hdr['CD1_2'] =   regrid_hdr['CD1_2']*real_ratio[2]
         regrid_hdr['CD2_1'] =   regrid_hdr['CD2_1']*real_ratio[1]
         wcs_found = True
-    except:
+    except KeyError:
         if not wcs_found:
             print("No CD cross-corr matrix found")
 

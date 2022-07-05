@@ -244,5 +244,5 @@ def FAT_Galaxy_Loops(Proc_Configuration, Full_Catalogue):
         registered_exception = e
         Configuration['FINAL_COMMENT'] = e
         Configuration['OUTPUT_QUANTITY'] = 'error'
-        cf.finish_galaxy(Configuration, current_run=current_run,
+        cf.finish_galaxy(Configuration, current_run=current_run,Fits_Files=Fits_Files,
                          debug=Configuration['DEBUG'], exiting=registered_exception)

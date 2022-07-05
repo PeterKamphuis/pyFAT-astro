@@ -242,87 +242,81 @@ def check_inclination(Configuration,Tirific_Template,Fits_Files, fit_type = 'Und
     create_directory(tmp_stage,f"{Configuration['FITTING_DIR']}")
 
     other_run = [Configuration['TIRIFIC_RUNNING'],Configuration['TIRIFIC_PID']]
-    try:
-        Configuration['TIRIFIC_RUNNING'] = False
-        #and a copy of the tirific template
+    Configuration['TIRIFIC_RUNNING'] = False
+    #and a copy of the tirific template
+    if debug:
+            print_log(f'''CHECK_INCLINATION: python is so stupid
+{'':8s}PA = {Tirific_Template['PA']}
+''',Configuration['OUTPUTLOG'])
+    Check_Template = copy.deepcopy(Tirific_Template)
+    #write_new_to_template(Configuration, f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def", Check_Template,debug = debug)
+    Check_Template['LOOPS'] = '0'
+    Check_Template['INIMODE'] = '0'
+    Check_Template['INSET'] = f"{Fits_Files['FITTING_CUBE']}"
+    current_cwd = os.getcwd()
+    short_log = Configuration['LOG_DIRECTORY'].replace(Configuration['FITTING_DIR'],'')
+    Check_Template['RESTARTNAME'] = f"{short_log}restart_{tmp_stage}.txt"
+    #Check_Template['RESTARTNAME'] = get_system_string(f"{Configuration['LOG_DIRECTORY']}restart_{tmp_stage}.txt")
+    #Check_Template['RESTARTNAME'] = f"./Logs/06-09-2021/restart_tmp_incl_check.txt"
+
+    #These are small galaxies make sure the VARINDX is not meesing things up
+    Check_Template['VARINDX'] = ''
+
+    out_keys = ['LOGNAME','OUTSET','TIRDEF']
+    out_extensions = ['log','fits','def']
+    incl_run= 'Not Initialized'
+    for i,key in enumerate(out_keys):
+        Check_Template[key] = f"{tmp_stage}/{tmp_stage}.{out_extensions[i]}"
+
+
+    vobs = [x*np.sin(np.radians(np.mean([float(y),float(z)]))) for x,y,z in \
+            zip(current[to_extract.index('VROT')][:],current[to_extract.index('INCL')][:],current[to_extract.index('INCL_2')][:])]
+    if debug:
+        print_log(f'''CHECK_INCLINATION: These are the values we get as input
+{'':8s}Inclination = {current[to_extract.index('INCL')][:]}, {current[to_extract.index('INCL_2')][:]}
+{'':8s}Vrot = {current[to_extract.index('VROT')][:]}
+{'':8s}Vobs = {vobs}
+{'':8s}PA = {Check_Template['PA']}
+''',Configuration['OUTPUTLOG'])
+    mom_chi = []
+    model_mom0 = fits.open(f"{Configuration['FITTING_DIR']}/Sofia_Output/{Fits_Files['MOMENT0']}")
+    #model_mom0 = remove_inhomogeneities(Configuration,model_mom0,inclination=float(current[1][0]), pa = float(current[2][0]), center = [current[3][0],current[4][0]],debug=debug)
+    chan_map = fits.open(f"{Configuration['FITTING_DIR']}/Sofia_Output/{Fits_Files['CHANNEL_MAP']}")
+    noisemap = np.sqrt(chan_map[0].data)*Configuration['NOISE']/np.nanmax(model_mom0[0].data)
+    max_in_moment = np.nanmax(model_mom0[0].data)
+    model_mom0[0].data = model_mom0[0].data
+    #/max_in_moment
+    for incl in incl_to_check:
+        #print(f'We are doing this inclination {incl}')
+        vrot = [x/np.sin(np.radians(inclination+incl)) for x in vobs]
+        format = set_format('INCL')
+        for key in ['INCL','INCL_2']:
+            Check_Template[key]= f"{' '.join([f'{x+incl:{format}}' for x in current[to_extract.index(key)][:]])}"
+        format = set_format('VROT')
+        for key in ['VROT','VROT_2']:
+            Check_Template[key]= f"{' '.join([f'{x:{format}}' for x in vrot])}"
+        wf.tirific(Configuration,Check_Template,name = f'{tmp_stage}_In.def',debug=True)
+        accepted,incl_run = run_tirific(Configuration,incl_run, stage = 'incl_check', fit_type=tmp_stage,debug=False)
+        make_moments(Configuration,Fits_Files,fit_type=tmp_stage,\
+                     moments = [0], \
+                     overwrite = True, vel_unit = 'm/s',debug=False)
+        #make_moments(filename = f"{Configuration['FITTING_DIR']}{tmp_stage}/{tmp_stage}.fits", basename = 'tmp_incl', directory = f"{Configuration['FITTING_DIR']}{tmp_stage}/",\
+        #             moments = [0],level = 3.*Configuration['NOISE'], \
+        #             overwrite = True, log= Configuration['OUTPUTLOG'], vel_unit = 'm/s',debug=debug)
+        incl_mom0 = fits.open(f"{Configuration['FITTING_DIR']}{tmp_stage}/{tmp_stage}_mom0.fits")
         if debug:
-                print_log(f'''CHECK_INCLINATION: python is so stupid
-    {'':8s}PA = {Tirific_Template['PA']}
-    ''',Configuration['OUTPUTLOG'])
-        Check_Template = copy.deepcopy(Tirific_Template)
-        #write_new_to_template(Configuration, f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def", Check_Template,debug = debug)
-        Check_Template['LOOPS'] = '0'
-        Check_Template['INIMODE'] = '0'
-        Check_Template['INSET'] = f"{Fits_Files['FITTING_CUBE']}"
-        current_cwd = os.getcwd()
-        short_log = Configuration['LOG_DIRECTORY'].replace(Configuration['FITTING_DIR'],'')
-        Check_Template['RESTARTNAME'] = f"{short_log}restart_{tmp_stage}.txt"
-        #Check_Template['RESTARTNAME'] = get_system_string(f"{Configuration['LOG_DIRECTORY']}restart_{tmp_stage}.txt")
-        #Check_Template['RESTARTNAME'] = f"./Logs/06-09-2021/restart_tmp_incl_check.txt"
-
-        #These are small galaxies make sure the VARINDX is not meesing things up
-        Check_Template['VARINDX'] = ''
-
-        out_keys = ['LOGNAME','OUTSET','TIRDEF']
-        out_extensions = ['log','fits','def']
-        incl_run= 'Not Initialized'
-        for i,key in enumerate(out_keys):
-            Check_Template[key] = f"{tmp_stage}/{tmp_stage}.{out_extensions[i]}"
-
-
-        vobs = [x*np.sin(np.radians(np.mean([float(y),float(z)]))) for x,y,z in \
-                zip(current[to_extract.index('VROT')][:],current[to_extract.index('INCL')][:],current[to_extract.index('INCL_2')][:])]
-        if debug:
-            print_log(f'''CHECK_INCLINATION: These are the values we get as input
-    {'':8s}Inclination = {current[to_extract.index('INCL')][:]}, {current[to_extract.index('INCL_2')][:]}
-    {'':8s}Vrot = {current[to_extract.index('VROT')][:]}
-    {'':8s}Vobs = {vobs}
-    {'':8s}PA = {Check_Template['PA']}
-    ''',Configuration['OUTPUTLOG'])
-        mom_chi = []
-        model_mom0 = fits.open(f"{Configuration['FITTING_DIR']}/Sofia_Output/{Fits_Files['MOMENT0']}")
-        #model_mom0 = remove_inhomogeneities(Configuration,model_mom0,inclination=float(current[1][0]), pa = float(current[2][0]), center = [current[3][0],current[4][0]],debug=debug)
-        chan_map = fits.open(f"{Configuration['FITTING_DIR']}/Sofia_Output/{Fits_Files['CHANNEL_MAP']}")
-        noisemap = np.sqrt(chan_map[0].data)*Configuration['NOISE']/np.nanmax(model_mom0[0].data)
-        max_in_moment = np.nanmax(model_mom0[0].data)
-        model_mom0[0].data = model_mom0[0].data
-        #/max_in_moment
-        for incl in incl_to_check:
-            #print(f'We are doing this inclination {incl}')
-            vrot = [x/np.sin(np.radians(inclination+incl)) for x in vobs]
-            format = set_format('INCL')
-            for key in ['INCL','INCL_2']:
-                Check_Template[key]= f"{' '.join([f'{x+incl:{format}}' for x in current[to_extract.index(key)][:]])}"
-            format = set_format('VROT')
-            for key in ['VROT','VROT_2']:
-                Check_Template[key]= f"{' '.join([f'{x:{format}}' for x in vrot])}"
-            wf.tirific(Configuration,Check_Template,name = f'{tmp_stage}_In.def',debug=True)
-            accepted,incl_run = run_tirific(Configuration,incl_run, stage = 'incl_check', fit_type=tmp_stage,debug=False)
-            make_moments(Configuration,Fits_Files,fit_type=tmp_stage,\
-                         moments = [0], \
-                         overwrite = True, vel_unit = 'm/s',debug=False)
-            #make_moments(filename = f"{Configuration['FITTING_DIR']}{tmp_stage}/{tmp_stage}.fits", basename = 'tmp_incl', directory = f"{Configuration['FITTING_DIR']}{tmp_stage}/",\
-            #             moments = [0],level = 3.*Configuration['NOISE'], \
-            #             overwrite = True, log= Configuration['OUTPUTLOG'], vel_unit = 'm/s',debug=debug)
-            incl_mom0 = fits.open(f"{Configuration['FITTING_DIR']}{tmp_stage}/{tmp_stage}_mom0.fits")
-            if debug:
-                try:
-                    os.remove(f"{Configuration['FITTING_DIR']}{tmp_stage}/tmp_{incl:.1f}_mom0.fits")
-                except:
-                    pass
-                os.rename(f"{Configuration['FITTING_DIR']}{tmp_stage}/{tmp_stage}_mom0.fits",f"{Configuration['FITTING_DIR']}{tmp_stage}/tmp_{incl:.1f}_mom0.fits")
-            chi = np.nansum((model_mom0[0].data[noisemap > 0.]-incl_mom0[0].data[noisemap > 0.])**2/noisemap[noisemap > 0.]**2)
-            mom_chi.append(abs(chi))
-            incl_mom0.close()
-        Check_Template = []
-        chan_map.close()
-        model_mom0.close()
-        finish_current_run(Configuration, incl_run)
-    except:
-        finish_current_run(Configuration, incl_run)
-        Configuration['TIRIFIC_RUNNING'] = other_run[0]
-        Configuration['TIRIFIC_PID'] =  other_run[1]
-        raise InclinationRunError('Something went wrong while estimating the inclination. This should not happen.')
+            try:
+                os.remove(f"{Configuration['FITTING_DIR']}{tmp_stage}/tmp_{incl:.1f}_mom0.fits")
+            except FileNotFoundError:
+                pass
+            os.rename(f"{Configuration['FITTING_DIR']}{tmp_stage}/{tmp_stage}_mom0.fits",f"{Configuration['FITTING_DIR']}{tmp_stage}/tmp_{incl:.1f}_mom0.fits")
+        chi = np.nansum((model_mom0[0].data[noisemap > 0.]-incl_mom0[0].data[noisemap > 0.])**2/noisemap[noisemap > 0.]**2)
+        mom_chi.append(abs(chi))
+        incl_mom0.close()
+    Check_Template = []
+    chan_map.close()
+    model_mom0.close()
+    finish_current_run(Configuration, incl_run)
     Configuration['TIRIFIC_RUNNING'] = other_run[0]
     Configuration['TIRIFIC_PID'] =  other_run[1]
     low= np.where(mom_chi == np.nanmin(mom_chi))[0]
@@ -542,11 +536,14 @@ def check_source(Configuration, Fits_Files, debug = False):
         Configuration['EXCLUDE_CENTRAL'] = False
 
     #Check that the source is bright enough
-    Max_SNR = np.nanmax(data)/Configuration['NOISE']
+    Max_SNR = np.nanmean(data[data > 0.95*np.max(data)])/Configuration['NOISE']
     if Max_SNR < 2.5:
-        print_log(f'''CHECK_SOURCE: The maximum Signal to Noise in this cube is {Max_SNR} that is not enough for a fit.
+        print_log(f'''CHECK_SOURCE: The mean SNR of the top 5% pixels in this cube is {Max_SNR}, that is not enough for a fit.
 ''', Configuration['OUTPUTLOG'], screen=Configuration['VERBOSE'])
         raise BadSourceError(log_statement)
+    else:
+        print_log(f'''CHECK_SOURCE: The mean SNR of the top 5% pixels in this cube is {Max_SNR}.
+''', Configuration['OUTPUTLOG'], screen=Configuration['VERBOSE'])
 
     # Size of the galaxy in beams
     Configuration['SIZE_IN_BEAMS'] = set_limits(maj_extent/(Configuration['BEAM'][0]/3600.),1.0,Configuration['MAX_SIZE_IN_BEAMS'])
@@ -815,12 +812,15 @@ def fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run, s
             min_error.append(Configuration['MIN_ERROR'][parameter])
         warp_triggered = False
         for key,min_err in zip(pars_to_smooth,min_error):
-                if key in ['PA','INCL'] and not warp_triggered:
-                    smoothed = regularise_warp(Configuration,Tirific_Template,\
-                        min_error = [Configuration['MIN_ERROR']['PA'],\
-                        Configuration['MIN_ERROR']['INCL']],\
-                        debug = debug)
-                    warp_triggered = True
+                if key in ['PA','INCL']:
+                    if not warp_triggered:
+                        smoothed = regularise_warp(Configuration,Tirific_Template,\
+                            min_error = [Configuration['MIN_ERROR']['PA'],\
+                            Configuration['MIN_ERROR']['INCL']],\
+                            debug = debug)
+                        warp_triggered = True
+                    else:
+                        pass
                 else:
                     smoothed = regularise_profile(Configuration,Tirific_Template,key,min_error = Configuration['MIN_ERROR'][parameter],debug = debug)
                 if key == 'VROT':
@@ -1041,9 +1041,15 @@ def one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run, de
         min_errors = [3.*np.mean(Configuration['LIMIT_MODIFIER']),2.,Configuration['CHANNEL_WIDTH']/(2.*Configuration['LIMIT_MODIFIER']), \
                         convertskyangle(Configuration,0.1,physical= True)/Configuration['LIMIT_MODIFIER'],\
                         Configuration['CHANNEL_WIDTH']/(Configuration['LIMIT_MODIFIER'])]
+        #keys_to_smooth =['SDIS','Z0','VROT']
+        #min_errors = [Configuration['CHANNEL_WIDTH']/(2.*Configuration['LIMIT_MODIFIER']), \
+        #                convertskyangle(Configuration,0.1,physical= True)/Configuration['LIMIT_MODIFIER'],\
+        #                Configuration['CHANNEL_WIDTH']/(Configuration['LIMIT_MODIFIER'])]
         for j,key in enumerate(keys_to_smooth):
             #Smoothing the profile also fixes it
             smoothed = smooth_profile(Configuration,Tirific_Template,key,debug=debug,min_error=min_errors[j])
+        #smoothed = regularise_warp(Configuration,Tirific_Template,debug=debug,
+        #            min_error=[2.,3.*np.mean(Configuration['LIMIT_MODIFIER'])],smooth_only=True)
 
         set_fitting_parameters(Configuration, Tirific_Template,stage = 'run_os',\
                              debug = debug)
@@ -1089,23 +1095,11 @@ def sofia(Configuration, Fits_Files, debug = False):
     sofia_template = rf.sofia_template(debug=debug)
     create_directory('Sofia_Output',Configuration['FITTING_DIR'])
     os.chdir(Configuration['FITTING_DIR'])
-    threshold = 7.
+    threshold = 5.
     counter = 3
     sofia_template['input.data'] = Fits_Files['FITTING_CUBE']
-    spatial_kernels = [0,int(round(Configuration['BEAM_IN_PIXELS'][0])),int(round(Configuration['BEAM_IN_PIXELS'][0]))*2]
-    if np.sum(Configuration['NAXES'][:2])/(2.*int(round(Configuration['BEAM_IN_PIXELS'][0])))  > 30:
-        spatial_kernels.append(int(round(Configuration['BEAM_IN_PIXELS'][0]))*3)
-        print_log(f'''RUN_SOFIA: Adding an extra kernel scale as the cube is more than 30 beams across.
-''', Configuration['OUTPUTLOG'])
+    spatial_kernels,velocity_kernels = construct_kernels(Configuration,sofia_template)
 
-    velocity_kernels = [0,3,6,12]
-    if Configuration['NAXES'][2] > 52:
-        velocity_kernels.append(16)
-        Configuration['VEL_SMOOTH_EXTENDED'] = True
-        print_log(f'''RUN_SOFIA: Adding an extra kernel scale as the cube has more than 52 channels.
-''', Configuration['OUTPUTLOG'])
-    sofia_template['scfind.kernelsXY'] = ','.join([str(x) for x in spatial_kernels])
-    sofia_template['scfind.kernelsZ'] = ','.join([str(x) for x in velocity_kernels])
     sofia_ok = False
     while not sofia_ok:
         clean_before_sofia(Configuration,debug=debug)
@@ -1143,6 +1137,65 @@ def sofia(Configuration, Fits_Files, debug = False):
     Configuration['SOFIA_RAN'] = True
     os.chdir(Configuration['START_DIRECTORY'])
 sofia.__doc__ =f'''
+ NAME:
+    sofia
+
+ PURPOSE:
+    run sofia on the cube to get a source mask and initial estimates.
+
+ CATEGORY:
+    run_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    Fits_Files = Standard FAT dictionary with filenames
+
+ OPTIONAL INPUTS:
+    debug = False
+
+
+ OUTPUTS:
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
+def construct_kernels(Configuration,sofia_template):
+    #we always want the unsmoothed cube
+    spatial_kernels= [0]
+    if np.sum(Configuration['NAXES'][:2])/(2.*int(round(Configuration['BEAM_IN_PIXELS'][0])))  > 10:
+        spatial_kernels.append(int(round(Configuration['BEAM_IN_PIXELS'][0])))
+    if np.sum(Configuration['NAXES'][:2])/(2.*int(round(Configuration['BEAM_IN_PIXELS'][0])))  > 20:
+        spatial_kernels.append(int(round(Configuration['BEAM_IN_PIXELS'][0]*2.)))
+    if np.sum(Configuration['NAXES'][:2])/(2.*int(round(Configuration['BEAM_IN_PIXELS'][0])))  > 30:
+        spatial_kernels.append(int(round(Configuration['BEAM_IN_PIXELS'][0]))*3)
+    print_log(f'''CONSTRUCT_KERNELS: We use the following spatial_kernels
+{'':8s} spatial kernels = {spatial_kernels}
+''', Configuration['OUTPUTLOG'])
+    velocity_kernels = [0]
+    if Configuration['NAXES'][2] > 12:
+        velocity_kernels.append(3)
+    if Configuration['NAXES'][2] > 24:
+        velocity_kernels.append(6)
+    if Configuration['NAXES'][2] > 48:
+        velocity_kernels.append(12)
+    if Configuration['NAXES'][2] > 52:
+        velocity_kernels.append(16)
+        Configuration['VEL_SMOOTH_EXTENDED'] = True
+        print_log(f'''CONSTRUCT_KERNELS: Using a very extended velocity smoothing as the cube has more than 52 channels.
+''', Configuration['OUTPUTLOG'])
+
+    print_log(f'''CONSTRUCT_KERNELS: We use the following velocity kernels
+{'':8s} velocity kernels = {spatial_kernels}
+''', Configuration['OUTPUTLOG'])
+    sofia_template['scfind.kernelsXY'] = ','.join([str(x) for x in spatial_kernels])
+    sofia_template['scfind.kernelsZ'] = ','.join([str(x) for x in velocity_kernels])
+    return spatial_kernels,velocity_kernels
+
+construct_kernels.__doc__ =f'''
  NAME:
     sofia
 
@@ -1223,43 +1276,7 @@ def tirshaker_call(Configuration,debug = False):
                  variation_type = variation_type, iterations = iterations,
                  random_seed = random_seed, mode = 'mad',debug=debug)
     os.chdir(f"{Configuration['START_DIRECTORY']}")
-    '''
-    try:
-        os.remove(f"{Configuration['FITTING_DIR']}Error_Shaker/blatirshin")
-    except:
-        pass
-    try:
-        os.remove(f"{Configuration['FITTING_DIR']}Error_Shaker/blatirlog")
-    except:
-        pass
-    #remove the duplicate line in the shaker output
-    # make sure all duplicate are removed
 
-    outshaker = open(f"{Configuration['FITTING_DIR']}Error_Shaker/{outfilename}", 'r').readlines()
-    lines_set = set(outshaker)
-
-    with open(f"{Configuration['FITTING_DIR']}Error_Shaker/{outfilename}", 'w') as out:
-        for line in lines_set:
-            out.write(line)
-
-    #Let's load the   the tirshaker output
-    err_var =[]
-    for group in parameter_groups:
-        for par in group:
-            if f'ERR_{par[:-1]}' not in err_var:
-                err_var.append(f'ERR_{par[:-1]}')
-    errors = rf.load_tirific(Configuration,f"{Configuration['FITTING_DIR']}Error_Shaker/{outfilename}",Variables = err_var,
-                     unpack = False , debug = debug )
-
-    for para in err_var:
-        key=para[4:]
-        FAT_err = f'# {key}_ERR'
-        format = set_format(key)
-        if FAT_err in Tirific_Template:
-            Tirific_Template[FAT_err]= f"{' '.join([f'{x:{format}}' for x in errors[:int(Configuration['NO_RINGS']),err_var.index(para)]])}"
-        else:
-            Tirific_Template.insert(key,f"# {key}_ERR",f"{' '.join([f'{x:{format}}' for x in errors[:int(Configuration['NO_RINGS']),err_var.index(para)]])}")
-'''
     wf.tirific(Configuration,Tirific_Template,name=f"{Configuration['USED_FITTING']}/{Configuration['USED_FITTING']}.def", debug = debug)
 
 tirshaker_call.__doc__ =f'''

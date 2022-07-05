@@ -628,21 +628,8 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, smoot
     noise_map = []
 
     # First we look for the kinematics center
-    #found_vsys = get_kinematical_center(Configuration,map,float(pa[0]),center=center)
-    #map_vsys = found_vsys[0]
-    #if np.sum([abs(found_vsys[1]), abs(found_vsys[2])]) != 0.:
-    #    center = [center[0]+found_vsys[1], center[1]+found_vsys[2]]
-    #    print_log(f'''GUESS_ORIENTATION: We are updating the center with x,y = {found_vsys[1:]}
-#{'':8s}to {center}
-#''',Configuration['OUTPUTLOG'])
-    #if debug:
-    #    print_log(f'''GUESS_ORIENTATION: We found the following initial VSYS:
-#{'':8s}vsys = {map_vsys}, at {center}
-#''',Configuration['OUTPUTLOG'])
-    try:
-        vel_pa = get_vel_pa(Configuration,map,center=center,debug=debug)
-    except:
-        vel_pa = [float('NaN'),float('NaN')]
+
+    vel_pa = get_vel_pa(Configuration,map,center=center,debug=debug)
 
     maj_profile,maj_axis,maj_resolution = get_profile(Configuration,map,pa[0], center=center,debug=debug)
     zeros = np.where(maj_profile == 0.)[0]
@@ -651,18 +638,10 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, smoot
     #print('How can we fix this')
     #print(pa,vel_pa)
     values = np.where(~np.isnan(maj_profile))[0]
-    #for val in values:
-    #    print(f'Rad = {maj_axis[val]}, Value = {maj_profile[val]}')
+
     loc_max = np.mean(maj_axis[np.where(maj_profile == np.nanmax(maj_profile))[0]])
     loc_min = np.mean(maj_axis[np.where(maj_profile == np.nanmin(maj_profile))[0]])
-    #print(loc_max)
-    #print(loc_min)
 
-    #matplotlib.use('MacOSX')
-    #plt.plot(maj_axis[values],maj_profile[values])
-    #plt.ylim(np.nanmin(maj_profile)-5.,np.nanmax(maj_profile)+5.)
-    #plt.show()
-    #exit()
 
 
     if loc_max > loc_min:

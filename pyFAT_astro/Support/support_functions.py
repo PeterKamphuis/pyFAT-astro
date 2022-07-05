@@ -133,7 +133,7 @@ calc_rings.__doc__ =f'''
 '''
 def calculate_number_processes(Configuration):
     cores_set = False
-    no_galaxies = set_limits(Configuration['CATALOGUE_END_ID']-Configuration['CATALOGUE_START_ID']-1,1,float('inf'))
+    no_galaxies = set_limits(Configuration['CATALOGUE_END_ID']-Configuration['CATALOGUE_START_ID'],1,float('inf'))
 
     while not cores_set:
         no_process= int(np.floor(Configuration['NCPU']/ Configuration['PER_GALAXY_NCPU']))
@@ -158,6 +158,7 @@ def calculate_number_processes(Configuration):
     cfgs=[]
     start_id =  Configuration['CATALOGUE_START_ID']
     no_galaxies_per_process = int(np.ceil(no_galaxies/no_process))
+    print(f"We have  {no_galaxies_per_process} galaxies per process.")
     for i in range(no_process):
         proc_conf=copy.deepcopy(Configuration)
         cores = proc_conf['PER_GALAXY_NCPU']
@@ -173,7 +174,7 @@ def calculate_number_processes(Configuration):
         proc_conf['CATALOGUE_END_ID'] = start_id+no_galaxies_per_process
         if proc_conf['CATALOGUE_END_ID']  > Configuration['CATALOGUE_END_ID']:
             proc_conf['CATALOGUE_END_ID'] = Configuration['CATALOGUE_END_ID']
-        start_id = proc_conf['CATALOGUE_END_ID']+1
+        start_id = proc_conf['CATALOGUE_END_ID']
         proc_conf['OUTPUT_CATALOGUE'] = f"{proc_conf['OUTPUT_CATALOGUE']}_loop{i:d}"
         with open(proc_conf['OUTPUT_CATALOGUE'],'w') as file:
             comment = 'Comments on Fit Result'
@@ -207,6 +208,70 @@ calculate_number_processes.__doc__ =f'''
 
  NOTE:
 '''
+def complex_am_invert(Configuration,Theta_in,Phi_in,multiple):
+
+    Theta_out = copy.deepcopy(Theta_in)
+    Phi_out = copy.deepcopy(Phi_in)
+    Theta_out[0]=Theta_in[0]
+    Phi_out[0]=Phi_in[0]
+    if 'INCL' in Configuration['FIXED_PARAMETERS'] and 'PA' in Configuration['FIXED_PARAMETERS']:
+        Theta_out[:]=Theta_in[0]
+        Phi_out[:]=Phi_in[0]
+    else:
+        #Create the PA and Inclination plane
+        Theta = np.linspace(0,np.pi,1000)
+        Phi = np.linspace(0,np.pi,1000)
+
+
+        if 'INCL' in Configuration['FIXED_PARAMETERS']:
+            Inclination_plane =   np.zeros((len(Theta),len(Phi)))
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore",message="divide by zero encountered in true_divide"\
+                                    ,category=RuntimeWarning)
+                for i in range(len(Theta)):
+                    Inclination_plane[:,i]= 90-np.arctan(1./(np.cos(Theta[i])*np.tan(Phi[:])))*(360./(2*np.pi))
+            Inclination_plane[np.where(Inclination_plane > 90.)] = 180 - Inclination_plane[np.where(Inclination_plane > 90.)]
+            Inclination_plane[np.where(Inclination_plane < 0.)] = -1 * Inclination_plane[np.where(Inclination_plane < 0.)]
+            current_inclination =  90-np.arctan(1./(np.cos(Theta_in[:])*np.tan(Phi_in[:])))*(360./(2*np.pi))
+            current_inclination[np.where(current_inclination > 90.)] = 180 - current_inclination[np.where(current_inclination > 90.)]
+            current_inclination[np.where(current_inclination < 0.)] = -1 * current_inclination[np.where(current_inclination < 0.)]
+            current_diff = np.array([abs(x-current_inclination[0]) for x in current_inclination],dtype=float)
+            not_flat = np.where(current_diff > 0.25)[0]
+            if not_flat.size != 0:
+                print(f'Starting the search for a constant I')
+                options_are = np.where(np.logical_and(current_inclination[0]-0.25 < Inclination_plane, Inclination_plane < current_inclination[0]+0.25))
+                options_Phi = Phi[options_are[0][:]]
+                options_Theta = Theta[options_are[1][:]]
+                for i in range(not_flat.size):
+                    diff = [abs(x-Phi_in[not_flat[i]])+abs(y-Theta_in[not_flat[i]]) for x,y in zip(options_Phi,options_Theta)]
+                    location= np.where(np.min(diff) == diff)[0]
+                    Phi_out[not_flat[i]]=options_Phi[location[0]]
+                    Theta_out[not_flat[i]]=options_Theta[location[0]]
+        if 'PA' in Configuration['FIXED_PARAMETERS']:
+            PA_plane =   np.zeros((len(Theta),len(Phi)))
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore",message="divide by zero encountered in true_divide"\
+                                    ,category=RuntimeWarning)
+                for i in range(len(Theta)):
+                    PA_plane[:,i] = abs(np.arctan(np.sin(Theta[i])*np.tan(Phi[:]))*(360./(2*np.pi)))
+
+            current_pa = abs(np.arctan(np.sin(Theta_in[:])*np.tan(Phi_in[:]))*(360./(2*np.pi)))
+            current_diff = np.array([abs(x-current_pa[0]) for x in current_pa],dtype=float)
+            not_flat = np.where(current_diff > 0.25)[0]
+            if not_flat.size != 0:
+                print(f'Starting the search for a constant PA')
+                options_are = np.where(np.logical_and(current_pa[0]-0.25 < PA_plane, PA_plane < current_pa[0]+0.25))
+                options_Phi = Phi[options_are[0][:]]
+                options_Theta = Theta[options_are[1][:]]
+                for i in range(not_flat.size):
+                    diff = [abs(x-Phi_in[not_flat[i]])+abs(y-Theta_in[not_flat[i]]) for x,y in zip(options_Phi,options_Theta)]
+                    location= np.where(np.min(diff) == diff)[0]
+                    Phi_out[not_flat[i]]=options_Phi[location[0]]
+                    Theta_out[not_flat[i]]=options_Theta[location[0]]
+
+
+    return Theta_out,Phi_out
+
 
 def calculate_am_vector(Configuration,PA_in,Inclination_in,multiple = None, invert=False,debug=False):
     if not multiple and invert:
@@ -217,6 +282,9 @@ def calculate_am_vector(Configuration,PA_in,Inclination_in,multiple = None, inve
     if invert:
         Theta=np.array(PA_in,dtype=float)
         Phi=np.array(Inclination_in,dtype=float)
+        if 'INCL' in Configuration['FIXED_PARAMETERS'] or 'PA' in Configuration['FIXED_PARAMETERS']:
+            Theta,Phi = complex_am_invert(Configuration,Theta,Phi,multiple)
+
         Inclination=90-np.arctan(1./(np.cos(Theta)*np.tan(Phi)))*(360./(2*np.pi))
     # return inclination boundary adjustements
         Inclination[np.where(Inclination > 90.)] = 180 - Inclination[np.where(Inclination > 90.)]
@@ -225,7 +293,7 @@ def calculate_am_vector(Configuration,PA_in,Inclination_in,multiple = None, inve
             PA= np.arctan(np.sin(Theta)*np.tan(Phi-np.pi/2.))*(360./(2*np.pi))\
                         +multiple*90.+np.arctan(np.sin(Theta[0])*np.tan(Phi[0]))*(360./(2*np.pi))
         else:
-            PA= np.arctan(np.sin(Theta)*np.tan(Phi))*(360./(2*np.pi))+multiple*90.
+            PA= abs(np.arctan(np.sin(Theta)*np.tan(Phi))*(360./(2*np.pi)))+multiple*90.
         return PA,Inclination
     else:
         # For this the PA has to be between 0-90
@@ -309,15 +377,9 @@ Inclination = {inclination}
         in_zero = np.where(np.array(theta_change+phi_change) == 0.)
         phi_factor[in_zero]=0.
         theta_factor[in_zero]=0.
-        #print(f'theta factor {theta_factor} phi factor{phi_factor}')
-
-        #change_angle = ((Theta - theta_zero)*theta_zero+ (Phi-phi_zero)*phi_zero)/(theta_zero+phi_zero)
-        #change_angle = np.array([(x**2+y**2)/(x+y) for x,y in zip(theta_change,phi_change) if (x != 0. or y != 0.) else 0.],dtype=float )
 
         change_angle = np.sqrt(theta_change**2+phi_change**2)
-        #*((theta_change+phi_change)/abs(theta_change+phi_change))
         change_angle[in_zero] =0.
-        #print(change_angle)
         new_change_angle = max_profile_change(Configuration,radius,change_angle,'ARBITRARY',\
             slope = Configuration['WARP_SLOPE'][side],max_change=max_shift, debug=debug)
 
@@ -508,7 +570,7 @@ def clean_header(Configuration,hdr_in,two_dim=False,mask_file=False, debug = Fal
     for key in keywords:
         try:
             del hdr[f'{key}4']
-        except:
+        except KeyError:
             pass
     if not two_dim:
         hdr['NAXIS'] = 3
@@ -716,9 +778,11 @@ def columndensity(Configuration,levels,systemic = 100.,beam=[-1.,-1.],channel_wi
         if column:
             # If the input is in solarmass we want to convert back to column densities
             if solar_mass_input:
-                levels=levels*solarmass/(mHI*pc**2)
+                levels=np.array([x*solarmass/(mHI*pc**2) for x in levels],dtype=float)
             #levels=levels/(HIconv*channel_width)
+
             levels = levels/(HIconv*channel_width)
+            print(levels)
         else:
 
             levels = HIconv*levels*channel_width
@@ -736,7 +800,7 @@ def columndensity(Configuration,levels,systemic = 100.,beam=[-1.,-1.],channel_wi
         else:
             TK=((605.7383)/(b))*(f0/f)**2*levels
             levels = TK*(1.823e18*channel_width)
-    if ~column and solar_mass_input:
+    if not column and solar_mass_input:
         levels = levels*mHI*pc**2/solarmass
     return levels
 
@@ -1064,7 +1128,7 @@ def copy_homemade_sofia(Configuration,no_cat=False,debug=False):
                 try:
                     if hdr[key] != hdr_in[key]:
                         update =True
-                except:
+                except KeyError:
                     update = True
             if file == '_mom0.fits':
                 if hdr['BUNIT'].strip().lower() == 'jy/beam*m/s':
@@ -1243,7 +1307,7 @@ def find_program(name,search):
             run.stderr.close()
             os.kill(run.pid, signal.SIGKILL)
             found = True
-        except:
+        except FileNotFoundError:
             name = input(f'''You have indicated to use {name} for using {search} but it cannot be found.
 Please provide the correct name : ''')
     return name
@@ -1280,6 +1344,7 @@ def finish_current_run(Configuration,current_run,debug=False):
             current_run.stdout.close()
             current_run.stderr.close()
         except:
+            print_log(f"FINISH_CURRENT_RUN: We failed to close the pipe to the current run even though there should be one. \n",Configuration['OUTPUTLOG'],debug=debug)
             pass
         try:
             os.kill(Configuration['TIRIFIC_PID'], signal.SIGKILL)
@@ -1473,8 +1538,6 @@ def fit_sine(Configuration,x,y,debug = False):
     if min_location.size > 1:
         min_location = int(min_location[0])
     est_width = float(abs(x[peak_location]-x[min_location])/(2.*np.pi))
-
-    #print(est_width)
     est_amp = np.mean(y)
     peak_location = np.where(y == np.nanmax(y))[0]
     if peak_location.size > 1:
@@ -1483,7 +1546,6 @@ def fit_sine(Configuration,x,y,debug = False):
     est_center = float(x[peak_location])
 
     est_width=est_width*(2.*np.pi/180.)
-    #print(est_peak,est_center,est_width,est_amp)
     with warnings.catch_warnings():
         warnings.simplefilter("error", OptimizeWarning)
         try:
@@ -2657,7 +2719,6 @@ def max_profile_change(Configuration,radius,profile,key,max_change=None,\
 
     for i,diff in enumerate(diff_profile):
         if abs(diff)/diff_rad[i] > max_change:
-            print(f'Befor {diff} i= {i}')
             #if it is the last point we simply limit it
             if i == len(diff_profile)-1:
                 new_profile[i+1] = profile[i]+ diff/abs(diff)*(max_change*0.5*diff_rad[i])
@@ -2684,7 +2745,7 @@ def max_profile_change(Configuration,radius,profile,key,max_change=None,\
 
             if i < len(diff_profile)-1:
                 diff_profile[i+1] = float(new_profile[i+2]-new_profile[i+1])
-                print(f'After {diff} i= {i}  {diff_profile[i+1]}')
+
     if debug:
         print_log(f'''MAX_CHANGE_PROFILE: The returned profile is:
 {'':8s}{key} = {new_profile}
@@ -3179,15 +3240,13 @@ We are in in stage {stage} and fit_type {fit_type} and have done {Configuration[
                     file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Mb for TiRiFiC \n")
         if tmp[0] == 'L':
             if int(tmp[1]) != currentloop:
-                print(f"\r{'':8s}RUN_TIRIFIC: {float(tmp[1])/float(max_loop)*100.:.1f} % Completed", end =" ",flush = True)
+                print(f"\r{'':8s}RUN_TIRIFIC: {set_limits(float(tmp[1])-1.,0.,float(max_loop))/float(max_loop)*100.:.1f} % Completed", end =" ",flush = True)
             currentloop  = int(tmp[1])
             if max_loop == 0:
                 max_loop = int(tmp[2])
-            try:
-                Configuration['NO_POINTSOURCES'] = np.array([tmp[18],tmp[19]],dtype=float)
-            except:
-                #If this fails for some reason an old number suffices, if the code really crashed problems will occur elsewhere.
-                pass
+
+            Configuration['NO_POINTSOURCES'] = np.array([tmp[18],tmp[19]],dtype=float)
+
         if tmp[0].strip() == 'Finished':
             break
         if tmp[0].strip() == 'Abort':
@@ -3327,7 +3386,7 @@ def setup_configuration(cfg):
             for file in test_files:
                 try:
                     os.remove(test_dir+file)
-                except:
+                except FileNotFoundError:
                     pass
 
         my_resources = import_pack_files('pyFAT_astro.Installation_Check')
@@ -3417,7 +3476,7 @@ def setup_configuration(cfg):
                'NO_POINTSOURCES': 0. , # Number of point sources, set in run_tirific
 
                'INNER_FIX': [4,4], #Number of rings that are fixed in the inner part for the INCL and PA, , adapted after every run in get_inner_fix in support_functions and for both sides
-               'CENTRAL_FIX': [], #Parameters of the center to fix. This set in check_cantral_convergence
+               'CENTRAL_FIX': [], #Parameters of the center to fix. This set in check_central_convergence
                'WARP_SLOPE': [None, None], #Ring numbers from which outwards the warping should be fitted as a slope, set in get_warp_slope in modify_template
                'OUTER_SLOPE_START': 1, # Ring number from where the RC is fitted as a slope
                'RC_UNRELIABLE': 1, # Ring number from where the RC values are set flat. Should only be set in check_size
@@ -3587,7 +3646,10 @@ def sbr_limits(Configuration, Tirific_Template , debug = False):
     if ringarea[0] == 0.:
          sbr_ring_limits[0]=np.nanmin(sbr_ring_limits)
          sbr_ring_limits[1]=sbr_ring_limits[2]/2.
-
+    if debug:
+        print_log(f'''SBR_LIMITS: Applying the modifiier:
+{'':8s}{Configuration['LIMIT_MODIFIER']}
+''',Configuration['OUTPUTLOG'])
     if len(Configuration['LIMIT_MODIFIER']) == 1:
         sbr_ring_limits= sbr_ring_limits*float(Configuration['LIMIT_MODIFIER'][0])
     else:
@@ -3704,7 +3766,7 @@ def set_limit_modifier(Configuration,Tirific_Template, debug= False):
         Z0_kpc = [Z0_kpc]
     #Scale the limits with the deviation away from 0.2 kpc as this is more or less the unmodified scale height
 
-    modifier_list=[x*(1.125-0.625*y)*set_limits(((Configuration['RING_SIZE']*Configuration['BEAM'][0])/45.)**0.25,0.75,1.25) for x,y in zip(modifier_list,Z0_kpc)]
+    modifier_list=[set_limits(x*(1.125-0.625*y)*set_limits(((Configuration['RING_SIZE']*Configuration['BEAM'][0])/45.)**0.25,0.75,1.25),0.5,3.) for x,y in zip(modifier_list,Z0_kpc)]
 
     Configuration['LIMIT_MODIFIER'] = np.array(modifier_list,dtype=float)
     if debug:

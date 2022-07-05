@@ -131,11 +131,11 @@ def clean_after_sofia(Configuration, debug = False):
     for file in files:
         try:
             os.rename(Configuration['BASE_NAME']+file,'Sofia_Output/'+Configuration['BASE_NAME']+file )
-        except:
+        except FileNotFoundError:
             pass
     try:
         os.rename('sofia_input.par','Sofia_Output/sofia_input.par')
-    except:
+    except FileNotFoundError:
         pass
 
 clean_after_sofia.__doc__ =f'''
@@ -232,11 +232,11 @@ def cleanup(Configuration,Fits_Files, debug = False):
         for extension in file_ext:
             try:
                 os.remove(f'{dir}{Configuration["BASE_NAME"]}{extension}')
-            except:
+            except FileNotFoundError:
                 pass
         try:
             os.remove(f'{dir}sofia_input.par')
-        except:
+        except FileNotFoundError:
             pass
     if 'tirshaker' in Configuration['FITTING_STAGES']:
         directories.append('Error_Shaker')
@@ -436,24 +436,21 @@ def installation_check(Configuration, debug =False):
     #Then the fitted file
     Fitted_values =load_tirific(Configuration,f"{Configuration['FITTING_DIR']}Finalmodel/Finalmodel.def",Variables = Variables_to_Compare,unpack = False,debug=debug)
     succes = False
-
-    try:
-        diff = np.abs(np.array(Model_values,dtype=float)-np.array(Fitted_values,dtype=float))
-        if debug:
-            print_log(f'''INSTALLATION_CHECK: the found differences
+    diff = np.abs(np.array(Model_values,dtype=float)-np.array(Fitted_values,dtype=float))
+    if debug:
+        print_log(f'''INSTALLATION_CHECK: the found differences
 {'':8s}{diff}
 ''',Configuration['OUTPUTLOG'])
-        too_much = np.array(np.where(diff > 1e-3),dtype=bool)
-        if debug:
-            print_log(f'''INSTALLATION_CHECK: at the locations
+    too_much = np.array(np.where(diff > 1e-3),dtype=bool)
+    if debug:
+        print_log(f'''INSTALLATION_CHECK: at the locations
 {'':8s}{too_much}{np.where(diff > 1e-3)}
 {'':8s}{too_much.size}
 ''',Configuration['OUTPUTLOG'])
 
-        if too_much.size == 0.:
-            succes = True
-    except:
-        pass
+    if too_much.size == 0.:
+        succes = True
+
 
     if succes:
         print_log(f'''
@@ -508,7 +505,7 @@ installation_check.__doc__ =f'''
  NOTE:
 '''
 
-def finish_galaxy(Configuration,current_run = 'Not initialized', Fits_Files= None, debug = False,exiting = None):
+def finish_galaxy(Configuration,current_run = 'Not initialized', Fits_Files= {'ORIGINAL_CUBE': "Unset.fits"}, debug = False,exiting = None):
     Configuration['END_TIME'] = datetime.now()
     if debug:
         print_log(f'''FINISH_GALAXY: These fits files are used:

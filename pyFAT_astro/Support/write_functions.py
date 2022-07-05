@@ -392,7 +392,7 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
     heightb = moment0[0].header['BMAJ']
     try:
         angleb  = moment0[0].header['BPA']
-    except:
+    except KeyError:
         angleb = 0.
     beam = Ellipse(xy=localoc, width=widthb, height=heightb, angle=angleb, transform=ax_moment0.get_transform('fk4'),
            edgecolor='k', lw=1, facecolor='none', hatch='/////',zorder=15)
@@ -482,7 +482,7 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
     heightb = moment1[0].header['BMAJ']
     try:
         angleb  = moment1[0].header['BPA']
-    except:
+    except KeyError:
         angleb = 0.
     beam = Ellipse(xy=localoc, width=widthb, height=heightb, angle=angleb, transform=ax_moment1.get_transform('fk4'),
            edgecolor='k', lw=1, facecolor='none', hatch='/////',zorder=15)
@@ -549,7 +549,7 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
     heightb = moment2[0].header['BMAJ']
     try:
         angleb  = moment2[0].header['BPA']
-    except:
+    except KeyError:
         angleb = 0.
 
     beam = Ellipse(xy=localoc, width=widthb, height=heightb, angle=angleb, transform = ax_moment2.get_transform('fk4'),
@@ -618,7 +618,7 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
              range(PV[0].header['NAXIS2'])]
     plt.gca().set_xticks(range(len(xaxis))[0:-1:int(len(xaxis) / 5)])
     plt.gca().set_yticks(range(len(yaxis))[0:-1:int(len(yaxis) / 5)])
-    plt.gca().set_xticklabels(['{:10.0f}'.format(i) for i in xaxis[0:-1:int(len(xaxis) / 5)]])
+    plt.gca().set_xticklabels(['{:10.1f}'.format(i) for i in xaxis[0:-1:int(len(xaxis) / 5)]])
     plt.gca().set_yticklabels(['{:10.1f}'.format(i) for i in yaxis[0:-1:int(len(yaxis) / 5)]])
 
     #Add some contours
@@ -633,23 +633,22 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
     ''',Configuration['OUTPUTLOG'],debug =True )
     if pos_cont.size == 0:
         pos_cont = 0.5 * np.nanmax(PV[0].data) * 0.95
-    try:
-        ax_PV.contour(PV[0].data, levels=pos_cont, colors='k',transform=ax_PV.get_transform(xv_proj))
-        ax_PV.contour(PV[0].data, levels=neg_cont, colors='grey',linestyles='--',transform=ax_PV.get_transform(xv_proj))
-        ax_PV.contour(PV_model[0].data, levels=pos_cont, colors='b',transform=ax_PV.get_transform(xv_model_proj),linewidths=1.)
-        momlevel = np.hstack((neg_cont,pos_cont))
-        column_levels = ', '.join(["{:.1f}".format(x*1000.) for x in momlevel])
-        if len(momlevel) < 4:
-            info_string = f"The contours are at {column_levels} mJy/beam"
-        else:
-            info_string = f"The contours are at {', '.join(['{:.1f}'.format(x*1000.) for x in momlevel[0:4]])}"
-            counter = 5
-            while counter < len(momlevel):
-                info_string = info_string+f"\n {', '.join(['{:.1f}'.format(x*1000.) for x in momlevel[counter:counter+7]])}"
-                counter += 7
-            info_string = info_string+" mJy/beam."
-    except:
-        info_string = f"Something went wrong plotting the contours."
+
+    ax_PV.contour(PV[0].data, levels=pos_cont, colors='k',transform=ax_PV.get_transform(xv_proj))
+    ax_PV.contour(PV[0].data, levels=neg_cont, colors='grey',linestyles='--',transform=ax_PV.get_transform(xv_proj))
+    ax_PV.contour(PV_model[0].data, levels=pos_cont, colors='b',transform=ax_PV.get_transform(xv_model_proj),linewidths=1.)
+    momlevel = np.hstack((neg_cont,pos_cont))
+    column_levels = ', '.join(["{:.1f}".format(x*1000.) for x in momlevel])
+    if len(momlevel) < 4:
+        info_string = f"The contours are at {column_levels} mJy/beam"
+    else:
+        info_string = f"The contours are at {', '.join(['{:.1f}'.format(x*1000.) for x in momlevel[0:4]])}"
+        counter = 5
+        while counter < len(momlevel):
+            info_string = info_string+f"\n {', '.join(['{:.1f}'.format(x*1000.) for x in momlevel[counter:counter+7]])}"
+            counter += 7
+        info_string = info_string+" mJy/beam."
+
     divider = make_axes_locatable(ax_PV)
     cax = divider.append_axes("top", size="5%", pad=0.05, axes_class=maxes.Axes)
     cbar = plt.colorbar(PV_plot, cax=cax, orientation='horizontal')
@@ -968,7 +967,7 @@ def plot_parameters(Configuration,Vars_to_plot,FAT_Model,location,Figure,paramet
     ax = Figure.add_subplot(location)
     try:
         yerr = FAT_Model[:,Vars_to_plot.index(f'{parameter}_ERR')]
-    except:
+    except ValueError:
         yerr =np.zeros(len(FAT_Model[:,Vars_to_plot.index('RADI')]))
     if debug:
         print_log(f'''PLOT_PARAMETERS: We found these errors {yerr}
@@ -981,7 +980,7 @@ def plot_parameters(Configuration,Vars_to_plot,FAT_Model,location,Figure,paramet
         if diff != 0.:
             try:
                 yerr = FAT_Model[:,Vars_to_plot.index(f'{parameter}_2_ERR')]
-            except:
+            except ValueError:
                 yerr =np.zeros(len(FAT_Model[:,Vars_to_plot.index('RADI')]))
             ax.errorbar(FAT_Model[:,Vars_to_plot.index('RADI')],FAT_Model[:,Vars_to_plot.index(f'{parameter}_2')],yerr= yerr, c ='r', label=f'{legend[1]}',zorder=3)
             ax.plot(FAT_Model[:,Vars_to_plot.index('RADI')],FAT_Model[:,Vars_to_plot.index(f'{parameter}_2')],'ro', ms = 3.,zorder=3)
@@ -991,7 +990,7 @@ def plot_parameters(Configuration,Vars_to_plot,FAT_Model,location,Figure,paramet
             last_index = int(np.where(Input_Model[:,Vars_to_plot.index(f'{parameter}')] != 0.)[0][-1])
             try:
                 yerr = Input_Model[:last_index,Vars_to_plot.index(f'# {parameter}_ERR')]
-            except:
+            except ValueError:
                 yerr =np.zeros(len(Input_Model[:last_index,Vars_to_plot.index('RADI')]))
             ax.errorbar(Input_Model[:last_index,Vars_to_plot.index('RADI')],Input_Model[:last_index,Vars_to_plot.index(f'{parameter}')],yerr= yerr, c ='b',linestyle='-', label=f'{legend[2]}',zorder=2)
             ax.plot(Input_Model[:last_index,Vars_to_plot.index('RADI')],Input_Model[:last_index,Vars_to_plot.index(f'{parameter}')],'bo',linestyle='-', ms = 3.,zorder=2)
@@ -1001,7 +1000,7 @@ def plot_parameters(Configuration,Vars_to_plot,FAT_Model,location,Figure,paramet
                 last_index = int(np.where(Input_Model[:,Vars_to_plot.index(f'{parameter}_2')] != 0.)[0][-1])
                 try:
                     yerr = Input_Model[:last_index,Vars_to_plot.index(f'# {parameter}_2_ERR')]
-                except:
+                except ValueError:
                     yerr =np.zeros(len(Input_Model[:last_index,Vars_to_plot.index('RADI')]))
 
                 ax.errorbar(Input_Model[:last_index,Vars_to_plot.index('RADI')],Input_Model[:last_index,Vars_to_plot.index(f'{parameter}_2')],yerr= yerr, c ='yellow', label=f'{legend[3]}',zorder=2)
@@ -1322,7 +1321,7 @@ def tirific(Configuration,Tirific_Template, name = 'tirific.def', debug = False)
     update_disk_angles(Configuration,Tirific_Template, debug= debug)
     try:
         Tirific_Template['RESTARTID'] = str(int(Tirific_Template['RESTARTID'])+1)
-    except:
+    except ValueError:
         Tirific_Template['RESTARTID'] = 0
     with open(Configuration['FITTING_DIR']+name, 'w') as file:
         for key in Tirific_Template:
