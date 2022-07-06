@@ -631,15 +631,32 @@ def fit_arc(Configuration,radii,sm_profile,error, function_to_fit,key, debug = F
     else:
         absolute_sigma = True
     with warnings.catch_warnings():
-        warnings.simplefilter("error", OptimizeWarning)
-        try:
-            arc_par,arc_cov  =  curve_fit(function_to_fit, radii, sm_profile,p0=[est_center,est_length,est_amp,est_mean]\
-                                        ,sigma=error,absolute_sigma=absolute_sigma)
-            new_profile = function_to_fit(radii,*arc_par)
-            new_profile[:3] = np.mean(new_profile[:3])
-        except OptimizeWarning:
-            new_profile = np.full(len(sm_profile), np.mean(sm_profile))
+        warnings.simplefilter("error")
+        succes = False
+        maxfev= int(100*(len(radii)))
 
+        while not succes:
+            try:
+                arc_par,arc_cov  =  curve_fit(function_to_fit, radii, sm_profile,p0=[est_center,est_length,est_amp,est_mean]\
+                                            ,sigma=error,absolute_sigma=absolute_sigma,maxfev=maxfev)
+                new_profile = function_to_fit(radii,*arc_par)
+                new_profile[:3] = np.mean(new_profile[:3])
+            except OptimizeWarning:
+                maxfev =  2000*(len(radii))
+            except RuntimeError as e:
+                split_error = str(e)
+                if 'Optimal parameters not found: Number of calls to function has reached maxfev =' in \
+                    split_error:
+                    maxfev += 100
+                    print_log(f'''FIT_ARC: We failed to find an optimal fit due to the maximum number of evaluations. icreasing maxfev to {maxfev}
+    ''',Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
+                else:
+                    raise RuntimeError(str(e))
+            if maxfev >  1000*(len(radii)):
+                print_log(f'''FIT_ARC: We failed to find an optimal fit to dispersion, returning the smoothed profile.
+''',Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
+                succes = True
+                new_profile = copy.deepcopy(sm_profile)
 
     return new_profile#,new_error
 fit_arc.__doc__ =f'''
@@ -2045,14 +2062,10 @@ def regularise_warp(Configuration,Tirific_Template, min_error= [0.,0.],debug = F
     error[:] = 0
     for i,key in enumerate(['PA','INCL']):
         original = np.array(get_from_template(Configuration,Tirific_Template, [key,f"{key}_2"]),dtype=float)
-        sm_profile = smooth_profile(Configuration,Tirific_Template, key ,profile_in=profile[2*i:2*i+2], min_error=min_error[i]/3.,debug=debug,no_apply=True)
+        sm_profile = smooth_profile(Configuration,Tirific_Template, key ,profile_in=profile[2*i:2*i+2], min_error=min_error[i]/3.,debug=debug,no_fix=True,no_apply=True)
         sm_error =  get_error(Configuration,original,sm_profile,key,weights=weights,apply_max_error = True,min_error=min_error[i]/3.,debug=debug)
         sm_profile,sm_error = modify_flat(Configuration, sm_profile, original, sm_error,key,inner_fix= Configuration['INNER_FIX'],debug=debug)
-
         profile[2*i:2*i+2]=sm_profile
-
-
-        original = np.array(get_from_template(Configuration,Tirific_Template, [key,f"{key}_2"]),dtype=float)
         error[2*i:2*i+2] = get_error(Configuration,original,profile[2*i:2*i+2],key,weights=weights,apply_max_error = True,min_error=min_error[i],debug=debug)
         format = set_format(key)
         if not no_apply:
@@ -3454,11 +3467,13 @@ set_vrot_fitting.__doc__ =f'''
 '''
 
 def smooth_profile(Configuration,Tirific_Template,key,min_error = 0.,debug=False \
-                    ,profile_in = None, no_apply =False,fix_sbr_call = False):
+                    ,profile_in = None, no_apply =False,no_fix = False,fix_sbr_call=False):
     if key == 'SBR' and not fix_sbr_call:
         error_message = f'''SMOOTH_PROFILE: Do not use smooth_profile for the SBR, SBR is regularised in fix_sbr'''
         print_log(error_message,Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'],debug = debug)
         raise FunctionCallError(error_message)
+    if fix_sbr_call:
+        no_fix=True
     if key in 'ARBITRARY' and (profile_in is None or no_apply is not True):
         error_message = f'''SMOOTH_PROFILE: We cannot read or write an ARBITRARY profile from the template.'''
         print_log(error_message,Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'],debug = debug)
@@ -3485,7 +3500,7 @@ def smooth_profile(Configuration,Tirific_Template,key,min_error = 0.,debug=False
         inner_fixed = [0,0]
 
     #he sbr profile is already fixed before getting to the smoothing
-    if not fix_sbr_call:
+    if not no_fix:
         profile =fix_profile(Configuration, key, profile, Tirific_Template,inner_fix = inner_fixed,debug=debug)
 
     if key == 'VROT':
@@ -3531,7 +3546,7 @@ def smooth_profile(Configuration,Tirific_Template,key,min_error = 0.,debug=False
         else:
             profile[:,0] = 0.
 
-    if not fix_sbr_call:
+    if not no_fix:
         profile =fix_profile(Configuration, key, profile, Tirific_Template,inner_fix=inner_fixed,debug=debug)
 
 

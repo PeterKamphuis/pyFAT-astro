@@ -1052,19 +1052,19 @@ def one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run, de
             get_warp_slope(Configuration,Tirific_Template, debug=debug)
 
         set_cflux(Configuration,Tirific_Template,debug = debug)
-        keys_to_smooth =['INCL','PA','SDIS','Z0','VROT']
-        min_errors = [3.*np.mean(Configuration['LIMIT_MODIFIER']),2.,Configuration['CHANNEL_WIDTH']/(2.*Configuration['LIMIT_MODIFIER']), \
-                        convertskyangle(Configuration,0.1,physical= True)/Configuration['LIMIT_MODIFIER'],\
-                        Configuration['CHANNEL_WIDTH']/(Configuration['LIMIT_MODIFIER'])]
-        #keys_to_smooth =['SDIS','Z0','VROT']
-        #min_errors = [Configuration['CHANNEL_WIDTH']/(2.*Configuration['LIMIT_MODIFIER']), \
+        #keys_to_smooth =['INCL','PA','SDIS','Z0','VROT']
+        #min_errors = [3.*np.mean(Configuration['LIMIT_MODIFIER']),2.,Configuration['CHANNEL_WIDTH']/(2.*Configuration['LIMIT_MODIFIER']), \
         #                convertskyangle(Configuration,0.1,physical= True)/Configuration['LIMIT_MODIFIER'],\
         #                Configuration['CHANNEL_WIDTH']/(Configuration['LIMIT_MODIFIER'])]
+        keys_to_smooth =['SDIS','Z0','VROT']
+        min_errors = [Configuration['CHANNEL_WIDTH']/(2.*Configuration['LIMIT_MODIFIER']), \
+                        convertskyangle(Configuration,0.1,physical= True)/Configuration['LIMIT_MODIFIER'],\
+                        Configuration['CHANNEL_WIDTH']/(Configuration['LIMIT_MODIFIER'])]
         for j,key in enumerate(keys_to_smooth):
             #Smoothing the profile also fixes it
             smoothed = smooth_profile(Configuration,Tirific_Template,key,debug=debug,min_error=min_errors[j])
-        #smoothed = regularise_warp(Configuration,Tirific_Template,debug=debug,
-        #            min_error=[2.,3.*np.mean(Configuration['LIMIT_MODIFIER'])],smooth_only=True)
+        smoothed = regularise_warp(Configuration,Tirific_Template,debug=debug,
+                    min_error=[2.,3.*np.mean(Configuration['LIMIT_MODIFIER'])],smooth_only=True)
 
         set_fitting_parameters(Configuration, Tirific_Template,stage = 'run_os',\
                              debug = debug)
