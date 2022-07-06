@@ -279,9 +279,9 @@ def check_inclination(Configuration,Tirific_Template,Fits_Files, fit_type = 'Und
 {'':8s}PA = {Check_Template['PA']}
 ''',Configuration['OUTPUTLOG'])
     mom_chi = []
-    model_mom0 = fits.open(f"{Configuration['FITTING_DIR']}/Sofia_Output/{Fits_Files['MOMENT0']}")
+    model_mom0 = fits.open(f"{Configuration['FITTING_DIR']}{Fits_Files['MOMENT0']}")
     #model_mom0 = remove_inhomogeneities(Configuration,model_mom0,inclination=float(current[1][0]), pa = float(current[2][0]), center = [current[3][0],current[4][0]],debug=debug)
-    chan_map = fits.open(f"{Configuration['FITTING_DIR']}/Sofia_Output/{Fits_Files['CHANNEL_MAP']}")
+    chan_map = fits.open(f"{Configuration['FITTING_DIR']}{Fits_Files['CHANNEL_MAP']}")
     noisemap = np.sqrt(chan_map[0].data)*Configuration['NOISE']/np.nanmax(model_mom0[0].data)
     max_in_moment = np.nanmax(model_mom0[0].data)
     model_mom0[0].data = model_mom0[0].data
@@ -398,7 +398,7 @@ def check_source(Configuration, Fits_Files, debug = False):
 
 
     name,x,x_min,x_max,y,y_min,y_max,z,z_min,z_max,ra,dec,v_app,f_sum,kin_pa, \
-        w50,err_f_sum, err_x,err_y,err_z= rf.sofia_catalogue(Configuration,Fits_Files,debug=debug)
+        w50,err_f_sum, err_x,err_y,err_z,source_rms= rf.sofia_catalogue(Configuration,Fits_Files,debug=debug)
 
     x_min,x_max,y_min,y_max,z_min,z_max = convert_type([x_min,x_max,y_min,y_max,z_min,z_max], type = 'int')
     x,y,z,ra,dec,v_app,f_sum,kin_pa,f_sum_err , err_x,err_y,err_z= convert_type([x,y,z,ra,dec,v_app,f_sum,kin_pa,err_f_sum, err_x,err_y,err_z])
@@ -441,9 +441,32 @@ def check_source(Configuration, Fits_Files, debug = False):
             elif i == 2:
                 x -= shift; x_min -= shift; x_max -= shift
 
-    Cube = fits.open(Configuration['FITTING_DIR']+Fits_Files['FITTING_CUBE'],uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
+    Cube = fits.open(f"{Configuration['FITTING_DIR']}{Fits_Files['FITTING_CUBE']}",uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
+
     data = Cube[0].data
     header = Cube[0].header
+    Mask = fits.open(f"{Configuration['FITTING_DIR']}{Fits_Files['MASK']}",uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
+    #Let's first check that this source has reasonable SNR
+#Check that the source is bright enough
+
+    Max_SNR = np.nanmax(data[Mask[0].data > 0.5])/Configuration['NOISE']
+    if Max_SNR < 2.5:
+        print_log(f'''CHECK_SOURCE: The max SNR of the pixels in the mask is {Max_SNR}, that is not enough for a fit.
+''', Configuration['OUTPUTLOG'], screen=Configuration['VERBOSE'])
+        raise BadSourceError(f"The max SNR of the pixels in the mask is {Max_SNR}. This is too faint.")
+    else:
+        print_log(f'''CHECK_SOURCE: The Max SNR of the pixels in the mask is {Max_SNR}.
+''', Configuration['OUTPUTLOG'], screen=Configuration['VERBOSE'])
+
+    Mean_SNR = np.nanmean(data[Mask[0].data > 0.5])/Configuration['NOISE']
+
+    if Mean_SNR < 0.75:
+        print_log(f'''CHECK_SOURCE: The mean SNR of the pixels in the mask is {Mean_SNR}, that is not enough for a fit.
+''', Configuration['OUTPUTLOG'], screen=Configuration['VERBOSE'])
+        raise BadSourceError(f"The mean SNR of the pixels in the mask is {Mean_SNR}. This is too faint.")
+    else:
+        print_log(f'''CHECK_SOURCE: The mean SNR of the pixels in the mask is {Mean_SNR}.
+''', Configuration['OUTPUTLOG'], screen=Configuration['VERBOSE'])
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
@@ -535,15 +558,7 @@ def check_source(Configuration, Fits_Files, debug = False):
     else:
         Configuration['EXCLUDE_CENTRAL'] = False
 
-    #Check that the source is bright enough
-    Max_SNR = np.nanmean(data[data > 0.95*np.max(data)])/Configuration['NOISE']
-    if Max_SNR < 2.5:
-        print_log(f'''CHECK_SOURCE: The mean SNR of the top 5% pixels in this cube is {Max_SNR}, that is not enough for a fit.
-''', Configuration['OUTPUTLOG'], screen=Configuration['VERBOSE'])
-        raise BadSourceError(log_statement)
-    else:
-        print_log(f'''CHECK_SOURCE: The mean SNR of the top 5% pixels in this cube is {Max_SNR}.
-''', Configuration['OUTPUTLOG'], screen=Configuration['VERBOSE'])
+
 
     # Size of the galaxy in beams
     Configuration['SIZE_IN_BEAMS'] = set_limits(maj_extent/(Configuration['BEAM'][0]/3600.),1.0,Configuration['MAX_SIZE_IN_BEAMS'])
@@ -1166,12 +1181,15 @@ sofia.__doc__ =f'''
 def construct_kernels(Configuration,sofia_template):
     #we always want the unsmoothed cube
     spatial_kernels= [0]
-    if np.sum(Configuration['NAXES'][:2])/(2.*int(round(Configuration['BEAM_IN_PIXELS'][0])))  > 10:
+    if np.sum(Configuration['NAXES'][:2])/(2.*int(round(Configuration['BEAM_IN_PIXELS'][0])))  > 5:
         spatial_kernels.append(int(round(Configuration['BEAM_IN_PIXELS'][0])))
-    if np.sum(Configuration['NAXES'][:2])/(2.*int(round(Configuration['BEAM_IN_PIXELS'][0])))  > 20:
+    if np.sum(Configuration['NAXES'][:2])/(2.*int(round(Configuration['BEAM_IN_PIXELS'][0])))  > 15:
         spatial_kernels.append(int(round(Configuration['BEAM_IN_PIXELS'][0]*2.)))
     if np.sum(Configuration['NAXES'][:2])/(2.*int(round(Configuration['BEAM_IN_PIXELS'][0])))  > 30:
         spatial_kernels.append(int(round(Configuration['BEAM_IN_PIXELS'][0]))*3)
+    if np.sum(Configuration['NAXES'][:2])/(2.*int(round(Configuration['BEAM_IN_PIXELS'][0])))  > 45:
+        spatial_kernels.append(int(round(Configuration['BEAM_IN_PIXELS'][0]))*4)
+
     print_log(f'''CONSTRUCT_KERNELS: We use the following spatial_kernels
 {'':8s} spatial kernels = {spatial_kernels}
 ''', Configuration['OUTPUTLOG'])
@@ -1189,7 +1207,7 @@ def construct_kernels(Configuration,sofia_template):
 ''', Configuration['OUTPUTLOG'])
 
     print_log(f'''CONSTRUCT_KERNELS: We use the following velocity kernels
-{'':8s} velocity kernels = {spatial_kernels}
+{'':8s} velocity kernels = {velocity_kernels}
 ''', Configuration['OUTPUTLOG'])
     sofia_template['scfind.kernelsXY'] = ','.join([str(x) for x in spatial_kernels])
     sofia_template['scfind.kernelsZ'] = ','.join([str(x) for x in velocity_kernels])

@@ -92,11 +92,11 @@ def FAT_Galaxy_Loops(Proc_Configuration, Full_Catalogue):
                 fat_ext = '_FAT'
             Fits_Files['FITTING_CUBE'] = f"{Full_Catalogue['CUBENAME'][current_galaxy_index]}{fat_ext}.fits"
             Fits_Files['OPTIMIZED_CUBE'] = f"{Full_Catalogue['CUBENAME'][current_galaxy_index]}{fat_ext}_opt.fits"
-            Fits_Files['MOMENT0'] = f"{Configuration['BASE_NAME']}_mom0.fits"
-            Fits_Files['MOMENT1'] = f"{Configuration['BASE_NAME']}_mom1.fits"
-            Fits_Files['MOMENT2'] = f"{Configuration['BASE_NAME']}_mom2.fits"
-            Fits_Files['MASK'] = f"{Configuration['BASE_NAME']}_mask.fits"
-            Fits_Files['CHANNEL_MAP'] = f"{Configuration['BASE_NAME']}_chan.fits"
+            Fits_Files['MOMENT0'] = f"Sofia_Output/{Configuration['BASE_NAME']}_mom0.fits"
+            Fits_Files['MOMENT1'] = f"Sofia_Output/{Configuration['BASE_NAME']}_mom1.fits"
+            Fits_Files['MOMENT2'] = f"Sofia_Output/{Configuration['BASE_NAME']}_mom2.fits"
+            Fits_Files['MASK'] = f"Sofia_Output/{Configuration['BASE_NAME']}_mask.fits"
+            Fits_Files['CHANNEL_MAP'] = f"Sofia_Output/{Configuration['BASE_NAME']}_chan.fits"
             if 'create_fat_cube' in Configuration['FITTING_STAGES']:
                 if not os.path.exists(f"{Configuration['FITTING_DIR']}/{Fits_Files['ORIGINAL_CUBE']}"):
                     raise CatalogError(

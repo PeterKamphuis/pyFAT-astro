@@ -344,7 +344,7 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, smoot
 ''',Configuration['OUTPUTLOG'], debug = debug, screen=Configuration['VERBOSE'])
     update_statistic(Configuration, message= "Starting the guess orientation run", debug=debug)
 
-    Image = fits.open(f"{Configuration['FITTING_DIR']}Sofia_Output/{Fits_Files['MOMENT0']}",\
+    Image = fits.open(f"{Configuration['FITTING_DIR']}{Fits_Files['MOMENT0']}",\
             uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
     map = Image[0].data
     hdr = Image[0].header
@@ -356,7 +356,7 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, smoot
 
     if not center:
         center = [hdr['NAXIS1']/2.-1,hdr['NAXIS2']/2.-1]
-    Image = fits.open(f"{Configuration['FITTING_DIR']}Sofia_Output/{Fits_Files['CHANNEL_MAP']}",\
+    Image = fits.open(f"{Configuration['FITTING_DIR']}{Fits_Files['CHANNEL_MAP']}",\
             uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
     noise_map = np.sqrt(Image[0].data)*Configuration['NOISE']*Configuration['CHANNEL_WIDTH']
 
@@ -560,7 +560,7 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, smoot
 
     print_log(f'''GUESS_ORIENTATION: Looking for the Initial Rotation Curve.
 ''',Configuration['OUTPUTLOG'], debug = debug, screen=Configuration['VERBOSE'])
-    Image = fits.open(f"{Configuration['FITTING_DIR']}Sofia_Output/{Fits_Files['MOMENT1']}",\
+    Image = fits.open(f"{Configuration['FITTING_DIR']}{Fits_Files['MOMENT1']}",\
             uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
     map = copy.deepcopy(Image[0].data)
     #if smooth:
@@ -634,15 +634,17 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, smoot
     maj_profile,maj_axis,maj_resolution = get_profile(Configuration,map,pa[0], center=center,debug=debug)
     zeros = np.where(maj_profile == 0.)[0]
     maj_profile[zeros] = float('NaN')
-    loc_max = np.mean(maj_axis[np.where(maj_profile == np.nanmax(maj_profile))[0]])
-    #print('How can we fix this')
-    #print(pa,vel_pa)
-    values = np.where(~np.isnan(maj_profile))[0]
+    if all(np.isnan(maj_profile)):
+        print_log(f'''GUESS_ORIENTATION: The RC extracted from the VF is all NaN's, this means something has gone very wrong.
+{'':8s} Raising an error.
+''' , Configuration['OUTPUTLOG'])
+        VROT_initial = [0]
+        SBR_initial = [0]
+        Image.close()
+        return np.array(pa,dtype=float),np.array(inclination,dtype=float),SBR_initial,maj_extent,center[0],center[1],float('NaN'),VROT_initial
 
     loc_max = np.mean(maj_axis[np.where(maj_profile == np.nanmax(maj_profile))[0]])
     loc_min = np.mean(maj_axis[np.where(maj_profile == np.nanmin(maj_profile))[0]])
-
-
 
     if loc_max > loc_min:
         pa[0] = pa[0]+180
@@ -974,20 +976,7 @@ def read_cube(Configuration,cube,debug=False):
     Configuration['CHANNEL_WIDTH'] = cube_hdr['CDELT3']/1000.
     Configuration['PIXEL_SIZE'] = np.mean([abs(cube_hdr['CDELT1']),abs(cube_hdr['CDELT2'])])
     Configuration['NAXES'] = [cube_hdr['NAXIS1'],cube_hdr['NAXIS2'], cube_hdr['NAXIS3']]
-    '''
-    The center should be limited to the sofia values
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        coordinate_frame = WCS(cube_hdr)
-        xlow,ylow,zlow = coordinate_frame.wcs_pix2world(1,1,1., 1.)
-        xhigh,yhigh,zhigh = coordinate_frame.wcs_pix2world(*Configuration['NAXES'], 1.)
-        xlim = np.sort([xlow,xhigh])
-        ylim = np.sort([ylow,yhigh])
-        zlim =np.sort([zlow,zhigh])/1000.
-        set_boundaries(Configuration,'VSYS',*zlim,input=True,debug=debug)
-        set_boundaries(Configuration,'XPOS',*xlim,input=True,debug=debug)
-        set_boundaries(Configuration,'YPOS',*ylim,input=True,debug=debug)
-    '''
+
     if np.sum(Configuration['VROT_INPUT_BOUNDARY']) == 0.:
         set_boundaries(Configuration,'VROT',Configuration['CHANNEL_WIDTH'],600.,input=True,debug=debug)
     if np.sum(Configuration['SDIS_INPUT_BOUNDARY']) == 0.:
@@ -1026,7 +1015,7 @@ def read_cube(Configuration,cube,debug=False):
 
 # function to read the sofia catalogue
 def sofia_catalogue(Configuration,Fits_Files, Variables =['id','x','x_min','x_max','y','y_min','y_max','z','z_min','z_max','ra',\
-                    'dec','v_app','f_sum','kin_pa','w50','err_f_sum','err_x','err_y','err_z'], debug = False):
+                    'dec','v_app','f_sum','kin_pa','w50','err_f_sum','err_x','err_y','err_z','rms'], debug = False):
     if debug:
         print_log(f'''SOFIA_CATALOGUE: Reading the source from the catalogue.
 ''',Configuration['OUTPUTLOG'],debug= True)
@@ -1159,6 +1148,12 @@ def sofia_catalogue(Configuration,Fits_Files, Variables =['id','x','x_min','x_ma
                     if edge:
                         print_log(f'''SOFIA_CATALOGUE: The bright source is very close to limits.
 ''',Configuration['OUTPUTLOG'])
+
+                        if float(outlist[Variables.index('rms')][index])*1e6 < float(outlist[Variables.index('f_sum')][index]):
+                            print_log(f'''SOFIA_CATALOGUE: There appears to me no noise in this cube. restoring the source.
+''',Configuration['OUTPUTLOG'])
+                            many_sources  = copy.deepcopy(outlist)
+                            fluxes = np.array(outlist[Variables.index('f_sum')],dtype =float)
                     else:
                         print_log(f'''SOFIA_CATALOGUE: The bright source is acceptable, restoring its flux.
 ''',Configuration['OUTPUTLOG'])

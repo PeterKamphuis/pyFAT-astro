@@ -253,10 +253,10 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
         moment1_mod = fits.open(f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel_mom1.fits")
         moment2_mod = fits.open(f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel_mom2.fits")
         cube = fits.open(f"{Configuration['FITTING_DIR']}{Fits_Files['FITTING_CUBE']}")
-        moment0 = fits.open(f"{Configuration['FITTING_DIR']}/Sofia_Output/{Fits_Files['MOMENT0']}")
-        moment1 = fits.open(f"{Configuration['FITTING_DIR']}/Sofia_Output/{Fits_Files['MOMENT1']}")
-        moment2 = fits.open(f"{Configuration['FITTING_DIR']}/Sofia_Output/{Fits_Files['MOMENT2']}")
-        channels_map = fits.open(f"{Configuration['FITTING_DIR']}/Sofia_Output/{Fits_Files['CHANNEL_MAP']}")
+        moment0 = fits.open(f"{Configuration['FITTING_DIR']}{Fits_Files['MOMENT0']}")
+        moment1 = fits.open(f"{Configuration['FITTING_DIR']}{Fits_Files['MOMENT1']}")
+        moment2 = fits.open(f"{Configuration['FITTING_DIR']}{Fits_Files['MOMENT2']}")
+        channels_map = fits.open(f"{Configuration['FITTING_DIR']}{Fits_Files['CHANNEL_MAP']}")
         im_wcs = WCS(moment0[0].header).celestial
 
     # Open the model info

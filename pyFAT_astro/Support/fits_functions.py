@@ -23,7 +23,7 @@ def check_mask(Configuration,id,Fits_Files,debug=False):
     if debug:
         print_log(f'''CHECK_MASK: Checking the mask to contain only the correct source.
 ''',Configuration['OUTPUTLOG'],debug=True)
-    mask = fits.open(f"{Configuration['FITTING_DIR']}/Sofia_Output/{Fits_Files['MASK']}",uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
+    mask = fits.open(f"{Configuration['FITTING_DIR']}/{Fits_Files['MASK']}",uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
 
     if float(id) not in mask[0].data:
         print_log(f'''CHECK_MASK: We cannot find the selected source in the mask. This will lead to errors. Aborting the fit.
@@ -39,7 +39,7 @@ def check_mask(Configuration,id,Fits_Files,debug=False):
                 print_log(f'''CHECK_MASK: The initial mask had more than a single source. redoing the mask.
 ''',Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
             mask[0].data = data
-            fits.writeto(f"{Configuration['FITTING_DIR']}/Sofia_Output/{Fits_Files['MASK']}",mask[0].data,mask[0].header, overwrite = True)
+            fits.writeto(f"{Configuration['FITTING_DIR']}{Fits_Files['MASK']}",mask[0].data,mask[0].header, overwrite = True)
 # to ensure compatible units and calculations with th models we make the maps ourselves
     del mask[0].header['C*3']
     mask[0].data[mask[0].data> 0.5] = 1.
@@ -166,11 +166,11 @@ def cut_cubes(Configuration, Fits_Files, galaxy_box, debug = False):
             new_cube[i,1] = limit[1]+int(cube_edge[i])
 
     if cut:
-        files_to_cut = [Fits_Files['FITTING_CUBE'],'Sofia_Output/'+Fits_Files['MASK'],\
-                        'Sofia_Output/'+Fits_Files['MOMENT0'],\
-                        'Sofia_Output/'+Fits_Files['MOMENT1'],\
-                        'Sofia_Output/'+Fits_Files['MOMENT2'],\
-                        'Sofia_Output/'+Fits_Files['CHANNEL_MAP'],\
+        files_to_cut = [Fits_Files['FITTING_CUBE'],Fits_Files['MASK'],\
+                        Fits_Files['MOMENT0'],\
+                        Fits_Files['MOMENT1'],\
+                        Fits_Files['MOMENT2'],\
+                        Fits_Files['CHANNEL_MAP'],\
                         ]
 
 
@@ -188,7 +188,7 @@ def cut_cubes(Configuration, Fits_Files, galaxy_box, debug = False):
             if os.path.exists(f"{Configuration['FITTING_DIR']}{file}"):
                 cutout_cube(Configuration,file,new_cube,debug=debug)
             else:
-                if file == 'Sofia_Output/'+Fits_Files['CHANNEL_MAP']:
+                if file == Fits_Files['CHANNEL_MAP']:
                     pass
                 else:
                     raise FunctionCallError(f'We are trying to cut {file} but it does not exist')
@@ -693,18 +693,18 @@ def make_moments(Configuration,Fits_Files,fit_type = 'Undefined',
         filename = f"{Configuration['FITTING_DIR']}{Fits_Files['FITTING_CUBE']}"
         basename = f"{Configuration['BASE_NAME']}"
         directory = f"{Configuration['FITTING_DIR']}/Sofia_Output/"
-        mask_cube = f"{Configuration['FITTING_DIR']}/Sofia_Output/{Fits_Files['MASK']}"
+        mask_cube = f"{Configuration['FITTING_DIR']}/{Fits_Files['MASK']}"
     elif fit_type == 'Generic_Final':
         filename = f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel.fits"
         basename = 'Finalmodel'
         directory = f"{Configuration['FITTING_DIR']}/Finalmodel/"
-        mask_cube = f"{Configuration['FITTING_DIR']}/Sofia_Output/{Fits_Files['MASK']}"
+        mask_cube = f"{Configuration['FITTING_DIR']}/{Fits_Files['MASK']}"
     else:
         filename = f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.fits"
         basename = fit_type
         directory = f"{Configuration['FITTING_DIR']}{fit_type}"
         if not level:
-            mask_cube = f"{Configuration['FITTING_DIR']}/Sofia_Output/{Fits_Files['MASK']}"
+            mask_cube = f"{Configuration['FITTING_DIR']}/{Fits_Files['MASK']}"
 
     cube = fits.open(filename)
     if vel_unit:

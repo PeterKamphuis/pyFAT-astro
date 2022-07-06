@@ -4022,10 +4022,10 @@ def sofia_output_exists(Configuration,Fits_Files, debug = False):
 ''', Configuration['OUTPUTLOG'],debug = True)
     req_files= ['MOMENT1','MOMENT0','MASK']
     for file in req_files:
-        if os.path.exists(Configuration['FITTING_DIR']+'Sofia_Output/'+Fits_Files[file]):
+        if os.path.exists(f"{Configuration['FITTING_DIR']}{Fits_Files[file]}"):
             continue
         else:
-            log_statement = f"SOFIA_OUTPUT_EXISTS: The file {Configuration['FITTING_DIR']+'Sofia_Output/'+Fits_Files[file]} is not found."
+            log_statement = f"SOFIA_OUTPUT_EXISTS: The file {Configuration['FITTING_DIR']}{Fits_Files[file]} is not found."
             print_log(log_statement, Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
             raise FileNotFoundError(log_statement)
 
