@@ -147,9 +147,9 @@ def main(argv):
         elif 'sofia_catalogue' in Original_Configuration['FITTING_STAGES']:
             Full_Catalogue = rf.sofia_input_catalogue(Original_Configuration)
         else:
-            Full_Catalogue = rf.catalogue(Original_Configuration['CATALOGUE'])
+            Full_Catalogue = rf.catalogue(Original_Configuration['CATALOGUE'],split_char= cfg.advanced.catalogue_split_character)
         # Get the longest directory name to format the output directory properlyFit_Tirific_OSC
-
+    
         for directory in Full_Catalogue['DIRECTORYNAME']:
             if directory == './':
                 directory = Original_Configuration['MAIN_DIRECTORY'].split('/')[-2]

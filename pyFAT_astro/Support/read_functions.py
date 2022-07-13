@@ -38,18 +38,41 @@ from pyFAT_astro import Templates as templates
 #Function to read a FAT input Catalogue
 
 
-def catalogue(filename, debug = False):
+def catalogue(filename,split_char='|', debug = False):
     Catalogue = Proper_Dictionary({})
     with open(filename,'r') as tmpfile:
-        #Define the exsiting catalogue input()
-        input_columns = [x.strip().upper() for x in tmpfile.readline().split('|')]
-        Catalogue['ENTRIES'] = ['ENTRIES']
-        Catalogue['ENTRIES'].extend(input_columns)
+        firstline = tmpfile.readline()
+        all_columns_check = False
+        required_columns= ['ID','DISTANCE','DIRECTORYNAME','CUBENAME']
+
+        while not all_columns_check:
+            input_columns = [x.strip().upper() for x in firstline.split(split_char)]
+            Catalogue['ENTRIES'] = ['ENTRIES']
+            Catalogue['ENTRIES'].extend(input_columns)
+            required_columns= ['ID','DISTANCE','DIRECTORYNAME','CUBENAME']
+
+            for key in required_columns:
+                print(f'Checking key {key}')
+                if key not in Catalogue['ENTRIES']:
+                    if split_char == '|':
+                        print(f'Key {key} not found')
+                        split_char=' '
+                        all_columns_check = False
+                        break
+                    else:
+                        raise BadCatalogueError(f'We can not find the column for {key} in your input catalogue')
+                else:
+                    all_columns_check = True
+                    continue
+
+
+
         for key in input_columns:
             Catalogue[key] = []
 
+
         for line in tmpfile.readlines():
-            input = [x.strip() for x  in line.split('|')]
+            input = [x.strip() for x  in line.split(split_char)]
             for i,key in enumerate(input_columns):
                 if key == 'DISTANCE':
                     Catalogue[key].append(float(input[i]))

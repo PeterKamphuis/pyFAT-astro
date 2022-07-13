@@ -80,6 +80,7 @@ class Advanced:
     verbose: bool = False
     #We do not want to use too many cores per galaxy.
     per_galaxy_ncpu: int = 4
+    catalogue_split_character: str = '|'
     # Allow for the user to set the boundaries in the fitting
     pa_input_boundary:  List = field(
         default_factory=lambda: [[0., 0.], [0., 0.], [0., 0.]])

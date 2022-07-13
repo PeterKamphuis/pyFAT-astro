@@ -260,6 +260,69 @@ Advanced Keywords
   when multiprocessing is off this number will be set to the global ncpu parameter.
   A high number of cores per galaxy can be beneficial for speeding up the fitting of larger galaxies however, for smaller galaxies less so.
 
+**catalogue_split_character**
+
+  *str, optional, default = '|'
+
+  The character used to split the columns in the input catalogue. If left unset pyFAT asumes the default and if it can not find all columns then it tries to was a space as a seperation character.
+  If it still fails it will thow a bad catalogue error.
+
+**pa_input_boundary**
+
+  *list, optional, default = [[0., 0.], [0., 0.], [0., 0.]]
+
+  The boundaries that the PA need to remain within. Too small boundaries can lead to FAT not finding a a succesfull model.
+  Given as min,max for the three areas of the fit: the central part, the approaching side warp, the receding side warp.
+
+**incl_input_boundary**
+
+  *list, optional, default = [[0., 0.], [0., 0.], [0., 0.]]
+
+  The boundaries that the inclination needs to remain within. Too small boundaries can lead to FAT not finding a a succesfull model.
+  Given as min,max for the three areas of the fit: the central part, the approaching side warp, the receding side warp.
+
+**sdis_input_boundary**
+
+  *list, optional, default = [[0., 0.], [0., 0.], [0., 0.]]
+
+  The boundaries that the dispersion need to remain within. Too small boundaries can lead to FAT not finding a a succesfull model.
+  Given as min,max for the three areas of the fit: the central part, the approaching side warp, the receding side warp.
+
+**z0_input_boundary**
+
+  *list, optional, default = [[0., 0.], [0., 0.], [0., 0.]]
+
+  The boundaries that the scale height need to remain within. Too small boundaries can lead to FAT not finding a a succesfull model.
+  Given as min,max for the three areas of the fit: the central part, the approaching side warp, the receding side warp.
+
+**vsys_input_boundary**
+
+  *list, optional, default = [[0., 0.], [0., 0.], [0., 0.]]
+
+  The boundaries that the systemic need to remain within. Too small boundaries can lead to FAT not finding a a succesfull model.
+  Given as min,max for the three areas of the fit: the central part, the approaching side warp, the receding side warp.
+
+**xpos_input_boundary**
+
+  *list, optional, default = [[0., 0.], [0., 0.], [0., 0.]]
+
+  The boundaries that the right ascension needs to remain within. Too small boundaries can lead to FAT not finding a a succesfull model.
+  Given as min,max for the three areas of the fit: the central part, the approaching side warp, the receding side warp.
+
+**ypos_input_boundary**
+
+  *list, optional, default = [[0., 0.], [0., 0.], [0., 0.]]
+
+  The boundaries that the declination needs to remain within. Too small boundaries can lead to FAT not finding a a succesfull model.
+  Given as min,max for the three areas of the fit: the central part, the approaching side warp, the receding side warp.
+
+**vrot_input_boundary**
+
+  *list, optional, default = [[0., 0.], [0., 0.], [0., 0.]]
+
+  The boundaries that the rotation curve needs to remain within. Too small boundaries can lead to FAT not finding a a succesfull model.
+  Given as min,max for the three areas of the fit: the central part, the approaching side warp, the receding side warp.
+
 
 
 Individual Keywords
