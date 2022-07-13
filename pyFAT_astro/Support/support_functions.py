@@ -133,7 +133,7 @@ calc_rings.__doc__ =f'''
 '''
 def calculate_number_processes(Configuration):
     cores_set = False
-    no_galaxies = set_limits(Configuration['CATALOGUE_END_ID']-Configuration['CATALOGUE_START_ID']-1,1,float('inf'))
+    no_galaxies = set_limits(Configuration['CATALOGUE_END_ID']-Configuration['CATALOGUE_START_ID'],1,float('inf'))
 
     while not cores_set:
         no_process= int(np.floor(Configuration['NCPU']/ Configuration['PER_GALAXY_NCPU']))
@@ -158,6 +158,7 @@ def calculate_number_processes(Configuration):
     cfgs=[]
     start_id =  Configuration['CATALOGUE_START_ID']
     no_galaxies_per_process = int(np.ceil(no_galaxies/no_process))
+    print(f"We have  {no_galaxies_per_process} galaxies per process.")
     for i in range(no_process):
         proc_conf=copy.deepcopy(Configuration)
         cores = proc_conf['PER_GALAXY_NCPU']
@@ -173,7 +174,7 @@ def calculate_number_processes(Configuration):
         proc_conf['CATALOGUE_END_ID'] = start_id+no_galaxies_per_process
         if proc_conf['CATALOGUE_END_ID']  > Configuration['CATALOGUE_END_ID']:
             proc_conf['CATALOGUE_END_ID'] = Configuration['CATALOGUE_END_ID']
-        start_id = proc_conf['CATALOGUE_END_ID']+1
+        start_id = proc_conf['CATALOGUE_END_ID']
         proc_conf['OUTPUT_CATALOGUE'] = f"{proc_conf['OUTPUT_CATALOGUE']}_loop{i:d}"
         with open(proc_conf['OUTPUT_CATALOGUE'],'w') as file:
             comment = 'Comments on Fit Result'
