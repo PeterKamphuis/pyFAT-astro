@@ -129,7 +129,12 @@ arc_tan_function.__doc__ =f'''
  NOTE:
 '''
 
-def calc_new_size(Configuration,radii,sbr,sbr_ring_limits, debug=False):
+def calc_new_size(Configuration,Tirific_Template,radii,sbr,sbr_ring_limits, debug=False):
+
+    sm_sbr = smooth_profile(Configuration,Tirific_Template,'SBR',
+                            min_error= sbr_ring_limits,no_apply = True,
+                            fix_sbr_call = True, profile_in = sbr ,debug=debug)
+
     new_size = Configuration['SIZE_IN_BEAMS']
     difference_with_limit = np.array(sbr-sbr_ring_limits,dtype=float)
     smooth_diff = smooth_profile(Configuration,{'EMPTY':None}, 'ARBITRARY' ,profile_in=difference_with_limit, min_error=[0.,0.],debug=debug,no_fix=True,no_apply=True)
@@ -137,10 +142,14 @@ def calc_new_size(Configuration,radii,sbr,sbr_ring_limits, debug=False):
         #If all last three values are above the limit we need to extend
         if np.all(smooth_diff[i,-3:] > 0.):
             #We fit a Gaussian to the SBR and see where it drops below the last SBR Limit
-            vals = fit_gaussian(Configuration,radii,sbr[i,:],errors=sbr_ring_limits[i,:],debug=debug)
-            extend_radii = np.linspace(0.,Configuration['MAX_SIZE_IN_BEAMS']*Configuration['BEAM'][0],1000)
-            Gauss_diff = gaussian_function(extend_radii,*vals)-sbr_ring_limits[i,-1]
-            this_size=set_limits(extend_radii[np.where(Gauss_diff < 0.)[0][0]]/Configuration['BEAM'][0], Configuration['MIN_SIZE_IN_BEAMS'], Configuration['MAX_SIZE_IN_BEAMS'])
+            try:
+                vals = fit_gaussian(Configuration,radii,sm_sbr[i,:],errors=sbr_ring_limits[i,:],debug=debug)
+                extend_radii = np.linspace(0.,Configuration['MAX_SIZE_IN_BEAMS']*Configuration['BEAM'][0],1000)
+                Gauss_diff = gaussian_function(extend_radii,*vals)-sbr_ring_limits[i,-1]
+                this_size=set_limits(extend_radii[np.where(Gauss_diff < 0.)[0][0]]/Configuration['BEAM'][0], Configuration['MIN_SIZE_IN_BEAMS'], Configuration['MAX_SIZE_IN_BEAMS'])
+            if FittingError:
+                #If we cannot fit a gaussian we extend by a beam
+                this_size=set_limits(radii[-1]/Configuration['BEAM'][0]+1.0, Configuration['MIN_SIZE_IN_BEAMS'], Configuration['MAX_SIZE_IN_BEAMS'])
             if this_size > new_size[i]+0.5:
                 new_size[i]= copy.deepcopy(this_size)
         else:
@@ -485,7 +494,7 @@ def check_size(Configuration,Tirific_Template, fit_type = 'Undefined', stage = '
     sbr_ring_limits = np.array([sbr_ring_limits,sbr_ring_limits],dtype=float)
 
     #This part has to change in something new
-    size_in_beams = calc_new_size(Configuration,radii,sbr,sbr_ring_limits, debug=debug)
+    size_in_beams = calc_new_size(Configuration,Tirific_Template,radii,sbr,sbr_ring_limits, debug=debug)
     apply_size = apply_new_size(Configuration,size_in_beams,debug=debug)
 
     if apply_size:
