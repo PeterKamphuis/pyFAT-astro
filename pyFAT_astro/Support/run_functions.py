@@ -123,7 +123,7 @@ def check_central_convergence(Configuration,Tirific_Template, fit_type = 'Undefi
     new_pos = rf.load_tirific(Configuration,f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def",Variables = ['XPOS','YPOS','VSYS'],debug = debug)
     old_pos = rf.load_tirific(Configuration,f"{Configuration['FITTING_DIR']}{fit_type}_In.def",Variables = ['XPOS','YPOS','VSYS'],debug = debug)
     if Configuration['OUTER_RINGS_DOUBLED']:
-        shift_beam_frac = set_limits(Configuration['SIZE_IN_BEAMS']*0.1/Configuration['CENTRAL_CONVERGENCE_COUNTER'],Configuration['SIZE_IN_BEAMS']*0.05,Configuration['SIZE_IN_BEAMS']*0.15)
+        shift_beam_frac = set_limits(np.mean(Configuration['SIZE_IN_BEAMS'])*0.1/Configuration['CENTRAL_CONVERGENCE_COUNTER'],np.mean(Configuration['SIZE_IN_BEAMS'])*0.05,np.mean(Configuration['SIZE_IN_BEAMS'])*0.15)
         #shift_beam_frac =Configuration['SIZE_IN_BEAMS']*0.05
     else:
         #shift_beam_frac = 0.15
@@ -137,14 +137,14 @@ def check_central_convergence(Configuration,Tirific_Template, fit_type = 'Undefi
         outstr = outstr+f'{"":8s}The {var} has shifted from {old_pos[i][0]} to  {new_pos[i][0]} which is a difference of {abs(new_pos[i][0] - old_pos[i][0])} needed = {limits[i]}.\n'
 
     if any([True if abs(x[0]-y[0]) > lim else False for x,y,lim in zip(old_pos,new_pos,limits) ]):
-        if Configuration['SIZE_IN_BEAMS'] < 20:
+        if np.sum(Configuration['SIZE_IN_BEAMS']) < 40:
             apply_limit = 2.*Configuration['BEAM'][0]/3600.
 
         else:
             if Configuration['OUTER_RINGS_DOUBLED'] and Configuration['ITERATIONS'] <= 2:
-                apply_limit = Configuration['BEAM'][0]/3600.*Configuration['SIZE_IN_BEAMS']
+                apply_limit = Configuration['BEAM'][0]/3600.*np.mean(Configuration['SIZE_IN_BEAMS'])
             else:
-                apply_limit = Configuration['BEAM'][0]/3600.*Configuration['SIZE_IN_BEAMS']*0.2
+                apply_limit = Configuration['BEAM'][0]/3600.*np.mean(Configuration['SIZE_IN_BEAMS'])*0.2
         if any([True if abs(x[0]-y[0]) > apply_limit else False for x,y in zip(old_pos[:-1],new_pos[:-1]) ]):
            print_log(f'''CHECK_CONVERGENCE: The center shifted more than {apply_limit/(Configuration['BEAM'][0]/3600.)} FWHM.
 {"":8s}CHECK_CONVERGENCE: Not applying this shift
@@ -164,7 +164,7 @@ def check_central_convergence(Configuration,Tirific_Template, fit_type = 'Undefi
                    return True
             print_log(f'''CHECK_CONVERGENCE: The center shifted too much trying again with new center.
 {outstr}''', Configuration['OUTPUTLOG'])
-            if Configuration['SIZE_IN_BEAMS'] > 8.:
+            if np.sum(Configuration['SIZE_IN_BEAMS']) > 16.:
                 for i,var in enumerate(vars):
                     if  abs(new_pos[i][0] - old_pos[i][0]) < limits[i]:
                         if debug:
@@ -231,7 +231,7 @@ def check_inclination(Configuration,Tirific_Template,Fits_Files, fit_type = 'Und
         print_log(f'''CHECK_INCLINATION: This is the initial inclination {inclination}
 ''',Configuration['OUTPUTLOG'],debug = True)
 
-    if Configuration['SIZE_IN_BEAMS'] < 5:
+    if np.sum(Configuration['SIZE_IN_BEAMS']) < 10.:
         incl_to_check = np.linspace(-15.,+15.,20)
     else:
         max=inclination-10
@@ -561,13 +561,13 @@ def check_source(Configuration, Fits_Files, debug = False):
 
 
     # Size of the galaxy in beams
-    Configuration['SIZE_IN_BEAMS'] = set_limits(maj_extent/(Configuration['BEAM'][0]/3600.),1.0,Configuration['MAX_SIZE_IN_BEAMS'])
-    if Configuration['SIZE_IN_BEAMS'] <= Configuration['TOO_SMALL_GALAXY']:
-        print_log(f'''CHECK_SOURCE: This galaxy has an estimated size of  {2*Configuration['SIZE_IN_BEAMS']} beams in diameter.
+    Configuration['SIZE_IN_BEAMS'] = np.full(2,set_limits(maj_extent/(Configuration['BEAM'][0]/3600.),1.0,Configuration['MAX_SIZE_IN_BEAMS']))
+    if np.sum(Configuration['SIZE_IN_BEAMS']) <= 2.*Configuration['TOO_SMALL_GALAXY']:
+        print_log(f'''CHECK_SOURCE: This galaxy has an estimated size of  {np.sum(Configuration['SIZE_IN_BEAMS'])} beams in diameter.
 {'':8s}This is not large enough too fit. We will exit this fit.
 ''',Configuration['OUTPUTLOG'])
         raise BadSourceError('The extracted source is too small')
-    set_ring_size(Configuration, debug = debug)
+    ring_size, number_of_rings = set_ring_size(Configuration, debug = debug)
     old_radii = np.linspace(0.,Configuration['BEAM'][0]*(len(SBR_initial)-1),len(SBR_initial))
     new_radii = set_rings(Configuration, debug = debug)
     SBR_initial = np.interp(new_radii,old_radii, SBR_initial)
@@ -585,14 +585,14 @@ def check_source(Configuration, Fits_Files, debug = False):
     # Swithcing here from doubled outer rings causes problems though
     SNR_range=set_limits(Max_SNR,1.9, 2.6)
 
-    Configuration['MAX_SIZE_IN_BEAMS'] = set_limits(Configuration['SIZE_IN_BEAMS']*3.125/SNR_range+3.,1.,Configuration['MAX_SIZE_IN_BEAMS'])
-    Configuration['MIN_SIZE_IN_BEAMS'] = set_limits(Configuration['SIZE_IN_BEAMS']-3.,Configuration['TOO_SMALL_GALAXY'],Configuration['SIZE_IN_BEAMS'])
+    Configuration['MAX_SIZE_IN_BEAMS'] = set_limits(np.max(Configuration['SIZE_IN_BEAMS'])*3.125/SNR_range+3.,1.,Configuration['MAX_SIZE_IN_BEAMS'])
+    Configuration['MIN_SIZE_IN_BEAMS'] = set_limits(np.max(Configuration['SIZE_IN_BEAMS'])-3.,Configuration['TOO_SMALL_GALAXY'],np.max(Configuration['SIZE_IN_BEAMS']))
     Configuration['NO_RINGS'] = calc_rings(Configuration,debug=debug)
     Configuration['LAST_RELIABLE_RINGS'] = [Configuration['NO_RINGS'],Configuration['NO_RINGS']]
     print_log(f'''CHECK_SOURCE: From the original Configuration and SoFiA we find:
 {"":8s}CHECK_SOURCE: The maximum diameter we will allow  is  {2.*Configuration['MAX_SIZE_IN_BEAMS']} beams. This is based on a SNR range of {SNR_range}
 {"":8s}CHECK_SOURCE: The minimum diameter we will allow  is  {2.*Configuration['MIN_SIZE_IN_BEAMS']} beams.
-{"":8s}CHECK_SOURCE: We start with a diameter of {2*Configuration['SIZE_IN_BEAMS']} beams in the model.
+{"":8s}CHECK_SOURCE: We start with a diameter of {np.sum(Configuration['SIZE_IN_BEAMS'])} beams in the model.
 {"":8s}CHECK_SOURCE: SoFiA found a PA of {kin_pa:.2f} and we use a PA = {pa[0]:.2f} +/- {pa[1]:.2f}
 {"":8s}CHECK_SOURCE: We start with an inclination of {inclination[0]:.2f} +/- {inclination[1]:.2f}{"":8s}
 {"":8s}CHECK_SOURCE: SoFiA found a W50 of {w50:.2f} km/s
@@ -641,7 +641,7 @@ def check_source(Configuration, Fits_Files, debug = False):
 
     if Configuration['OUTER_RINGS_DOUBLED']:
         for par in ['XPOS','YPOS']:
-            Initial_Parameters[par][1]= Initial_Parameters[par][1]*Configuration['SIZE_IN_BEAMS']*10.
+            Initial_Parameters[par][1]= Initial_Parameters[par][1]*np.mean(Configuration['SIZE_IN_BEAMS'])*10.
         Initial_Parameters['VSYS'][1] = Initial_Parameters['VSYS'][1]*Configuration['NAXES'][2]/10.*Configuration['CHANNEL_WIDTH']*1000.
     Initial_Parameters['SBR_profile'] = SBR_initial
     #Initial_Parameters['VROT'] = [max_vrot/1000.,max_vrot_dev/1000.]
@@ -655,7 +655,7 @@ def check_source(Configuration, Fits_Files, debug = False):
     for err,parameter in zip(new_errors,para):
         Configuration['MIN_ERROR'][parameter] = [set_limits(err,Configuration['MIN_ERROR'][parameter][0],Configuration['MAX_ERROR'][parameter][0]/2.)]
     #if the source is small we fix the warping
-    if Configuration['SIZE_IN_BEAMS'] <= Configuration['MINIMUM_WARP_SIZE']:
+    if np.mean(Configuration['SIZE_IN_BEAMS']) <= Configuration['MINIMUM_WARP_SIZE']:
         for parameter in ['INCL','Z0','SDIS','PA']:
             if parameter not in Configuration['FIXED_PARAMETERS'][0]:
                 Configuration['FIXED_PARAMETERS'][0].append(parameter)
@@ -754,7 +754,7 @@ def fitting_osc(Configuration,Fits_Files,Tirific_Template,Initial_Parameters):
         # Run the step
         current_run = one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run,debug = Configuration['DEBUG'])
 
-        if (Configuration['ITERATIONS'] == 1  and Configuration['SIZE_IN_BEAMS'] < 5.3) or  (Configuration['ACCEPTED'] and Configuration['SIZE_IN_BEAMS'] < 3.3):
+        if (Configuration['ITERATIONS'] == 1  and np.sum(Configuration['SIZE_IN_BEAMS']) < 10.6) or  (Configuration['ACCEPTED'] and np.sum(Configuration['SIZE_IN_BEAMS']) < 6.6):
             if Configuration['DEBUG']:
                         print_log(f'''FITTING_OSC: Checking the inclination due to small galaxy size.
 {'':8s}PA = {Tirific_Template['PA']}
@@ -1007,7 +1007,7 @@ def one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run, de
         Configuration['CENTRAL_FIX'] = []
 
     # Check whether we have the correct sizes,
-    if not Configuration['FIX_SIZE']:
+    if not all(Configuration['FIX_SIZE']):
         accepted_size = check_size(Configuration,Tirific_Template, fit_type = fit_type, stage = stage, current_run = current_run, debug=debug,Fits_Files=Fits_Files)
     else:
         accepted_size = True

@@ -4,7 +4,7 @@
 from pyFAT_astro.Support.fat_errors import SupportRunError,SmallSourceError,\
                                               FileNotFoundError,TirificKillError,\
                                               InputError,ProgramError,DefFileError,\
-                                              BadHeaderError
+                                              BadHeaderError,FittingError
 from collections import OrderedDict #used in Proper_Dictionary
 from inspect import getframeinfo,stack
 
@@ -82,9 +82,15 @@ def calc_rings(Configuration,size_in_beams = 0., ring_size  = 0.,debug=False):
     if ring_size == 0.:
         ring_size = Configuration['RING_SIZE']
     if size_in_beams == 0.:
-        size_in_beams = Configuration['SIZE_IN_BEAMS']
+        size_in_beams = np.max(Configuration['SIZE_IN_BEAMS'])
+    if debug:
+        print_log(f'''CALC_RINGS: Calculating the number of rings in the model.
+{'':8s} size in beams = {size_in_beams}
+{'':8s} ring_size = {ring_size}
+{'':8s} the maximum amount of rings = {Configuration['MAX_SIZE_IN_BEAMS']}
+''',Configuration['OUTPUTLOG'],debug = True)
 
-    est_rings = round((size_in_beams)/(ring_size)+2.)
+    est_rings = round((size_in_beams-1./5.)/(ring_size)+2.)
     #if est_rings > 20 and Configuration['MAX_SIZE_IN_BEAMS'] > 25:
     if est_rings > 20:
         Configuration['OUTER_RINGS_DOUBLED'] = True
@@ -1620,9 +1626,39 @@ def fit_gaussian(Configuration,x,y, covariance = False,errors = None, debug = Fa
     if peak_location.size > 1:
         peak_location = peak_location[0]
     est_center = float(x[peak_location])
-
     est_sigma = np.nansum(y*(x-est_center)**2)/np.nansum(y)
-    gauss_parameters, gauss_covariance = curve_fit(gaussian_function, x, y,p0=[est_peak,est_center,est_sigma],sigma= errors,absolute_sigma= absolute_sigma)
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        succes = False
+        maxfev= int(100*(len(radii)))
+
+        while not succes:
+            if debug:
+                print_log(f'''FIT_GAUSSIAN: Starting the curve fit with {maxfev}
+    ''',Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
+            try:
+                gauss_parameters, gauss_covariance = curve_fit(gaussian_function, \
+                        x, y,p0=[est_peak,est_center,est_sigma],sigma= errors,\
+                        absolute_sigma= absolute_sigma,maxfev=maxfev)
+                succes = True
+            except OptimizeWarning:
+                maxfev =  2000*(len(radii))
+            except RuntimeError as e:
+                split_error = str(e)
+                if 'Optimal parameters not found: Number of calls to function has reached maxfev' in \
+                    split_error:
+                    maxfev += 100*int(len(radii))
+                    print_log(f'''FIT_GAUSSIAN: We failed to find an optimal fit due to the maximum number of evaluations. increasing maxfev to {maxfev}
+    ''',Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
+                else:
+                    print_log(f'''FIT_GAUSSIAN: some other error {split_error}
+    ''',Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
+                    raise RuntimeError(split_error)
+            if maxfev >  1000*(len(radii)):
+                raise FittingError("FIT_GAUSSIAN: failed to find decent gaussian parameters")
+
+    #gauss_parameters, gauss_covariance = curve_fit(gaussian_function, x, y,p0=[est_peak,est_center,est_sigma],sigma= errors,absolute_sigma= absolute_sigma)
     if covariance:
         return gauss_parameters, gauss_covariance
     else:
@@ -3434,13 +3470,12 @@ def setup_configuration(cfg):
                 'ACCEPTED_TIRIFIC', #Did Tirific run the full loops (False) or not (True)
                 'SOFIA_RAN', #Check if we have ran Sofia
                 'NO_RADEC',
-                'FIX_SIZE', # If we have before fitted a size we want to fix to this size to avoid looping
                 'CENTRAL_CONVERGENCE' #Have we found the center
                 ]
 #
     for key in boolean_keys:
         Configuration[key] = False
-
+    Configuration['FIX_SIZE'] = [False,False]# If we have before fitted a size we want to fix to this size to avoid looping
     other_keys={'ID': 'Unset', # ID of the galaxy in the catalogue , set from the catalogue at start of loop
                'SUB_DIR': 'Unset', # Name of the directory in which galaxy resides, set from the catalogue at start of loop
                'FITTING_DIR': 'Unset', # Full path of the directory in which the fitting takes place, set at start of loop
@@ -3467,11 +3502,11 @@ def setup_configuration(cfg):
 
                'MAX_SIZE_IN_BEAMS': 30, # The galaxy is not allowed to extend beyond this number of beams in radius, set in check_source
                'MIN_SIZE_IN_BEAMS': 0., # Minimum allowed radius in number of beams of the galaxy, set in check_source
-               'SIZE_IN_BEAMS': 0, # The radius of the galaxy in number of beams, adapted after running Sofia
+               'SIZE_IN_BEAMS': np.full(2,0.,dtype=float),  #The radius of the galaxy in number of beams, adapted after running Sofia
                'NO_RINGS': 0., # The number of rings in the fit,
                'LAST_RELIABLE_RINGS': [0.,0.], # Location of the rings where the SBR drops below the cutoff limits, adapted after every run. Should only be modified in check_size
                'LIMIT_MODIFIER': [1.], #Modifier for the cutoff limits based on the inclination , adapted after every run.
-               'OLD_RINGS': [], # List to keep track of the ring sizes that have been fitted.
+               'OLD_SIZE': [['0.','0.']], # List to keep track of the size in beams.
 
                'NO_POINTSOURCES': 0. , # Number of point sources, set in run_tirific
 
@@ -3838,29 +3873,119 @@ set_limits.__doc__ =f'''
 
  NOTE:
 '''
-
-def set_ring_size(Configuration, debug = False, size_in_beams = 0., check_set_rings = False):
+def set_ring_size(Configuration, debug = False,requested_ring_size = 0., size_in_beams = 0., check_set_rings = False):
+    double_size = False
     if size_in_beams == 0.:
-        size_in_beams =  Configuration['SIZE_IN_BEAMS']
-    ring_size = Configuration['RING_SIZE']
-    no_rings = calc_rings(Configuration,ring_size=ring_size,size_in_beams=size_in_beams,debug=debug)
+        size_in_beams =  np.min(Configuration['SIZE_IN_BEAMS'])
+        double_size=True
+    if requested_ring_size == 0.:
+         requested_ring_size =  Configuration['RING_SIZE']
+
     if debug:
         print_log(f'''SET_RING_SIZE: Starting with the following parameters.
-{'':8s}size in beams = {size_in_beams} and ring size = {ring_size}
+{'':8s}size in beams = {size_in_beams}
+{'':8s}requested ring size = {requested_ring_size}
 ''', Configuration['OUTPUTLOG'],debug=True)
+    no_rings = 0.
+    ring_size = 100.
+    while requested_ring_size > 0.5 and no_rings < Configuration['MINIMUM_RINGS']:
 
-    while ring_size > 0.5 and  no_rings < 8.:
-        previous_ringsize = ring_size
-        ring_size = set_limits(ring_size/1.5,0.5,float('NaN'),debug=debug)
-        no_rings = calc_rings(Configuration,ring_size=ring_size,size_in_beams=size_in_beams)
-        print_log(f'''SET_RING_SIZE: Because we had less than eight rings we have reduced the ring size from {previous_ringsize} to {ring_size}
+        est_rings = set_limits(round((size_in_beams-1./5.)/(requested_ring_size)),Configuration['MINIMUM_RINGS'],float('NaN'))
+        ring_size = set_limits((size_in_beams-1./5.)/est_rings,0.5,float('NaN'),debug=debug)
+
+        no_rings = calc_rings(Configuration,ring_size=ring_size,size_in_beams=size_in_beams,debug=debug)
+
+        if no_rings < Configuration['MINIMUM_RINGS'] and requested_ring_size > 0.5:
+            previous_ringsize = copy.deepcopy(requested_ring_size)
+            requested_ring_size = set_limits(requested_ring_size/1.25,0.5,float('NaN'),debug=debug)
+            print_log(f'''SET_RING_SIZE: Because we had less than {Configuration['MINIMUM_RINGS']} rings we have reduced the requested ring size from {previous_ringsize} to {requested_ring_size}
 ''',Configuration['OUTPUTLOG'])
 
-    while no_rings < Configuration['MINIMUM_RINGS'] and not size_in_beams >=  Configuration['MAX_SIZE_IN_BEAMS']:
-        size_in_beams = set_limits(size_in_beams+1.*ring_size,1, Configuration['MAX_SIZE_IN_BEAMS'])
-        no_rings = calc_rings(Configuration,ring_size=ring_size,size_in_beams=size_in_beams)
-        print_log(f'''SET_RING_SIZE: The initial estimate is too small to fit adding a ring to it.
+    if double_size:
+        # we had two values in the size_in beams we get the number of rings from the maximum
+        #As we used the minimum to calate the ring size we need to recalculated the number of rings
+        no_rings = calc_rings(Configuration,ring_size=ring_size,size_in_beams=np.max(Configuration['SIZE_IN_BEAMS']),debug=debug)
+
+
+    if debug:
+        print_log(f'''SET_RING_SIZE: After checking the size we get
+{'':8s}size in beams = {size_in_beams}, ring size = {ring_size} and the number of ring = {no_rings}
+''', Configuration['OUTPUTLOG'])
+
+    if no_rings <  Configuration['MINIMUM_RINGS']:
+        print_log(f'''SET_RING_SIZE: With a ring size of {ring_size} we still only find {no_rings}.
+{"":8s}SET_RING_SIZE: This is not enough for a fit.
+''',Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
+    if not check_set_rings:
+        if no_rings <  Configuration['MINIMUM_RINGS']:
+            raise SmallSourceError('This source is too small to reliably fit.')
+        Configuration['NO_RINGS'] = int(no_rings)
+        Configuration['RING_SIZE'] = ring_size
+    return ring_size,int(no_rings)
+
+set_ring_size.__doc__ =f'''
+ NAME:
+    set_ring_size
+
+ PURPOSE:
+    Calculate the size and number of rings and the galaxy size in beams and update them in the Configuration dictionary
+
+ CATEGORY:
+    support_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+
+ OPTIONAL INPUTS:
+    debug = False
+
+    size_in_beams = 0.
+    The size of the galaxy in beams across the major axis radius, if unset it is taken from the Configuration
+
+    check_set_rings = False
+    Set this parameter to True to not apply the calaculated ring size and number and size of the model to the
+    Configuration but to return the parameters as  size_in_beams,ring_size,no_rings
+
+ OUTPUTS:
+    Will raise an error when the number of rings goes below the minimum
+
+ OPTIONAL OUTPUTS:
+    size_in_beams,ring_size,no_rings
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
+def set_ring_size_old(Configuration, debug = False, size_in_beams = 0., check_set_rings = False):
+    if size_in_beams == 0.:
+        size_in_beams =  np.min(Configuration['SIZE_IN_BEAMS'])
+
+    if debug:
+        print_log(f'''SET_RING_SIZE: Starting with the following parameters.
+{'':8s}size in beams = {size_in_beams}
+''', Configuration['OUTPUTLOG'],debug=True)
+    no_rings = 0.
+    ring_size = 100.
+    while ring_size > 0.5 and  no_rings < 5.:
+        if Configuration['RING_SIZE'] > 0.5:
+            est_rings = set_limits(round((size_in_beams-1./5.)/(Configuration['RING_SIZE'])),Configuration['MINIMUM_RINGS'],float('NaN'))
+            previous_ringsize = Configuration['RING_SIZE']
+            ring_size = set_limits((size_in_beams-1./5.)/est_rings,0.5,float('NaN'),debug=debug)
+
+        no_rings = calc_rings(Configuration,ring_size=ring_size,size_in_beams=size_in_beams,debug=debug)
+        if Configuration['MINIMUM_RINGS'] <= no_rings and  no_rings < 8.:
+            Configuration['RING_SIZE']=set_limits(ring_size/1.5,0.5,float('NaN'),debug=debug)
+            print_log(f'''SET_RING_SIZE: Because we had less than eight rings we have reduced the ring size from {previous_ringsize} to {ring_size}
 ''',Configuration['OUTPUTLOG'])
+        elif Configuration['MINIMUM_RINGS'] > no_rings and size_in_beams <  Configuration['MAX_SIZE_IN_BEAMS']:
+            size_in_beams = set_limits(size_in_beams+1.,1., Configuration['MAX_SIZE_IN_BEAMS'])
+            print_log(f'''SET_RING_SIZE: The initial estimate is too small to fit adding a ring to it.
+''',Configuration['OUTPUTLOG'])
+        else:
+            pass
+
+
 
     if debug:
         print_log(f'''SET_RING_SIZE: After checking the size we get
@@ -3871,15 +3996,18 @@ def set_ring_size(Configuration, debug = False, size_in_beams = 0., check_set_ri
         return size_in_beams,ring_size,int(no_rings)
     else:
         Configuration['NO_RINGS'] = int(no_rings)
-        Configuration['SIZE_IN_BEAMS'] = size_in_beams
+        for i in [0,1]:
+            if size_in_beams > Configuration['SIZE_IN_BEAMS'][i]:
+                Configuration['SIZE_IN_BEAMS'][i] = size_in_beams
         Configuration['RING_SIZE'] = ring_size
         if Configuration['NO_RINGS'] < Configuration['MINIMUM_RINGS']:
             print_log(f'''SET_RING_SIZE: With a ring size of {Configuration['RING_SIZE']} we still only find {Configuration['NO_RINGS']}.
 {"":8s}SET_RING_SIZE: This is not enough for a fit.
 ''',Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
             raise SmallSourceError('This source is too small to reliably fit.')
+        return size_in_beams,ring_size,int(no_rings)
 
-set_ring_size.__doc__ =f'''
+set_ring_size_old.__doc__ =f'''
  NAME:
     set_ring_size
 
@@ -3949,7 +4077,7 @@ def set_rings(Configuration,ring_size = 0. , debug = False):
 {'':8s}{radii}
 {'':8s}We should have {Configuration['NO_RINGS']} or we incorrectly updated and should have {no_rings}
 {'':8s}We have {len(radii)} rings.
-{'':8s}The last ring should be around {Configuration['BEAM'][0]*Configuration['SIZE_IN_BEAMS']}
+{'':8s}The last ring should be around {Configuration['BEAM'][0]*np.max(Configuration['SIZE_IN_BEAMS'])}
 {'':8s}The rings should be size {Configuration['BEAM'][0]*ring_size} and outer rings {req_outer_ring}
 {'':8s}They are {radii[3]-radii[2]} and {radii[-1]-radii[-2]}
 ''', Configuration['OUTPUTLOG'])

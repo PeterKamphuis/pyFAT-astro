@@ -194,8 +194,9 @@ def FAT_Galaxy_Loops(Proc_Configuration, Full_Catalogue):
                     sf.print_log(f'''The source is well defined and we will now setup the initial tirific file
     ''', Configuration['OUTPUTLOG'], screen=Configuration['VERBOSE'], debug=Configuration['DEBUG'])
                     #Add your personal fitting types here
-                    wf.write_config(
-                        f'{Configuration["LOG_DIRECTORY"]}CFG_Before_Fitting.txt', Configuration, debug=True)
+                    if Configuration['DEBUG']:
+                        wf.write_config(
+                            f'{Configuration["LOG_DIRECTORY"]}CFG_Before_Fitting.txt', Configuration, debug=True)
 
                 if 'fit_tirific_osc' in Configuration['FITTING_STAGES']:
                     current_run = runf.fitting_osc(

@@ -399,7 +399,7 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, smoot
         print_log(f'''GUESS_ORIENTATION: We find SNR = {SNR} and a scale factor {scale_factor} and the noise median {median_noise_in_map}
 {'':8s} minimum {minimum_noise_in_map}
 ''',Configuration['OUTPUTLOG'])
-    if Configuration['SIZE_IN_BEAMS'] >10:
+    if np.mean(Configuration['SIZE_IN_BEAMS']) >10:
         beam_check=[Configuration['BEAM_IN_PIXELS'][0],Configuration['BEAM_IN_PIXELS'][0]/2.]
     else:
         beam_check=[Configuration['BEAM_IN_PIXELS'][0]/2.]
@@ -585,7 +585,7 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, smoot
     if v_sys == -1 or center_counter > 0.:
         #As python is utterly moronic the center goes in back wards to the map
         map_vsys = np.nanmean(map[int(round(center[1]-buffer)):int(round(center[1]+buffer)),int(round(center[0]-buffer)):int(round(center[0]+buffer))])
-        if Configuration['SIZE_IN_BEAMS'] < 10.:
+        if np.mean(Configuration['SIZE_IN_BEAMS']) < 10.:
             map_vsys = (v_sys+map_vsys)/2.
     else:
         map_vsys = v_sys
@@ -604,7 +604,7 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, smoot
             if v_sys == -1 or center_counter > 0.:
                 #As python is utterly moronic the center goes in back wards to the map
                 map_vsys = np.nanmean(tmp[int(round(center[1]-buffer)):int(round(center[1]+buffer)),int(round(center[0]-buffer)):int(round(center[0]+buffer))])
-                if Configuration['SIZE_IN_BEAMS'] < 10.:
+                if np.mean(Configuration['SIZE_IN_BEAMS']) < 10.:
                     map_vsys = (v_sys+map_vsys)/2.
 
 

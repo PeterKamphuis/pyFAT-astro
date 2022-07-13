@@ -7,13 +7,54 @@ import copy
 from pyFAT_astro.Support.support_functions import set_rings,convertskyangle,sbr_limits,set_limits,print_log,set_limit_modifier,\
                               set_ring_size,calc_rings,finish_current_run,set_format,get_from_template,gaussian_function,fit_gaussian,\
                               get_ring_weights,set_boundaries,max_profile_change,check_angular_momentum_vector,calculate_am_vector
-from pyFAT_astro.Support.fat_errors import InitializeError,CfluxError,FunctionCallError,BadConfigurationError
+from pyFAT_astro.Support.fat_errors import InitializeError,CfluxError,FunctionCallError,BadConfigurationError,FittingError
 import numpy as np
 import os
 import warnings
 from scipy.optimize import curve_fit, OptimizeWarning
 from scipy.signal import savgol_filter
 from scipy.interpolate import CubicSpline,Akima1DInterpolator
+
+
+
+def apply_new_size(Configuration, new_size, debug=False):
+    ''' Check whether we want to apply our new size '''
+    if all([Configuration['OLD_SIZE'][-1][x] ==  f"{new_size[x]:.1f}" for x in [0,1]]):
+        print_log(f'''APPLY_NEW_SIZE: The new sizes equal those of the previous fit. Not changing
+''', Configuration['OUTPUTLOG'])
+        return False
+    for i in [0,1]:
+        for sizes in Configuration['OLD_SIZE'][:-1]:
+            if sizes[i] == f"{new_size[i]:.1f}":
+                Configuration['FIX_SIZE'][i] = True
+    return True
+apply_new_size.__doc__ =f'''
+ NAME:
+    apply new size
+
+ PURPOSE:
+    determine whether the newly calculated size should be written to the configuration
+    by comparing to previous sizes
+
+ CATEGORY:
+    modify_template
+
+ INPUTS:
+    Configuration = Standard configuration Dictionary
+    new_size = the new sizes to check
+
+ OPTIONAL INPUTS:
+
+ OUTPUTS:
+    boolean
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
 
 
 def arc_tan_sdis_function(axis,center,length,amplitude,mean):
@@ -86,6 +127,70 @@ arc_tan_function.__doc__ =f'''
     Unspecified
 
  NOTE:
+'''
+
+def calc_new_size(Configuration,radii,sbr,sbr_ring_limits, debug=False):
+    new_size = Configuration['SIZE_IN_BEAMS']
+    difference_with_limit = np.array(sbr-sbr_ring_limits,dtype=float)
+    smooth_diff = smooth_profile(Configuration,{'EMPTY':None}, 'ARBITRARY' ,profile_in=difference_with_limit, min_error=[0.,0.],debug=debug,no_fix=True,no_apply=True)
+    for i in [0,1]:
+        #If all last three values are above the limit we need to extend
+        if np.all(smooth_diff[i,-3:] > 0.):
+            #We fit a Gaussian to the SBR and see where it drops below the last SBR Limit
+            vals = fit_gaussian(Configuration,radii,sbr[i,:],errors=sbr_ring_limits[i,:],debug=debug)
+            extend_radii = np.linspace(0.,Configuration['MAX_SIZE_IN_BEAMS']*Configuration['BEAM'][0],1000)
+            Gauss_diff = gaussian_function(extend_radii,*vals)-sbr_ring_limits[i,-1]
+            this_size=set_limits(extend_radii[np.where(Gauss_diff < 0.)[0][0]]/Configuration['BEAM'][0], Configuration['MIN_SIZE_IN_BEAMS'], Configuration['MAX_SIZE_IN_BEAMS'])
+            if this_size > new_size[i]+0.5:
+                new_size[i]= copy.deepcopy(this_size)
+        else:
+            #we need to find where we cross the zero line
+            loc= int(np.where(smooth_diff[i,:] < 0.)[0][0])
+
+            x1 = float(radii[loc-1])
+            x2 = float(radii[loc])
+            y1 = float(smooth_diff[i,loc-1])
+            y2 = float(smooth_diff[i,loc])
+            this_size = set_limits((x1+y1*(x2-x1)/(y1-y2))/Configuration['BEAM'][0],Configuration['MIN_SIZE_IN_BEAMS'], Configuration['MAX_SIZE_IN_BEAMS'])
+
+            if debug:
+                print_log(f'''CALC_NEW_SIZE: The profile for {i} drop below 0. between {x1} and {x2}.
+{'':8s} with y1 = {y1} and y2 = {y2}
+{'':8s} the new size is {this_size}
+''',Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
+            if this_size < new_size[i]-0.5:
+                new_size[i]= copy.deepcopy(this_size)
+        if new_size[i] < Configuration['TOO_SMALL_GALAXY']:
+             new_size[i] = Configuration['TOO_SMALL_GALAXY']
+    return new_size
+calc_new_size.__doc__ =f'''
+ NAME:
+    calc_new_size
+
+ PURPOSE:
+    Based on the current SBR profiles and sbr_limits calc ulate the size of the galaxy
+
+ CATEGORY:
+    modify_template
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    radii = The current radii of the model
+    sbr = The current sbr of the model (Both sides)
+    sbr_ring_limits = The current sbr limits
+
+ OPTIONAL INPUTS:
+    debug = False
+
+ OUTPUTS:
+    new_size
+    a 2 element array indicating the new size for both sides of the model
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+NOTE:
+    The new size is neveer applied to Configuration
 '''
 
 def calculate_change_boundary(Configuration,multiple_used,theta_zero,phi_zero,debug=False):
@@ -378,8 +483,22 @@ def check_size(Configuration,Tirific_Template, fit_type = 'Undefined', stage = '
 ''',Configuration['OUTPUTLOG'])
     #sbr_ring_limits = 1.25*np.array([sbr_ring_limits,sbr_ring_limits])
     sbr_ring_limits = np.array([sbr_ring_limits,sbr_ring_limits],dtype=float)
-    new_rings = get_number_of_rings(Configuration,sbr,sbr_ring_limits, debug=debug)
-    # if all of the last points are  below the limit we start checking how far to cut
+
+    #This part has to change in something new
+    size_in_beams = calc_new_size(Configuration,radii,sbr,sbr_ring_limits, debug=debug)
+    apply_size = apply_new_size(Configuration,size_in_beams,debug=debug)
+
+    if apply_size:
+        Configuration['OLD_SIZE'].append([f"{Configuration['SIZE_IN_BEAMS'][0]:.1f}",\
+                                           f"{Configuration['SIZE_IN_BEAMS'][1]:.1f}"])
+        Configuration['SIZE_IN_BEAMS'] = size_in_beams
+        ring_size, number_of_rings = set_ring_size(Configuration, debug=debug)
+        if debug:
+                print_log(f'''CHECK_SIZE: Applied the size of {Configuration['SIZE_IN_BEAMS']}, ring size {ring_size} resulting in {number_of_rings} rings
+''',Configuration['OUTPUTLOG'])
+
+
+    # Set the unreliable parameters
     #the lower the inclination the sooner the RC becomes unreliable
     limit_factor = set_limits(2.5*np.mean(Configuration['LIMIT_MODIFIER']) ,2.,4.)
     if debug:
@@ -396,78 +515,108 @@ def check_size(Configuration,Tirific_Template, fit_type = 'Undefined', stage = '
             Configuration['LAST_RELIABLE_RINGS'][i] = Configuration['NO_RINGS']
     if debug:
         print_log(f'''CHECK_SIZE: We set these as the last reliable rings {Configuration['LAST_RELIABLE_RINGS']}
-{'':8s}The RC is deemed unrliable from ring {Configuration['RC_UNRELIABLE']} on.
+    {'':8s}The RC is deemed unrliable from ring {Configuration['RC_UNRELIABLE']} on.
 ''',Configuration['OUTPUTLOG'])
+
+    if apply_size:
+        # Do not move this from here else other routines such as sbr_limits are messed up
+        set_new_size(Configuration,Tirific_Template,Fits_Files,fit_type= fit_type, stage = stage ,debug = debug,current_run = current_run)
+        return False
+    else:
+        return True
+
+
+    '''
+    new_rings = get_number_of_rings(Configuration,sbr,sbr_ring_limits, debug=debug)
+    # if all of the last points are  below the limit we start checking how far to cut
+    #the lower the inclination the sooner the RC becomes unreliable
+    limit_factor = set_limits(2.5*np.mean(Configuration['LIMIT_MODIFIER']) ,2.,4.)
+    if debug:
+        print_log(f''CHECK_SIZE: Using a limit factor to calculate where the RC is reliable of  {limit_factor}
+'',Configuration['OUTPUTLOG'])
+    Configuration['RC_UNRELIABLE'] = get_number_of_rings(Configuration,sbr,limit_factor*sbr_ring_limits, debug=debug)-1
+    if Configuration['RC_UNRELIABLE'] == Configuration['NO_RINGS']:
+        Configuration['RC_UNRELIABLE'] -= 1
+    for i in [0,1]:
+        corr_val = np.where(sbr[i,2:] > sbr_ring_limits[i,2:]*3.)[0]+2
+        if corr_val.size > 0:
+            Configuration['LAST_RELIABLE_RINGS'][i] = corr_val[-1]+1
+        else:
+            Configuration['LAST_RELIABLE_RINGS'][i] = Configuration['NO_RINGS']
+    if debug:
+        print_log(f''CHECK_SIZE: We set these as the last reliable rings {Configuration['LAST_RELIABLE_RINGS']}
+{'':8s}The RC is deemed unrliable from ring {Configuration['RC_UNRELIABLE']} on.
+'',Configuration['OUTPUTLOG'])
     #if we haven't subtracted we check if we should add
     if int(new_rings) == int(Configuration['NO_RINGS']):
         new_rings = check_for_ring_addition(Configuration,Tirific_Template,sbr,sbr_ring_limits*limit_factor,debug=debug)
     else:
         if debug:
-            print_log(f'''CHECK_SIZE: The last rings were found to be:
+            print_log(f''CHECK_SIZE: The last rings were found to be:
 {'':8s}{sbr[:,-2:]}
 {'':8s}and the limits:
 {'':8s}{sbr_ring_limits[:,-2:]}
 {'':8s}Thus we have subtracted a set of rings.
-''', Configuration['OUTPUTLOG'])
+'', Configuration['OUTPUTLOG'])
 
     if new_rings <= Configuration['NO_RINGS']:
         size_in_beams = (radii[new_rings-1]-1./5.*Configuration['BEAM'][0])/Configuration['BEAM'][0]
     else:
         size_in_beams = (radii[-1]-1./5.*Configuration['BEAM'][0])/Configuration['BEAM'][0]+Configuration['RING_SIZE']
     if debug:
-        print_log(f'''CHECK_SIZE: Before checking against the minimum and maximum the size in beams = {size_in_beams}
-''', Configuration['OUTPUTLOG'],debug=True)
+        print_log(f''CHECK_SIZE: Before checking against the minimum and maximum the size in beams = {size_in_beams}
+'', Configuration['OUTPUTLOG'],debug=True)
     size_in_beams = set_limits(size_in_beams, Configuration['MIN_SIZE_IN_BEAMS'], Configuration['MAX_SIZE_IN_BEAMS'])
     # limit between 3 and the maximum allowed from the sofia estimate
     size_in_beams,ring_size,number_of_rings = set_ring_size(Configuration, size_in_beams=size_in_beams,check_set_rings = True, debug=debug)
 
-    print_log(f'''CHECK_SIZE: We find the following size in beams {size_in_beams:.1f} with size {ring_size:.2f}.
+    print_log(f''CHECK_SIZE: We find the following size in beams {size_in_beams:.1f} with size {ring_size:.2f}.
 {'':8s}CHECK_SIZE: The previous iteration had a size of {Configuration['SIZE_IN_BEAMS']:.1f} with rings  {Configuration['RING_SIZE']:.2f} times the beam.
 {'':8s}CHECK_SIZE: This results in {int(number_of_rings):d} rings in the model compared to {int(Configuration['NO_RINGS']):d} previously.
-''', Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
+'', Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
     if f"{ring_size:.1f}" != f"{Configuration['RING_SIZE']:.1f}":
         Configuration['NEW_RING_SIZE'] = True
     else:
         Configuration['NEW_RING_SIZE'] = False
     if debug:
-        print_log(f'''CHECK_SIZE: The previous rings we have tried are {Configuration['OLD_RINGS']}
-''',Configuration['OUTPUTLOG'])
+        print_log(f''CHECK_SIZE: The previous rings we have tried are {Configuration['OLD_RINGS']}
+'',Configuration['OUTPUTLOG'])
 
     if f"{size_in_beams:.1f}" == Configuration['OLD_RINGS'][-1]:
         return True
     elif f"{size_in_beams:.1f}" in Configuration['OLD_RINGS']:
-        print_log(f'''CHECK_SIZE: We have processed this size before.
-''', Configuration['OUTPUTLOG'])
+        print_log(f''CHECK_SIZE: We have processed this size before.
+'', Configuration['OUTPUTLOG'])
         ind = Configuration['OLD_RINGS'].index(f"{size_in_beams:.1f}")
         if Configuration['OLD_RINGS'][ind+1] > Configuration['OLD_RINGS'][ind]:
-            print_log(f'''CHECK_SIZE: After which we increased the size.
-''', Configuration['OUTPUTLOG'])
+            print_log(f''CHECK_SIZE: After which we increased the size.
+'', Configuration['OUTPUTLOG'])
             Configuration['FIX_SIZE'] = True
             if Configuration['OLD_RINGS'][ind+1] == Configuration['OLD_RINGS'][-1]:
-                print_log(f'''CHECK_SIZE: Which is the current fit so that's ok.
-''', Configuration['OUTPUTLOG'])
+                print_log(f''CHECK_SIZE: Which is the current fit so that's ok.
+'', Configuration['OUTPUTLOG'])
                 return True
             else:
-                print_log(f'''CHECK_SIZE: Which is not the current fit so we refit this size.
-''', Configuration['OUTPUTLOG'])
+                print_log(f''CHECK_SIZE: Which is not the current fit so we refit this size.
+'', Configuration['OUTPUTLOG'])
             Configuration['OLD_RINGS'].append(f"{size_in_beams:.1f}")
 
         else:
-            print_log(f'''CHECK_SIZE: After which we decreased so we allow this addition. But no more.
-''', Configuration['OUTPUTLOG'])
+            print_log(f''CHECK_SIZE: After which we decreased so we allow this addition. But no more.
+'', Configuration['OUTPUTLOG'])
             Configuration['FIX_SIZE'] = True
             Configuration['OLD_RINGS'].append(f"{size_in_beams:.1f}")
     else:
         if debug:
-            print_log(f'''CHECK_SIZE: Adding the new ring size to OLD_RINGS.
-''', Configuration['OUTPUTLOG'])
+            print_log(f''CHECK_SIZE: Adding the new ring size to OLD_RINGS.
+'', Configuration['OUTPUTLOG'])
         Configuration['OLD_RINGS'].append(f"{size_in_beams:.1f}")
 
     Configuration['RING_SIZE'] = ring_size
     Configuration['SIZE_IN_BEAMS'] = size_in_beams
     Configuration['NO_RINGS'] = calc_rings(Configuration,debug=debug)
-    print_log(f'''CHECK_SIZE: We need to modify the number of rings in the model.
-''', Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
+    print_log(f''CHECK_SIZE: We need to modify the number of rings in the model.
+'', Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
 
     if Configuration['RC_UNRELIABLE'] > Configuration['NO_RINGS']:
         Configuration['RC_UNRELIABLE'] = Configuration['NO_RINGS']
@@ -475,15 +624,16 @@ def check_size(Configuration,Tirific_Template, fit_type = 'Undefined', stage = '
         if Configuration['LAST_RELIABLE_RINGS'][i] > Configuration['NO_RINGS']:
             Configuration['LAST_RELIABLE_RINGS'][i] = Configuration['NO_RINGS']
     if debug:
-        print_log(f'''CHECK_SIZE: We trust the RC upto ring {Configuration['RC_UNRELIABLE']}
+        print_log(f'CHECK_SIZE: We trust the RC upto ring {Configuration['RC_UNRELIABLE']}
 {'':8s} and the rings in general upto {Configuration['LAST_RELIABLE_RINGS']}
-''',Configuration['OUTPUTLOG'])
+',Configuration['OUTPUTLOG'])
     if Fits_Files == 'No Files':
         raise InitializeError('CHECK_SIZE: Trying to adapt the model size but the fits files were not provided.')
     else:
         # Do not move this from here else other routines such as sbr_limits are messed up
         set_new_size(Configuration,Tirific_Template,Fits_Files,fit_type= fit_type, stage = stage ,debug = debug,current_run = current_run)
     return False
+    '''
 check_size.__doc__  =f'''
  NAME:
     check_size
@@ -636,22 +786,28 @@ def fit_arc(Configuration,radii,sm_profile,error, function_to_fit,key, debug = F
         maxfev= int(100*(len(radii)))
 
         while not succes:
+            if debug:
+                print_log(f'''FIT_ARC: Starting the curve fit with {maxfev}
+''',Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
             try:
                 arc_par,arc_cov  =  curve_fit(function_to_fit, radii, sm_profile,p0=[est_center,est_length,est_amp,est_mean]\
                                             ,sigma=error,absolute_sigma=absolute_sigma,maxfev=maxfev)
                 new_profile = function_to_fit(radii,*arc_par)
                 new_profile[:3] = np.mean(new_profile[:3])
+                succes = True
             except OptimizeWarning:
                 maxfev =  2000*(len(radii))
             except RuntimeError as e:
                 split_error = str(e)
-                if 'Optimal parameters not found: Number of calls to function has reached maxfev =' in \
+                if 'Optimal parameters not found: Number of calls to function has reached maxfev' in \
                     split_error:
-                    maxfev += 100
-                    print_log(f'''FIT_ARC: We failed to find an optimal fit due to the maximum number of evaluations. icreasing maxfev to {maxfev}
-    ''',Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
+                    maxfev += 100*int(len(radii))
+                    print_log(f'''FIT_ARC: We failed to find an optimal fit due to the maximum number of evaluations. increasing maxfev to {maxfev}
+''',Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
                 else:
-                    raise RuntimeError(str(e))
+                    print_log(f'''FIT_ARC: some other error {split_error}
+''',Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
+                    raise RuntimeError(split_error)
             if maxfev >  1000*(len(radii)):
                 print_log(f'''FIT_ARC: We failed to find an optimal fit to dispersion, returning the smoothed profile.
 ''',Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
@@ -1119,7 +1275,7 @@ def fix_sbr(Configuration,Tirific_Template, smooth = False, debug=False):
 {'':8s} sm_sbr = {sm_sbr[i,[0,1]]}
 ''',Configuration['OUTPUTLOG'])
                     gaussian[[0,1]] = sm_sbr[i,[0,1]]
-            except RuntimeError:
+            except FittingError:
                 # If we fail we try a CubicSpline interpolation
                 try:
                     tmp = CubicSpline(radii[corr_val],fit_sbr,extrapolate = True,bc_type ='natural')
@@ -1386,6 +1542,7 @@ get_error.__doc__ =f'''
 
  NOTE: the maximum errors are defined in main.py
 '''
+
 
 def get_number_of_rings(Configuration,sbr,sbr_ring_limits, debug=False):
     '''Determine whether the amount of rings is good for the limits or not'''
@@ -2257,10 +2414,10 @@ def set_cflux(Configuration,Tirific_Template,debug = False):
 {"":8s}SET_CFLUX: This must be an error. Exiting the fitting.
 ''',Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
         raise CfluxError('The model had infinite point sources')
-    if Configuration['SIZE_IN_BEAMS'] < 15:
+    if np.max(Configuration['SIZE_IN_BEAMS']) < 15:
         factor = 1.
     else:
-        factor=(Configuration['SIZE_IN_BEAMS']/15.)**1.5
+        factor=(np.max(Configuration['SIZE_IN_BEAMS'])/15.)**1.5
     triggered = 0
     if not 0.5e6 < Configuration['NO_POINTSOURCES'][0] < 2.2e6:
         new_cflux = set_limits(float(Tirific_Template['CFLUX'])*Configuration['NO_POINTSOURCES'][0]/(factor*1e6),1e-7,5e-3)
@@ -2896,9 +3053,9 @@ def set_model_parameters(Configuration, Tirific_Template,Model_Values, stage = '
         else:
             if key == 'RADI':
                 rad = set_rings(Configuration,debug=debug)
-                if len(Configuration['OLD_RINGS']) == 0:
-                    size_in_beams = (rad[-1]-1./5.*Configuration['BEAM'][0])/Configuration['BEAM'][0]
-                    Configuration['OLD_RINGS'].append(f"{size_in_beams:.1f}")
+                #if len(Configuration['OLD_SIZE']) == 0:
+                #    size_in_beams = (rad[-1]-1./5.*Configuration['BEAM'][0])/Configuration['BEAM'][0]
+                #    Configuration['OLD_SIZE'].append([f"{size_in_beams:.1f}")
                 Tirific_Template['RADI']= f"{' '.join([f'{x:.2f}' for x in rad])}"
                 Tirific_Template['NUR']=str(len(rad))
                 check_parameters.append('RADI')
@@ -3066,7 +3223,7 @@ def set_new_size(Configuration,Tirific_Template, Fits_Files, fit_type = 'Undefin
 ''',Configuration['OUTPUTLOG'])
 
     #Replace the old ring numbers in VARY and VARINDX
-    old_rings = calc_rings(Configuration,size_in_beams = int(round(float(Configuration['OLD_RINGS'][-2]))), ring_size  = 0.,debug=debug)
+    old_rings = calc_rings(Configuration,size_in_beams = int(round(np.max([float(Configuration['OLD_SIZE'][-1][0]),float(Configuration['OLD_SIZE'][-1][1])]))), ring_size  = 0.,debug=debug)
     current_rings = calc_rings(Configuration,debug=debug)
     #This could lead to replacing a value smaller than the other side
     Tirific_Template['VARY'] = Tirific_Template['VARY'].replace(f"{old_rings}",f"{current_rings}")
@@ -3076,7 +3233,7 @@ def set_new_size(Configuration,Tirific_Template, Fits_Files, fit_type = 'Undefin
     #if current_rings < old_rings:
     #    flatten_the_curve(Configuration,Tirific_Template,debug=debug)
     # Check whether the galaxy has become to small for variations
-    if Configuration['SIZE_IN_BEAMS'] > Configuration['MINIMUM_WARP_SIZE']:
+    if np.sum(Configuration['SIZE_IN_BEAMS']) > Configuration['MINIMUM_WARP_SIZE']:
         Configuration['FIXED_PARAMETERS'][0] = Configuration['FIXED_PARAMETERS'][1]
     else:
         for parameter in ['INCL','Z0','SDIS','PA']:
@@ -3270,15 +3427,24 @@ def set_sbr_fitting(Configuration,Tirific_Template, stage = 'no_stage',debug = F
             max_size = 2.
         #Make sure the SBR profile is not dropping below the minimum we are setting
 
-        if stage in ['initialize_os']:
-            fact = 0.75
-        elif Configuration['SIZE_IN_BEAMS'] < max_size:
-            fact=2.5
-        else:
-            fact=2.
+        fact= [2.,2.]
         format = set_format('SBR')
+        pmax = copy.deepcopy(sbr_profile)
+        pmin = copy.deepcopy(sbr_profile)
+        pmax[:,:] = 1.
+        pmin[:,:] = 0.
         for i in [0,1]:
-            sbr_profile[i,inner_ring:] = [set_limits(sbr_profile[i,x],sbr_ring_limits[x]/fact*2.,1.) for x in range(len(radii)-1,inner_ring-1,-1)]
+            if stage in ['initialize_os']:
+                fact[i] = 0.75
+            elif Configuration['SIZE_IN_BEAMS'][i] < max_size:
+                fact[i]=2.5
+
+            for x in range(len(radii)-1,inner_ring-1,-1):
+                if radii[x] < Configuration['SIZE_IN_BEAMS'][i]*Configuration['BEAM'][0]:
+                    sbr_profile[i,x] = set_limits(sbr_profile[i,x],sbr_ring_limits[x]/fact[i]*2.,1.)
+
+                else:
+                    sbr_profile[i,x] = 0.
             sbr_profile[i,:inner_ring] = [set_limits(x,np.min(sbr_ring_limits),1.) for x in sbr_profile[i,:inner_ring]]
             if i == 0:
                 ext=''
@@ -3290,7 +3456,17 @@ def set_sbr_fitting(Configuration,Tirific_Template, stage = 'no_stage',debug = F
                                 min_error= [sbr_ring_limits,sbr_ring_limits],no_apply = True,
                                 fix_sbr_call = True,profile_in = sbr_profile ,debug=debug)
         sbr_av_smoothed = [(x+y)/2. for x,y in zip(sbr_smoothed_profile[0],sbr_smoothed_profile[1])]
-        if Configuration['SIZE_IN_BEAMS'] < max_size:
+        for i in [0,1]:
+            for x in range(len(radii)-1,inner_ring-1,-1):
+                if  sbr_profile[i,x] > 0.:
+                    pmax[i,x] = set_limits(sbr_av_smoothed[x-1]*20.,sbr_ring_limits[x]*30.,1.)
+                    pmin[i,x] = sbr_ring_limits[x]/fact[i]
+                else:
+                    pmax[i,x] = set_limits(sbr_av_smoothed[x-1]*5.,sbr_ring_limits[x]*10,sbr_ring_limits[x]*30)
+                    pmin[i,x] = 0.
+
+
+        if np.mean(Configuration['SIZE_IN_BEAMS']) < max_size:
             sbr_input['VARY'] =  np.array([f"SBR {x+1} SBR_2 {x+1}" for x in range(len(radii)-1,inner_ring-1,-1)],dtype=str)
 
 
@@ -3299,7 +3475,7 @@ def set_sbr_fitting(Configuration,Tirific_Template, stage = 'no_stage',debug = F
             #    sbr_input['PARMIN'] = np.array([sbr_ring_limits[x]/2. if x <= (3./4.)*len(radii) else 0 for x in range(len(radii)-1,inner_ring-1,-1)])
             #elif stage in ['initialize_ec','run_ec']:
 
-            sbr_input['PARMIN'] = np.array([sbr_ring_limits[x]/fact for x in range(len(radii)-1,inner_ring-1,-1)],dtype=float)
+            sbr_input['PARMIN'] = np.array([sbr_ring_limits[x]/np.max(fact) for x in range(len(radii)-1,inner_ring-1,-1)],dtype=float)
             sbr_input['MODERATE'] = np.array([5 for x in range(len(radii)-1,inner_ring-1,-1)],dtype=float) #How many steps from del start to del end
             sbr_input['DELSTART'] = np.array([1e-4 for x in range(len(radii)-1,inner_ring-1,-1)],dtype=float) # Starting step
             sbr_input['DELEND'] = np.array([2.5e-6 for x in range(len(radii)-1,inner_ring-1,-1)],dtype=float) #Ending step
@@ -3307,13 +3483,17 @@ def set_sbr_fitting(Configuration,Tirific_Template, stage = 'no_stage',debug = F
         else:
             sbr_input['VARY'] =  np.array([[f"SBR {x+1}",f"SBR_2 {x+1}"] for x in range(len(radii)-1,inner_ring-1,-1)],dtype=str).reshape((len(radii)-inner_ring)*2)
 
-            pmax = np.array([np.full(2,set_limits(sbr_av_smoothed[x-1]*20.,sbr_ring_limits[x]*30.,1.)) for x in range(len(radii)-1,inner_ring-1,-1)], dtype=float)
-            sbr_input['PARMAX']  = pmax.reshape((len(radii)-inner_ring)*2)
+
+
+
+            #pmax = np.array([np.full(2,set_limits(sbr_av_smoothed[x-1]*20.,sbr_ring_limits[x]*30.,1.)) for x in range(len(radii)-1,inner_ring-1,-1)], dtype=float)
+            sbr_input['PARMAX'] = np.array([[pmax[0,x],pmax[1,x]] for x in range(len(radii)-1,inner_ring-1,-1)],dtype=float).reshape((len(radii)-inner_ring)*2)
             #sbr_input['PARMAX'] = np.array([[set_limits(sbr_smoothed_profile[0,x-1]*20.,sbr_ring_limits[x]*30.,1.),set_limits(sbr_smoothed_profile[1,x-1]*20.,sbr_ring_limits[x]*30.,1.)] for x in range(len(radii)-1,inner_ring-1,-1)],dtype=float).reshape((len(radii)-inner_ring)*2)
         #if stage in ['initial','run_cc']:
             #    sbr_input['PARMIN'] = np.array([[sbr_ring_limits[x]/2.,sbr_ring_limits[x]/2.] if x <= (3./4.)*len(radii) else [0.,0.] for x in range(len(radii)-1,inner_ring-1,-1)]).reshape((len(radii)-inner_ring)*2)
             #elif stage in ['initialize_ec','run_ec']:
-            sbr_input['PARMIN'] = np.array([[sbr_ring_limits[x]/fact,sbr_ring_limits[x]/fact] for x in range(len(radii)-1,inner_ring-1,-1)],dtype=float).reshape((len(radii)-inner_ring)*2)
+            sbr_input['PARMIN']  = np.array([[pmin[0,x],pmin[1,x]] for x in range(len(radii)-1,inner_ring-1,-1)],dtype=float).reshape((len(radii)-inner_ring)*2)
+            #sbr_input['PARMIN'] = np.array([[sbr_ring_limits[x]/fact[0],sbr_ring_limits[x]/fact[1]] for x in range(len(radii)-1,inner_ring-1,-1)],dtype=float).reshape((len(radii)-inner_ring)*2)
             sbr_input['MODERATE'] = np.array([[5,5] for x in range(len(radii)-1,inner_ring-1,-1)],dtype=float).reshape((len(radii)-inner_ring)*2) #How many steps from del start to del end
             sbr_input['DELSTART'] = np.array([[1e-4,1e-4] for x in range(len(radii)-1,inner_ring-1,-1)],dtype=float).reshape((len(radii)-inner_ring)*2) # Starting step
             sbr_input['DELEND'] = np.array([[sbr_ring_limits[x]/20.,sbr_ring_limits[x]/20.] for x in range(len(radii)-1,inner_ring-1,-1)],dtype=float).reshape((len(radii)-inner_ring)*2)

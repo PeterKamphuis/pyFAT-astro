@@ -38,11 +38,11 @@ def check_legitimacy(Configuration,debug=False):
         if debug:
             print_log(f'''CHECK_LEGITIMACY: The retrieved inclination {float(inclination[0])} is below {Configuration['UNRELIABLE_INCLINATION']} thus the fit is not accepted.
 ''',Configuration['OUTPUTLOG'],debug =True)
-    if 2.*Configuration['SIZE_IN_BEAMS'] < Configuration['UNRELIABLE_SIZE']:
+    if np.sum(Configuration['SIZE_IN_BEAMS']) < Configuration['UNRELIABLE_SIZE']:
         Configuration['ACCEPTED'] = False
         Configuration['FINAL_COMMENT'] = f"The final size is below {Configuration['UNRELIABLE_SIZE']}. FAT is not neccesarily reliable in this range."
         if debug:
-            print_log(f'''CHECK_LEGITIMACY: The retrieved size {2.*Configuration['SIZE_IN_BEAMS']} is below {Configuration['UNRELIABLE_SIZE']} thus the fit is not accepted.
+            print_log(f'''CHECK_LEGITIMACY: The retrieved size {np.sum(Configuration['SIZE_IN_BEAMS'])} is below {Configuration['UNRELIABLE_SIZE']} thus the fit is not accepted.
 ''',Configuration['OUTPUTLOG'],debug =True)
     return
 

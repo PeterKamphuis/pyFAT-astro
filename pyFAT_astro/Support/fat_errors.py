@@ -16,6 +16,8 @@ class DefFileError(Exception):
     pass
 class FileNotFoundError(Exception):
     pass
+class FittingError(Exception):
+    pass
 class FunctionCallError(Exception):
     pass
 class InclinationRunError(Exception):
