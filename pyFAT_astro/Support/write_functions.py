@@ -602,8 +602,10 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
     # Then we want to plot our PV-Diagram
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        xv_proj = WCS(PV[0].header)
-        xv_model_proj = WCS(PV_model[0].header)
+        #As astropy is the dumbest piece of software ever invented and it cannot separate stray keywords from extra dimensions
+        # we need to specify we want the first two axes.
+        xv_proj = WCS(PV[0].header,naxis=[0,1])
+        xv_model_proj = WCS(PV_model[0].header,naxis=[0,1])
     ax_PV = Overview.add_subplot(gs[2:8,8:14], projection=xv_proj)
     #Comp_ax2.set_title('PV-Diagram')
 

@@ -171,8 +171,8 @@ def calculate_number_processes(Configuration):
         if extra_cores >= plus_core:
             cores += plus_core
             extra_cores -= plus_core
-        if cores > 20:
-            cores = 20.
+        if cores > proc_conf['PER_GALAXY_NCPU']*2:
+            cores = proc_conf['PER_GALAXY_NCPU']*2
         print(f"Process {i} with {cores} cores")
         key=f"Conf_{i:d}"
         proc_conf['PER_GALAXY_NCPU'] = cores

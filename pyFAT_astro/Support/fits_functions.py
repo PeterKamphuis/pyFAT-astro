@@ -408,8 +408,8 @@ def extract_pv(Configuration,cube_in,angle,center=[-1,-1,-1],finalsize=[-1,-1],c
     del (TwoD_hdr['CRVAL3'])
     del (TwoD_hdr['CDELT3'])
     del (TwoD_hdr['CTYPE3'])
-
     del (TwoD_hdr['NAXIS3'])
+    TwoD_hdr['NAXIS'] = 2
     TwoD_hdr['CRVAL1'] = 0.
     #Because we used nx in the linspace for liney we also use it here
     TwoD_hdr['CDELT1'] = np.sqrt(((x2-x1)*abs(hdr['CDELT1'])/nx)**2+((y2-y1)*abs(hdr['CDELT2'])/nx)**2)*3600.

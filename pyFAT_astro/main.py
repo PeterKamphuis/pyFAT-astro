@@ -154,7 +154,6 @@ def main(argv):
         else:
             Full_Catalogue = rf.catalogue(Original_Configuration['CATALOGUE'],split_char= cfg.advanced.catalogue_split_character)
         # Get the longest directory name to format the output directory properlyFit_Tirific_OSC
-    
         for directory in Full_Catalogue['DIRECTORYNAME']:
             if directory == './':
                 directory = Original_Configuration['MAIN_DIRECTORY'].split('/')[-2]
@@ -192,6 +191,7 @@ def main(argv):
         if float(Original_Configuration['CATALOGUE_START_ID']) > float(Original_Configuration['CATALOGUE_END_ID']):
             raise CatalogError(f''' Your starting galaxy (Line nr = {Original_Configuration['CATALOGUE_START_ID']}) is listed after your ending galaxy (Line nr = {Original_Configuration['CATALOGUE_END_ID']}), maybe you have double catalogue ids?''')
             sys.exit(1)
+        
         if Original_Configuration['MULTIPROCESSING']:
             Original_Configurations,no_processes = sf.calculate_number_processes(Original_Configuration)
             to_maps = [(x,Full_Catalogue ) for x in Original_Configurations]

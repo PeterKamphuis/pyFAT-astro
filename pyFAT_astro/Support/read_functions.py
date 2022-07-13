@@ -73,11 +73,15 @@ def catalogue(filename,split_char='|', debug = False):
 
         for line in tmpfile.readlines():
             input = [x.strip() for x  in line.split(split_char)]
-            for i,key in enumerate(input_columns):
-                if key == 'DISTANCE':
-                    Catalogue[key].append(float(input[i]))
-                else:
-                    Catalogue[key].append(input[i])
+            if len(input) == len(input_columns):
+                for i,key in enumerate(input_columns):
+                    if key == 'DISTANCE':
+                        Catalogue[key].append(float(input[i]))
+                    else:
+                        Catalogue[key].append(input[i])
+            else:
+                print(f'READ_CATALOGUE: Your line "{line}" in the input catalogue does not have correct number of columns, skipping it')
+
     #if 'NUMBER' in Catalogue['ENTRIES']:
     #    Catalogue['NUMBER'] = np.array(Catalogue['NUMBER'],dtype=int)
 
