@@ -1631,7 +1631,7 @@ def fit_gaussian(Configuration,x,y, covariance = False,errors = None, debug = Fa
     with warnings.catch_warnings():
         warnings.simplefilter("error")
         succes = False
-        maxfev= int(100*(len(radii)))
+        maxfev= int(100*(len(x)))
 
         while not succes:
             if debug:
@@ -1643,19 +1643,19 @@ def fit_gaussian(Configuration,x,y, covariance = False,errors = None, debug = Fa
                         absolute_sigma= absolute_sigma,maxfev=maxfev)
                 succes = True
             except OptimizeWarning:
-                maxfev =  2000*(len(radii))
+                maxfev =  2000*(len(x))
             except RuntimeError as e:
                 split_error = str(e)
                 if 'Optimal parameters not found: Number of calls to function has reached maxfev' in \
                     split_error:
-                    maxfev += 100*int(len(radii))
+                    maxfev += 100*int(len(x))
                     print_log(f'''FIT_GAUSSIAN: We failed to find an optimal fit due to the maximum number of evaluations. increasing maxfev to {maxfev}
     ''',Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
                 else:
                     print_log(f'''FIT_GAUSSIAN: some other error {split_error}
     ''',Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
                     raise RuntimeError(split_error)
-            if maxfev >  1000*(len(radii)):
+            if maxfev >  1000*(len(x)):
                 raise FittingError("FIT_GAUSSIAN: failed to find decent gaussian parameters")
 
     #gauss_parameters, gauss_covariance = curve_fit(gaussian_function, x, y,p0=[est_peak,est_center,est_sigma],sigma= errors,absolute_sigma= absolute_sigma)
@@ -3888,9 +3888,10 @@ def set_ring_size(Configuration, debug = False,requested_ring_size = 0., size_in
 ''', Configuration['OUTPUTLOG'],debug=True)
     no_rings = 0.
     ring_size = 100.
-    while requested_ring_size > 0.5 and no_rings < Configuration['MINIMUM_RINGS']:
+    while (requested_ring_size > 0.5 and no_rings < Configuration['MINIMUM_RINGS']) or no_rings == 0.:
 
-        est_rings = set_limits(round((size_in_beams-1./5.)/(requested_ring_size)),Configuration['MINIMUM_RINGS'],float('NaN'))
+        est_rings = set_limits(round((size_in_beams-1./5.)/(requested_ring_size)),8.,float('NaN'))
+
         ring_size = set_limits((size_in_beams-1./5.)/est_rings,0.5,float('NaN'),debug=debug)
 
         no_rings = calc_rings(Configuration,ring_size=ring_size,size_in_beams=size_in_beams,debug=debug)

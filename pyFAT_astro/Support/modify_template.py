@@ -147,9 +147,13 @@ def calc_new_size(Configuration,Tirific_Template,radii,sbr,sbr_ring_limits, debu
                 extend_radii = np.linspace(0.,Configuration['MAX_SIZE_IN_BEAMS']*Configuration['BEAM'][0],1000)
                 Gauss_diff = gaussian_function(extend_radii,*vals)-sbr_ring_limits[i,-1]
                 this_size=set_limits(extend_radii[np.where(Gauss_diff < 0.)[0][0]]/Configuration['BEAM'][0], Configuration['MIN_SIZE_IN_BEAMS'], Configuration['MAX_SIZE_IN_BEAMS'])
-            if FittingError:
+            except FittingError:
                 #If we cannot fit a gaussian we extend by a beam
                 this_size=set_limits(radii[-1]/Configuration['BEAM'][0]+1.0, Configuration['MIN_SIZE_IN_BEAMS'], Configuration['MAX_SIZE_IN_BEAMS'])
+            except IndexError:
+                #If we do not find any values in the gaussian below the limits we extend 2 beams
+                this_size=set_limits(radii[-1]/Configuration['BEAM'][0]+2.0, Configuration['MIN_SIZE_IN_BEAMS'], Configuration['MAX_SIZE_IN_BEAMS'])
+
             if this_size > new_size[i]+0.5:
                 new_size[i]= copy.deepcopy(this_size)
         else:
