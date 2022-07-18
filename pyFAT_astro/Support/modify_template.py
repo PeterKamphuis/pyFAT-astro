@@ -555,15 +555,38 @@ def fit_arc(Configuration,radii,sm_profile,error, function_to_fit,key, debug = F
     else:
         absolute_sigma = True
     with warnings.catch_warnings():
-        warnings.simplefilter("error", OptimizeWarning)
-        try:
-            arc_par,arc_cov  =  curve_fit(function_to_fit, radii, sm_profile,p0=[est_center,est_length,est_amp,est_mean]\
-                                        ,sigma=error,absolute_sigma=absolute_sigma)
-        except OptimizeWarning:
-            pass
-    new_profile = function_to_fit(radii,*arc_par)
+        warnings.simplefilter("error")
+        succes = False
+        maxfev= int(100*(len(radii)))
 
-    new_profile[:3] = np.mean(new_profile[:3])
+        while not succes:
+            if debug:
+                print_log(f'''FIT_ARC: Starting the curve fit with {maxfev}
+''',Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
+            try:
+                arc_par,arc_cov  =  curve_fit(function_to_fit, radii, sm_profile,p0=[est_center,est_length,est_amp,est_mean]\
+                                            ,sigma=error,absolute_sigma=absolute_sigma,maxfev=maxfev)
+                new_profile = function_to_fit(radii,*arc_par)
+                new_profile[:3] = np.mean(new_profile[:3])
+                succes = True
+            except OptimizeWarning:
+                maxfev =  2000*(len(radii))
+            except RuntimeError as e:
+                split_error = str(e)
+                if 'Optimal parameters not found: Number of calls to function has reached maxfev' in \
+                    split_error:
+                    maxfev += 100*int(len(radii))
+                    print_log(f'''FIT_ARC: We failed to find an optimal fit due to the maximum number of evaluations. increasing maxfev to {maxfev}
+''',Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
+                else:
+                    print_log(f'''FIT_ARC: some other error {split_error}
+''',Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
+                    raise RuntimeError(split_error)
+            if maxfev >  1000*(len(radii)):
+                print_log(f'''FIT_ARC: We failed to find an optimal fit to dispersion, returning the smoothed profile.
+''',Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
+                succes = True
+                new_profile = copy.deepcopy(sm_profile)
 
     return new_profile#,new_error
 fit_arc.__doc__ =f'''
@@ -593,6 +616,7 @@ fit_arc.__doc__ =f'''
 
  NOTE:
 '''
+
 
 def fit_polynomial(Configuration,radii,profile,sm_profile,error, key, Tirific_Template,inner_fix = 4,min_error =0.,boundary_limits = [0,0.], debug = False ):
     if debug:
