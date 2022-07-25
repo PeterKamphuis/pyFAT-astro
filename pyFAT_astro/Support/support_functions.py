@@ -7,7 +7,7 @@ from pyFAT_astro.Support.fat_errors import SupportRunError,SmallSourceError,\
                                               BadHeaderError,FittingError
 from collections import OrderedDict #used in Proper_Dictionary
 from inspect import getframeinfo,stack
-
+from numpy.linalg import LinAlgError
 from scipy.optimize import curve_fit, OptimizeWarning
 from scipy import ndimage
 from scipy.signal import savgol_filter
@@ -3343,6 +3343,10 @@ run_tirific.__doc__ =f'''
 
 
 def set_boundaries(Configuration,key,lower,upper,input=False,debug=False):
+    if debug:
+        print_log(f'''SET_BOUNDARIES: Starting to implement the boundaries for {key} with lower = {lower} and upper = {upper}.
+''',Configuration['OUTPUTLOG'], debug=True)
+
     check=False
     key = key.upper()
     if np.sum(Configuration[f'{key}_INPUT_BOUNDARY']) != 0.:
@@ -3517,7 +3521,7 @@ def setup_configuration(cfg):
                'RC_UNRELIABLE': 1, # Ring number from where the RC values are set flat. Should only be set in check_size
 
                'NOISE': 0. , #Noise of the input cube in Jy/beam, set in read_cube
-               'BEAM_IN_PIXELS': [0.,0.,0.], #FWHM BMAJ, BMIN in pixels and total number of pixels in beam area, set in main
+               'BEAM_IN_PIXELS': [0.,0.,0.], #FWHM BMAJ, BMIN in pixels and total number of pixels in beam area, set in read_cube in read_functions
                'BEAM': [0.,0.,0.], #  FWHM BMAJ, BMIN in arcsec and BPA, set in main
                'BEAM_AREA': 0., #BEAM_AREA in arcsec set in main
                'NAXES': [0.,0.,0.], #  Size of the cube in pixels x,y,z arranged like sane people not python, set in main

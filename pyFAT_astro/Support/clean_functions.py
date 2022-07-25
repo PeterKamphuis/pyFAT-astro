@@ -549,7 +549,12 @@ def finish_galaxy(Configuration,current_run = 'Not initialized', Fits_Files= {'O
             Configuration['FINAL_COMMENT'] = f"The code crashed while fitting this galaxy please check it's log."
             Configuration['OUTPUT_QUANTITY'] = 5
         else:
-            sys.exit(1)
+            if exiting:
+                sys.exit(1)
+            else:
+                Configuration['ACCEPTED'] = False
+                Configuration['FINAL_COMMENT'] = f"The code crashed while fitting this galaxy please check it's log."
+                Configuration['OUTPUT_QUANTITY'] = 5
     elif Configuration['OUTPUT_QUANTITY'] == 5:
         print_log(f'''
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!

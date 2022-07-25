@@ -15,7 +15,7 @@ import pyFAT_astro.Support.support_functions as sf
 import pyFAT_astro.Support.write_functions as wf
 
 from datetime import datetime
-
+from pyFAT_astro.Support.fat_errors import BadCatalogueError
 
 def FAT_Galaxy_Loops(Proc_Configuration, Full_Catalogue):
     try:
@@ -99,12 +99,12 @@ def FAT_Galaxy_Loops(Proc_Configuration, Full_Catalogue):
             Fits_Files['CHANNEL_MAP'] = f"Sofia_Output/{Configuration['BASE_NAME']}_chan.fits"
             if 'create_fat_cube' in Configuration['FITTING_STAGES']:
                 if not os.path.exists(f"{Configuration['FITTING_DIR']}/{Fits_Files['ORIGINAL_CUBE']}"):
-                    raise CatalogError(
-                        f'''We can not find the file {Fits_Files['ORIGINAL_CUBE']}. This is likely to be due to a typo in your catalog.''')
+                    raise BadCatalogueError(
+                        f'''We can not find the file {Fits_Files['ORIGINAL_CUBE']}. This is likely to be due to a typo in your catalog {Configuration['CATALOGUE']}.''')
             else:
                 if not os.path.exists(f"{Configuration['FITTING_DIR']}/{Fits_Files['FITTING_CUBE']}"):
-                    raise CatalogError(
-                        f'''We can not find the file {Fits_Files['FITTING_CUBE']}. This is likely to be due to a typo in your catalog.''')
+                    raise BadCatalogueError(
+                        f'''We can not find the file {Fits_Files['FITTING_CUBE']}. This is likely to be due to a typo in your catalog {Configuration['CATALOGUE']}.''')
 
             # run cleanup
             cf.cleanup(Configuration, Fits_Files, debug=Configuration['DEBUG'])

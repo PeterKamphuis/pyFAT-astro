@@ -331,10 +331,12 @@ get_DHI.__doc__ =f'''
 
 def get_totflux(Configuration,map_name,debug=False):
     image = fits.open(f"{Configuration['FITTING_DIR']}{map_name}")
-    flux = np.nansum(image[0].data)
+    #We are taking these from the moment map so we have to divide out the km/s
+    flux = float(np.nansum(image[0].data)/Configuration['BEAM_IN_PIXELS'][2]/Configuration['CHANNEL_WIDTH'])
+    #Should this not have an additional channel width parameter
     error = np.sqrt((np.where(image[0].data> 0.)[0].size)/Configuration['BEAM_IN_PIXELS'][2])*Configuration['NOISE']
     image.close()
-    return [float(flux/Configuration['BEAM_IN_PIXELS'][2]),error]
+    return [flux,error]
 get_totflux.__doc__ =f'''
  NAME:
     get_totflux
@@ -495,7 +497,7 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, smoot
         if center_counter == 0:
             original_pa = copy.deepcopy(pa)
             original_maj_extent = copy.deepcopy(maj_extent)
-            original_inclination = copy.deepcopy(inclination)
+            original_inclination = copy.deGUESS_ORIEepcopy(inclination)
 
         if center_counter > 0 and not any([np.isfinite(maj_extent),np.isfinite(pa[0]),np.isfinite(inclination[0])]):
             pa=original_pa
@@ -611,7 +613,10 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, smoot
 ''',Configuration['OUTPUTLOG'])
     if v_sys == -1 or center_counter > 0.:
         #As python is utterly moronic the center goes in back wards to the map
-        map_vsys = np.nanmean(map[int(round(center[1]-buffer)):int(round(center[1]+buffer)),int(round(center[0]-buffer)):int(round(center[0]+buffer))])
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore",message="Mean of empty slice"\
+                            ,category=RuntimeWarning)
+            map_vsys = np.nanmean(map[int(round(center[1]-buffer)):int(round(center[1]+buffer)),int(round(center[0]-buffer)):int(round(center[0]+buffer))])
         if np.mean(Configuration['SIZE_IN_BEAMS']) < 10.:
             map_vsys = (v_sys+map_vsys)/2.
     else:
@@ -630,7 +635,14 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, smoot
             #We need the cnter to be found else we get a crash
             if v_sys == -1 or center_counter > 0.:
                 #As python is utterly moronic the center goes in back wards to the map
-                map_vsys = np.nanmean(tmp[int(round(center[1]-buffer)):int(round(center[1]+buffer)),int(round(center[0]-buffer)):int(round(center[0]+buffer))])
+                with warnings.catch_warnings():
+                    warnings.filterwarnings("error",message="Mean of empty slice"\
+                            ,category=RuntimeWarning)
+                    try:
+                        map_vsys = np.nanmean(tmp[int(round(center[1]-buffer)):int(round(center[1]+buffer)),int(round(center[0]-buffer)):int(round(center[0]+buffer))])
+                    except RuntimeWarning:
+                        map_vsys = v_sys
+
                 if np.mean(Configuration['SIZE_IN_BEAMS']) < 10.:
                     map_vsys = (v_sys+map_vsys)/2.
 

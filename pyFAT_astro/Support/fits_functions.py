@@ -148,7 +148,9 @@ create_fat_cube.__doc__ =f'''
 '''
 
 def cut_cubes(Configuration, Fits_Files, galaxy_box, debug = False):
-
+    if debug:
+        print_log(f'''CUT_CUBES: Starting to cut the cube_size.
+''', Configuration['OUTPUTLOG'],debug = True)
     cube_edge= [6.,5.*round(Configuration['BEAM_IN_PIXELS'][0]),5.*round(Configuration['BEAM_IN_PIXELS'][0])]
     cube_size= []
     new_cube = []

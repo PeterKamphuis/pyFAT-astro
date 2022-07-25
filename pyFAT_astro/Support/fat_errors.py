@@ -8,8 +8,6 @@ class BadSourceError(Exception):
     pass
 class BadHeaderError(Exception):
     pass
-class CatalogError(Exception):
-    pass
 class CfluxError(Exception):
     pass
 class DefFileError(Exception):
