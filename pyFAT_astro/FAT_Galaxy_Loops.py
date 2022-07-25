@@ -58,6 +58,10 @@ def FAT_Galaxy_Loops(Proc_Configuration, Full_Catalogue):
             log_statement = f'''This file is a log of the fitting process run at {Configuration ['START_TIME']}.
 {"":8s}This is version {pyFAT_astro.__version__} of the program.
 '''
+            if pyFAT_astro.__branch__:
+                log_stament =f'''{log_statement} This is a github distribution and we are on the branch {pyFAT_astro.__branch__}.
+'''
+
 
             # Adapt configuration to hold some specifics to this galaxy
 

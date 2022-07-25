@@ -34,5 +34,19 @@ def report_version():
             # we are probably in an installed version
             return __version__
 
+def report_branch():
+    path = os.path.dirname(os.path.abspath(__file__))
+    result = None
+    try:
+        branches = subprocess.check_output(\
+            'cd %s; git branch' % path, shell=True, stderr=subprocess.STDOUT).rstrip().decode().split()
+        for i,line in enumerate(branches):
+            if line == '*':
+                result=branches[i+1]
+                break
+    except subprocess.CalledProcessError:
+        result= None
+    return result
 
 __version__ = report_version()
+__branch__ =report_branch()
