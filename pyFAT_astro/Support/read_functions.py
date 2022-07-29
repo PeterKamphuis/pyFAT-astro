@@ -497,7 +497,7 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, smoot
         if center_counter == 0:
             original_pa = copy.deepcopy(pa)
             original_maj_extent = copy.deepcopy(maj_extent)
-            original_inclination = copy.deGUESS_ORIEepcopy(inclination)
+            original_inclination = copy.deepcopy(inclination)
 
         if center_counter > 0 and not any([np.isfinite(maj_extent),np.isfinite(pa[0]),np.isfinite(inclination[0])]):
             pa=original_pa

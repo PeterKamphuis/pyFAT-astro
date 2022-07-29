@@ -214,7 +214,10 @@ calculate_number_processes.__doc__ =f'''
 
  NOTE:
 '''
-def complex_am_invert(Configuration,Theta_in,Phi_in,multiple):
+def complex_am_invert(Configuration,Theta_in,Phi_in,multiple, debug = False):
+    if debug:
+        print_log(f'''COMPLEX_AM_INVERT:  as PA or INCL in {Configuration['FIXED_PARAMETERS']} we are doing a complex invert.
+''',Configuration['OUTPUTLOG'],debug=debug)
 
     Theta_out = copy.deepcopy(Theta_in)
     Phi_out = copy.deepcopy(Phi_in)
@@ -223,6 +226,9 @@ def complex_am_invert(Configuration,Theta_in,Phi_in,multiple):
     if 'INCL' in Configuration['FIXED_PARAMETERS'] and 'PA' in Configuration['FIXED_PARAMETERS']:
         Theta_out[:]=Theta_in[0]
         Phi_out[:]=Phi_in[0]
+        if debug:
+            print_log(f'''COMPLEX_AM_INVERT:  both PA and INCL are fixed returning the centra Phi and Theta.
+''',Configuration['OUTPUTLOG'],debug=debug)
     else:
         #Create the PA and Inclination plane
         Theta = np.linspace(0,np.pi,1000)
@@ -244,7 +250,6 @@ def complex_am_invert(Configuration,Theta_in,Phi_in,multiple):
             current_diff = np.array([abs(x-current_inclination[0]) for x in current_inclination],dtype=float)
             not_flat = np.where(current_diff > 0.25)[0]
             if not_flat.size != 0:
-                print(f'Starting the search for a constant I')
                 options_are = np.where(np.logical_and(current_inclination[0]-0.25 < Inclination_plane, Inclination_plane < current_inclination[0]+0.25))
                 options_Phi = Phi[options_are[0][:]]
                 options_Theta = Theta[options_are[1][:]]
@@ -282,14 +287,14 @@ def complex_am_invert(Configuration,Theta_in,Phi_in,multiple):
 def calculate_am_vector(Configuration,PA_in,Inclination_in,multiple = None, invert=False,debug=False):
     if not multiple and invert:
         print_log(f'''CALCULATE_AM_VECTOR: inverting phi and theta without the multiple will result in all PAs being in the first quadrant.
-''',Configuration['OUTPUTLOG'])
+''',Configuration['OUTPUTLOG'],debug=debug)
         multiple=0.
 
     if invert:
         Theta=np.array(PA_in,dtype=float)
         Phi=np.array(Inclination_in,dtype=float)
         if 'INCL' in Configuration['FIXED_PARAMETERS'] or 'PA' in Configuration['FIXED_PARAMETERS']:
-            Theta,Phi = complex_am_invert(Configuration,Theta,Phi,multiple)
+            Theta,Phi = complex_am_invert(Configuration,Theta,Phi,multiple,debug=debug)
 
         Inclination=90-np.arctan(1./(np.cos(Theta)*np.tan(Phi)))*(360./(2*np.pi))
     # return inclination boundary adjustements
@@ -307,11 +312,14 @@ def calculate_am_vector(Configuration,PA_in,Inclination_in,multiple = None, inve
         Inclination=np.array(Inclination_in,dtype=float)
         multiple=np.floor(PA[0]/90.)
         PA= PA-multiple*90.
-        Inclination=90-Inclination
+        #if any(PA > 90.):
+
+        Inclination= 90.-Inclination
         PA[np.where(PA == 0.)] = 0.001
         Inclination[np.where(Inclination == 0.)] = 0.001
-        Theta=np.arctan(np.tan(Inclination*(np.pi/180.))*np.tan(PA*(np.pi/180.)))
-        Phi = np.arctan(np.tan(PA*(np.pi/180.))/np.sin(Theta))
+        Theta=np.arctan(abs(np.tan(Inclination*(np.pi/180.)))*abs(np.tan(PA*(np.pi/180.))))
+        Phi = np.arctan(abs(np.tan(PA*(np.pi/180.)))/np.sin(Theta))
+
         return Theta,Phi,multiple
 calculate_am_vector.__doc__ =f'''
  NAME:
@@ -353,10 +361,10 @@ def check_angular_momentum_vector(Configuration,radius_in,pa_in,inclination_in,\
     max_shift = np.arctan(np.tan(Configuration['MAX_CHANGE']['INCL']*(np.pi/180.))\
                     *np.tan(Configuration['MAX_CHANGE']['PA']*(np.pi/180.)))
     if debug:
-            print_log(f'''CHECK_ANGULAR_MOMENTUM_VECTOR: The maximum alowwed shift = {max_shift}.
+            print_log(f'''CHECK_ANGULAR_MOMENTUM_VECTOR: The maximum allowed shift = {max_shift}.
 ''',Configuration['OUTPUTLOG'])
     succes = False
-
+    counter = 0.
     while not succes:
         if debug:
             print_log(f'''CHECK_ANGULAR_MOMENTUM_VECTOR: Calculating Phi and Theta from these PA and inclination
@@ -401,7 +409,6 @@ new values
 phi {new_phi_change}, theta {new_theta_change}, angle {new_change_angle}
 ''',Configuration['OUTPUTLOG'])
 
-
         diff_phi = np.array(np.where(np.array([abs(x-y) for x,y in zip(Phi,new_phi) ],dtype=float) > 1e-6))
         diff_theta = np.array(np.where(np.array([abs(x-y) for x,y in zip(Theta,new_theta)],dtype=float) > 1e-6))
 
@@ -423,11 +430,13 @@ phi {new_phi_change}, theta {new_theta_change}, angle {new_change_angle}
 PA = {pa}
 Inclination = {inclination}
 ''',Configuration['OUTPUTLOG'])
-
-            continue
-
+            counter += 1
+            if counter > 1000.:
+                #It is not really a succes but we have to exit the loop and one point.
+                succes = True
         else:
             succes = True
+
     if debug:
         print_log(f'''CHECK_ANGULAR_MOMENTUM_VECTOR: Before checking we have modified = {modified}
 ''',Configuration['OUTPUTLOG'])
