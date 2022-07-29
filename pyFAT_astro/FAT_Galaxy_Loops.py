@@ -15,6 +15,7 @@ import pyFAT_astro.Support.support_functions as sf
 import pyFAT_astro.Support.write_functions as wf
 
 from datetime import datetime
+from pyFAT_astro.Support.fat_errors import CatalogError
 
 
 def FAT_Galaxy_Loops(Proc_Configuration, Full_Catalogue):
