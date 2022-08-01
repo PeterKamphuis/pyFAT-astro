@@ -575,13 +575,14 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, smoot
 ''',Configuration['OUTPUTLOG'], debug = debug, screen=Configuration['VERBOSE'])
     update_statistic(Configuration, message= "Starting the initial search for the SBR and VROT.", debug=debug)
 
+
     ring_size_req = Configuration['BEAM_IN_PIXELS'][0]/maj_resolution
+
     SBR_initial = avg_profile[0::int(ring_size_req)]/(np.pi*Configuration['BEAM'][0]*Configuration['BEAM'][1]/(4.*np.log(2.))) # Jy*km/s
     SBR_initial =np.hstack((SBR_initial[0],SBR_initial,SBR_initial[-1]))
 
     SBR_initial[0:3] = SBR_initial[0:3] * (1.2 -float(inclination[0])/90.)
-
-
+    
     #We need to know which is the approaching side and which is receding
 
 
@@ -1187,12 +1188,20 @@ def sofia_catalogue(Configuration,Fits_Files, Variables =['id','x','x_min','x_ma
                                     float(outlist[Variables.index('z_min')][index]),
                                     float(outlist[Variables.index('z_max')][index]),
                                     Configuration,debug = debug,vel_edge=min_vel_edge)
+                    cube= float(Configuration['NAXES'][0])*float(Configuration['NAXES'][1])
+                    source_size=(float(many_sources[Variables.index('y_max')][index])-float(many_sources[Variables.index('y_min')][index]))* \
+                                (float(many_sources[Variables.index('x_max')][index])-float(many_sources[Variables.index('x_min')][index]))
 
-                    if edge:
-                        print_log(f'''SOFIA_CATALOGUE: The bright source is very close to limits.
+                    if edge and source_size/cube < 0.5:
+                        print_log(f'''SOFIA_CATALOGUE: The bright source is very close to limits and not more than half a channel in size.
 ''',Configuration['OUTPUTLOG'])
                     else:
-                        print_log(f'''SOFIA_CATALOGUE: The bright source is acceptable, restoring its flux.
+                        if edge and source_size/cube >= 0.5:
+                            print_log(f'''SOFIA_CATALOGUE: The bright source is very close to limits but spans more than half a channel so we are restoring it.
+In principle your cube is too small.
+''',Configuration['OUTPUTLOG'])
+                        else:
+                            print_log(f'''SOFIA_CATALOGUE: The bright source is acceptable, restoring its flux.
 ''',Configuration['OUTPUTLOG'])
                         many_sources  = copy.deepcopy(outlist)
                         fluxes = np.array(outlist[Variables.index('f_sum')],dtype =float)

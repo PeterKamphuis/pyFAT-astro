@@ -1638,7 +1638,6 @@ def get_inclination_pa(Configuration, Image, center, cutoff = 0., debug = False,
         #extract the profiles under a set of angles
         angles = np.linspace(0, 360, 180)
         ratios, maj_extent = obtain_ratios(Configuration,map, center, angles,noise = cutoff,debug=False)
-
         if np.any(np.isnan(ratios)):
             return [float('NaN'),float('NaN')],  [float('NaN'),float('NaN')],float('NaN')
         sin_ratios,sin_parameters = fit_sine(Configuration,angles,ratios,debug=False)
@@ -2595,7 +2594,6 @@ def obtain_ratios(Configuration, map, center, angles, noise = 0. ,debug = False)
     for angle in angles:
         #major axis
         maj_profile,maj_axis,maj_resolution = get_profile(Configuration,map,angle,center=center,debug=debug)
-
         tmp = np.where(maj_profile > noise)[0]
 
         #gauss =fit_gaussian(maj_axis[tmp], maj_profile[tmp])
@@ -3482,6 +3480,7 @@ def set_limit_modifier(Configuration,Tirific_Template, debug= False):
             modifier_list.append(set_limits(np.sqrt(np.cos(np.radians(inc))/np.cos(np.radians(60.))),0.75,2.))
         else:
             modifier_list.append(set_limits(np.sqrt(np.cos(np.radians(inc))/np.cos(np.radians(60.)))*i/10.,0.8,1.75))
+
     if Configuration['OUTER_RINGS_DOUBLED']:
         if len(modifier_list) > 10:
             modifier_list[10:]= np.sqrt(modifier_list[10:])
@@ -3493,8 +3492,7 @@ def set_limit_modifier(Configuration,Tirific_Template, debug= False):
     if not isiterable(Z0_kpc):
         Z0_kpc = [Z0_kpc]
     #Scale the limits with the deviation away from 0.2 kpc as this is more or less the unmodified scale height
-
-    modifier_list=[x*(1.125-0.625*y)*set_limits(((Configuration['RING_SIZE']*Configuration['BEAM'][0])/45.)**0.25,0.75,1.25) for x,y in zip(modifier_list,Z0_kpc)]
+    modifier_list=[set_limits(x*(1.125-0.625*y)*set_limits(((Configuration['RING_SIZE']*Configuration['BEAM'][0])/45.)**0.25,0.75,1.25),0.7,2.2) for x,y in zip(modifier_list,Z0_kpc)]
 
     Configuration['LIMIT_MODIFIER'] = np.array(modifier_list,dtype=float)
     if debug:
