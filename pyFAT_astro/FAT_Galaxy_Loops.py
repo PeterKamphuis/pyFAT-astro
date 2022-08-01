@@ -160,7 +160,7 @@ def FAT_Galaxy_Loops(Proc_Configuration, Full_Catalogue):
             # Get a bunch of info from the cube
             rf.read_cube(
                 Configuration, Fits_Files['FITTING_CUBE'], debug=Configuration['DEBUG'])
-
+        
             #If we have Sofia Preprocessed Output request make sure it all exists
             if Configuration['DEBUG']:
                 wf.write_config(
