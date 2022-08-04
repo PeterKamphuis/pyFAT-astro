@@ -601,7 +601,7 @@ def prep_cube(Configuration,hdr,data, debug = False):
         or abs(new_noise/np.mean([channel_noise,noise_corner])) < 0.25:
             print_log(f'''PREPROCESSING: There is something odd in the noise statistics of your cube. We are not using the nehgative values
 ''',Configuration['OUTPUTLOG'])
-            new_noise = np.mean([channel_noise,noise_corner])
+            #new_noise = np.mean([channel_noise,noise_corner])
     hdr['FATNOISE'] = new_noise
 
     return data
