@@ -134,8 +134,8 @@ def calc_new_size(Configuration,Tirific_Template,radii,sbr,sbr_ring_limits, debu
     sm_sbr = smooth_profile(Configuration,Tirific_Template,'SBR',
                             min_error= sbr_ring_limits,no_apply = True,
                             fix_sbr_call = True, profile_in = sbr ,debug=debug)
-
-    new_size = Configuration['SIZE_IN_BEAMS']
+    old_size = copy.deepcopy(Configuration['SIZE_IN_BEAMS'])
+    new_size = copy.deepcopy(Configuration['SIZE_IN_BEAMS'])
     difference_with_limit = np.array(sbr-sbr_ring_limits,dtype=float)
     smooth_diff = smooth_profile(Configuration,{'EMPTY':None}, 'ARBITRARY' ,profile_in=difference_with_limit, min_error=[0.,0.],debug=debug,no_fix=True,no_apply=True)
     for i in [0,1]:
@@ -146,7 +146,7 @@ def calc_new_size(Configuration,Tirific_Template,radii,sbr,sbr_ring_limits, debu
                 vals = fit_gaussian(Configuration,radii,sm_sbr[i,:],errors=sbr_ring_limits[i,:],debug=debug)
                 extend_radii = np.linspace(0.,Configuration['MAX_SIZE_IN_BEAMS']*Configuration['BEAM'][0],1000)
                 Gauss_diff = gaussian_function(extend_radii,*vals)-sbr_ring_limits[i,-1]
-                this_size=set_limits(extend_radii[np.where(Gauss_diff < 0.)[0][0]]/Configuration['BEAM'][0], Configuration['MIN_SIZE_IN_BEAMS'], Configuration['MAX_SIZE_IN_BEAMS'])
+                this_size=set_limits(extend_radii[np.where(Gauss_diff < 0.)[0][0]]/Configuration['BEAM'][0]+0.5, Configuration['MIN_SIZE_IN_BEAMS'], Configuration['MAX_SIZE_IN_BEAMS'])
             except FittingError:
                 #If we cannot fit a gaussian we extend by a beam
                 this_size=set_limits(radii[-1]/Configuration['BEAM'][0]+1.0, Configuration['MIN_SIZE_IN_BEAMS'], Configuration['MAX_SIZE_IN_BEAMS'])
@@ -173,8 +173,16 @@ def calc_new_size(Configuration,Tirific_Template,radii,sbr,sbr_ring_limits, debu
 ''',Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
             if this_size < new_size[i]-0.5:
                 new_size[i]= copy.deepcopy(this_size)
+        if Configuration['FIX_RING_SIZE']:
+            real_size = new_size[i]-1./5.
+            rings = int(real_size/Configuration['RING_SIZE'])
+            new_size[i] = rings * Configuration['RING_SIZE']+1./5.
         if new_size[i] < Configuration['TOO_SMALL_GALAXY']:
              new_size[i] = Configuration['TOO_SMALL_GALAXY']
+    if debug:
+        print_log(f'''CALC_NEW_SIZE: We have the new_size {new_size} compared to what we had before {old_size}
+''',Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
+
     return new_size
 calc_new_size.__doc__ =f'''
  NAME:

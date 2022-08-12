@@ -24,6 +24,7 @@ with warnings.catch_warnings():
     from mpl_toolkits.axes_grid1 import make_axes_locatable
     from matplotlib.patches import Ellipse
     import matplotlib.axes as maxes
+    import matplotlib.font_manager as mpl_fm
 from astropy.io import fits
 from astropy.wcs import WCS
 # create or append to the basic ifo file
@@ -299,7 +300,12 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
     size_ratio = 11.6/8.2
     #stupid pythonic layout for grid spec, which means it is yx instead of xy like for normal human beings
     gs = Overview.add_gridspec(int(20*size_ratio),20)
-    labelfont = {'family': 'Times New Roman',
+    try:
+        mpl_fm.fontManager.addfont(Configuration['FONT_FILE'])
+        font_name = mpl_fm.FontProperties(fname=Configuration['FONT_FILE']).get_name()
+    except FileNotFoundError:
+        font_name = 'DejaVu Sans'
+    labelfont = {'family': font_name,
              'weight': 'normal',
              'size': 8}
     plt.rc('font', **labelfont)
@@ -699,7 +705,8 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
 
 
 # ------------------------------Rotation curves------------------------------------
-    labelfont= {'family':'Times New Roman',
+
+    labelfont= {'family':font_name,
             'weight':'normal',
             'size':10}
     ax_RC = plot_parameters(Configuration,Vars_to_plot,FAT_Model,gs[19:22,3:9],\
@@ -1073,7 +1080,12 @@ def plot_usage_stats(Configuration,debug = False):
 
     labels = {'FAT': {'label':[], 'Time':[]}, 'Tirific':{'label':[], 'Time':[]}}
     loads = {'FAT':{'CPU':[],'MEM':[],'Time':[]},'Tirific':{'CPU':[],'MEM':[],'Time': []}}
-    labelfont = {'family': 'Times New Roman',
+    try:
+        mpl_fm.fontManager.addfont(Configuration['FONT_FILE'])
+        font_name = mpl_fm.FontProperties(fname=Configuration['FONT_FILE']).get_name()
+    except FileNotFoundError:
+        font_name = 'DejaVu Sans'
+    labelfont = {'family': font_name,
              'weight': 'normal',
              'size': 4}
     current_stage = 'Not_Found'
@@ -1157,7 +1169,7 @@ def plot_usage_stats(Configuration,debug = False):
         last_label = -100
         label_sep = combined_time[-1]/30.
         color, linest = '0.5', '--'
-        labelfont = {'family': 'Times New Roman',
+        labelfont = {'family': font_name,
                  'weight': 'normal',
                  'size': 6.5}
         prev_label = ''

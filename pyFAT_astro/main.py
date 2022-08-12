@@ -30,12 +30,7 @@ except ImportError:
     # For Py<3.9 files is not available
     from importlib_resources import files as import_pack_files
 
-try:
-    from importlib.resources import files as import_pack_files
-except ImportError:
-    # Try backported to PY<37 `importlib_resources`.
-    # For Py<3.9 files is not available
-    from importlib_resources import files as import_pack_files
+
 # String syntax ''' '''for multiline strings. " " for string without break and ' ' for indexing dictionaries
 
 #from memory_profiler import profile

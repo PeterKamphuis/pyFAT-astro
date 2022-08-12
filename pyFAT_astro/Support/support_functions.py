@@ -3461,7 +3461,7 @@ def setup_configuration(cfg):
                     Configuration['OUTPUT_CATALOGUE'] =  getattr(input_key,sub_key)
                 elif str(key) == 'fitting' and str(sub_key) == 'fixed_parameters':
                     value = getattr(input_key,sub_key)
-                    for req_key in ['Z0','XPOS','YPOS','VSYS']:
+                    for req_key in ['XPOS','YPOS','VSYS']:
                         if req_key not in value:
                             value.append(req_key)
                     Configuration[str(sub_key).upper()] =  [value,value]
@@ -3478,6 +3478,7 @@ def setup_configuration(cfg):
                 'VEL_SMOOTH_EXTENDED', # Is the velocity smoothing extended ????
                 'EXCLUDE_CENTRAL', # Do we exclude the central part of the fitting due to blanks/an absorption source
                 'ACCEPTED',
+                'FIX_RING_SIZE', #Do we allow FAT to vary the rings size (False) or not (True)
                 'ACCEPTED_TIRIFIC', #Did Tirific run the full loops (False) or not (True)
                 'SOFIA_RAN', #Check if we have ran Sofia
                 'NO_RADEC',
@@ -3486,6 +3487,9 @@ def setup_configuration(cfg):
 #
     for key in boolean_keys:
         Configuration[key] = False
+    if Configuration['RING_SIZE'] < 0.:
+        Configuration['FIX_RING_SIZE'] = True
+        Configuration['RING_SIZE'] = abs(Configuration['RING_SIZE'])
     Configuration['FIX_SIZE'] = [False,False]# If we have before fitted a size we want to fix to this size to avoid looping
     other_keys={'ID': 'Unset', # ID of the galaxy in the catalogue , set from the catalogue at start of loop
                'SUB_DIR': 'Unset', # Name of the directory in which galaxy resides, set from the catalogue at start of loop
@@ -3568,11 +3572,15 @@ def setup_configuration(cfg):
 Your main fitting directory ({Configuration['MAIN_DIRECTORY']}) does not exist.
 Please provide the correct directory.
 :  ''')
+
     if Configuration['CATALOGUE']:
+        if not os.path.exists(Configuration['CATALOGUE']) and len(Configuration['CATALOGUE'].split('/')) == 1:
+            Configuration['CATALOGUE']= f'''{Configuration['MAIN_DIRECTORY']}{Configuration['CATALOGUE']}'''
+
         while not os.path.exists(Configuration['CATALOGUE']):
             Configuration['CATALOGUE'] = input(f'''
 Your input catalogue ({Configuration['CATALOGUE']}) does not exist.
-Please provide the correct file name.
+Please provide the correct path and file name.
 : ''')
     #Make sure there is only one Fit_ stage
 
@@ -3629,7 +3637,8 @@ Please pick one of the following {', '.join(['sinusoidal','independent','hanning
                         Please provide the correct directory name.
                         ''')
                 Configuration['OUTPUT_CATALOGUE'] = f"{check_dir}/{output_catalogue_dir[-1]}"
-
+        elif len(output_catalogue_dir) == 1:
+            Configuration['OUTPUT_CATALOGUE'] = f"{Configuration['MAIN_DIRECTORY']}{Configuration['OUTPUT_CATALOGUE']}"
 
     if Configuration['RING_SIZE'] < 0.5:
         Configuration['RING_SIZE'] = 0.5
@@ -3898,27 +3907,30 @@ def set_ring_size(Configuration, debug = False,requested_ring_size = 0., size_in
 {'':8s}size in beams = {size_in_beams}
 {'':8s}requested ring size = {requested_ring_size}
 ''', Configuration['OUTPUTLOG'],debug=True)
-    no_rings = 0.
-    ring_size = 100.
-    while (requested_ring_size > 0.5 and no_rings < Configuration['MINIMUM_RINGS']) or no_rings == 0.:
+    if not Configuration['FIX_RING_SIZE']:
+        no_rings = 0.
+        ring_size = 100.
+        while (requested_ring_size > 0.5 and no_rings < Configuration['MINIMUM_RINGS']) or no_rings == 0.:
 
-        est_rings = set_limits(round((size_in_beams-1./5.)/(requested_ring_size)),8.,float('NaN'))
+            est_rings = set_limits(round((size_in_beams-1./5.)/(requested_ring_size)),8.,float('NaN'))
 
-        ring_size = set_limits((size_in_beams-1./5.)/est_rings,0.5,float('NaN'),debug=debug)
+            ring_size = set_limits((size_in_beams-1./5.)/est_rings,0.5,float('NaN'),debug=debug)
 
-        no_rings = calc_rings(Configuration,ring_size=ring_size,size_in_beams=size_in_beams,debug=debug)
+            no_rings = calc_rings(Configuration,ring_size=ring_size,size_in_beams=size_in_beams,debug=debug)
 
-        if no_rings < Configuration['MINIMUM_RINGS'] and requested_ring_size > 0.5:
-            previous_ringsize = copy.deepcopy(requested_ring_size)
-            requested_ring_size = set_limits(requested_ring_size/1.25,0.5,float('NaN'),debug=debug)
-            print_log(f'''SET_RING_SIZE: Because we had less than {Configuration['MINIMUM_RINGS']} rings we have reduced the requested ring size from {previous_ringsize} to {requested_ring_size}
-''',Configuration['OUTPUTLOG'])
+            if no_rings < Configuration['MINIMUM_RINGS'] and requested_ring_size > 0.5:
+                previous_ringsize = copy.deepcopy(requested_ring_size)
+                requested_ring_size = set_limits(requested_ring_size/1.25,0.5,float('NaN'),debug=debug)
+                print_log(f'''SET_RING_SIZE: Because we had less than {Configuration['MINIMUM_RINGS']} rings we have reduced the requested ring size from {previous_ringsize} to {requested_ring_size}
+    ''',Configuration['OUTPUTLOG'])
 
-    if double_size:
-        # we had two values in the size_in beams we get the number of rings from the maximum
-        #As we used the minimum to calate the ring size we need to recalculated the number of rings
+        if double_size:
+            # we had two values in the size_in beams we get the number of rings from the maximum
+            #As we used the minimum to calate the ring size we need to recalculated the number of rings
+            no_rings = calc_rings(Configuration,ring_size=ring_size,size_in_beams=np.max(Configuration['SIZE_IN_BEAMS']),debug=debug)
+    else:
+        ring_size = requested_ring_size
         no_rings = calc_rings(Configuration,ring_size=ring_size,size_in_beams=np.max(Configuration['SIZE_IN_BEAMS']),debug=debug)
-
 
     if debug:
         print_log(f'''SET_RING_SIZE: After checking the size we get

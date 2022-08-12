@@ -126,6 +126,14 @@ Output Keywords
  Switch for tracking fitting time, CPU usage and RAM usage. This helps a lot to keep track on which stages are taking resources.
 
 
+**font_file**
+
+ *str, optional, default =  "/usr/share/fonts/truetype/msttcorefonts/Times_New_Roman.ttf"*
+
+  As fonts are a nightmare in matplotlib one can set the location of their preferred font for the plotting.
+  On Ubuntu the default can be obtained by installing apt-get install ttf-mscorefonts-installer. This should point to the actual font, if the file is not fond we will fall back to DejaVu Sans.
+
+
 Fitting Keywords
 --------
  *Specified with fitting:*
@@ -164,13 +172,13 @@ Fitting Keywords
 
   *float, optional, default = 1.1*
 
-  The size of the rings in number of beams
+  The size of the rings in number of beams. The minimum is 0.5. A negative value indicates that FAT is not allowed to vary the ring size (although values smaller than 0.5 will still be set to 0.5 and for large galaxies the outer wings will still be doubled)
 
 **fixed_parameters**:
 
  *List, optional, default = ['Z0','XPOS','YPOS','VSYS']
 
- A list of the parameters that should stay fixed, i.e. all rings fitted as a single value, in the fitting. The rotation curve (VROT) can not be fixed at the moment. If the surface brightness is fixed it is fitted with a Gaussian after every iterations.
+ A list of the parameters that should stay fixed with radius, i.e. all rings fitted as a single value, in the fitting. The rotation curve (VROT) can not be fixed at the moment. If the surface brightness is fixed it is fitted with a Gaussian after every iterations.
  XPOS, YPOS, and VSYS are always fitted as singular.
 **opt_pixel_beam**:
 

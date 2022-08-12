@@ -52,7 +52,6 @@ def catalogue(filename,split_char='|', debug = False):
             required_columns= ['ID','DISTANCE','DIRECTORYNAME','CUBENAME']
 
             for key in required_columns:
-                print(f'Checking key {key}')
                 if key not in Catalogue['ENTRIES']:
                     if split_char == '|':
                         print(f'Key {key} not found')
@@ -584,7 +583,7 @@ def guess_orientation(Configuration,Fits_Files, v_sys = -1 ,center = None, smoot
     SBR_initial =np.hstack((SBR_initial[0],SBR_initial,SBR_initial[-1]))
 
     SBR_initial[0:3] = SBR_initial[0:3] * (1.2 -float(inclination[0])/90.)
-    
+
     #We need to know which is the approaching side and which is receding
 
 

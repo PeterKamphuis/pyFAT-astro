@@ -58,6 +58,8 @@ class Output:
     output_quantity: int = 3
     # If you want FAT to output a warp radius, tiltograms and warp radius set warp_output (Default = n)
     warp_output: bool = False
+    # The font to be used in the plots
+    font_file: str = "/usr/share/fonts/truetype/msttcorefonts/Times_New_Roman.ttf"
     debug: bool = False
     timing: bool = False
 

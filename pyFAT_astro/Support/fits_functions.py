@@ -365,10 +365,6 @@ def extract_pv(Configuration,cube_in,angle,center=[-1,-1,-1],finalsize=[-1,-1],c
         TwoD_hdr['NAXIS1'] = nx
 
         TwoD_hdr['CRPIX2'] = hdr['CRPIX3']
-        if convert !=-1:
-            TwoD_hdr['CRVAL2'] = hdr['CRVAL3']/convert
-        else:
-            TwoD_hdr['CRVAL2'] = hdr['CRVAL3']
         TwoD_hdr['CRPIX1'] = xcenter+1
     else:
         zstart = set_limits(int(zcenter-finalsize[1]/2.),0,int(nz))
@@ -380,26 +376,27 @@ def extract_pv(Configuration,cube_in,angle,center=[-1,-1,-1],finalsize=[-1,-1],c
         TwoD_hdr['NAXIS2'] = int(finalsize[1])
         TwoD_hdr['NAXIS1'] = int(finalsize[0])
         TwoD_hdr['CRPIX2'] = hdr['CRPIX3']-int(nz/2.-finalsize[1]/2.)
-        if convert !=-1:
-            TwoD_hdr['CRVAL2'] = hdr['CRVAL3']/convert
-        else:
-            TwoD_hdr['CRVAL2'] = hdr['CRVAL3']
-
         TwoD_hdr['CRPIX1'] = int(finalsize[0]/2.)+1
+
     if convert !=-1:
+        TwoD_hdr['CRVAL2'] = hdr['CRVAL3']/convert
         TwoD_hdr['CDELT2'] = hdr['CDELT3']/convert
     else:
+        TwoD_hdr['CRVAL2'] = hdr['CRVAL3']
         TwoD_hdr['CDELT2'] = hdr['CDELT3']
     TwoD_hdr['CTYPE2'] = hdr['CTYPE3']
     try:
-        if hdr['CUNIT3'].lower() == 'm/s' and convert == -1:
+        if hdr['CUNIT3'].lower() == 'm/s' and convert == 1000. :
             TwoD_hdr['CDELT2'] = hdr['CDELT3']/1000.
             TwoD_hdr['CRVAL2'] = hdr['CRVAL3']/1000.
             TwoD_hdr['CUNIT2'] = 'km/s'
             del (TwoD_hdr['CUNIT3'])
         elif  convert != -1:
             del (TwoD_hdr['CUNIT3'])
-            del (TwoD_hdr['CUNIT2'])
+            try:
+                del (TwoD_hdr['CUNIT2'])
+            except KeyError:
+                pass
         else:
             TwoD_hdr['CUNIT2'] = hdr['CUNIT3']
             del (TwoD_hdr['CUNIT3'])
@@ -584,6 +581,24 @@ def prep_cube(Configuration,hdr,data, debug = False):
 {"":8s}PREPROCESSING: We blanked these values.
 ''',Configuration['OUTPUTLOG'])
 
+    #Let's make sure that a central absorption source is treated the same regardless od the size of the cube
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        buffer=5.*hdr['BMAJ']/np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])
+        central = data[:,int(hdr['NAXIS2']/2.-buffer):int(hdr['NAXIS2']/2.+buffer),\
+                        int(hdr['NAXIS1']/2.-buffer):int(hdr['NAXIS1']/2.+buffer)]
+
+        central_noise_indices = np.where(central < -10*noise_corner)
+    if len(central_noise_indices) > 0.0001*4*buffer*hdr['NAXIS3']:
+        central[central_noise_indices] = float('NaN')
+        data[:,int(hdr['NAXIS2']/2.-buffer):int(hdr['NAXIS2']/2.+buffer),\
+                        int(hdr['NAXIS1']/2.-buffer):int(hdr['NAXIS1']/2.+buffer)] =\
+                        central
+        print_log(f'''PREPROCESSING: Your cube had a significant amount of values below -10*sigma. If you do not have a central absorption source there is something seriously wrong with the cube.
+{"":8s}PREPROCESSING: We blanked these values.
+''',Configuration['OUTPUTLOG'])
+
+
     # Check whether any channels got fully blanked
     blanked_channels = []
     for z in range(hdr['NAXIS3']):
@@ -595,7 +610,7 @@ def prep_cube(Configuration,hdr,data, debug = False):
     #Previously SoFiA was not dealing with blanks properly and the statement went here
     #finally we want to get the noise level from the negative in the final cube
 
-    new_noise = np.std(np.hstack([data[data<0],-1.*data[data<0]]))
+    new_noise = np.nanstd(np.hstack([data[data<0],-1.*data[data<0]]))
     #If we have noiseles cubes this will be far to low
     if abs(new_noise/np.mean([channel_noise,noise_corner])) > 4. \
         or abs(new_noise/np.mean([channel_noise,noise_corner])) < 0.25:
