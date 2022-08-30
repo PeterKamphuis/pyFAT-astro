@@ -444,12 +444,13 @@ def check_source(Configuration, Fits_Files, debug = False):
     Cube = fits.open(f"{Configuration['FITTING_DIR']}{Fits_Files['FITTING_CUBE']}",uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
 
     data = Cube[0].data
+    masked_data = Cube[0].data
     header = Cube[0].header
     Mask = fits.open(f"{Configuration['FITTING_DIR']}{Fits_Files['MASK']}",uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
-    #Let's first check that this source has reasonable SNR
+    masked_data[Mask[0].data < 0.5] = float('NaN')#Let's first check that this source has reasonable SNR
 #Check that the source is bright enough
 
-    Max_SNR = np.nanmax(data[Mask[0].data > 0.5])/Configuration['NOISE']
+    Max_SNR = np.nanmax(masked_data)/Configuration['NOISE']
     if Max_SNR < 2.5:
         print_log(f'''CHECK_SOURCE: The max SNR of the pixels in the mask is {Max_SNR}, that is not enough for a fit.
 ''', Configuration['OUTPUTLOG'], screen=Configuration['VERBOSE'])
@@ -458,8 +459,8 @@ def check_source(Configuration, Fits_Files, debug = False):
         print_log(f'''CHECK_SOURCE: The Max SNR of the pixels in the mask is {Max_SNR}.
 ''', Configuration['OUTPUTLOG'], screen=Configuration['VERBOSE'])
 
-    Mean_SNR = np.nanmean(data[Mask[0].data > 0.5])/Configuration['NOISE']
-
+    Mean_SNR = np.nanmean(masked_data[masked_data > 0.])/Configuration['NOISE']
+    del masked_data
     if Mean_SNR < 0.75:
         print_log(f'''CHECK_SOURCE: The mean SNR of the pixels in the mask is {Mean_SNR}, that is not enough for a fit.
 ''', Configuration['OUTPUTLOG'], screen=Configuration['VERBOSE'])
@@ -546,6 +547,7 @@ def check_source(Configuration, Fits_Files, debug = False):
     Central_Flux = np.mean(data[int(round(z-1)):int(round(z+1)),\
                                 int(round(y-Configuration['BEAM_IN_PIXELS'][0]/2.)):int(round(y+Configuration['BEAM_IN_PIXELS'][0]/2.)),\
                                 int(round(x-Configuration['BEAM_IN_PIXELS'][0]/2.)):int(round(x+Configuration['BEAM_IN_PIXELS'][0]/2.))])
+    del data
     if debug:
         print_log(f'''CHECK_SOURCE: In the center we find an average flux of  {Central_Flux} Jy/beam around the location:
 {"":8s}CHECK_SOURCE: x,y,z = {int(round(x))}, {int(round(y))}, {int(round(z))}.

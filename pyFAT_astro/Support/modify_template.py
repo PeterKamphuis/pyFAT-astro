@@ -129,7 +129,13 @@ arc_tan_function.__doc__ =f'''
  NOTE:
 '''
 
-def calc_new_size(Configuration,Tirific_Template,radii,sbr,sbr_ring_limits, debug=False):
+def calc_new_size(Configuration,Tirific_Template,radii,sbr_in,sbr_ring_limits, debug=False):
+
+    sbr=copy.deepcopy(sbr_in)
+
+    for i in [0,1]:
+        if sbr[i,-1] > 5*  sbr[i,-2]:
+              sbr[i,-1]= 0.8*sbr[i,-2]
 
     sm_sbr = smooth_profile(Configuration,Tirific_Template,'SBR',
                             min_error= sbr_ring_limits,no_apply = True,
@@ -138,6 +144,10 @@ def calc_new_size(Configuration,Tirific_Template,radii,sbr,sbr_ring_limits, debu
     new_size = copy.deepcopy(Configuration['SIZE_IN_BEAMS'])
     difference_with_limit = np.array(sbr-sbr_ring_limits,dtype=float)
     smooth_diff = smooth_profile(Configuration,{'EMPTY':None}, 'ARBITRARY' ,profile_in=difference_with_limit, min_error=[0.,0.],debug=debug,no_fix=True,no_apply=True)
+    if debug:
+        print_log(f'''CALC_NEW_SIZE: We find the following smoothed difference profile:
+{'':8s} smooth_diff = {smooth_diff}
+''',Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
     for i in [0,1]:
         #If all last three values are above the limit we need to extend
         if np.all(smooth_diff[i,-3:] > 0.):
@@ -1045,15 +1055,16 @@ def fix_outer_rotation(Configuration,profile, debug = False):
     # if the outer parts are less then 5 channels there is something wrong And we just take a flat curve from max
     if np.mean(profile[Configuration['RC_UNRELIABLE']:]) < 5.*Configuration['CHANNEL_WIDTH']:
         Configuration['RC_UNRELIABLE'] = int(np.where(np.max(profile) == profile)[0][0])+1
-        profile[Configuration['RC_UNRELIABLE']:] = profile[Configuration['RC_UNRELIABLE']-1]
-        if debug:
-            print_log(f'''FIX_OUTER_ROTATION: we adjusted the unreliable part.
+        if Configuration['RC_UNRELIABLE'] < Configuration['NO_RINGS']-1:                
+            profile[Configuration['RC_UNRELIABLE']:] = profile[Configuration['RC_UNRELIABLE']-1]
+            if debug:
+                print_log(f'''FIX_OUTER_ROTATION: we adjusted the unreliable part.
 {'':8s}{profile}
 {'':8s} from ring {Configuration['RC_UNRELIABLE']} we do not trust the rings.
-''',Configuration['OUTPUTLOG'],debug = True)
+    ''',Configuration['OUTPUTLOG'],debug = True)
 
     #inner_slope = int(round(set_limits(NUR*(4.-Configuration['LIMIT_MODIFIER'][0])/4.,round(NUR/2.),NUR-2)))
-    if Configuration['RC_UNRELIABLE'] != Configuration['NO_RINGS']-1 and np.mean(profile[1:3]) > 180.:
+    if Configuration['RC_UNRELIABLE'] < Configuration['NO_RINGS']-1 and np.mean(profile[1:3]) > 180.:
         profile[Configuration['RC_UNRELIABLE']:] = profile[Configuration['RC_UNRELIABLE']-1]
 
     for i in range(int(Configuration['NO_RINGS']*3./4),Configuration['NO_RINGS']-1):

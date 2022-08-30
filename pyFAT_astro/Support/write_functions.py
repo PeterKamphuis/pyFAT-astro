@@ -235,7 +235,7 @@ initialize_def_file.__doc__ =f'''
 
  OPTIONAL OUTPUTS:
 
- PROCEDURES CALLED:
+ PROCEDURES CALLED:"/usr/share/fonts/truetype/msttcorefonts/Times_New_Roman.ttf"
     Unspecified
 
  NOTE:
