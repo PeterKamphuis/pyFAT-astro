@@ -1,10 +1,10 @@
 #!/usr/bin/env python
-
+''' This is the setup script for the pyFAT package'''
 import os
 
 try:
     from setuptools import setup
-except ImportError as e:
+except ImportError:
     from distutils.core import setup
 
 requirements = [

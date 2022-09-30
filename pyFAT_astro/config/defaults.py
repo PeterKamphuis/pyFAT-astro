@@ -6,7 +6,8 @@ import os
 from dataclasses import dataclass, field
 from datetime import datetime
 from omegaconf import MISSING
-from multiprocessing import cpu_count
+#from multiprocessing import cpu_count
+from psutil import cpu_count
 from typing import List, Optional
 
 
