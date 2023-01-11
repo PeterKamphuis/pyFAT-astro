@@ -101,6 +101,8 @@ class Advanced:
         default_factory=lambda: [[0., 0.], [0., 0.], [0., 0.]])
     vrot_input_boundary: List = field(
         default_factory=lambda: [[0., 0.], [0., 0.], [0., 0.]])
+    sbr_input_boundary: List = field(
+        default_factory=lambda: [[0., 0.], [0., 0.], [0., 0.]])
 
     # Add the channel dependency, minimum inclination,
 

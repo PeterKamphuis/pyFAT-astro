@@ -479,7 +479,9 @@ def check_source(Configuration, Fits_Files, debug = False):
     DECboun = np.sort([float(declow),float(dechigh)])
     RAboun = np.sort([float(ralow),float(rahigh)])
     VELboun = np.sort([float(vellow),float(velhigh)])
-    vsys_error= np.mean(np.abs(np.array(VELboun,dtype=float)-v_app))*0.05
+    vsys_error= set_limits(np.mean(np.abs(np.array(VELboun/1000.,dtype=float)-v_app))*0.05,\
+                    Configuration['CHANNEL_WIDTH']*2,Configuration['CHANNEL_WIDTH']*10.)
+
     rahr,dechr = convertRADEC(Configuration,ra,dec,debug=debug)
     # We write the results of the cut cube to the log
     print_log(f'''CHECK_SOURCE: The source finder found the following center in pixels.
@@ -503,7 +505,9 @@ def check_source(Configuration, Fits_Files, debug = False):
     else:
         smooth_field = False
 
-    pa, inclination, SBR_initial, maj_extent,x_new,y_new,new_vsys,VROT_initial = rf.guess_orientation(Configuration,Fits_Files, v_sys= v_app, smooth = smooth_field,center = [x,y],debug=debug)
+    pa, inclination, SBR_initial, maj_extent,x_new,y_new,new_vsys,VROT_initial =\
+        rf.guess_orientation(Configuration,Fits_Files, vsys= v_app, \
+            smooth = smooth_field,center = [x,y],debug=debug)
 
     if x_new != x or y_new != y or new_vsys != v_app:
         x,y,z_new=cube_wcs.wcs_world2pix(ra,dec,new_vsys*1000.,1)
@@ -639,12 +643,12 @@ def check_source(Configuration, Fits_Files, debug = False):
     Initial_Parameters = {}
     Initial_Parameters['XPOS'] = [ra,set_limits(abs(err_x*header['CDELT1']),0.1/3600.*Configuration['BEAM'][0],3./3600.*Configuration['BEAM'][0] )]
     Initial_Parameters['YPOS'] = [dec,set_limits(abs(err_y*header['CDELT2']),0.1/3600.*Configuration['BEAM'][0],3./3600.*Configuration['BEAM'][0] )]
-    Initial_Parameters['VSYS'] =[v_app*1000.,vsys_error]
+    Initial_Parameters['VSYS'] =[v_app,vsys_error]
 
     if Configuration['OUTER_RINGS_DOUBLED']:
         for par in ['XPOS','YPOS']:
             Initial_Parameters[par][1]= Initial_Parameters[par][1]*np.mean(Configuration['SIZE_IN_BEAMS'])*10.
-        Initial_Parameters['VSYS'][1] = Initial_Parameters['VSYS'][1]*Configuration['NAXES'][2]/10.*Configuration['CHANNEL_WIDTH']*1000.
+        Initial_Parameters['VSYS'][1] = Initial_Parameters['VSYS'][1]*Configuration['NAXES'][2]/10.*Configuration['CHANNEL_WIDTH']
     Initial_Parameters['SBR_profile'] = SBR_initial
     #Initial_Parameters['VROT'] = [max_vrot/1000.,max_vrot_dev/1000.]
     Initial_Parameters['VROT_profile'] = VROT_initial
@@ -661,6 +665,10 @@ def check_source(Configuration, Fits_Files, debug = False):
         for parameter in ['INCL','Z0','SDIS','PA']:
             if parameter not in Configuration['FIXED_PARAMETERS'][0]:
                 Configuration['FIXED_PARAMETERS'][0].append(parameter)
+
+    Initial_Parameters = check_initial_boundaries(Configuration, Initial_Parameters,\
+                                    debug=debug)
+
 
     return Initial_Parameters
 check_source.__doc__='''
@@ -690,6 +698,48 @@ check_source.__doc__='''
 
  NOTE:
 '''
+
+def check_initial_boundaries(Configuration, Initial_Parameters,\
+                                debug=False):
+    if debug:
+        print_log(f'''CHECK_INITIAL_BOUNDARIES: Starting Check
+''',Configuration['OUTPUTLOG'],debug=True)
+    for parameter in Initial_Parameters:
+        #some initial parameters we do not want to check as they are not in the models
+        if parameter in ['FLUX']:
+            continue
+        if parameter in ['VROT_profile','SBR_profile']:
+            stripped_parameter= parameter.split('_')[0]
+            length = len(Initial_Parameters[parameter])
+            if parameter == 'VROT_profile':
+                error=  set_limits(Initial_Parameters[stripped_parameter][1]/10.,0.,\
+                    Configuration[f'{stripped_parameter}_INPUT_BOUNDARY'][0][0]*1.05)
+            elif parameter == 'SBR_profile':
+                error=Initial_Parameters[parameter][-1]/5.
+            else:
+                error=0.
+        else:
+            stripped_parameter= parameter
+            length=1
+            error = set_limits(abs(Initial_Parameters[parameter][1]/10.),0.,\
+                abs(Configuration[f'{stripped_parameter}_INPUT_BOUNDARY'][0][0])*1.05)
+        if np.sum(Configuration[f'{stripped_parameter}_INPUT_BOUNDARY']) != 0.:
+            if debug:
+                print_log(f'''CHECK_INITIAL_BOUNDARIES: Checking {parameter}
+{'':8s} stripped_parameter = {stripped_parameter}
+{'':8s} boundaries = {Configuration[f'{stripped_parameter}_INPUT_BOUNDARY']}
+{'':8s} length = {length}
+{'':8s} error = {error}
+''',Configuration['OUTPUTLOG'])
+            for i in range(length):
+                Initial_Parameters[parameter][i] = set_limits(\
+                    Initial_Parameters[parameter][i],\
+                    Configuration[f'{stripped_parameter}_INPUT_BOUNDARY'][0][0]+error,\
+                    Configuration[f'{stripped_parameter}_INPUT_BOUNDARY'][0][1]-error)
+
+
+
+    return Initial_Parameters
 
 def check_vobs(Configuration,Tirific_Template,fit_type = 'Undefined', debug = False):
     passed = False

@@ -787,8 +787,10 @@ def columndensity(Configuration,levels,systemic = 100.,beam=[-1.,-1.],channel_wi
         print_log(f'''COLUMNDENSITY: We have the following input for calculating the columns.
 {'':8s}COLUMNDENSITY: level = {levels}, channel_width = {channel_width}, beam = {beam}, systemic = {systemic})
 ''',Configuration['OUTPUTLOG'])
-    if systemic > 10000:
-        systemic = systemic/1000.
+    #systemic should always be in km/s
+    #if systemic > 10000:
+    #    systemic = systemic/1000.
+
     f = f0 * (1 - (systemic / c)) #Systemic frequency
     if arcsquare:
         #Should we have the (f0/f)**2 factor here????
@@ -3553,7 +3555,7 @@ def setup_configuration(cfg):
 
 
 # The parameters that need boundary limits are set here
-    boundary_limit_keys = ['PA','INCL', 'SDIS', 'Z0','VSYS','XPOS','YPOS','VROT']
+    boundary_limit_keys = ['PA','INCL', 'SDIS', 'Z0','VSYS','XPOS','YPOS','VROT','SBR']
     for key in boundary_limit_keys:
         if np.sum(Configuration[f"{key}_INPUT_BOUNDARY"]) == 0.:
             if key == 'INCL':

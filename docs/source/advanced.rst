@@ -331,6 +331,14 @@ Advanced Keywords
   The boundaries that the rotation curve needs to remain within. Too small boundaries can lead to FAT not finding a a succesfull model.
   Given as min,max for the three areas of the fit: the central part, the approaching side warp, the receding side warp.
 
+**sbr_input_boundary**
+
+    *list, optional, default = [[0., 0.], [0., 0.], [0., 0.]]*
+
+    The boundaries that the surface brightness profile needs to remain within. Too small boundaries can lead to FAT not finding a a succesfull model.
+    Given as min,max for the three areas of the fit: the central part, the approaching side warp, the receding side warp.
+
+
 
 
 Individual Keywords

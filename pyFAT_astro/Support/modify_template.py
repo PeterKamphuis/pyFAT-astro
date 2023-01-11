@@ -1055,7 +1055,7 @@ def fix_outer_rotation(Configuration,profile, debug = False):
     # if the outer parts are less then 5 channels there is something wrong And we just take a flat curve from max
     if np.mean(profile[Configuration['RC_UNRELIABLE']:]) < 5.*Configuration['CHANNEL_WIDTH']:
         Configuration['RC_UNRELIABLE'] = int(np.where(np.max(profile) == profile)[0][0])+1
-        if Configuration['RC_UNRELIABLE'] < Configuration['NO_RINGS']-1:                
+        if Configuration['RC_UNRELIABLE'] < Configuration['NO_RINGS']-1:
             profile[Configuration['RC_UNRELIABLE']:] = profile[Configuration['RC_UNRELIABLE']-1]
             if debug:
                 print_log(f'''FIX_OUTER_ROTATION: we adjusted the unreliable part.
@@ -3047,7 +3047,7 @@ def set_model_parameters(Configuration, Tirific_Template,Model_Values, stage = '
 
     check_parameters = []
     if 'VSYS' in Model_Values:
-        vsys =Model_Values['VSYS'][0]/1000.
+        vsys = Model_Values['VSYS']
     else:
         vsys=100.
     scramble = np.zeros(len(parameters_to_set))
