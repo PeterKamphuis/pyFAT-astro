@@ -171,7 +171,7 @@ def main(argv):
 
         if Original_Configuration['TIMING']:
             with open(Original_Configuration['MAIN_DIRECTORY']+'Timing_Result.txt','w') as timing_result:
-                timing_result.write("This file contains the system start and end times for the fitting of each galaxy")
+                timing_result.write("This file contains the system start and end times for the fitting of each galaxy. \n")
 
         #if start_galaxy not negative then it is catalogue ID
 

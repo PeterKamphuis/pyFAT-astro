@@ -590,13 +590,16 @@ def clean_header(Configuration,hdr_in,two_dim=False,mask_file=False, debug = Fal
     if not two_dim:
         hdr['NAXIS'] = 3
         if not 'CUNIT3' in hdr:
-            if hdr['CDELT3'] > 500:
+            if abs(hdr['CDELT3']) > 500:
                 hdr['CUNIT3'] = 'm/s'
             else:
                 hdr['CUNIT3'] = 'km/s'
-            print_log(f'''CLEAN_HEADER: Your header did not have a unit for the third axis, that is bad policy.
+            print_log(f'''CLEAN_HEADER:
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+Your header did not have a unit for the third axis, that is bad policy.
 {"":8s} We have set it to {hdr['CUNIT3']}. Please ensure that is correct.'
-''',Configuration['OUTPUTLOG'])
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+''',Configuration['OUTPUTLOG'],screen = True)
         if hdr['CUNIT3'].upper() == 'HZ' or hdr['CTYPE3'].upper() == 'FREQ':
             print_log('CLEAN_HEADER: FREQUENCY IS NOT A SUPPORTED VELOCITY AXIS.', Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
             raise BadHeaderError('The Cube has frequency as a velocity axis this is not supported')

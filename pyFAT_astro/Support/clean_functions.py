@@ -640,11 +640,17 @@ finish_galaxy.__doc__ =f'''
 '''
 
 def transfer_errors(Configuration,fit_type='Undefined',debug = False):
+    if debug:
+        print_log(f'''TRANSFER_ERROR: Start.
+''',Configuration['OUTPUTLOG'],debug =True)
     # Load the final file
     Tirific_Template = tirific_template(filename = f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def",debug= debug)
     variables = ['INCL','PA','VROT','SDIS','SBR','VSYS','XPOS','YPOS','Z0']
     weights = get_ring_weights(Configuration,Tirific_Template,debug=debug)
     for parameter in variables:
+        if debug:
+            print_log(f'''TRANSFER_ERROR: Creating errors for {parameter}.
+''',Configuration['OUTPUTLOG'],debug =False)
         profile = np.array(get_from_template(Configuration,Tirific_Template, [parameter,f"{parameter}_2"]),dtype=float)
         sm_profile1,sm_profile2= load_tirific(Configuration,f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}_Iteration_{Configuration['ITERATIONS']}.def",Variables=[parameter,f"{parameter}_2"],unpack=True,debug=debug)
         sm_profile = np.array([sm_profile1,sm_profile2])
