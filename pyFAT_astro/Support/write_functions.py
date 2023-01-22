@@ -1,14 +1,15 @@
 # -*- coding: future_fstrings -*-
 # This module contains a set of functions and classes that are used to write text files to Disk
 
-from pyFAT_astro.Support.support_functions import print_log,convertRADEC,convertskyangle,\
-                                set_limit_modifier,columndensity,set_limits,\
-                                linenumber
+
 from pyFAT_astro.Support.modify_template import set_model_parameters, set_overall_parameters,\
                                 set_fitting_parameters,get_warp_slope, update_disk_angles
 from pyFAT_astro.Support.fits_functions import extract_pv
-from pyFAT_astro.Support.read_functions import load_tirific,load_basicinfo, load_template
+from pyFAT_astro.Support.read_functions import load_basicinfo
 from pyFAT_astro.Support.fat_errors import ProgramError
+import pyFAT_astro.Support.support_functions as sf
+
+
 import copy
 import numpy as np
 import warnings
@@ -51,19 +52,20 @@ def basicinfo(Configuration,initialize = False,stage='TiRiFiC', debug = False,
 ''')
     else:
         Vars_to_Set =  ['XPOS','YPOS','VSYS','VROT','INCL','PA','SDIS','SBR','SBR_2','Z0']
-        FAT_Model = load_template(Configuration,template,Variables= Vars_to_Set,unpack=False, debug=debug)
-        RA=[FAT_Model[0,Vars_to_Set.index('XPOS')],abs(Configuration['BEAM'][0]/(3600.*2.))]
-        DEC=[FAT_Model[0,Vars_to_Set.index('YPOS')],abs(Configuration['BEAM'][0]/(3600.*2.))]
-        VSYS =np.array([FAT_Model[0,Vars_to_Set.index('VSYS')],Configuration['CHANNEL_WIDTH']],dtype=float)
-        PA=[FAT_Model[0,Vars_to_Set.index('PA')], 3.]
-        Inclination = [FAT_Model[0,Vars_to_Set.index('INCL')], 3.]
-        Max_Vrot = [np.max(FAT_Model[:,Vars_to_Set.index('VROT')]),np.max(FAT_Model[:,Vars_to_Set.index('VROT')])-np.min(FAT_Model[1:,Vars_to_Set.index('VROT')]) ]
+        FAT_Model = sf.load_tirific(Configuration,template,\
+            Variables= Vars_to_Set,array=True, debug=debug)
+        RA=[FAT_Model[Vars_to_Set.index('XPOS'),0],abs(Configuration['BEAM'][0]/(3600.*2.))]
+        DEC=[FAT_Model[Vars_to_Set.index('YPOS'),0],abs(Configuration['BEAM'][0]/(3600.*2.))]
+        VSYS =np.array([FAT_Model[Vars_to_Set.index('VSYS'),0],Configuration['CHANNEL_WIDTH']],dtype=float)
+        PA=[FAT_Model[Vars_to_Set.index('PA'),0], 3.]
+        Inclination = [FAT_Model[Vars_to_Set.index('INCL'),0], 3.]
+        Max_Vrot = [np.max(FAT_Model[Vars_to_Set.index('VROT'),:]),np.max(FAT_Model[Vars_to_Set.index('VROT'),:])-np.min(FAT_Model[Vars_to_Set.index('VROT'),1:]) ]
         Distance = Configuration['DISTANCE']
 
     with open(f"{Configuration['FITTING_DIR']}{Configuration['BASE_NAME']}-Basic_Info.txt",'a') as file:
         if not initialize:
             file.write(f'''#These are the values from {stage}. \n''')
-        RAhr,DEChr = convertRADEC(Configuration,RA[0],DEC[0],debug=debug)
+        RAhr,DEChr = sf.convertRADEC(Configuration,RA[0],DEC[0],debug=debug)
         RA_c = f'{RAhr}+/-{RA[1]*3600.:0.2f}'
         DEC_c = f'{DEChr}+/-{DEC[1]*3600.:0.2f}'
         VSYS_c = f'{VSYS[0]:.2f}+/-{VSYS[1]:.2f}'
@@ -74,7 +76,7 @@ def basicinfo(Configuration,initialize = False,stage='TiRiFiC', debug = False,
         DHI_a = f'{DHI[0]:.2f}+/-{DHI[1]:.2f}'
         Dist = f'{Distance:.2f}'
         HIMass  = f'{Tot_Flux[0]*2.36E5*Distance**2:.2e}'
-        DHI_k = f'{convertskyangle(Configuration,DHI[0]):.2f}'
+        DHI_k = f'{sf.convertskyangle(Configuration,DHI[0]):.2f}'
         Flux_c = f'{Tot_Flux[0]:.2f}+/-{Tot_Flux[1]:.2f}'
         file.write(f'''  {RA_c:>25s} {DEC_c:>25s} {VSYS_c:>20s} {PA_c:>20s} {INCL_c:>20s} {MVROT_c:>20s} {Vmask_c:>20s} {Flux_c:>20s} {DHI_a:>20s} {Dist:>20s} {HIMass:>20s} {DHI_k:>20s}
 ''')
@@ -158,7 +160,7 @@ def initialize_def_file(Configuration, Fits_Files,Tirific_Template,Initial_Param
 
         set_model_parameters(Configuration, Tirific_Template,Initial_Parameters, debug=debug)
 
-        set_limit_modifier(Configuration,Tirific_Template, debug=debug )
+        sf.set_limit_modifier(Configuration,Tirific_Template, debug=debug )
 
         set_fitting_parameters(Configuration, Tirific_Template,stage = 'initial',
                                 initial_estimates = Initial_Parameters, debug=debug)
@@ -171,23 +173,22 @@ def initialize_def_file(Configuration, Fits_Files,Tirific_Template,Initial_Param
         Vars_to_Set =  ['XPOS','YPOS','VSYS','VROT','INCL','PA','SDIS','SBR','SBR_2','Z0']
         if fit_type == 'Fit_Tirific_OSC':
             set_model_parameters(Configuration, Tirific_Template,Initial_Parameters,stage='initialize_def_file', debug=debug)
-        #FAT_Model = load_template(Configuration,Tirific_Template,Variables= Vars_to_Set,unpack=False, debug=debug)
 
         # Finally we set how these parameters are fitted.
-        set_limit_modifier(Configuration,Tirific_Template, debug=debug)
+        sf.set_limit_modifier(Configuration,Tirific_Template, debug=debug)
         #get_inner_fix(Configuration,Tirific_Template, debug=debug)
         get_warp_slope(Configuration,Tirific_Template, debug=debug)
         #if Configuration['OUTER_RINGS_DOUBLED']:
-        Initial_Parameters['XPOS'][1]= set_limits(Initial_Parameters['XPOS'][1],Configuration['BEAM'][0]/3600.,Configuration['BEAM'][0]/3600.*5)
-        Initial_Parameters['YPOS'][1]= set_limits(Initial_Parameters['YPOS'][1],Configuration['BEAM'][0]/3600.,Configuration['BEAM'][0]/3600.*5)
-        Initial_Parameters['VSYS'][1]= set_limits(Initial_Parameters['VSYS'][1],Configuration['CHANNEL_WIDTH']/2.,Configuration['CHANNEL_WIDTH']*5)
-        Initial_Parameters['PA'][1]= set_limits(Initial_Parameters['PA'][1],1.,15)
-        Initial_Parameters['INCL'][1]= set_limits(Initial_Parameters['INCL'][1],3.,15)
+        Initial_Parameters['XPOS'][1]= sf.set_limits(Initial_Parameters['XPOS'][1],Configuration['BEAM'][0]/3600.,Configuration['BEAM'][0]/3600.*5)
+        Initial_Parameters['YPOS'][1]= sf.set_limits(Initial_Parameters['YPOS'][1],Configuration['BEAM'][0]/3600.,Configuration['BEAM'][0]/3600.*5)
+        Initial_Parameters['VSYS'][1]= sf.set_limits(Initial_Parameters['VSYS'][1],Configuration['CHANNEL_WIDTH']/2.,Configuration['CHANNEL_WIDTH']*5)
+        Initial_Parameters['PA'][1]= sf.set_limits(Initial_Parameters['PA'][1],1.,15)
+        Initial_Parameters['INCL'][1]= sf.set_limits(Initial_Parameters['INCL'][1],3.,15)
         '''
         else:
             Initial_Parameters['XPOS'][1]= Configuration['BEAM'][0]/3600.
             Initial_Parameters['YPOS'][1]= Configuration['BEAM'][0]/3600.
-            Initial_Parameters['VSYS'][1]= set_limits(Initial_Parameters['VSYS'][1],Configuration['CHANNEL_WIDTH']/2.,Configuration['CHANNEL_WIDTH']*5)
+            Initial_Parameters['VSYS'][1]= sf.set_limits(Initial_Parameters['VSYS'][1],Configuration['CHANNEL_WIDTH']/2.,Configuration['CHANNEL_WIDTH']*5)
 
             #Initial_Parameters['VSYS'][1]= Configuration['CHANNEL_WIDTH']
             Initial_Parameters['PA'][1]= 1.
@@ -195,7 +196,7 @@ def initialize_def_file(Configuration, Fits_Files,Tirific_Template,Initial_Param
 
 
 
-        
+
         parameters = {'VSYS': [FAT_Model[0,Vars_to_Set.index('VSYS')], Configuration['CHANNEL_WIDTH']], \
                       'XPOS': [FAT_Model[0,Vars_to_Set.index('XPOS')], Configuration['BEAM'][0]/3600.] ,
                       'YPOS': [FAT_Model[0,Vars_to_Set.index('YPOS')], Configuration['BEAM'][0]/3600.],
@@ -247,7 +248,7 @@ initialize_def_file.__doc__ =f'''
 def make_overview_plot(Configuration,Fits_Files, debug = False):
     fit_type = Configuration['USED_FITTING']
     if debug:
-        print_log(f'''MAKE_OVERVIEW_PLOT: We are starting the overview plot.
+        sf.print_log(f'''MAKE_OVERVIEW_PLOT: We are starting the overview plot.
 ''',Configuration['OUTPUTLOG'],debug =True )
 
     with warnings.catch_warnings():
@@ -265,31 +266,36 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
 
     # Open the model info
     if debug:
-        print_log(f'''MAKE_OVERVIEW_PLOT: Reading the variables from the final model
+        sf.print_log(f'''MAKE_OVERVIEW_PLOT: Reading the variables from the final model
 ''',Configuration['OUTPUTLOG'],debug =True )
     Vars_to_plot_short= ['RADI','XPOS','YPOS','VSYS','VROT','INCL','PA','SDIS',\
                     'SBR','Z0']
     Vars_to_plot=copy.deepcopy(Vars_to_plot_short)
     for x in Vars_to_plot_short:
         if x != 'RADI':
-            Vars_to_plot.append(f'{x}_ERR')
+            Vars_to_plot.append(f'# {x}_ERR')
         if x not in ['XPOS','YPOS','VSYS']:
             Vars_to_plot.append(f'{x}_2')
-            Vars_to_plot.append(f'{x}_2_ERR')
-    FAT_Model = load_tirific(Configuration,f"{Configuration['FITTING_DIR']}Finalmodel/Finalmodel.def",Variables= Vars_to_plot,unpack=False,debug=debug)
+            Vars_to_plot.append(f'# {x}_2_ERR')
+    FAT_Model = sf.load_tirific(Configuration,\
+        f"{Configuration['FITTING_DIR']}Finalmodel/Finalmodel.def",\
+        Variables= Vars_to_plot,array=True,debug=debug)
     Extra_Model_File = f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}_Iteration_{Configuration['ITERATIONS']}.def"
 
     if os.path.exists(Extra_Model_File):
-        Extra_Model = load_tirific(Configuration,Extra_Model_File,Variables= Vars_to_plot,unpack=False,debug=debug)
+        Extra_Model = sf.load_tirific(Configuration,Extra_Model_File,\
+            Variables= Vars_to_plot,array=True,debug=debug)
     else:
         Extra_Model = []
     if debug:
-        print_log(f'''MAKE_OVERVIEW_PLOT: We find the following model values.
-{'':8s}{[f"{x} = {FAT_Model[:,i]}" for i,x in enumerate(Vars_to_plot)]}
+        sf.print_log(f'''MAKE_OVERVIEW_PLOT: We find the following model values.
+{'':8s}{[f"{x} = {FAT_Model[i,:]}" for i,x in enumerate(Vars_to_plot)]}
 ''',Configuration['OUTPUTLOG'])
 
     if os.path.exists(f"{Configuration['FITTING_DIR']}ModelInput.def"):
-        Input_Model = load_tirific(Configuration,f"{Configuration['FITTING_DIR']}ModelInput.def",Variables= Vars_to_plot,unpack=False,debug=debug)
+        Input_Model = sf.load_tirific(Configuration,\
+            f"{Configuration['FITTING_DIR']}ModelInput.def",\
+            Variables= Vars_to_plot,array=True,debug=debug)
     else:
         Input_Model = []
     sof_basic_ra,sof_basic_dec, sof_basic_vsys,sof_basic_maxrot,sof_basic_pa,sof_basic_inclination,sof_basic_extent = load_basicinfo(Configuration,
@@ -415,7 +421,7 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
     cbar.ax.set_title(f"{moment0[0].header['BUNIT']}", y= 0.2)
 
 
-    column_levels = columndensity(Configuration,momlevel*1000.,systemic = FAT_Model[0,Vars_to_plot.index('VSYS')])
+    column_levels = sf.columndensity(Configuration,momlevel*1000.,systemic = FAT_Model[Vars_to_plot.index('VSYS'),0])
 
     if 1e21 < np.min(column_levels):
         fact= 1e21
@@ -452,11 +458,11 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
     ax_moment1.set_label('Velocity Field')
     #Comp_ax1.set_facecolor('black')
     # we need contour levels and
-    inclination_correction = set_limits(FAT_Model[0,Vars_to_plot.index('INCL')]+12.5,20.,90.)
-    velocity_width= set_limits(1.25*np.nanmax(FAT_Model[:,Vars_to_plot.index('VROT')])*np.sin(np.radians(inclination_correction)),30.,700.)
+    inclination_correction = sf.set_limits(FAT_Model[Vars_to_plot.index('INCL'),0]+12.5,20.,90.)
+    velocity_width= sf.set_limits(1.25*np.nanmax(FAT_Model[Vars_to_plot.index('VROT'),:])*np.sin(np.radians(inclination_correction)),30.,700.)
 
-    max_color= FAT_Model[0,Vars_to_plot.index('VSYS')]+velocity_width
-    min_color= FAT_Model[0,Vars_to_plot.index('VSYS')]-velocity_width
+    max_color= FAT_Model[Vars_to_plot.index('VSYS'),0]+velocity_width
+    min_color= FAT_Model[Vars_to_plot.index('VSYS'),0]-velocity_width
 
     moment1_plot = ax_moment1.imshow(moment1[0].data, cmap='rainbow', origin='lower', alpha=1, vmin = min_color, vmax = max_color )
     plt.ylabel('DEC (J2000)')
@@ -464,9 +470,9 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
     plt.xlabel('RA J2000')
 
     # contours
-    velocity_step=set_limits(int((int(max_color-min_color)*0.9)/20.),1.,30.)
+    velocity_step=sf.set_limits(int((int(max_color-min_color)*0.9)/20.),1.,30.)
     integer_array = np.linspace(0,20,21)-10
-    momlevel = [FAT_Model[0,Vars_to_plot.index('VSYS')]+x*velocity_step for x in integer_array if min_color < FAT_Model[0,Vars_to_plot.index('VSYS')]+x*velocity_step < max_color]
+    momlevel = [FAT_Model[Vars_to_plot.index('VSYS'),0]+x*velocity_step for x in integer_array if min_color < FAT_Model[Vars_to_plot.index('VSYS'),0]+x*velocity_step < max_color]
     ax_moment1.contour(moment1[0].data, transform=ax_moment1.get_transform(im_wcs),
                levels=momlevel, colors='white',linewidths=1.2 , zorder =4)
     ax_moment1.contour(moment1[0].data, transform=ax_moment1.get_transform(im_wcs),
@@ -522,7 +528,7 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
     ax_moment2.set_label('Moment2')
     #Comp_ax1.set_facecolor('black')
     # we need contour levels and
-    max_color= set_limits(np.nanmax(moment2[0].data),15,50)
+    max_color= sf.set_limits(np.nanmax(moment2[0].data),15,50)
     min_color= 0.
 
     moment2_plot = ax_moment2.imshow(moment2[0].data, cmap='rainbow' ,origin='lower', alpha=1, vmin = min_color, vmax = max_color )
@@ -596,14 +602,14 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
 
 #__________________------------------------------------------------------------PV Diagram
 
-    extract_angle = np.mean(FAT_Model[0:round(len(FAT_Model[:,Vars_to_plot.index('PA')])/2.),Vars_to_plot.index('PA')])
+    extract_angle = np.mean(FAT_Model[Vars_to_plot.index('PA'),0:round(len(FAT_Model[Vars_to_plot.index('PA'),:])/2.)])
     PV = extract_pv(Configuration,cube,extract_angle, \
-                    center = [float(FAT_Model[0,Vars_to_plot.index('XPOS')]),float(FAT_Model[0,Vars_to_plot.index('YPOS')]),float(FAT_Model[0,Vars_to_plot.index('VSYS')]*1000.)], \
+                    center = [float(FAT_Model[Vars_to_plot.index('XPOS'),0]),float(FAT_Model[Vars_to_plot.index('YPOS'),0]),float(FAT_Model[Vars_to_plot.index('VSYS'),0]*1000.)], \
                     convert=1000.)
     if not os.path.exists(f"{Configuration['FITTING_DIR']}/Finalmodel/{Configuration['BASE_NAME']}_final_xv.fits"):
         fits.writeto(f"{Configuration['FITTING_DIR']}/Finalmodel/{Configuration['BASE_NAME']}_final_xv.fits",PV[0].data,PV[0].header)
     PV_model = extract_pv(Configuration,cube_mod,extract_angle, \
-                    center = [float(FAT_Model[0,Vars_to_plot.index('XPOS')]),float(FAT_Model[0,Vars_to_plot.index('YPOS')]),float(FAT_Model[0,Vars_to_plot.index('VSYS')]*1000.)], \
+                    center = [float(FAT_Model[Vars_to_plot.index('XPOS'),0]),float(FAT_Model[Vars_to_plot.index('YPOS'),0]),float(FAT_Model[Vars_to_plot.index('VSYS'),0]*1000.)], \
                     convert=1000.)
     if not os.path.exists(f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel_xv.fits"):
         fits.writeto(f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel_xv.fits",PV_model[0].data,PV_model[0].header)
@@ -640,7 +646,7 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
         pos_cont =  np.array([0,1,2,3,4,5,6,7],dtype=float)*(np.nanmax(PV[0].data) * 0.95-3.*Configuration['NOISE'])/7. +3.*Configuration['NOISE']
     pos_cont = np.array([x for x in pos_cont if x <= np.nanmax(PV[0].data) * 0.95],dtype=float)
     if debug:
-            print_log(f'''MAKE_OVERVIEW_PLOT: postive {pos_cont}, negative {neg_cont}, noise {Configuration['NOISE']}
+            sf.print_log(f'''MAKE_OVERVIEW_PLOT: postive {pos_cont}, negative {neg_cont}, noise {Configuration['NOISE']}
     ''',Configuration['OUTPUTLOG'],debug =True )
     if pos_cont.size == 0:
         pos_cont = 0.5 * np.nanmax(PV[0].data) * 0.95
@@ -716,18 +722,18 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
                             Overview,'VROT',Input_Model = Input_Model,initial_extent= sof_basic_extent[0], \
                             initial = sof_basic_maxrot[0],Extra_Model = Extra_Model,\
                             debug=debug)
-    ymin =np.min([FAT_Model[1:,Vars_to_plot.index('VROT')],FAT_Model[1:,Vars_to_plot.index('VROT_2')]])
+    ymin =np.min([FAT_Model[Vars_to_plot.index('VROT'),1:],FAT_Model[Vars_to_plot.index('VROT_2'),1:]])
     if len(Extra_Model) > 0:
-        ymin2 =np.min([Extra_Model[1:,Vars_to_plot.index('VROT')],Extra_Model[1:,Vars_to_plot.index('VROT_2')]])
-        ymax2 =np.max([Extra_Model[1:,Vars_to_plot.index('VROT')],Extra_Model[1:,Vars_to_plot.index('VROT_2')]])
+        ymin2 =np.min([Extra_Model[Vars_to_plot.index('VROT'),1:],Extra_Model[Vars_to_plot.index('VROT_2'),1:]])
+        ymax2 =np.max([Extra_Model[Vars_to_plot.index('VROT'),1:],Extra_Model[Vars_to_plot.index('VROT_2'),1:]])
     else:
         ymin2 = ymin
         ymax2 = ymax
-    ymax =np.max([FAT_Model[1:,Vars_to_plot.index('VROT')],FAT_Model[1:,Vars_to_plot.index('VROT_2')]])
+    ymax =np.max([FAT_Model[Vars_to_plot.index('VROT'),1:],FAT_Model[Vars_to_plot.index('VROT_2'),1:]])
 
     if len(Input_Model) > 0:
-        ymin3 =np.min([Input_Model[1:,Vars_to_plot.index('VROT')],Input_Model[1:,Vars_to_plot.index('VROT_2')]])
-        ymax3 =np.max([Input_Model[1:,Vars_to_plot.index('VROT')],Input_Model[1:,Vars_to_plot.index('VROT_2')]])
+        ymin3 =np.min([Input_Model[Vars_to_plot.index('VROT'),1:],Input_Model[Vars_to_plot.index('VROT_2'),1:]])
+        ymax3 =np.max([Input_Model[Vars_to_plot.index('VROT'),1:],Input_Model[Vars_to_plot.index('VROT_2'),1:]])
     else:
         ymin3=ymin
         ymax3= ymax
@@ -750,7 +756,7 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
     plt.ylabel('RC (km s$^{-1}$)',**labelfont)
     arcmin,arcmax = ax_RC.get_xlim()
     sec_ax = ax_RC.twiny()
-    sec_ax.set_xlim(convertskyangle(Configuration,arcmin),convertskyangle(Configuration,arcmax))
+    sec_ax.set_xlim(sf.convertskyangle(Configuration,arcmin),sf.convertskyangle(Configuration,arcmax))
     sec_ax.figure.canvas.draw()
     sec_ax.set_xlabel('Radius (kpc)',va='bottom',**labelfont)
 
@@ -772,7 +778,7 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
     plt.ylabel('Incl ($^{\circ}$)',**labelfont)
     arcmin,arcmax = ax_INCL.get_xlim()
     sec_ax = ax_INCL.twiny()
-    sec_ax.set_xlim(convertskyangle(Configuration,arcmin),convertskyangle(Configuration,arcmax))
+    sec_ax.set_xlim(sf.convertskyangle(Configuration,arcmin),sf.convertskyangle(Configuration,arcmax))
     sec_ax.set_xticklabels([])
     sec_ax.figure.canvas.draw()
 
@@ -795,7 +801,7 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
     plt.ylabel('PA ($^{\circ}$)',**labelfont)
     arcmin,arcmax = ax_PA.get_xlim()
     sec_ax = ax_PA.twiny()
-    sec_ax.set_xlim(convertskyangle(Configuration,arcmin),convertskyangle(Configuration,arcmax))
+    sec_ax.set_xlim(sf.convertskyangle(Configuration,arcmin),sf.convertskyangle(Configuration,arcmax))
     sec_ax.set_xticklabels([])
     sec_ax.figure.canvas.draw()
 
@@ -818,7 +824,7 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
     plt.ylabel('Disp (km s$^{-1}$)',**labelfont)
     arcmin,arcmax = ax_SDIS.get_xlim()
     sec_ax = ax_SDIS.twiny()
-    sec_ax.set_xlim(convertskyangle(Configuration,arcmin),convertskyangle(Configuration,arcmax))
+    sec_ax.set_xlim(sf.convertskyangle(Configuration,arcmin),sf.convertskyangle(Configuration,arcmax))
     sec_ax.figure.canvas.draw()
     sec_ax.set_xlabel('Radius (kpc)',va='bottom',**labelfont)
 
@@ -826,7 +832,7 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
 # ------------------------------Scale height------------------------------------
     ax_Z0 = plot_parameters(Configuration,Vars_to_plot,FAT_Model,gs[22:25,12:18],\
                             Overview,'Z0',Input_Model = Input_Model,initial_extent= sof_basic_extent[0],\
-                            Extra_Model = Extra_Model,initial = convertskyangle(Configuration,0.2,physical=True),debug=debug)
+                            Extra_Model = Extra_Model,initial = sf.convertskyangle(Configuration,0.2,physical=True),debug=debug)
 
     plt.tick_params(
         axis='x',          # changes apply to the x-axis
@@ -842,13 +848,13 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
     plt.ylabel('Z0 (arcsec)',**labelfont)
     arcmin,arcmax = ax_Z0.get_ylim()
     sec_ax = ax_Z0.twinx()
-    sec_ax.set_ylim(convertskyangle(Configuration,arcmin),convertskyangle(Configuration,arcmax))
+    sec_ax.set_ylim(sf.convertskyangle(Configuration,arcmin),sf.convertskyangle(Configuration,arcmax))
     sec_ax.figure.canvas.draw()
     sec_ax.set_ylabel('Z0 (kpc)',rotation=-90,va='bottom',**labelfont)
     arcmin,arcmax = ax_Z0.get_xlim()
     sec_ax = ax_Z0.twiny()
     sec_ax.set_xticklabels([])
-    sec_ax.set_xlim(convertskyangle(Configuration,arcmin),convertskyangle(Configuration,arcmax))
+    sec_ax.set_xlim(sf.convertskyangle(Configuration,arcmin),sf.convertskyangle(Configuration,arcmax))
     sec_ax.figure.canvas.draw()
 
 
@@ -871,7 +877,7 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
 
     jymin,jymax = ax_SBR.get_ylim()
     sec_ax = ax_SBR.twinx()
-    sec_ax.set_ylim(columndensity(Configuration,jymin*1000.,arcsquare = True)/1e20,columndensity(Configuration,jymax*1000.,arcsquare = True)/1e20)
+    sec_ax.set_ylim(sf.columndensity(Configuration,jymin*1000.,arcsquare = True)/1e20,sf.columndensity(Configuration,jymax*1000.,arcsquare = True)/1e20)
     sec_ax.set_ylabel('Col. Dens. \n (x10$^{20}$ cm$^{-2}$)',rotation=-90,va='bottom',**labelfont)
     sec_ax.figure.canvas.draw()
     if 'SBR' in Configuration['FIXED_PARAMETERS'][0]:
@@ -880,7 +886,7 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
     sec_ax = ax_SBR.twiny()
     arcmin,arcmax = ax_SBR.get_xlim()
     sec_ax.set_xticklabels([])
-    sec_ax.set_xlim(convertskyangle(Configuration,arcmin),convertskyangle(Configuration,arcmax))
+    sec_ax.set_xlim(sf.convertskyangle(Configuration,arcmin),sf.convertskyangle(Configuration,arcmax))
     sec_ax.figure.canvas.draw()
 
 
@@ -889,13 +895,13 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
     plt.xlabel('Sys. Vel. (km s$^{-1}$)',**labelfont)
     plt.ylabel('Distance (Mpc)',**labelfont)
 
-    plt.errorbar(float(FAT_Model[0,Vars_to_plot.index('VSYS')]),float(Configuration['DISTANCE'])\
-                ,xerr=float(FAT_Model[0,Vars_to_plot.index('VSYS_ERR')]), c='k',zorder= 3,fmt="o")
+    plt.errorbar(float(FAT_Model[Vars_to_plot.index('VSYS'),0]),float(Configuration['DISTANCE'])\
+                ,xerr=float(FAT_Model[Vars_to_plot.index('# VSYS_ERR'),0]), c='k',zorder= 3,fmt="o")
     #plt.scatter(float(FAT_Model[0,Vars_to_plot.index('VSYS')]),float(Configuration['DISTANCE']),c='k',zorder= 3)
     if len(Extra_Model) > 0:
-        plt.scatter(float(Extra_Model[0,Vars_to_plot.index('VSYS')]),float(Configuration['DISTANCE']),c='r',alpha = 0.5,zorder=1)
+        plt.scatter(float(Extra_Model[Vars_to_plot.index('VSYS'),0]),float(Configuration['DISTANCE']),c='r',alpha = 0.5,zorder=1)
     if len(Input_Model) > 0:
-        plt.scatter(float(Input_Model[0,Vars_to_plot.index('VSYS')]),float(Configuration['DISTANCE']),c='b',zorder= 2)
+        plt.scatter(float(Input_Model[Vars_to_plot.index('VSYS'),0]),float(Configuration['DISTANCE']),c='b',zorder= 2)
     plt.scatter(sof_basic_vsys[0],float(Configuration['DISTANCE']),marker='x',alpha=0.5, c = 'k')
     xmin,xmax = ax_VSYS.get_xlim()
     ymin,ymax = ax_VSYS.get_ylim()
@@ -905,7 +911,7 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
     Distanc=vall/70.
     plt.plot(vall,Distanc,'k--',alpha=0.5)
     ax_VSYS.set_xlim(xmin, xmax)
-    left = float(FAT_Model[0,Vars_to_plot.index('VSYS')])-cube[0].header['CDELT3']/2000.
+    left = float(FAT_Model[Vars_to_plot.index('VSYS'),0])-cube[0].header['CDELT3']/2000.
     bottom = ymin-5
     width =  cube[0].header['CDELT3']/1000.
     height = ymax-ymin+50
@@ -916,20 +922,20 @@ def make_overview_plot(Configuration,Fits_Files, debug = False):
 #----------------------------------------------RA vs DEC -----------------------------------------
     ax_RAD = Overview.add_subplot(gs[8:12,16:20])
 
-    plt.errorbar(float(FAT_Model[0,Vars_to_plot.index('XPOS')]),\
-                 float(FAT_Model[0,Vars_to_plot.index('YPOS')]),
-                xerr=float(FAT_Model[0,Vars_to_plot.index('XPOS_ERR')]),\
-                yerr=float(FAT_Model[0,Vars_to_plot.index('YPOS_ERR')]), c='k',zorder= 3,fmt="o")
+    plt.errorbar(float(FAT_Model[Vars_to_plot.index('XPOS'),0]),\
+                 float(FAT_Model[Vars_to_plot.index('YPOS'),0]),
+                xerr=float(FAT_Model[Vars_to_plot.index('# XPOS_ERR'),0]),\
+                yerr=float(FAT_Model[Vars_to_plot.index('# YPOS_ERR'),0]), c='k',zorder= 3,fmt="o")
 
-    plt.scatter(float(FAT_Model[0,Vars_to_plot.index('XPOS')]),float(FAT_Model[0,Vars_to_plot.index('YPOS')]),c='k',zorder=3,label = 'Final')
+    plt.scatter(float(FAT_Model[Vars_to_plot.index('XPOS'),0]),float(FAT_Model[Vars_to_plot.index('YPOS'),0]),c='k',zorder=3,label = 'Final')
     if len(Extra_Model) > 0:
         lab = 'Unsmoothed'
         alpha =0.5
-        plt.scatter(float(Extra_Model[0,Vars_to_plot.index('XPOS')]),float(Extra_Model[0,Vars_to_plot.index('YPOS')]),c='r',zorder=1,alpha=alpha,label=lab)
+        plt.scatter(float(Extra_Model[Vars_to_plot.index('XPOS'),0]),float(Extra_Model[Vars_to_plot.index('YPOS'),0]),c='r',zorder=1,alpha=alpha,label=lab)
     if len(Input_Model) > 0:
-        plt.scatter(float(Input_Model[0,Vars_to_plot.index('XPOS')]),float(Input_Model[0,Vars_to_plot.index('YPOS')]),c='b',zorder =2,label='Input')
+        plt.scatter(float(Input_Model[Vars_to_plot.index('XPOS'),0]),float(Input_Model[Vars_to_plot.index('YPOS'),0]),c='b',zorder =2,label='Input')
     plt.scatter(sof_basic_ra[0],sof_basic_dec[0],marker='x',alpha=0.5, c = 'k',label='Initial')
-    mod_ell = Ellipse(xy=[float(FAT_Model[0,Vars_to_plot.index('XPOS')]),float(FAT_Model[0,Vars_to_plot.index('YPOS')])], width=cube[0].header['BMAJ'] , height=cube[0].header['BMAJ'], angle=0,
+    mod_ell = Ellipse(xy=[float(FAT_Model[Vars_to_plot.index('XPOS'),0]),float(FAT_Model[Vars_to_plot.index('YPOS'),0])], width=cube[0].header['BMAJ'] , height=cube[0].header['BMAJ'], angle=0,
                edgecolor='none', alpha=0.4, lw=4, facecolor='k', hatch = None, zorder=-1)
     ax_RAD.add_patch(mod_ell)
     ax_RAD.legend(loc='upper left', bbox_to_anchor=(0.0, -0.3), shadow=True, ncol=1)
@@ -974,56 +980,56 @@ def plot_parameters(Configuration,Vars_to_plot,FAT_Model,location,Figure,paramet
                     Input_Model = [],legend = ['Empty','Empty','Empty','Empty'],
                     initial = None, initial_extent=  None, Extra_Model = [], debug = False):
     if debug:
-        print_log(f'''PLOT_PARAMETERS: We are starting to plot {parameter}
+        sf.print_log(f'''PLOT_PARAMETERS: We are starting to plot {parameter}
 ''', Configuration['OUTPUTLOG'], debug = True)
     ax = Figure.add_subplot(location)
     try:
-        yerr = FAT_Model[:,Vars_to_plot.index(f'{parameter}_ERR')]
+        yerr = FAT_Model[Vars_to_plot.index(f'# {parameter}_ERR'),:]
     except ValueError:
-        yerr =np.zeros(len(FAT_Model[:,Vars_to_plot.index('RADI')]))
+        yerr =np.zeros(len(FAT_Model[Vars_to_plot.index('RADI'),:]))
     if debug:
-        print_log(f'''PLOT_PARAMETERS: We found these errors {yerr}
+        sf.print_log(f'''PLOT_PARAMETERS: We found these errors {yerr}
 ''', Configuration['OUTPUTLOG'])
 
-    ax.errorbar(FAT_Model[:,Vars_to_plot.index('RADI')],FAT_Model[:,Vars_to_plot.index(f'{parameter}')],yerr= yerr, c ='k', label=f'{legend[0]}',zorder=3)
-    ax.plot(FAT_Model[:,Vars_to_plot.index('RADI')],FAT_Model[:,Vars_to_plot.index(f'{parameter}')],'ko', ms = 3.,zorder=3)
-    if np.sum(FAT_Model[:,Vars_to_plot.index(f'{parameter}_2')]) != 0.:
-        diff = np.sum(abs(FAT_Model[:,Vars_to_plot.index(f'{parameter}_2')]-FAT_Model[:,Vars_to_plot.index(f'{parameter}')]))
+    ax.errorbar(FAT_Model[Vars_to_plot.index('RADI'),:],FAT_Model[Vars_to_plot.index(f'{parameter}'),:],yerr= yerr, c ='k', label=f'{legend[0]}',zorder=3)
+    ax.plot(FAT_Model[Vars_to_plot.index('RADI'),:],FAT_Model[Vars_to_plot.index(f'{parameter}'),:],'ko', ms = 3.,zorder=3)
+    if np.sum(FAT_Model[Vars_to_plot.index(f'{parameter}_2'),:]) != 0.:
+        diff = np.sum(abs(FAT_Model[Vars_to_plot.index(f'{parameter}_2'),:]-FAT_Model[Vars_to_plot.index(f'{parameter}'),:]))
         if diff != 0.:
             try:
-                yerr = FAT_Model[:,Vars_to_plot.index(f'{parameter}_2_ERR')]
+                yerr = FAT_Model[Vars_to_plot.index(f'# {parameter}_2_ERR'),:]
             except ValueError:
-                yerr =np.zeros(len(FAT_Model[:,Vars_to_plot.index('RADI')]))
-            ax.errorbar(FAT_Model[:,Vars_to_plot.index('RADI')],FAT_Model[:,Vars_to_plot.index(f'{parameter}_2')],yerr= yerr, c ='r', label=f'{legend[1]}',zorder=3)
-            ax.plot(FAT_Model[:,Vars_to_plot.index('RADI')],FAT_Model[:,Vars_to_plot.index(f'{parameter}_2')],'ro', ms = 3.,zorder=3)
+                yerr =np.zeros(len(FAT_Model[Vars_to_plot.index('RADI'),:]))
+            ax.errorbar(FAT_Model[Vars_to_plot.index('RADI'),:],FAT_Model[Vars_to_plot.index(f'{parameter}_2'),:],yerr= yerr, c ='r', label=f'{legend[1]}',zorder=3)
+            ax.plot(FAT_Model[Vars_to_plot.index('RADI'),:],FAT_Model[Vars_to_plot.index(f'{parameter}_2'),:],'ro', ms = 3.,zorder=3)
 
     if len(Input_Model) > 0:
-        if np.sum(Input_Model[:,Vars_to_plot.index(f'{parameter}')]) != 0.:
-            last_index = int(np.where(Input_Model[:,Vars_to_plot.index(f'{parameter}')] != 0.)[0][-1])
+        if np.sum(Input_Model[Vars_to_plot.index(f'{parameter}'),:]) != 0.:
+            last_index = int(np.where(Input_Model[Vars_to_plot.index(f'{parameter}'),:] != 0.)[0][-1])
             try:
-                yerr = Input_Model[:last_index,Vars_to_plot.index(f'# {parameter}_ERR')]
+                yerr = Input_Model[Vars_to_plot.index(f'# {parameter}_ERR'),:last_index]
             except ValueError:
-                yerr =np.zeros(len(Input_Model[:last_index,Vars_to_plot.index('RADI')]))
-            ax.errorbar(Input_Model[:last_index,Vars_to_plot.index('RADI')],Input_Model[:last_index,Vars_to_plot.index(f'{parameter}')],yerr= yerr, c ='b',linestyle='-', label=f'{legend[2]}',zorder=2)
-            ax.plot(Input_Model[:last_index,Vars_to_plot.index('RADI')],Input_Model[:last_index,Vars_to_plot.index(f'{parameter}')],'bo',linestyle='-', ms = 3.,zorder=2)
-        if np.sum(Input_Model[:,Vars_to_plot.index(f'{parameter}_2')]) != 0.:
-            diff = np.sum(abs(Input_Model[:,Vars_to_plot.index(f'{parameter}_2')]-Input_Model[:,Vars_to_plot.index(f'{parameter}')]))
+                yerr =np.zeros(len(Input_Model[Vars_to_plot.index('RADI'),:last_index]))
+            ax.errorbar(Input_Model[Vars_to_plot.index('RADI'),:last_index],Input_Model[Vars_to_plot.index(f'{parameter}'),:last_index],yerr= yerr, c ='b',linestyle='-', label=f'{legend[2]}',zorder=2)
+            ax.plot(Input_Model[Vars_to_plot.index('RADI'),:last_index],Input_Model[Vars_to_plot.index(f'{parameter}'),:last_index],'bo',linestyle='-', ms = 3.,zorder=2)
+        if np.sum(Input_Model[Vars_to_plot.index(f'{parameter}_2'),:]) != 0.:
+            diff = np.sum(abs(Input_Model[Vars_to_plot.index(f'{parameter}_2'),:]-Input_Model[Vars_to_plot.index(f'{parameter}'),:]))
             if diff != 0.:
-                last_index = int(np.where(Input_Model[:,Vars_to_plot.index(f'{parameter}_2')] != 0.)[0][-1])
-                try:
-                    yerr = Input_Model[:last_index,Vars_to_plot.index(f'# {parameter}_2_ERR')]
+                last_index = int(np.where(Input_Model[Vars_to_plot.index(f'{parameter}_2'),:] != 0.)[0][-1])
+                try: ###### Keep swapping indices
+                    yerr = Input_Model[Vars_to_plot.index(f'# {parameter}_2_ERR'),:last_index]
                 except ValueError:
-                    yerr =np.zeros(len(Input_Model[:last_index,Vars_to_plot.index('RADI')]))
+                    yerr =np.zeros(len(Input_Model[Vars_to_plot.index('RADI'),:last_index]))
 
-                ax.errorbar(Input_Model[:last_index,Vars_to_plot.index('RADI')],Input_Model[:last_index,Vars_to_plot.index(f'{parameter}_2')],yerr= yerr, c ='yellow', label=f'{legend[3]}',zorder=2)
-                ax.plot(Input_Model[:last_index,Vars_to_plot.index('RADI')],Input_Model[:last_index,Vars_to_plot.index(f'{parameter}_2')],'yellow',zorder=2,marker ='o',linestyle='-' , ms = 3.)
+                ax.errorbar(Input_Model[Vars_to_plot.index('RADI'),:last_index],Input_Model[Vars_to_plot.index(f'{parameter}_2'),:last_index],yerr= yerr, c ='yellow', label=f'{legend[3]}',zorder=2)
+                ax.plot(Input_Model[Vars_to_plot.index('RADI'),:last_index,],Input_Model[Vars_to_plot.index(f'{parameter}_2'),:last_index],'yellow',zorder=2,marker ='o',linestyle='-' , ms = 3.)
     ymin,ymax = ax.get_ylim()
     if len(Extra_Model) > 0:
-        ax.plot(Extra_Model[:,Vars_to_plot.index('RADI')],Extra_Model[:,Vars_to_plot.index(f'{parameter}')],'ko',linestyle='-', ms = 3., alpha=0.2,zorder=1)
-        if np.sum(Extra_Model[:,Vars_to_plot.index(f'{parameter}_2')]) != 0.:
-            diff = np.sum(abs(Extra_Model[:,Vars_to_plot.index(f'{parameter}_2')]-Extra_Model[:,Vars_to_plot.index(f'{parameter}')]))
+        ax.plot(Extra_Model[Vars_to_plot.index('RADI'),:],Extra_Model[Vars_to_plot.index(f'{parameter}'),:],'ko',linestyle='-', ms = 3., alpha=0.2,zorder=1)
+        if np.sum(Extra_Model[Vars_to_plot.index(f'{parameter}_2'),:]) != 0.:
+            diff = np.sum(abs(Extra_Model[Vars_to_plot.index(f'{parameter}_2'),:]-Extra_Model[Vars_to_plot.index(f'{parameter}'),:]))
             if diff != 0.:
-                ax.plot(Extra_Model[:,Vars_to_plot.index('RADI')],Extra_Model[:,Vars_to_plot.index(f'{parameter}_2')],'r', alpha=0.2,zorder=1,marker ='o',linestyle='-' , ms = 3.)
+                ax.plot(Extra_Model[Vars_to_plot.index('RADI'),:],Extra_Model[Vars_to_plot.index(f'{parameter}_2'),:],'r', alpha=0.2,zorder=1,marker ='o',linestyle='-' , ms = 3.)
     xmin,xmax = ax.get_xlim()
     if initial:
         ax.plot([xmin-5,xmax+5],[float(initial),float(initial)],c='k',alpha=0.4, linestyle ='--')
@@ -1380,7 +1386,7 @@ tirific.__doc__ =f'''
 
 def write_config(file,Configuration,debug = False):
     if debug:
-        print_log(f'''WRITE_CONFIG: writing the configuration to {file}
+        sf.print_log(f'''WRITE_CONFIG: writing the configuration to {file}
 ''',Configuration['OUTPUTLOG'], screen=Configuration['VERBOSE'])
     # Separate the keyword names
     with open(file,'w') as tmp:

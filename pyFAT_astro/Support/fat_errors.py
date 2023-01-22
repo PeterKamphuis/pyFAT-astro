@@ -4,6 +4,10 @@ class BadCatalogueError(Exception):
     pass
 class BadConfigurationError(Exception):
     pass
+class BadCubeError(Exception):
+    pass
+class BadMaskError(Exception):
+    pass
 class BadSourceError(Exception):
     pass
 class BadHeaderError(Exception):
@@ -33,6 +37,8 @@ class ProgramError(Exception):
 class SmallSourceError(Exception):
     pass
 class SofiaFaintError(Exception):
+    pass
+class SofiaMissingError(Exception):
     pass
 class SofiaRunError(Exception):
     pass

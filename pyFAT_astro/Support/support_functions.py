@@ -5,6 +5,7 @@ from pyFAT_astro.Support.fat_errors import SupportRunError,SmallSourceError,\
                                               FileNotFoundError,TirificKillError,\
                                               InputError,ProgramError,DefFileError,\
                                               BadHeaderError,FittingError
+from pyFAT_astro import Templates as templates
 from collections import OrderedDict #used in Proper_Dictionary
 from inspect import getframeinfo,stack
 from numpy.linalg import LinAlgError
@@ -20,7 +21,11 @@ except ImportError:
     # Try backported to PY<37 `importlib_resources`.
     # For Py<3.9 files is not available
     from importlib_resources import files as import_pack_files
-
+try:
+    from importlib.resources import open_text as pack_open_txt
+except ImportError:
+    # Try backported to PY<37 `importlib_resources`.
+    from importlib_resources import open_text as pack_open_txt
 import matplotlib.pyplot as plt
 import os
 import sys
@@ -1821,7 +1826,8 @@ def get_fit_groups(Configuration,Tirific_Template,debug = False):
                 if current_par[-1] == '2':
                     current_par=current_par[:-2]
             par = [f'# {par}_ERR']
-            all_errors = np.array(get_from_template(Configuration,Tirific_Template, par,debug=debug),dtype=float)
+            all_errors = load_tirific(Configuration,Tirific_Template, par,\
+                array=True,debug=debug)
             current_rings = np.array(rings[-1],dtype=int)-1
             if current_rings.size == 1:
                 current_rings = int(current_rings)
@@ -1885,59 +1891,6 @@ get_fit_groups.__doc__ =f'''
  EXAMPLE:
 
  NOTE:
-'''
-
-def get_from_template(Configuration,Tirific_Template,Variables, debug = False):
-    out = []
-    #if debug:
-    #    print_log(f'''GET_FROM_TEMPLATE: Trying to get the following profiles {Variables}
-#''',Configuration['OUTPUTLOG'] ,debug= True)
-    for key in Variables:
-        try:
-            out.append([float(x) for x  in Tirific_Template[key].split()])
-        except KeyError:
-            out.append([])
-    if len(Variables) == 1:
-        out= out[0]
-    #Because lists are stupid i.e. sbr[0][0] = SBR[0], sbr[1][0] = SBR_2[0] but  sbr[:][0] = SBR[:] not SBR[0],SBR_2[0] as logic would demand
-    #if debug:
-    #    print_log(f'''GET_FROM_TEMPLATE: We extracted the following profiles from the Template.
-#{'':8s}GET_FROM_TEMPLATE: {out}
-#''',Configuration['OUTPUTLOG'])
-
-    #Beware that lists are stupid i.e. sbr[0][0] = SBR[0], sbr[1][0] = SBR_2[0] but  sbr[:][0] = SBR[:] not SBR[0],SBR_2[0] as logic would demand
-    # However if you make a np. array from it make sure that you specify float  or have lists of the same length else you get an array of lists which behave just as dumb
-    return out
-
-get_from_template.__doc__ =f'''
- NAME:
-    get_from_template
- PURPOSE:
-    Return a specified list of prameters from the template. This puts the template values in a list !!!!!!!!
-
- CATEGORY:
-    support_functions
-
- INPUTS:
-    Configuration = Standard FAT configuration
-    Tirific_Template =  Standard tirific template
-    Variables = parameters to be extracted
-
- OPTIONAL INPUTS:
-    debug = False
-
- OUTPUTS:
-    list with the values of the requested variables
-
- OPTIONAL OUTPUTS:
-
- PROCEDURES CALLED:
-    Unspecified
-
- NOTE:
-    This is very similar to load_template in read_functions but this returns an
-    unchecked list whereas load_template return a np array with length NUR,
-    the latter can thus can include zeros
 '''
 
 def get_inclination_pa(Configuration, Image, center, cutoff = 0., debug = False,figure_name = 'test'):
@@ -2299,7 +2252,8 @@ def get_ring_weights(Configuration,Tirific_Template,debug = False):
     if debug:
         print_log(f'''GET_RING_WEIGTHS: Getting the importance of the rings in terms of SBR.
 ''',Configuration['OUTPUTLOG'], debug = True)
-    sbr = np.array(get_from_template(Configuration,Tirific_Template, ["SBR",f"SBR_2"]),dtype=float)
+    sbr = load_tirific(Configuration,Tirific_Template,Variables=["SBR",f"SBR_2"],\
+                array=True,debug=debug)
     radii,cut_off_limits = sbr_limits(Configuration,Tirific_Template, debug = debug)
     weights= [[],[]]
     for i in [0,1]:
@@ -2366,6 +2320,46 @@ get_system_string.__doc__=f'''
 
  OUTPUTS:
     string = string with escaped spaces
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
+def get_tirific_output_names(Configuration,work_dir,deffile,debug=False):
+    if debug:
+        print_log(f'''GET_TIRIFIC_OUTPUT_NAMES: Starting the extraction of the output names in {deffile} tot be ran in {work_dir})
+''',Configuration['OUTPUTLOG'])
+
+    fitsfile,deffile = load_tirific(Configuration,f'{work_dir}/{deffile}',debug=debug,\
+        Variables=['OUTSET','TIRDEF'])
+    output_fits = f'{work_dir}/{fitsfile[0]}'
+    output_deffile = f'{work_dir}/{deffile[0]}'
+    return output_fits,output_deffile
+get_tirific_output_names.__doc__=f'''
+ NAME:
+    get_tirific_output_names
+
+ PURPOSE:
+    get the  name of the output fits file and def file as defined in the running directory + deffile
+
+ CATEGORY:
+    support_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    work_dir = The directory where the def file is ran as tirific input can be relative
+    deffile = the tirific input deffile
+
+
+ OPTIONAL INPUTS:
+
+
+ OUTPUTS:
+    output_fits = the full output name
+    output_deffile = the full output def file name
 
  OPTIONAL OUTPUTS:
 
@@ -2623,6 +2617,90 @@ linenumber.__doc__ =f'''
     !!!!Not sure whether currently the linenumber is produced due to the restructuring.
 '''
 
+#The functions load_tirifiic,load_template and get_from template were extremely similar
+#This replaces all with a single function
+def load_tirific(Configuration,def_input,Variables = ['BMIN','BMAJ','BPA','RMS',\
+            'DISTANCE','NUR','RADI','VROT','Z0', 'SBR', 'INCL','PA','XPOS','YPOS',\
+            'VSYS','SDIS','VROT_2',  'Z0_2','SBR_2','INCL_2','PA_2','XPOS_2',\
+            'YPOS_2','VSYS_2','SDIS_2','CONDISP','CFLUX','CFLUX_2'],debug = False,\
+             array = False,ensure_rings =False ):
+    # if the input is a string we first load the template
+    if isinstance(def_input,str):
+        def_input = tirific_template(filename = def_input, debug = debug)
+
+    out = []
+    for key in Variables:
+        try:
+            out.append([float(x) for x  in def_input[key].split()])
+        except KeyError:
+            out.append([])
+        except ValueError:
+            out.append([x for x  in def_input[key].split()])
+
+    #Because lists are stupid i.e. sbr[0][0] = SBR[0], sbr[1][0] = SBR_2[0] but  sbr[:][0] = SBR[:] not SBR[0],SBR_2[0] as logic would demand
+
+    if array:
+        tmp = out
+        #We can ensure that the output has the same number of values as there are rings
+        if ensure_rings:
+            length=int(def_input['NUR'])
+        else:
+            #or just take the longest input as the size
+            length = max(map(len,out))
+        #let's just order this in variable, values such that it unpacks properly into a list of variables
+        out = np.zeros((len(Variables),length),dtype=float)
+        for i,variable in enumerate(tmp):
+            if len(variable) > 0.:
+                out[i,0:len(variable)] = variable[0:len(variable)]
+
+    if len(Variables) == 1:
+        out= out[0]
+    if debug:
+        print_log(f'''LOAD_TIRIFIC: We extracted the following profiles from the Template.
+{'':8s}Requested Variables = {Variables}
+{'':8s}Extracted = {out}
+''',Configuration['OUTPUTLOG'])
+    #Beware that lists are stupid i.e. sbr[0][0] = SBR[0], sbr[1][0] = SBR_2[0] but  sbr[:][0] = SBR[:] not SBR[0],SBR_2[0] as logic would demand
+    # However if you make a np. array from it make sure that you specify float  or have lists of the same length else you get an array of lists which behave just as dumb
+    return out
+load_tirific.__doc__ =f'''
+ NAME:
+    load_tirific
+
+ PURPOSE:
+    Load values from variables set in the tirific files
+
+ CATEGORY:
+    read_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    def_input = Path to the tirific def file or a FAT tirific template dictionary
+
+ OPTIONAL INPUTS:
+    Variables = ['BMIN','BMAJ','BPA','RMS','DISTANCE','NUR','RADI','VROT',
+                 'Z0', 'SBR', 'INCL','PA','XPOS','YPOS','VSYS','SDIS','VROT_2',  'Z0_2','SBR_2',
+                 'INCL_2','PA_2','XPOS_2','YPOS_2','VSYS_2','SDIS_2','CONDISP','CFLUX','CFLUX_2']
+
+    debug = False
+    array = False
+        Specify that the output should be an numpy array with all varables having the same length
+
+    ensure_rings =false
+        Specify that the output array should have the length of the NUR parameter in the def file
+ OUTPUTS:
+    outputarray array with all the values of the parameters requested
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+    This replaces load_tirific,load_template and get_from_template.
+'''
+
+
 def make_equal_length(list1_in,list2_in):
     '''ensure that 2 lists have the same length'''
     #python is a silly language
@@ -2677,8 +2755,10 @@ def make_tiltogram(Configuration,Tirific_Template,debug =False):
     if debug:
         print_log(f'''MAKE_TILTOGRAM: Starting tiltogram.
 ''',Configuration['OUTPUTLOG'])
-    pa_incl = np.array(get_from_template(Configuration,Tirific_Template,Variables=['PA','PA_2','INCL','INCL_2']),dtype=float)
-    sbr = np.array(get_from_template(Configuration,Tirific_Template, ["SBR",f"SBR_2"]),dtype=float)
+    pa_incl = load_tirific(Configuration,Tirific_Template,\
+            Variables=['PA','PA_2','INCL','INCL_2'],array=True)
+    sbr = load_tirific(Configuration,Tirific_Template,Variables=["SBR",f"SBR_2"]\
+            ,array=True)
     radii,cut_off_limits = sbr_limits(Configuration,Tirific_Template, debug = debug)
     add = [[],[]]
     Theta = [[],[]]
@@ -3233,21 +3313,23 @@ We are in in stage {stage} and fit_type {fit_type} and have done {Configuration[
 
     # First move the previous fits
     rename_fit_products(Configuration,fit_type = fit_type, stage=stage, debug = debug)
-    # Then if already running change restart file
     if fit_type == 'Error_Shaker':
         work_dir = os.getcwd()
         restart_file = f"restart_Error_Shaker.txt"
     else:
         restart_file = f"{Configuration['LOG_DIRECTORY']}restart_{fit_type}.txt"
         work_dir = Configuration['FITTING_DIR']
+    #Get the output fits file and def file defined in workdir+ deffile
+    output_fits,output_deffile = get_tirific_output_names(Configuration,work_dir,deffile,debug=debug)
+    # Then if already running change restart file
     if Configuration['TIRIFIC_RUNNING']:
-        print_log(f'''RUN_TIRIFIC: We are using an initialized tirific in {Configuration['FITTING_DIR']}
+        print_log(f'''RUN_TIRIFIC: We are using an initialized tirific in {Configuration['FITTING_DIR']} with the file {deffile}
 ''',Configuration['OUTPUTLOG'], screen=Configuration['VERBOSE'])
 
         with open(restart_file,'a') as file:
             file.write("Restarting from previous run \n")
     else:
-        print_log(f'''RUN_TIRIFIC: We are starting a new TiRiFiC in {Configuration['FITTING_DIR']}
+        print_log(f'''RUN_TIRIFIC: We are starting a new TiRiFiC in {Configuration['FITTING_DIR']} with the file {deffile}
 ''',Configuration['OUTPUTLOG'], screen=Configuration['VERBOSE'])
         with open(restart_file,'w') as file:
             file.write("Initialized a new run \n")
@@ -3311,10 +3393,18 @@ We are in in stage {stage} and fit_type {fit_type} and have done {Configuration[
     time.sleep(1.0)
     wait_counter = 0
     if fit_type != 'Error_Shaker':
-        while not os.path.exists(f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.fits") and wait_counter < 1000.:
-            print(f"\r Waiting ", end = "", flush = True)
+        while not os.path.exists(output_fits) and wait_counter < 1000.:
+            print(f"\r Waiting for {output_fits}", end = "", flush = True)
             time.sleep(0.5)
             wait_counter += 1
+            if wait_counter/100. == int(wait_counter/100.):
+                    print_log(f'''RUN_TIRIFIC: we have waited {0.5*wait_counter} seconds for the output of tirific but it is not there yet.
+''',Configuration['OUTPUTLOG'], screen=Configuration['VERBOSE'])
+        if not  os.path.exists(output_fits) \
+            or not  os.path.exists(output_deffile):
+            raise FittingError(f'''The tirific subprocess did not produce the correct output
+We were running {deffile} and failed to find the output {output_fits} or {output_deffile}
+''')
 
     if currentloop != max_loop:
         return 1,current_run
@@ -3437,7 +3527,7 @@ def setup_configuration(cfg):
         else:
             for file in test_files:
                 try:
-                    os.remove(test_dir+file)
+                    os.remove(f'{cfg.input.main_directory}/{file}')
                 except FileNotFoundError:
                     pass
 
@@ -3689,7 +3779,8 @@ def sbr_limits(Configuration, Tirific_Template , debug = False):
         print_log(f'''SBR_LIMITS: Got {len(radii)} radii
 ''',Configuration['OUTPUTLOG'], debug=True)
     level = Configuration['NOISE']*1000
-    noise_in_column = columndensity(Configuration,level,systemic = float(get_from_template(Configuration,Tirific_Template,['VSYS'],debug=debug)[0]))
+    noise_in_column = columndensity(Configuration,level,systemic = \
+        float(load_tirific(Configuration,Tirific_Template,Variables=['VSYS'],debug=debug)[0]))
     J2007col=9.61097e+19
     #J2007scl= 2. #arcsec in a sech^2 layer
     ratio=(noise_in_column/J2007col)**0.5
@@ -3793,10 +3884,12 @@ set_format.__doc__ =f'''
 #simple function keep track of how to modify the edge limits
 def set_limit_modifier(Configuration,Tirific_Template, debug= False):
     '''Write to the Configuration a value or list of values to modify sbr dependent values.'''
-    Profiles = np.array(get_from_template(Configuration,Tirific_Template,['INCL','INCL_2','Z0','Z0_2'],debug=debug),dtype=float)
+    Profiles = load_tirific(Configuration,Tirific_Template,
+        Variables=['INCL','INCL_2','Z0','Z0_2'],array=True,debug=debug)
     Inclination = [np.mean([x,y]) for x,y in zip(Profiles[0],Profiles[1])]
     Z0_av = [np.mean([x,y]) for x,y in zip(Profiles[2],Profiles[3])]
-    kpc_radius=convertskyangle(Configuration,get_from_template(Configuration,Tirific_Template,['RADI'],debug=debug))
+    kpc_radius=convertskyangle(Configuration,load_tirific(Configuration,\
+        Tirific_Template,['RADI'],debug=debug))
     modifier_list = []
     # This should be per kpc
     if len(Inclination) > 1:
@@ -4214,6 +4307,59 @@ sofia_output_exists.__doc__ =f'''
 
  PROCEDURES CALLED:
     Unspecified
+
+ NOTE:
+'''
+
+def tirific_template(filename = '', debug = False):
+    if filename == '':
+        with pack_open_txt(templates, 'template.def') as tmp:
+            template = tmp.readlines()
+    elif filename == 'Installation_Check':
+        from pyFAT_astro import Installation_Check as IC
+        with pack_open_txt(IC, 'ModelInput.def') as tmp:
+            template = tmp.readlines()
+    else:
+        with open(filename, 'r') as tmp:
+            template = tmp.readlines()
+    result = Proper_Dictionary()
+    counter = 0
+    # Separate the keyword names
+    for line in template:
+        key = str(line.split('=')[0].strip().upper())
+        if key == '':
+            result[f'EMPTY{counter}'] = line
+            counter += 1
+        else:
+            result[key] = str(line.split('=')[1].strip())
+    return result
+tirific_template.__doc__ ='''
+ NAME:
+    tirific_template
+
+ PURPOSE:
+    Read a tirific def file into a dictionary to use as a template.
+    The parameter ill be the dictionary key with the values stored in that key
+
+ CATEGORY:
+    read_functions
+
+ INPUTS:
+    filename = Name of the def file
+
+ OPTIONAL INPUTS:
+    filename = ''
+    Name of the def file, if unset the def file in Templates is used
+
+    debug =False
+
+ OUTPUTS:
+    result = dictionary with the read file
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+      split, strip, open
 
  NOTE:
 '''

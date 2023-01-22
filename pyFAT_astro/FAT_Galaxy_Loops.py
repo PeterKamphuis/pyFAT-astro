@@ -114,7 +114,7 @@ def FAT_Galaxy_Loops(Proc_Configuration, Full_Catalogue):
             cf.cleanup(Configuration, Fits_Files, debug=Configuration['DEBUG'])
 
             # then we want to read the template
-            Tirific_Template = rf.tirific_template()
+            Tirific_Template = sf.tirific_template()
             if Configuration['DEBUG']:
                 from numpy import __version__ as npversion
                 from scipy import __version__ as spversion
@@ -160,7 +160,7 @@ def FAT_Galaxy_Loops(Proc_Configuration, Full_Catalogue):
             # Get a bunch of info from the cube
             rf.read_cube(
                 Configuration, Fits_Files['FITTING_CUBE'], debug=Configuration['DEBUG'])
-        
+
             #If we have Sofia Preprocessed Output request make sure it all exists
             if Configuration['DEBUG']:
                 wf.write_config(
