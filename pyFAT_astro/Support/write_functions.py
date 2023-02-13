@@ -156,7 +156,8 @@ def initialize_def_file(Configuration, Fits_Files,Tirific_Template,Initial_Param
 
         #if 'VSYS' in Initial_Parameters:
         #    Initial_Parameters['VSYS'] = [x/1000. for x in Initial_Parameters['VSYS']]
-        set_overall_parameters(Configuration, Fits_Files,Tirific_Template,fit_type=fit_type, flux = Initial_Parameters['FLUX'][0] )
+        set_overall_parameters(Configuration, Fits_Files,Tirific_Template,\
+            fit_type=fit_type, flux = Initial_Parameters['FLUX'][0] )
         # Then set the values for the various parameters of the model
 
         set_model_parameters(Configuration, Tirific_Template,Initial_Parameters )
@@ -170,7 +171,8 @@ def initialize_def_file(Configuration, Fits_Files,Tirific_Template,Initial_Param
     elif fit_type in ['Extent_Convergence','Fit_Tirific_OSC']:
         #if 'VSYS' in Initial_Parameters and fit_type == 'Fit_Tirific_OSC':
         #    Initial_Parameters['VSYS'] = [x/1000. for x in Initial_Parameters['VSYS']]
-        set_overall_parameters(Configuration, Fits_Files,Tirific_Template ,fit_type=fit_type ,stage='initialize_ec')
+        set_overall_parameters(Configuration, Fits_Files,Tirific_Template ,\
+            fit_type=fit_type)
         Vars_to_Set =  ['XPOS','YPOS','VSYS','VROT','INCL','PA','SDIS','SBR','SBR_2','Z0']
         if fit_type == 'Fit_Tirific_OSC':
             set_model_parameters(Configuration, Tirific_Template,Initial_Parameters,stage='initialize_def_file' )
@@ -186,7 +188,7 @@ def initialize_def_file(Configuration, Fits_Files,Tirific_Template,Initial_Param
         if Initial_Parameters['INCL'][0] >35:
             Initial_Parameters['PA'][1]= sf.set_limits(Initial_Parameters['PA'][1],1.,15)
         Initial_Parameters['INCL'][1]= sf.set_limits(Initial_Parameters['INCL'][1],3.,15)
-        
+
 
         set_fitting_parameters(Configuration, Tirific_Template,stage = 'initialize_os',
                                initial_estimates=Initial_Parameters )

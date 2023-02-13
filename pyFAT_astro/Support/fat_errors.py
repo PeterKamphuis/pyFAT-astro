@@ -44,5 +44,7 @@ class SofiaRunError(Exception):
     pass
 class SupportRunError(Exception):
     pass
+class TirificOutputError(Exception):
+    pass
 class TirificKillError(Exception):
     pass

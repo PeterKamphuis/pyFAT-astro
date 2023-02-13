@@ -4,7 +4,7 @@ import pyFAT_astro
 from pyFAT_astro.Support.fat_errors import SupportRunError,SmallSourceError,\
                                               FileNotFoundError,TirificKillError,\
                                               InputError,ProgramError,DefFileError,\
-                                              BadHeaderError,FittingError
+                                              BadHeaderError,FittingError,TirificOutputError
 from pyFAT_astro import Templates as templates
 import pyFAT_astro
 
@@ -3354,19 +3354,19 @@ We are in in stage {stage} and fit_type {fit_type} and have done {Configuration[
     time.sleep(1.0)
     wait_counter = 0
     if fit_type != 'Error_Shaker':
-        while not os.path.exists(output_fits) and wait_counter < 1000.:
-            print(f"\r Waiting for {output_fits}", end = "", flush = True)
-            time.sleep(0.5)
+        while not os.path.exists(output_fits) and wait_counter < 100.:
+            time.sleep(0.3)
             wait_counter += 1
-            if wait_counter/100. == int(wait_counter/100.):
-                print_log(f'''RUN_TIRIFIC: we have waited {0.5*wait_counter} seconds for the output of tirific but it is not there yet.
+            if wait_counter/10. == int(wait_counter/10.):
+                print(f"\r Waiting for {output_fits}. \n", end = "", flush = True)
+                print_log(f'''RUN_TIRIFIC: we have waited {0.3*wait_counter} seconds for the output of tirific but it is not there yet.
 ''',Configuration['OUTPUTLOG'])
         if not  os.path.exists(output_fits) \
             or not  os.path.exists(output_deffile):
-            print_log(f'''RUN_TIRIFIC: After 500 seconds we could not find the expected output from the tirific run. We are raising an error for this galaxy.
+            print_log(f'''RUN_TIRIFIC: After 30 seconds we could not find the expected output from the tirific run. We are raising an error for this galaxy.
 ''',Configuration['OUTPUTLOG'],case=['main','screen'])
-            raise FittingError(f'''The tirific subprocess did not produce the correct output
-We were running {deffile} and failed to find the output {output_fits} or {output_deffile}
+            raise TirificOutputError(f'''The tirific subprocess did not produce the correct output, most likely it crashed.
+We were running {deffile} and failed to find the output {output_fits} or {output_deffile}.
 ''')
 
     if currentloop != max_loop:

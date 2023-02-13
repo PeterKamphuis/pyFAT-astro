@@ -200,7 +200,7 @@ def calc_new_size(Configuration,Tirific_Template,radii,sbr_in,sbr_ring_limits ):
         if new_size[i] < Configuration['TOO_SMALL_GALAXY']:
              new_size[i] = Configuration['TOO_SMALL_GALAXY']
 
-    sf.print_log(f'''CALC_NEW_SIZE: We have the new_size {new_size} compared to what we had before {old_size} 
+    sf.print_log(f'''CALC_NEW_SIZE: We have the new_size {new_size} compared to what we had before {old_size}
 ''',Configuration['OUTPUTLOG'],case = ['debug_add'])
 
     return new_size
@@ -559,7 +559,8 @@ def check_size(Configuration,Tirific_Template, fit_type = 'Undefined', stage = '
 
     if apply_size:
         # Do not move this from here else other routines such as sbr_limits are messed up
-        set_new_size(Configuration,Tirific_Template,Fits_Files,fit_type= fit_type, stage = stage ,current_run = current_run)
+        set_new_size(Configuration,Tirific_Template,Fits_Files,fit_type= fit_type\
+            ,current_run = current_run)
         return False
     else:
         return True
@@ -2983,7 +2984,7 @@ set_model_parameters.__doc__ =f'''
  NOTE:
 '''
 #function to check that all parameters in template have the proper length.
-def set_new_size(Configuration,Tirific_Template, Fits_Files, fit_type = 'Undefined', stage = 'initial',
+def set_new_size(Configuration,Tirific_Template, Fits_Files, fit_type = 'Undefined',
                     current_run='Not Initialized', Variables =
                     ['VROT','Z0', 'SBR', 'INCL','PA','XPOS','YPOS','VSYS','SDIS','VROT_2',  'Z0_2','SBR_2',
                      'INCL_2','PA_2','XPOS_2','YPOS_2','VSYS_2','SDIS_2', 'AZ1P', 'AZ1W' ,'AZ1P_2','AZ1W_2', 'RADI']):
@@ -3083,7 +3084,7 @@ def set_new_size(Configuration,Tirific_Template, Fits_Files, fit_type = 'Undefin
     #update the limit_modifier
     sf.set_limit_modifier(Configuration,Tirific_Template)
     # Maybe increase the amount of loops in smaller galaxies
-    set_overall_parameters(Configuration, Fits_Files,Tirific_Template ,fit_type=fit_type,stage=stage)
+    set_overall_parameters(Configuration, Fits_Files,Tirific_Template ,fit_type=fit_type)
     # if we change the radii we need to restart tirific
     sf.finish_current_run(Configuration,current_run)
 set_new_size.__doc__ =f'''
@@ -3107,8 +3108,6 @@ set_new_size.__doc__ =f'''
     fit_type = 'Undefined'
     type of fitting
 
-    stage = 'initial'
-    stage of the fitting
 
     current_run='Not Initialized'
     subprocess structure running tirific
@@ -3128,7 +3127,7 @@ set_new_size.__doc__ =f'''
  NOTE:
 '''
 
-def set_overall_parameters(Configuration, Fits_Files,Tirific_Template,stage = 'initial',fit_type='Undefined', flux = None):
+def set_overall_parameters(Configuration, Fits_Files,Tirific_Template,fit_type='Undefined', flux = None):
 
             if Configuration['OPTIMIZED']:
                 Tirific_Template['INSET'] = f"{Fits_Files['OPTIMIZED_CUBE']}"
@@ -3202,8 +3201,6 @@ set_overall_parameters.__doc__ =f'''
  OPTIONAL INPUTS:
 
 
-    stage = 'initial'
-    stage of fitting
 
     fit_type='Undefined_Stage'
     type of fitting

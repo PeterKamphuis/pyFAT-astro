@@ -9,10 +9,11 @@ from pyFAT_astro.Support.fits_functions import cut_cubes,extract_pv,make_moments
 from pyFAT_astro.Support.modify_template import write_new_to_template,\
     smooth_profile,set_cflux,fix_sbr,regularise_profile,set_fitting_parameters,\
     check_size,no_declining_vrot,set_errors,get_warp_slope,check_angles,write_center,\
-    set_boundary_limits,regularise_warp
+    set_boundary_limits,regularise_warp,set_new_size
 from pyFAT_astro.Support.constants import H_0
 from pyFAT_astro.Support.fat_errors import SofiaFaintError,BadConfigurationError,\
-                                              InclinationRunError,SofiaRunError,BadSourceError
+                                              InclinationRunError,SofiaRunError,\
+                                              BadSourceError,TirificOutputError
 from pyFAT_astro.Support.tirshaker import tirshaker
 
 from astropy.wcs import WCS
@@ -550,7 +551,6 @@ Checking the central flux in a box with size of {Configuration['BEAM_IN_PIXELS']
         Configuration['EXCLUDE_CENTRAL'] = False
 
 
-
     # Size of the galaxy in beams
     Configuration['SIZE_IN_BEAMS'] = np.full(2,sf.set_limits(maj_extent/(Configuration['BEAM'][0]/3600.),1.0,Configuration['MAX_SIZE_IN_BEAMS']))
     if np.sum(Configuration['SIZE_IN_BEAMS']) <= 2.*Configuration['TOO_SMALL_GALAXY']:
@@ -965,11 +965,32 @@ def make_full_resolution(Configuration,Tirific_Template,Fits_Files,fit_type = 'U
 ''',Configuration['OUTPUTLOG'],case= ['main','debug_start'])
     write_new_to_template(Configuration, f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def", Tirific_Template)
     Tirific_Template['INSET'] = f"{Fits_Files['FITTING_CUBE']}"
+    Tirific_Template['VARY'] = f" VROT 1:3"
+    Tirific_Template['VARINDX'] = f" "
     Tirific_Template['LOOPS'] = "0"
     Tirific_Template['INIMODE'] = "0"
     wf.tirific(Configuration,Tirific_Template,name = f'{fit_type}_In.def')
     sf.finish_current_run(Configuration,current_run)
-    accepted,current_run = sf.run_tirific(Configuration,'Not zed', stage = 'full_res', fit_type=fit_type)
+    try:
+        accepted,current_run = sf.run_tirific(Configuration,'Not zed', stage = 'full_res', fit_type=fit_type)
+    except TirificOutputError:
+        sf.print_log(f'''MAKE_FULL_RESOLUTION: The  original size is {Configuration['SIZE_IN_BEAMS']}
+''',Configuration['OUTPUTLOG'], case=['debug_add','screen'])
+        Configuration['SIZE_IN_BEAMS'] = Configuration['SIZE_IN_BEAMS']*0.99
+        ring_size, number_of_rings = sf.set_ring_size(Configuration)
+        sf.print_log(f'''MAKE_FULL_RESOLUTION: Applied the size of {Configuration['SIZE_IN_BEAMS']}, ring size {ring_size} resulting in {number_of_rings} rings
+''',Configuration['OUTPUTLOG'], case=['main','screen'])
+        set_new_size(Configuration,Tirific_Template,Fits_Files,fit_type= fit_type,\
+            current_run = current_run)
+        Tirific_Template['INSET'] = f"{Fits_Files['FITTING_CUBE']}"
+        Tirific_Template['VARY'] = f" VROT 1:3"
+        Tirific_Template['VARINDX'] = f" "
+        Tirific_Template['LOOPS'] = "0"
+        Tirific_Template['INIMODE'] = "0"
+        wf.tirific(Configuration,Tirific_Template,name = f'{fit_type}_In.def')
+        accepted,current_run = sf.run_tirific(Configuration,'Not zed', stage = 'full_res', fit_type=fit_type)
+
+
     sf.finish_current_run(Configuration,current_run)
 make_full_resolution.__doc__ =f'''
  NAME:
@@ -1012,7 +1033,16 @@ def one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run):
     fit_type = 'Fit_Tirific_OSC'
     stage = 'run_os'
     #First we run tirific
-    accepted,current_run = sf.run_tirific(Configuration,current_run,stage = stage, fit_type = fit_type)
+    try:
+        accepted,current_run = sf.run_tirific(Configuration,current_run,stage = stage, fit_type = fit_type)
+    except TirificOutputError:
+        sf.print_log(f'''ONE_STEP_CONVERGENCE: Tirific failed to produce output. It might be an unspecified crash.
+we try once more else we break off the fitting. As this sometimes happens due to a gsl interpolation error we modify the ring size by 1%
+''',Configuration['OUTPUTLOG'], case=['main','screen'])
+        #There appears to be a case where the last ring can cause an interpolation error.
+        #Deal with the this we take 0.99% of the beam ring size and
+        accepted,current_run = sf.run_tirific(Configuration,current_run,stage = stage, fit_type = fit_type)
+
 
     if not accepted:
         Configuration['ACCEPTED_TIRIFIC'] = False

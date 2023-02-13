@@ -1040,7 +1040,7 @@ def sofia_catalogue(Configuration,Fits_Files, Variables =['id','x','x_min','x_ma
 ''',Configuration['OUTPUTLOG'])
 
                         if float(outlist[Variables.index('rms')][index])*1e6 < float(outlist[Variables.index('f_sum')][index]):
-                            sf.print_log(f'''SOFIA_CATALOGUE: There appears to me no noise in this cube. restoring the source.
+                            sf.print_log(f'''SOFIA_CATALOGUE: There appears to be no noise in this cube. restoring the source.
 ''',Configuration['OUTPUTLOG'])
                             many_sources  = copy.deepcopy(outlist)
                             fluxes = np.array(outlist[Variables.index('f_sum')],dtype =float)
