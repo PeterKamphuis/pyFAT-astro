@@ -131,10 +131,21 @@ def main(argv):
             with open(f'{cfg.input.main_directory}/FAT_Inputs-Run_{datetime.now().strftime("%d-%m-%Y")}.yml','w') as default_write:
                 default_write.write(OmegaConf.to_yaml(cfg))
 
+        # The way we want to pint our message we define as globals  such that we can access the settings everywhere
+
+        pyFAT_astro.debug = cfg.output.debug
+        pyFAT_astro.verbose_log = cfg.output.verbose_log
+        pyFAT_astro.screen = cfg.output.verbose_screen
+        #Let's write and input example to the main directory
+        if pyFAT_astro.debug:
+            with open(f'{cfg.input.main_directory}/FAT_Inputs-Run_{datetime.now().strftime("%d-%m-%Y")}.yml','w') as default_write:
+                default_write.write(OmegaConf.to_yaml(cfg))
+
+
         #Transform all to a Configuration dictionary
         Original_Configuration = sf.setup_configuration(cfg)
 
-        if Original_Configuration['DEBUG']:
+        if pyFAT_astro.debug :
             warnings.showwarning = warn_with_traceback
 
         #First we check for sofia and TiRiFiC

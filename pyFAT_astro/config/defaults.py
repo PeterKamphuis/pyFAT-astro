@@ -63,7 +63,8 @@ class Output:
     font_file: str = "/usr/share/fonts/truetype/msttcorefonts/Times_New_Roman.ttf"
     debug: bool = False
     timing: bool = False
-
+    verbose_log: bool = False
+    verbose_screen: bool = False
 
 @dataclass
 class Advanced:
@@ -80,7 +81,6 @@ class Advanced:
     unreliable_inclination: float = 10.  # If the final inclination is below this the fit is considered unreliable
     shaker_iterations: int = 20
     multiprocessing: bool = True
-    verbose: bool = False
     #We do not want to use too many cores per galaxy.
     per_galaxy_ncpu: int = 4
     catalogue_split_character: str = '|'

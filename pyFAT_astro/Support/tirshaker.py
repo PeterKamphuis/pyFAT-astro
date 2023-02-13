@@ -21,13 +21,14 @@ from scipy import stats
 
 from pyFAT_astro.Support.write_functions import tirific as write_tirific
 import pyFAT_astro.Support.support_functions as sf
+import pyFAT_astro
 
 #
 #tirshaker
 def tirshaker(Configuration, Tirific_Template, outfilename = 'test_out.def', \
               outfileprefix = 'tirsh_', parameter_groups = [], rings = [], block = []\
               , variation = [], variation_type = [], iterations = 0, random_seed = 0,\
-               mode = 'mad',debug=False,fit_type='Error_Shaker'):
+               mode = 'mad',fit_type='Error_Shaker'):
     # Initiate rng
     random.seed(random_seed)
 
@@ -81,7 +82,7 @@ def tirshaker(Configuration, Tirific_Template, outfilename = 'test_out.def', \
         *** Tirshaker iteration {i:02d} ***
         ******************************
         ******************************
-''',Configuration['OUTPUTLOG'], screen=Configuration['VERBOSE'])
+''',Configuration['OUTPUTLOG'])
 
     #fortestin
     #    break
@@ -124,8 +125,8 @@ def tirshaker(Configuration, Tirific_Template, outfilename = 'test_out.def', \
         #Current_Template['LOGNAME'] = logname
         #Current_Template['TIRDEF'] = defname
 
-        write_tirific(Configuration,Current_Template, name =f'Error_Shaker/{fit_type}_In.def' , debug = debug)
-        accepted,current_run = sf.run_tirific(Configuration, current_run, stage = 'shaker',fit_type = fit_type, debug = debug)
+        write_tirific(Configuration,Current_Template, name =f'Error_Shaker/{fit_type}_In.def' )
+        accepted,current_run = sf.run_tirific(Configuration, current_run, stage = 'shaker',fit_type = fit_type)
         #os.system('tirific deffile= '+inname)
 
         # Read the values of the parameters requested
@@ -138,8 +139,7 @@ def tirshaker(Configuration, Tirific_Template, outfilename = 'test_out.def', \
                 numbers.append([float(x) for x in \
                     sf.load_tirific(Configuration,\
                         f"{Configuration['FITTING_DIR']}Error_Shaker/Error_Shaker_Out.def",\
-                        Variables = [parameter_groups[j][k]],array=True,\
-                        debug=debug)[0]])
+                        Variables = [parameter_groups[j][k]],array=True)[0]])
                 if parameter_groups[j][k] == 'CONDISP':
                     pass
                 else:
@@ -228,7 +228,7 @@ def tirshaker(Configuration, Tirific_Template, outfilename = 'test_out.def', \
 
 
     sf.finish_current_run(Configuration, current_run)
-    write_tirific(Configuration,Tirific_Template, name =f'Error_Shaker/{outfilename}' , debug = debug)
+    write_tirific(Configuration,Tirific_Template, name =f'Error_Shaker/{outfilename}' )
     Configuration['TIRIFIC_RUNNING'] = original_running
 
 tirshaker.__doc__ =f'''
@@ -254,7 +254,6 @@ tirshaker.__doc__ =f'''
     mode (str)                             : If 'mad' implements an outlier rejection.
 
  OPTIONAL INPUTS:
-    debug = False
 
 
  OUTPUTS:

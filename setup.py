@@ -19,7 +19,7 @@ requirements = [
 ]
 
 PACKAGE_NAME = 'pyFAT_astro'
-__version__ = 'v0.1.0'
+__version__ = 'v0.1.1'
 
 
 #with open("README.md", "r") as fh:

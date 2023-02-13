@@ -85,11 +85,10 @@ def FAT_Galaxy_Loops(Proc_Configuration, Full_Catalogue):
             #if we skip the create_fat _cube stage peaople could give the fat cube itself
 
             if Fits_Files['ORIGINAL_CUBE'][-9:] == '_FAT.fits':
-                sf.print_log(f''' Your input cube ends in _FAT.fits indicating it is a FAT processed cube.
-''', Configuration['OUTPUTLOG'], screen=Configuration['VERBOSE'], debug=Configuration['DEBUG'])
                 if 'create_fat_cube' in Configuration['FITTING_STAGES']:
-                    sf.print_log(f''' We remove the Create_FAT_Cube stages from the loop.
-''', Configuration['OUTPUTLOG'], screen=Configuration['VERBOSE'], debug=Configuration['DEBUG'])
+                    sf.print_log(f'''FAT_GALAXY_LOOPS: Your input cube ends in _FAT.fits indicating it is a FAT processed cube.
+Therefore we remove the Create_FAT_Cube stages from the loop.
+''', Configuration['OUTPUTLOG'])
                     Configuration['FITTING_STAGES'].remove('create_fat_cube')
                 fat_ext = ''
             else:
@@ -111,11 +110,11 @@ def FAT_Galaxy_Loops(Proc_Configuration, Full_Catalogue):
                         f'''We can not find the file {Fits_Files['FITTING_CUBE']}. This is likely to be due to a typo in your catalog {Configuration['CATALOGUE']}.''')
 
             # run cleanup
-            cf.cleanup(Configuration, Fits_Files, debug=Configuration['DEBUG'])
+            cf.cleanup(Configuration, Fits_Files)
 
             # then we want to read the template
             Tirific_Template = sf.tirific_template()
-            if Configuration['DEBUG']:
+            if pyFAT_astro.debug:
                 from numpy import __version__ as npversion
                 from scipy import __version__ as spversion
                 from astropy import __version__ as apversion
@@ -124,7 +123,7 @@ def FAT_Galaxy_Loops(Proc_Configuration, Full_Catalogue):
                     from matplotlib import __version__ as mpversion
                 #from subprocess import __version__ as subversion
 
-                sf.print_log(f'''MAIN: We are using the following versions
+                sf.print_log(f'''FAT_GALAXY_LOOPS: We are using the following versions
 {'':8s}NumPy {npversion}
 {'':8s}SciPy {spversion}
 {'':8s}AstroPy {apversion}
@@ -133,7 +132,7 @@ def FAT_Galaxy_Loops(Proc_Configuration, Full_Catalogue):
 
             log_statement = f'''We are starting the catalogue entry {Configuration['ID']} in the directory {Configuration['SUB_DIR']}.\n'''
             sf.print_log(
-                log_statement, Configuration['OUTPUTLOG'], screen=True)
+                log_statement, Configuration['OUTPUTLOG'])
 
             if Configuration['TIMING']:
                 Configuration['FAT_PSUPROCESS'] = psu.Process(
@@ -141,7 +140,6 @@ def FAT_Galaxy_Loops(Proc_Configuration, Full_Catalogue):
                 sf.update_statistic(
                     Configuration, message="Creating a CPU RAM Log for analysis.")
 
-            # Check if the input cube exists
 
             # Let's see if our base cube exists, Note that cleanup removes it if we want to start from the original dir so no need to check start_point
             if not os.path.exists(f"{Configuration['FITTING_DIR']}{Fits_Files['FITTING_CUBE']}"):
@@ -154,38 +152,36 @@ def FAT_Galaxy_Loops(Proc_Configuration, Full_Catalogue):
                     else:
                         Configuration['OUTPUT_QUANTITY'] = 'error'
                     cf.finish_galaxy(Configuration, current_run=current_run,
-                                        debug=Configuration['DEBUG'], exiting=e)
+                                         exiting=e)
                     continue
-
+        
             # Get a bunch of info from the cube
             rf.read_cube(
-                Configuration, Fits_Files['FITTING_CUBE'], debug=Configuration['DEBUG'])
+                Configuration, Fits_Files['FITTING_CUBE'])
 
             #If we have Sofia Preprocessed Output request make sure it all exists
-            if Configuration['DEBUG']:
+            if pyFAT_astro.debug:
                 wf.write_config(
-                    f'{Configuration["LOG_DIRECTORY"]}CFG_Before_Sofia.txt', Configuration, debug=True)
+                    f'{Configuration["LOG_DIRECTORY"]}CFG_Before_Sofia.txt', Configuration)
 
-            if 'existing_sofia' in Configuration['FITTING_STAGES']:
+            if 'external_sofia' in Configuration['FITTING_STAGES']:
                 sf.copy_homemade_sofia(
-                    Configuration, debug=Configuration['DEBUG'])
+                    Configuration)
             elif 'run_sofia' in Configuration['FITTING_STAGES']:
                 # Run sofia2
                 try:
-                    runf.sofia(Configuration, Fits_Files,
-                               debug=Configuration['DEBUG'])
+                    runf.sofia(Configuration, Fits_Files)
                 except Exception as e:
                     Configuration['FINAL_COMMENT'] = e
                     if e.__class__.__name__ in Configuration['STOP_INDIVIDUAL_ERRORS']:
                         Configuration['OUTPUT_QUANTITY'] = 5
                     else:
                         Configuration['OUTPUT_QUANTITY'] = 'error'
-                    cf.finish_galaxy(Configuration, current_run=current_run,
-                                        debug=Configuration['DEBUG'], exiting=e)
+                    cf.finish_galaxy(Configuration, current_run=current_run, exiting=e)
                     continue
             else:
                 sf.sofia_output_exists(
-                    Configuration, Fits_Files, debug=Configuration['DEBUG'])
+                    Configuration, Fits_Files)
                 # We assume sofia is ran and created the proper files
             try:
 
@@ -193,27 +189,28 @@ def FAT_Galaxy_Loops(Proc_Configuration, Full_Catalogue):
                 if Configuration['USED_FITTING']:
                     # Process the found source in sofia to set up the proper fitting and make sure source can be fitted
                     Initial_Parameters = runf.check_source(
-                        Configuration, Fits_Files, debug=Configuration['DEBUG'])
+                        Configuration, Fits_Files)
                     #sf.sofia_output_exists(Configuration,Fits_Files)
-                    sf.print_log(f'''The source is well defined and we will now setup the initial tirific file
-    ''', Configuration['OUTPUTLOG'], screen=Configuration['VERBOSE'], debug=Configuration['DEBUG'])
+                    sf.print_log(f'''FAT_GALAXY_LOOPS: The source is well defined and we will now setup the initial tirific file
+''', Configuration['OUTPUTLOG'])
                     #Add your personal fitting types here
-                    if Configuration['DEBUG']:
+                    if pyFAT_astro.debug:
                         wf.write_config(
-                            f'{Configuration["LOG_DIRECTORY"]}CFG_Before_Fitting.txt', Configuration, debug=True)
+                            f'{Configuration["LOG_DIRECTORY"]}CFG_Before_Fitting.txt', Configuration)
 
                 if 'fit_tirific_osc' in Configuration['FITTING_STAGES']:
                     current_run = runf.fitting_osc(
                         Configuration, Fits_Files, Tirific_Template, Initial_Parameters)
                 elif 'fit_make_your_own' in Configuration['FITTING_STAGES']:
-                    print_log(
-                        f'If you add any fitting routine make sure that the fit stage  starts with Fit_')
+                    sf.print_log(f'''FAT_GALAXY_LOOPS: If you add any fitting routine make sure that the fit stage  starts with Fit_
+''',Configuration['OUTPUTLOG'])
+                    sf.create_directory(Configuration['USED_FITTING'],Configuration['FITTING_DIR'])
                     Configuration['FINAL_COMMENT'] = 'This example does not work'
-                    cf.finish_galaxy(Configuration, debug=Configuration['DEBUG'])
+                    cf.finish_galaxy(Configuration)
                     continue
                 else:
                     Configuration['FINAL_COMMENT'] = 'You have chosen not to do any fitting'
-                    cf.finish_galaxy(Configuration, debug=Configuration['DEBUG'])
+                    cf.finish_galaxy(Configuration)
                     continue
 
                 #if all the fitting has gone properly we create nice errors
@@ -221,7 +218,7 @@ def FAT_Galaxy_Loops(Proc_Configuration, Full_Catalogue):
                 if Configuration['OUTPUT_QUANTITY'] != 5:
                     if 'tirshaker' in Configuration['FITTING_STAGES']:
                         runf.tirshaker_call(
-                            Configuration, debug=Configuration['DEBUG'])
+                            Configuration)
 
                     Configuration['FINAL_COMMENT'] = 'The fit has converged succesfully'
 
@@ -234,20 +231,20 @@ def FAT_Galaxy_Loops(Proc_Configuration, Full_Catalogue):
                     Configuration['OUTPUT_QUANTITY'] = 'error'
             #Only
             cf.finish_galaxy(Configuration, current_run=current_run,
-                             Fits_Files=Fits_Files, debug=Configuration['DEBUG'], exiting=registered_exception)
+                             Fits_Files=Fits_Files, exiting=registered_exception)
             if Configuration['OUTPUT_QUANTITY'] != 5:
                 DHI = rf.get_DHI(
-                    Configuration, Model=Configuration['USED_FITTING'], debug=Configuration['DEBUG'])
+                    Configuration, Model=Configuration['USED_FITTING'])
                 Totflux = rf.get_totflux(
-                    Configuration, f"/Finalmodel/Finalmodel_mom0.fits", debug=Configuration['DEBUG'])
+                    Configuration, f"/Finalmodel/Finalmodel_mom0.fits")
                 wf.basicinfo(Configuration, template=Tirific_Template, Tot_Flux=Totflux, DHI=[
-                             DHI, Configuration['BEAM'][0]*Configuration['RING_SIZE']], debug=Configuration['DEBUG'])
+                             DHI, Configuration['BEAM'][0]*Configuration['RING_SIZE']])
                 if Configuration['INSTALLATION_CHECK']:
                     cf.installation_check(
-                        Configuration, debug=Configuration['DEBUG'])
+                        Configuration)
     except Exception as e:
         registered_exception = e
         Configuration['FINAL_COMMENT'] = e
         Configuration['OUTPUT_QUANTITY'] = 'error'
         cf.finish_galaxy(Configuration, current_run=current_run,Fits_Files=Fits_Files,
-                         debug=Configuration['DEBUG'], exiting=registered_exception)
+                          exiting=registered_exception)

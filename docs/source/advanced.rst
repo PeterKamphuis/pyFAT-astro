@@ -133,6 +133,17 @@ Output Keywords
   As fonts are a nightmare in matplotlib one can set the location of their preferred font for the plotting.
   On Ubuntu the default can be obtained by installing apt-get install ttf-mscorefonts-installer. This should point to the actual font, if the file is not fond we will fall back to DejaVu Sans.
 
+**verbose_log**
+
+  *bool, optional, default = False*
+
+  Be abundant with the messages when writing to the log.
+
+**verbose_screen**
+
+  *bool, optional, default = False*
+
+  Write all log messages to the screen. If set to False screen messages will be minimal, i.e. only start, finish and termination messages in case verbose_log = False. When verbose_log = True important messages go to screen as well.
 
 Fitting Keywords
 --------

@@ -1,11 +1,13 @@
 # -*- coding: future_fstrings -*-
 # This module contains a set of functions and classes that are used in several different Python scripts in the Database.
-
+import pyFAT_astro
 from pyFAT_astro.Support.fat_errors import SupportRunError,SmallSourceError,\
                                               FileNotFoundError,TirificKillError,\
                                               InputError,ProgramError,DefFileError,\
                                               BadHeaderError,FittingError
 from pyFAT_astro import Templates as templates
+import pyFAT_astro
+
 from collections import OrderedDict #used in Proper_Dictionary
 from inspect import getframeinfo,stack
 from numpy.linalg import LinAlgError
@@ -83,17 +85,16 @@ Proper_Dictionary.__doc__=f'''
 A class of ordered dictionary where keys can be inserted in at specified locations or at the end.
 '''
 
-def calc_rings(Configuration,size_in_beams = 0., ring_size  = 0.,debug=False):
+def calc_rings(Configuration,size_in_beams = 0., ring_size  = 0.):
     if ring_size == 0.:
         ring_size = Configuration['RING_SIZE']
     if size_in_beams == 0.:
         size_in_beams = np.max(Configuration['SIZE_IN_BEAMS'])
-    if debug:
-        print_log(f'''CALC_RINGS: Calculating the number of rings in the model.
+    print_log(f'''CALC_RINGS: Calculating the number of rings in the model.
 {'':8s} size in beams = {size_in_beams}
 {'':8s} ring_size = {ring_size}
 {'':8s} the maximum amount of rings = {Configuration['MAX_SIZE_IN_BEAMS']}
-''',Configuration['OUTPUTLOG'],debug = True)
+''',Configuration['OUTPUTLOG'],case= ['debug_start'])
 
     est_rings = round((size_in_beams-1./5.)/(ring_size)+2.)
     #if est_rings > 20 and Configuration['MAX_SIZE_IN_BEAMS'] > 25:
@@ -104,10 +105,9 @@ def calc_rings(Configuration,size_in_beams = 0., ring_size  = 0.,debug=False):
     else:
         Configuration['OUTER_RINGS_DOUBLED'] = False
         no_rings = est_rings
-    if debug:
-        print_log(f'''CALC_RINGS: We started with ring size = {ring_size} and the size in beams {size_in_beams}.
+    print_log(f'''CALC_RINGS: We started with ring size = {ring_size} and the size in beams {size_in_beams}.
 {'':8s}The model will have {no_rings} rings and the rings are {'doubled' if Configuration['OUTER_RINGS_DOUBLED'] else 'not doubled'}.
-''',Configuration['OUTPUTLOG'])
+''',Configuration['OUTPUTLOG'],case= ['debug_add'])
     return int(no_rings)
 
 calc_rings.__doc__ =f'''
@@ -124,7 +124,7 @@ calc_rings.__doc__ =f'''
     Configuration = Standard FAT configuration
 
  OPTIONAL INPUTS:
-    debug = False
+
 
     size_in_beams = 0.
     Radius of the model in beams. Default from Configuration
@@ -219,10 +219,9 @@ calculate_number_processes.__doc__ =f'''
 
  NOTE:
 '''
-def complex_am_invert(Configuration,Theta_in,Phi_in,multiple, debug = False):
-    if debug:
-        print_log(f'''COMPLEX_AM_INVERT:  as PA or INCL in {Configuration['FIXED_PARAMETERS']} we are doing a complex invert.
-''',Configuration['OUTPUTLOG'],debug=debug)
+def complex_am_invert(Configuration,Theta_in,Phi_in):
+    print_log(f'''COMPLEX_AM_INVERT:  as PA or INCL in {Configuration['FIXED_PARAMETERS']} we are doing a complex invert.
+''',Configuration['OUTPUTLOG'],case= ['debug_start'])
 
     Theta_out = copy.deepcopy(Theta_in)
     Phi_out = copy.deepcopy(Phi_in)
@@ -231,9 +230,8 @@ def complex_am_invert(Configuration,Theta_in,Phi_in,multiple, debug = False):
     if 'INCL' in Configuration['FIXED_PARAMETERS'] and 'PA' in Configuration['FIXED_PARAMETERS']:
         Theta_out[:]=Theta_in[0]
         Phi_out[:]=Phi_in[0]
-        if debug:
-            print_log(f'''COMPLEX_AM_INVERT:  both PA and INCL are fixed returning the centra Phi and Theta.
-''',Configuration['OUTPUTLOG'],debug=debug)
+        print_log(f'''COMPLEX_AM_INVERT:  both PA and INCL are fixed returning the centra Phi and Theta.
+''',Configuration['OUTPUTLOG'],case= ['debug_add'])
     else:
         #Create the PA and Inclination plane
         Theta = np.linspace(0,np.pi,1000)
@@ -289,17 +287,17 @@ def complex_am_invert(Configuration,Theta_in,Phi_in,multiple, debug = False):
     return Theta_out,Phi_out
 
 
-def calculate_am_vector(Configuration,PA_in,Inclination_in,multiple = None, invert=False,debug=False):
-    if not multiple and invert:
+def calculate_am_vector(Configuration,PA_in,Inclination_in,multiple = [None], invert=False):
+    if multiple[0] == None and invert:
         print_log(f'''CALCULATE_AM_VECTOR: inverting phi and theta without the multiple will result in all PAs being in the first quadrant.
-''',Configuration['OUTPUTLOG'],debug=debug)
-        multiple=0.
+''',Configuration['OUTPUTLOG'],case= ['debug_start'])
+        multiple=np.zeros(len(PA_in))
 
     if invert:
         Theta=np.array(PA_in,dtype=float)
         Phi=np.array(Inclination_in,dtype=float)
         if 'INCL' in Configuration['FIXED_PARAMETERS'] or 'PA' in Configuration['FIXED_PARAMETERS']:
-            Theta,Phi = complex_am_invert(Configuration,Theta,Phi,multiple,debug=debug)
+            Theta,Phi = complex_am_invert(Configuration,Theta,Phi)
 
         Inclination=90-np.arctan(1./(np.cos(Theta)*np.tan(Phi)))*(360./(2*np.pi))
     # return inclination boundary adjustements
@@ -315,7 +313,7 @@ def calculate_am_vector(Configuration,PA_in,Inclination_in,multiple = None, inve
         # For this the PA has to be between 0-90
         PA=np.array(PA_in,dtype=float)
         Inclination=np.array(Inclination_in,dtype=float)
-        multiple=np.floor(PA[0]/90.)
+        multiple=np.floor(PA/90.)
         PA= PA-multiple*90.
         #if any(PA > 90.):
 
@@ -354,29 +352,28 @@ calculate_am_vector.__doc__ =f'''
 
 
 def check_angular_momentum_vector(Configuration,radius_in,pa_in,inclination_in,\
-                                    modified= False,debug=False,side=0):
+                                    modified= False,side=0):
 
     inclination = np.array(inclination_in)
     pa = np.array(pa_in)
     inclination_in = np.array(inclination_in)
     pa_in = np.array(pa_in)
-    radius = np.array(radius_in)
-    radkpc = np.array([convertskyangle(Configuration,float(x)) for x in radius],dtype=float)
+    radius = np.array(radius_in,dtype=float)
+    radkpc = convertskyangle(Configuration,radius)
+    #radkpc = np.array([convertskyangle(Configuration,float(x)) for x in radius],dtype=float)
     #phi is dependent on theta but the max change should be the same
     max_shift = np.arctan(np.tan(Configuration['MAX_CHANGE']['INCL']*(np.pi/180.))\
                     *np.tan(Configuration['MAX_CHANGE']['PA']*(np.pi/180.)))
-    if debug:
-            print_log(f'''CHECK_ANGULAR_MOMENTUM_VECTOR: The maximum allowed shift = {max_shift}.
-''',Configuration['OUTPUTLOG'])
+    print_log(f'''CHECK_ANGULAR_MOMENTUM_VECTOR: The maximum allowed shift = {max_shift}.
+''',Configuration['OUTPUTLOG'],case= ['debug_start'])
     succes = False
     counter = 0.
     while not succes:
-        if debug:
-            print_log(f'''CHECK_ANGULAR_MOMENTUM_VECTOR: Calculating Phi and Theta from these PA and inclination
+        print_log(f'''CHECK_ANGULAR_MOMENTUM_VECTOR: Calculating Phi and Theta from these PA and inclination
 PA = {pa}
 Inclination = {inclination}
-''',Configuration['OUTPUTLOG'])
-        Theta,Phi,quadrant = calculate_am_vector(Configuration,pa,inclination,debug=debug)
+''',Configuration['OUTPUTLOG'],case= ['debug_add'])
+        Theta,Phi,quadrant = calculate_am_vector(Configuration,pa,inclination )
         theta_zero = Theta[0]
         phi_zero = Phi[0]
 
@@ -399,42 +396,39 @@ Inclination = {inclination}
 
         change_angle = np.sqrt(theta_change**2+phi_change**2)
         change_angle[in_zero] =0.
-        new_change_angle = max_profile_change(Configuration,radius,change_angle,'ARBITRARY',\
-            slope = Configuration['WARP_SLOPE'][side],max_change=max_shift, debug=debug)
+        new_change_angle = max_profile_change(Configuration,radkpc,change_angle,'ARBITRARY',\
+            slope = Configuration['WARP_SLOPE'][side],max_change=max_shift, kpc_radius=True )
 
 
         new_theta_change = new_change_angle*theta_factor
         new_phi_change = new_change_angle*phi_factor
         new_theta = theta_zero+new_theta_change
         new_phi = phi_zero+new_phi_change
-        if debug:
-            print_log(f'''We put in the difference of
+        print_log(f'''We put in the difference of
 phi {phi_change}, theta {theta_change}, angle {change_angle}
 new values
 phi {new_phi_change}, theta {new_theta_change}, angle {new_change_angle}
-''',Configuration['OUTPUTLOG'])
+''',Configuration['OUTPUTLOG'],case= ['debug_add'])
 
         diff_phi = np.array(np.where(np.array([abs(x-y) for x,y in zip(Phi,new_phi) ],dtype=float) > 1e-6))
         diff_theta = np.array(np.where(np.array([abs(x-y) for x,y in zip(Theta,new_theta)],dtype=float) > 1e-6))
 
         if diff_phi.size != 0. or \
             diff_theta.size != 0.:
-            if debug:
-                print_log(f'''CHECK_ANGULAR_MOMENTUM_VECTOR
+            print_log(f'''CHECK_ANGULAR_MOMENTUM_VECTOR
 {'':8s} Phi = {Phi}, new_phi = {new_phi}
 {'':8s} Phi diff = {np.array([abs(x-y) for x,y in zip(Phi,new_phi) ],dtype=float)}{'':8s}
 {'':8s} Theta = {Theta}, new_theta = {new_theta}
 {'':8s} Theta diff = {np.array([abs(x-y) for x,y in zip(Theta,new_theta) ],dtype=float)}
-''',Configuration['OUTPUTLOG'])
+''',Configuration['OUTPUTLOG'],case= ['debug_add'])
 
 
             pa,inclination = calculate_am_vector(Configuration,new_theta,new_phi,\
-                                multiple=quadrant,invert=True, debug=debug)
-            if debug:
-                print_log(f'''CHECK_ANGULAR_MOMENTUM_VECTOR: new PA and inclination
+                                multiple=quadrant,invert=True )
+            print_log(f'''CHECK_ANGULAR_MOMENTUM_VECTOR: new PA and inclination
 PA = {pa}
 Inclination = {inclination}
-''',Configuration['OUTPUTLOG'])
+''',Configuration['OUTPUTLOG'],case= ['debug_add'])
             counter += 1
             if counter > 1000.:
                 #It is not really a succes but we have to exit the loop and one point.
@@ -442,9 +436,8 @@ Inclination = {inclination}
         else:
             succes = True
 
-    if debug:
-        print_log(f'''CHECK_ANGULAR_MOMENTUM_VECTOR: Before checking we have modified = {modified}
-''',Configuration['OUTPUTLOG'])
+    print_log(f'''CHECK_ANGULAR_MOMENTUM_VECTOR: Before checking we have modified = {modified}
+''',Configuration['OUTPUTLOG'],case= ['debug_add'])
     #if len(np.where(np.array([abs(x-y) for x,y in zip(pa_in,pa) ],dtype=float) != 0.)) != 0. or \
     #    len(np.where(np.array([abs(x-y) for x,y in zip(inclination_in,inclination) ],dtype=float) != 0.)) != 0.:
     if not np.isclose(pa_in,pa, atol=Configuration['MIN_ERROR']['PA']).any() or \
@@ -471,8 +464,6 @@ check_angular_momentum_vector.__doc__ =f'''
     angle_check = False
     indicates whether we have modified the angles
 
-    debug = debug
-
  OUTPUTS:
     pa_new = the modfied PA
     incl_new= the modified incl
@@ -488,7 +479,7 @@ check_angular_momentum_vector.__doc__ =f'''
 
 
 
-def check_sofia(Configuration,Fits_Files,debug=False):
+def check_sofia(Configuration,Fits_Files):
     files =['_mask.fits','_mom0.fits','_mom1.fits','_chan.fits','_mom2.fits','_cat.txt']
     for file in files:
         if os.path.exists(f'{Configuration["FITTING_DIR"]}Sofia_Output/{Configuration["BASE_NAME"]}{file}'):
@@ -511,7 +502,7 @@ check_sofia.__doc__ =f'''
     Fits_Files = Standard FAT dictionary with filenames
 
  OPTIONAL INPUTS:
-    debug = False
+
 
  OUTPUTS:
 
@@ -523,7 +514,7 @@ check_sofia.__doc__ =f'''
  NOTE:
 '''
 
-def check_tiltogram(Configuration, tiltogram,inner_min=3,debug=False):
+def check_tiltogram(Configuration, tiltogram,inner_min=3):
     for i in [0,1]:
         theta_inner = np.array([np.mean(tiltogram[i,0:x+1,0:x+1]) for x in range(tiltogram.shape[1])],dtype=float)
         theta_mutual = np.array([np.mean(tiltogram[i,x:,0:x+1]) for x in range(tiltogram.shape[1])],dtype=float)
@@ -533,10 +524,9 @@ def check_tiltogram(Configuration, tiltogram,inner_min=3,debug=False):
         # (ii) theta_inner < 5 deg
         # (iii) thetamut > 15 deg
         diff = np.array(abs(theta_inner-theta_mutual),dtype = float)
-        if debug:
-            print_log(f'''CHECK_TILTOGRAM: Checking the tiltogram in side {i}.
+        print_log(f'''CHECK_TILTOGRAM: Checking the tiltogram in side {i}.
 {'':8s} Diff = {diff}
-''',Configuration['OUTPUTLOG'])
+''',Configuration['OUTPUTLOG'],case= ['debug_start'])
         rings_found = False
         while not rings_found:
             ring_location = np.where(np.nanmax(diff) == diff)[0]
@@ -566,7 +556,7 @@ INPUTS:
    tiltogram = the array containing the tiltogram for both sides
 
 OPTIONAL INPUTS:
-   debug = False
+
    inner_min = minimum set of inner rings that should be fixed
 
 OUTPUTS:
@@ -581,11 +571,10 @@ NOTE:
 
 '''
 # clean the header
-def clean_header(Configuration,hdr_in,two_dim=False,mask_file=False, debug = False):
+def clean_header(Configuration,hdr_in,two_dim=False,mask_file=False):
     hdr = copy.deepcopy(hdr_in)
-    if debug:
-        print_log(f'''CLEAN_HEADER: Starting to clean the header.
-''',Configuration['OUTPUTLOG'],debug=Configuration['VERBOSE'])
+    print_log(f'''CLEAN_HEADER: Starting to clean the header.
+''',Configuration['OUTPUTLOG'],case= ['debug_start'])
     keywords = ['CDELT','CUNIT','CRPIX','CRVAL','CTYPE']
     for key in keywords:
         try:
@@ -604,9 +593,9 @@ def clean_header(Configuration,hdr_in,two_dim=False,mask_file=False, debug = Fal
 Your header did not have a unit for the third axis, that is bad policy.
 {"":8s} We have set it to {hdr['CUNIT3']}. Please ensure that is correct.'
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-''',Configuration['OUTPUTLOG'],screen = True)
+''',Configuration['OUTPUTLOG'])
         if hdr['CUNIT3'].upper() == 'HZ' or hdr['CTYPE3'].upper() == 'FREQ':
-            print_log('CLEAN_HEADER: FREQUENCY IS NOT A SUPPORTED VELOCITY AXIS.', Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
+            print_log('CLEAN_HEADER: FREQUENCY IS NOT A SUPPORTED VELOCITY AXIS.', Configuration['OUTPUTLOG'], case=['main','screen'])
             raise BadHeaderError('The Cube has frequency as a velocity axis this is not supported')
 
         vel_types = ['VELO-HEL','VELO-LSR','VELO', 'VELOCITY']
@@ -614,7 +603,7 @@ Your header did not have a unit for the third axis, that is bad policy.
             if hdr['CTYPE3'].split('-')[0].upper() in ['RA','DEC']:
                 print_log(f'''CLEAN_HEADER: Your zaxis is a spatial axis not a velocity axis.
 {"":8s}CLEAN_HEADER: Please arrange your cube logically
-''',Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
+''',Configuration['OUTPUTLOG'],case= ['main','screen'])
                 raise BadHeaderError("The Cube's third axis is not a velocity axis")
             hdr['CTYPE3'] = 'VELO'
             print_log(f'''CLEAN_HEADER: Your velocity projection is not standard. The keyword is changed to VELO (relativistic definition). This might be dangerous.
@@ -672,22 +661,22 @@ Your header did not have a unit for the third axis, that is bad policy.
                         break
             if not found:
                 print_log(f'''CLEAN_HEADER: WE CANNOT FIND THE MAJOR AXIS FWHM IN THE HEADER
-''',Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
+''',Configuration['OUTPUTLOG'],case= ['main','screen'])
                 raise BadHeaderError("The Cube has no major axis FWHM in the header.")
     if not 'CTYPE1' in hdr or not 'CTYPE2' in hdr:
         print_log(f'''CLEAN_HEADER: Your spatial axes have no ctype. this can lead to errors.
-''',Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
+''',Configuration['OUTPUTLOG'],case= ['main','screen'])
         raise BadHeaderError("The Cube header has no ctypes.")
 
     if hdr['CTYPE1'].split('-')[0].upper() in ['DEC']:
         print_log(f'''CLEAN_HEADER: !!!!!!!!!!Your declination is in the first axis. !!!!!!!!!!!!!!!!!
 {"":8s}CLEAN_HEADER: !!!!!!!!!!         This will not work.          !!!!!!!!!!!!!!!!
-''',Configuration['OUTPUTLOG'],screen = Configuration['VERBOSE'])
+''',Configuration['OUTPUTLOG'],case= ['main','screen'])
         raise BadHeaderError("Your spatial axes are reversed")
     if hdr['CTYPE2'].split('-')[0].upper() in ['RA']:
         print_log( f'''CLEAN_HEADER: !!!!!!!!!!Your right ascension is on the second axis. !!!!!!!!!!!!!!!!!
 {"":8s}CLEAN_HEADER: !!!!!!!!!!         This will not work.          !!!!!!!!!!!!!!!!
-''',Configuration['OUTPUTLOG'],screen = Configuration['VERBOSE'])
+''',Configuration['OUTPUTLOG'],case= ['main','screen'])
         raise BadHeaderError("Your spatial axes are reversed")
     if hdr['CRVAL1'] < 0.:
         print_log(f'''CLEAN_HEADER: your RA crval is negative, this can lead to errors. Adding 360. deg
@@ -722,7 +711,7 @@ Your header did not have a unit for the third axis, that is bad policy.
         if abs(hdr['BMAJ']/hdr['CDELT1']) > hdr['NAXIS1']:
             print_log( f'''CLEAN_HEADER: !!!!!!!!!!Your cube is smaller than the beam major axis. !!!!!!!!!!!!!!!!!
     {"":8s}CLEAN_HEADER: !!!!!!!!!!         This will not work.          !!!!!!!!!!!!!!!!
-    ''',Configuration['OUTPUTLOG'])
+    ''',Configuration['OUTPUTLOG'],case= ['main','screen'])
             raise BadHeaderError("Your cube is too small for your beam")
     except KeyError:
         pass
@@ -752,7 +741,7 @@ clean_header.__doc__ =f'''
     hdr = header to be cleaned
 
  OPTIONAL INPUTS:
-    debug = False
+
 
  OUTPUTS:
     the updated header
@@ -765,7 +754,7 @@ clean_header.__doc__ =f'''
  NOTE:
 '''
 
-def columndensity(Configuration,levels,systemic = 100.,beam=[-1.,-1.],channel_width=-1.,column= False,arcsquare=False,solar_mass_input =False,solar_mass_output=False, debug = False):
+def columndensity(Configuration,levels,systemic = 100.,beam=[-1.,-1.],channel_width=-1.,column= False,arcsquare=False,solar_mass_input =False,solar_mass_output=False):
 
     if beam[0] == -1:
         if not arcsquare:
@@ -776,25 +765,20 @@ def columndensity(Configuration,levels,systemic = 100.,beam=[-1.,-1.],channel_wi
         else:
             channel_width = Configuration['CHANNEL_WIDTH']
 
-    if debug:
-        print_log(f'''COLUMNDENSITY: Starting conversion from the following input.
+    print_log(f'''COLUMNDENSITY: Starting conversion from the following input.
 {'':8s}Levels = {levels}
 {'':8s}Beam = {beam}
 {'':8s}channel_width = {channel_width}
-''',Configuration['OUTPUTLOG'],debug =True)
+''',Configuration['OUTPUTLOG'],case= ['debug_start'])
     beam=np.array(beam,dtype=float)
     f0 = 1.420405751786E9 #Hz rest freq
     c = 299792.458 # light speed in km / s
     pc = 3.086e+18 #parsec in cm
     solarmass = 1.98855e30 #Solar mass in kg
     mHI = 1.6737236e-27 #neutral hydrogen mass in kg
-    if debug:
-        print_log(f'''COLUMNDENSITY: We have the following input for calculating the columns.
+    print_log(f'''COLUMNDENSITY: We have the following input for calculating the columns.
 {'':8s}COLUMNDENSITY: level = {levels}, channel_width = {channel_width}, beam = {beam}, systemic = {systemic})
-''',Configuration['OUTPUTLOG'])
-    #systemic should always be in km/s
-    #if systemic > 10000:
-    #    systemic = systemic/1000.
+''',Configuration['OUTPUTLOG'],case= ['debug_add'])
 
     f = f0 * (1 - (systemic / c)) #Systemic frequency
     if arcsquare:
@@ -844,7 +828,7 @@ columndensity.__doc__ =f'''
     levels = the values to convert
 
  OPTIONAL INPUTS:
-    debug = False
+
 
     systemic = 100.
     the systemic velocity of the source
@@ -881,12 +865,11 @@ columndensity.__doc__ =f'''
 '''
 
         # a Function to convert the RA and DEC into hour angle (invert = False) and vice versa (default)
-def convertRADEC(Configuration,RAin,DECin,invert=False, colon=False,debug = False):
-    if debug:
-        print_log(f'''CONVERTRADEC: Starting conversion from the following input.
+def convertRADEC(Configuration,RAin,DECin,invert=False, colon=False):
+    print_log(f'''CONVERTRADEC: Starting conversion from the following input.
     {'':8s}RA = {RAin}
     {'':8s}DEC = {DECin}
-''',Configuration['OUTPUTLOG'],debug =True)
+''',Configuration['OUTPUTLOG'],case= ['debug_start'])
     RA = copy.deepcopy(RAin)
     DEC = copy.deepcopy(DECin)
     if not invert:
@@ -958,7 +941,7 @@ convertRADEC.__doc__ =f'''
     DECin = DEC to be converted
 
  OPTIONAL INPUTS:
-    debug = False
+
 
     invert=False
     if true input is hour angle string to be converted to degree
@@ -1014,14 +997,14 @@ convert_type.__doc__ =f'''
 '''
 
 # function for converting kpc to arcsec and vice versa
-def convertskyangle(Configuration, angle, distance=-1., unit='arcsec', distance_unit='Mpc', physical=False,debug = False):
-    if debug:
-        print_log(f'''CONVERTSKYANGLE: Starting conversion from the following input.
-    {'':8s}Angle = {angle}
-    {'':8s}Distance = {distance}
-''',Configuration['OUTPUTLOG'],debug =True)
+def convertskyangle(Configuration, angle, distance=-1., unit='arcsec', distance_unit='Mpc', physical=False):
     if distance == -1.:
         distance = Configuration['DISTANCE']
+    print_log(f'''CONVERTSKYANGLE: Starting conversion from the following input.
+    {'':8s}Angle = {angle}
+    {'':8s}Distance = {distance}
+''',Configuration['OUTPUTLOG'],case= ['debug_start'])
+
     try:
         _ = (e for e in angle)
     except TypeError:
@@ -1038,8 +1021,9 @@ def convertskyangle(Configuration, angle, distance=-1., unit='arcsec', distance_
     elif distance_unit.lower() == 'pc':
         distance = distance / (10 ** 3)
     else:
-        print_log('CONVERTSKYANGLE: ' + distance_unit + ' is an unknown unit to convertskyangle.\n',Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
-        print_log('CONVERTSKYANGLE: please use Mpc, kpc or pc.\n',Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
+        print_log(f'''CONVERTSKYANGLE: {distance_unit} is an unknown unit to convertskyangle.
+{'':8s}CONVERTSKYANGLE: please use Mpc, kpc or pc.
+''',Configuration['OUTPUTLOG'],case= ['main','screen'])
         raise SupportRunError('CONVERTSKYANGLE: ' + distance_unit + ' is an unknown unit to convertskyangle.')
     if not physical:
         if unit.lower() == 'arcsec':
@@ -1049,8 +1033,9 @@ def convertskyangle(Configuration, angle, distance=-1., unit='arcsec', distance_
         elif unit.lower() == 'degree':
             radians = angle * ((2. * np.pi) / 360.)
         else:
-            print_log('CONVERTSKYANGLE: ' + unit + ' is an unknown unit to convertskyangle.\n',Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
-            print_log('CONVERTSKYANGLE: please use arcsec, arcmin or degree.\n',Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
+            print_log(f'''CONVERTSKYANGLE: {unit} is an unknown unit to convertskyangle.
+{'':8s}CONVERTSKYANGLE: arcsec, arcmin or degree.
+''',Configuration['OUTPUTLOG'],case= ['main','screen'])
             raise SupportRunError('CONVERTSKYANGLE: ' + unit + ' is an unknown unit to convertskyangle.')
 
 
@@ -1063,8 +1048,9 @@ def convertskyangle(Configuration, angle, distance=-1., unit='arcsec', distance_
         elif unit.lower() == 'pc':
             kpc = angle / (10 ** 3)
         else:
-            print_log('CONVERTSKYANGLE: ' + unit + ' is an unknown unit to convertskyangle.\n',Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
-            print_log('CONVERTSKYANGLE: please use kpc, Mpc or pc.\n',Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
+            print_log(f'''CONVERTSKYANGLE: {unit} is an unknown unit to convertskyangle.
+{'':8s}CONVERTSKYANGLE: please use Mpc, kpc or pc.
+''',Configuration['OUTPUTLOG'],case= ['main','screen'])
             raise SupportRunError('CONVERTSKYANGLE: ' + unit + ' is an unknown unit to convertskyangle.')
 
         radians = 2. * np.arctan(kpc / (2. * distance))
@@ -1088,7 +1074,7 @@ convertskyangle.__doc__ =f'''
     angle = the angles or lengths to be converted
 
  OPTIONAL INPUTS:
-    debug = False
+
 
     distance=1.
     Distance to the galaxy for the conversion
@@ -1114,7 +1100,7 @@ convertskyangle.__doc__ =f'''
 '''
 
 
-def copy_homemade_sofia(Configuration,no_cat=False,debug=False):
+def copy_homemade_sofia(Configuration,no_cat=False):
     create_directory('Sofia_Output',Configuration['FITTING_DIR'])
     files =['_mask.fits','_mom0.fits','_mom1.fits','_chan.fits','_mom2.fits']
     if not no_cat:
@@ -1129,7 +1115,7 @@ def copy_homemade_sofia(Configuration,no_cat=False,debug=False):
                 print_log(f'''COPY_HOMEMADE_SOFIA: Something went wrong copying the file  {Configuration['SOFIA_DIR']}{Configuration['SOFIA_BASENAME']+file}
 {'':8s} to the file {Configuration['FITTING_DIR']}Sofia_Output/{Configuration['BASE_NAME']+file}.
 {'':8s}We are aborting this fit as we cannot make it without Sofia input.
-''',Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'],debug=debug )
+''',Configuration['OUTPUTLOG'],case= ['main','screen'])
                 raise SofiaMissingError("Either the sofia mask or catalogue is missing. We can not run without it")
             else:
                 pass
@@ -1147,7 +1133,7 @@ def copy_homemade_sofia(Configuration,no_cat=False,debug=False):
             hdr_in = initial[0].header
             data=initial[0].data
             initial.close()
-            hdr = clean_header(Configuration,hdr_in,two_dim=two_dim,mask_file=mask_file,debug=debug)
+            hdr = clean_header(Configuration,hdr_in,two_dim=two_dim,mask_file=mask_file )
             update = False
             for key in hdr:
                 try:
@@ -1184,7 +1170,7 @@ copy_homemade_sofia.__doc__ =f'''
 
 
  OPTIONAL INPUTS:
-    debug = False
+
     check = False
     if set to true FAT merely checks for the existings of the sofia files where they expect them
  OUTPUTS:
@@ -1198,7 +1184,7 @@ copy_homemade_sofia.__doc__ =f'''
 '''
 
 
-def create_directory(directory,base_directory,debug=False):
+def create_directory(directory,base_directory):
     split_directory = [x for x in directory.split('/') if x]
     split_directory_clean = [x for x in directory.split('/') if x]
     split_base = [x for x in base_directory.split('/') if x]
@@ -1229,7 +1215,7 @@ create_directory.__doc__ =f'''
     base_directory = string with directory that exists and from where to start the check from
 
  OPTIONAL INPUTS:
-    debug = False
+
 
  OUTPUTS:
 
@@ -1242,7 +1228,7 @@ create_directory.__doc__ =f'''
  NOTE:
 '''
 
-def deproject(Configuration,map,angle, center = 0., invert = False,debug=False):
+def deproject(Configuration,map,angle, center = 0., invert = False):
     axis = np.array(range(len(map[:,0])),dtype=float)-center
     if invert:
         newaxis = axis/np.cos(np.radians(angle))
@@ -1269,7 +1255,7 @@ deproject.__doc__ =f'''
     angle = the inclination angle
 
  OPTIONAL INPUTS:
-    debug = False
+
 
     center = 0.
     height on the yaxis to rotate around
@@ -1362,30 +1348,35 @@ find_program.__doc__ =f'''
  NOTE:
 '''
 
-def finish_current_run(Configuration,current_run,debug=False):
-    print_log(f"FINISH_CURRENT_RUN: Is Tirific Running? {Configuration['TIRIFIC_RUNNING']}. \n",Configuration['OUTPUTLOG'],debug=debug)
+def finish_current_run(Configuration,current_run):
+    print_log(f'''FINISH_CURRENT_RUN: Is Tirific Running? {Configuration['TIRIFIC_RUNNING']}.
+''',Configuration['OUTPUTLOG'])
     if Configuration['TIRIFIC_RUNNING']:
         try:
             current_run.stdout.close()
             current_run.stderr.close()
         except:
-            print_log(f"FINISH_CURRENT_RUN: We failed to close the pipe to the current run even though there should be one. \n",Configuration['OUTPUTLOG'],debug=debug)
+            print_log(f'''FINISH_CURRENT_RUN: We failed to close the pipe to the current run even though there should be one.
+''',Configuration['OUTPUTLOG'])
             pass
         try:
             os.kill(Configuration['TIRIFIC_PID'], signal.SIGKILL)
-            print_log(f"FINISH_CURRENT_RUN: We killed PID = {Configuration['TIRIFIC_PID']}. \n",Configuration['OUTPUTLOG'])
+            print_log(f'''FINISH_CURRENT_RUN: We killed PID = {Configuration['TIRIFIC_PID']}.
+''',Configuration['OUTPUTLOG'])
         except:
             try:
                 current_run.kill()
-                print_log(f"FINISH_CURRENT_RUN: We killed the current run although we failed on the PID = {Configuration['TIRIFIC_PID']}. \n",\
-                          Configuration['OUTPUTLOG'])
+                print_log(f'''FINISH_CURRENT_RUN: We killed the current run although we failed on the PID = {Configuration['TIRIFIC_PID']}.
+''',Configuration['OUTPUTLOG'])
             except AttributeError:
-                print_log(f"FINISH_CURRENT_RUN: We failed to kill the current run with PID {Configuration['TIRIFIC_PID']} even though we have tirific running",Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
+                print_log(f'''FINISH_CURRENT_RUN: We failed to kill the current run with PID {Configuration['TIRIFIC_PID']} even though we have tirific running
+''',Configuration['OUTPUTLOG'],case=['main','screen'])
                 raise TirificKillError('FINISH_CURRENT_RUN: Despite having an initialized tirific we could not kill it. This should not happen.')
         Configuration['TIRIFIC_RUNNING'] = False
         Configuration['TIRIFIC_PID'] = 'Not Initialized'
     else:
-        print_log(f"FINISH_CURRENT_RUN: No run is initialized. \n",Configuration['OUTPUTLOG'])
+        print_log(f'''FINISH_CURRENT_RUN: No run is initialized.
+''',Configuration['OUTPUTLOG'])
 finish_current_run.__doc__ =f'''
  NAME:
     finish_current_run
@@ -1399,7 +1390,7 @@ finish_current_run.__doc__ =f'''
     current_run = subprocess structure for the current tirific run
 
  OPTIONAL INPUTS:
-    debug = False
+
 
  OUTPUTS:
     kills tirific if initialized or raises an error when it fails to do so while tirific is running
@@ -1412,7 +1403,7 @@ finish_current_run.__doc__ =f'''
  NOTE:
 '''
 
-def fit_center_ellipse(Configuration,map,inclination= -1, pa = -1,debug=False):
+def fit_center_ellipse(Configuration,map,inclination= -1, pa = -1):
     max = np.max(map)
     ellipses = np.linspace(max/2.,max,num=10)
     parameters =[]
@@ -1421,7 +1412,7 @@ def fit_center_ellipse(Configuration,map,inclination= -1, pa = -1,debug=False):
         map_to_fit[map < el_in ] = 1.
         map_to_fit[map < el_out ] = 0.
         y,x = np.where(map_to_fit == 1.)
-        cx,cy,a,b, orient = fit_ellipse(Configuration,x,y,debug=False)
+        cx,cy,a,b, orient = fit_ellipse(Configuration,x,y)
         if np.isnan(cx) or np.isnan(cx):
             continue
         else:
@@ -1463,7 +1454,7 @@ INPUTS:
 
 OPTIONAL INPUTS:
 
-   debug = False
+
 
 OUTPUTS:
    center
@@ -1478,7 +1469,7 @@ NOTE:
 '''
 
 
-def fit_ellipse(Configuration,x,y,debug=False):
+def fit_ellipse(Configuration,x,y):
     x=x[:,None]
     y=y[:,None]
     diag = np.hstack([x*x,x*y,y*y,x,y,np.ones(x.shape)])
@@ -1527,7 +1518,7 @@ INPUTS:
 
 OPTIONAL INPUTS:
 
-   debug = False
+
 
 OUTPUTS:
    new_x = new x center
@@ -1545,13 +1536,12 @@ PROCEDURES CALLED:
 NOTE:
 '''
 
-def fit_sine(Configuration,x,y,debug = False):
-    if debug:
-        print_log(f'''FIT_SINE: Starting to fit a sin.
+def fit_sine(Configuration,x,y):
+    print_log(f'''FIT_SINE: Starting to fit a sin.
 {'':8s}x = {x}
 {'':8s}y = {y}
 {'':8s} x size = {x.size} y size = {y.size}
-''', Configuration['OUTPUTLOG'],debug =True)
+''', Configuration['OUTPUTLOG'],case=['debug_start'])
     # Make sure we have numpy arrays
     x= np.array(x,dtype=float)
     y= np.array(y,dtype=float)
@@ -1578,13 +1568,12 @@ def fit_sine(Configuration,x,y,debug = False):
         except RuntimeError:
             sin_parameters = [float('NaN') for z in range(4)]
         except OptimizeWarning:
-            if debug:
-                print_log(f'''FIT_SINE: the covariance could not be estimated. Using initial estimates
+            print_log(f'''FIT_SINE: the covariance could not be estimated. Using initial estimates
 {'':8s}peak est = {est_peak}
 {'':8s}center est = {est_center}
 {'':8s}width est = {est_width}
 {'':8s}amp est = {est_amp}
-''', Configuration['OUTPUTLOG'],debug =True)
+''', Configuration['OUTPUTLOG'],case=['debug_add'])
             sin_parameters = [0.,0.,0.,0.]
 
     if not 0.4 < sin_parameters[2] <0.6:
@@ -1610,7 +1599,7 @@ INPUTS:
 
 OPTIONAL INPUTS:
 
-   debug = False
+
 
 OUTPUTS:
    ratios
@@ -1625,12 +1614,11 @@ NOTE:
 '''
 
 
-def fit_gaussian(Configuration,x,y, covariance = False,errors = None, debug = False):
-    if debug:
-        print_log(f'''FIT_GAUSSIAN: Starting to fit a Gaussian.
+def fit_gaussian(Configuration,x,y, covariance = False,errors = None):
+    print_log(f'''FIT_GAUSSIAN: Starting to fit a Gaussian.
 {'':8s}x = {x}
 {'':8s}y = {y}
-''', Configuration['OUTPUTLOG'],debug =True)
+''', Configuration['OUTPUTLOG'],case=['debug_start'])
     # Make sure we have numpy arrays
     x= np.array(x,dtype=float)
     y= np.array(y,dtype=float)
@@ -1653,9 +1641,8 @@ def fit_gaussian(Configuration,x,y, covariance = False,errors = None, debug = Fa
         maxfev= int(100*(len(x)))
 
         while not succes:
-            if debug:
-                print_log(f'''FIT_GAUSSIAN: Starting the curve fit with {maxfev}
-    ''',Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
+            print_log(f'''FIT_GAUSSIAN: Starting the curve fit with {maxfev}
+''',Configuration['OUTPUTLOG'],case=['debug_add'])
             try:
                 gauss_parameters, gauss_covariance = curve_fit(gaussian_function, \
                         x, y,p0=[est_peak,est_center,est_sigma],sigma= errors,\
@@ -1669,10 +1656,10 @@ def fit_gaussian(Configuration,x,y, covariance = False,errors = None, debug = Fa
                     split_error:
                     maxfev += 100*int(len(x))
                     print_log(f'''FIT_GAUSSIAN: We failed to find an optimal fit due to the maximum number of evaluations. increasing maxfev to {maxfev}
-    ''',Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
+''',Configuration['OUTPUTLOG'],case=['debug_add'])
                 else:
-                    print_log(f'''FIT_GAUSSIAN: some other error {split_error}
-    ''',Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
+                    print_log(f'''FIT_GAUSSIAN: failed due to the following error {split_error}
+''',Configuration['OUTPUTLOG'],case=['main','screen'])
                     raise RuntimeError(split_error)
             if maxfev >  1000*(len(x)):
                 raise FittingError("FIT_GAUSSIAN: failed to find decent gaussian parameters")
@@ -1700,7 +1687,7 @@ fit_gaussian.__doc__ =f'''
     covariance = false
     return to covariance matrix of the fit or not
 
-    debug = False
+
 
  OUTPUTS:
     gauss_parameters
@@ -1751,14 +1738,14 @@ gaussian_function.__doc__ =f'''
  NOTE:
 '''
 
-def get_fit_groups(Configuration,Tirific_Template,debug = False):
+def get_fit_groups(Configuration,Tirific_Template):
     parameter_groups = []
     block = []
     rings = []
     groups = Tirific_Template['VARY'].split(',')
     variation_type = []
     variation = []
-    radii,cut_off_limits = sbr_limits(Configuration,Tirific_Template, debug = debug)
+    radii,cut_off_limits = sbr_limits(Configuration,Tirific_Template )
     sbr_standard = np.mean(cut_off_limits) * 5.
     paramater_standard_variation = {'PA': [10.,'a'],
                                    'INCL': [10.,'a'],
@@ -1770,14 +1757,12 @@ def get_fit_groups(Configuration,Tirific_Template,debug = False):
                                    'Z0': [Configuration['BEAM'][0]*2.,'a'],
                                    'SDIS': [Configuration['CHANNEL_WIDTH']*1.5,'a'],
                                    }
-    if debug:
-        print_log(f'''GET_FIT_GROUPS: We have found the following unformatted groups from VARY:
+    print_log(f'''GET_FIT_GROUPS: We have found the following unformatted groups from VARY:
 {'':8s}{groups}
-''',Configuration['OUTPUTLOG'])
+''',Configuration['OUTPUTLOG'],case=['debug_add'])
     for group in groups:
-        if debug:
-            print_log(f'''GET_FIT_GROUPS: We are processing {group}
-''',Configuration['OUTPUTLOG'])
+        print_log(f'''GET_FIT_GROUPS: We are processing {group}
+''',Configuration['OUTPUTLOG'],case=['debug_add'])
         parts = group.split()
         if parts[0][0] == '!':
             block.append(False)
@@ -1812,11 +1797,10 @@ def get_fit_groups(Configuration,Tirific_Template,debug = False):
         block_str = 'as a block.'
         if not block[-1]:
             block_str = 'individually.'
-        if debug:
-            print_log(f'''GET_FIT_GROUPS: We determined the group {parameter_groups[-1]}
+        print_log(f'''GET_FIT_GROUPS: We determined the group {parameter_groups[-1]}
 {'':8s}with rings {rings[-1]}
 {'':8s} which are varied {block_str}
-''',Configuration['OUTPUTLOG'])
+''',Configuration['OUTPUTLOG'],case=['debug_add'])
         # Then get current errors that are present
         per_par_variation  = []
         current_par = ''
@@ -1827,7 +1811,7 @@ def get_fit_groups(Configuration,Tirific_Template,debug = False):
                     current_par=current_par[:-2]
             par = [f'# {par}_ERR']
             all_errors = load_tirific(Configuration,Tirific_Template, par,\
-                array=True,debug=debug)
+                array=True )
             current_rings = np.array(rings[-1],dtype=int)-1
             if current_rings.size == 1:
                 current_rings = int(current_rings)
@@ -1837,11 +1821,10 @@ def get_fit_groups(Configuration,Tirific_Template,debug = False):
                 else:
                     per_par_variation.append(paramater_standard_variation[current_par][0])
             elif current_par == 'SBR':
-                if debug:
-                    print_log(f'''GET_FIT_GROUPS: For SBR we are setting
+                print_log(f'''GET_FIT_GROUPS: For SBR we are setting
 {'':8s}the cut_off_limits {cut_off_limits}
 {'':8s} in ring {current_rings}  == {cut_off_limits[current_rings]}
-''',Configuration['OUTPUTLOG'])
+''',Configuration['OUTPUTLOG'],case=['debug_add'])
                 if block[-1]:
                     per_par_variation.append(np.mean(cut_off_limits[current_rings])*3.)
                 else:
@@ -1893,33 +1876,20 @@ get_fit_groups.__doc__ =f'''
  NOTE:
 '''
 
-def get_inclination_pa(Configuration, Image, center, cutoff = 0., debug = False,figure_name = 'test'):
+def get_inclination_pa(Configuration, Image, center, cutoff = 0.,figure_name = 'test'):
     map = copy.deepcopy(Image[0].data)
     for i in [0,1]:
-        if debug:
-            print_log(f'''GET_INCLINATION_PA: Doing iteration {i} in the estimates
-''',Configuration['OUTPUTLOG'])
+        print_log(f'''GET_INCLINATION_PA: Doing iteration {i} in the estimates
+''',Configuration['OUTPUTLOG'],case=['debug_start'])
         # now we need to get profiles under many angles let's say 100
         #extract the profiles under a set of angles
         angles = np.linspace(0, 360, 180)
-        ratios, maj_extent = obtain_ratios(Configuration,map, center, angles,noise = cutoff,debug=False)
+        ratios, maj_extent = obtain_ratios(Configuration,map, center, angles,noise = cutoff)
         if np.any(np.isnan(ratios)):
             return [float('NaN'),float('NaN')],  [float('NaN'),float('NaN')],float('NaN')
-        sin_ratios,sin_parameters = fit_sine(Configuration,angles,ratios,debug=False)
+        sin_ratios,sin_parameters = fit_sine(Configuration,angles,ratios)
         if np.any(np.isnan(sin_parameters)):
             return [float('NaN'),float('NaN')],  [float('NaN'),float('NaN')],float('NaN')
-
-        '''
-        import matplotlib
-        matplotlib.use('MacOSX')
-        if debug:
-            name= f'{figure_name}_{i}.pdf'
-            fig = plt.figure()
-            plt.plot(angles,ratios)
-            plt.plot(angles,sin_ratios,'k--')
-            plt.savefig(name, bbox_inches='tight')
-            plt.close()
-        '''
         ratios=sin_ratios
 
         max_index = np.where(ratios == np.nanmax(ratios))[0]
@@ -1936,14 +1906,12 @@ def get_inclination_pa(Configuration, Image, center, cutoff = 0., debug = False,
             min_index=min_index-90
         if max_index > 135 and min_index < 45:
             max_index=max_index-90
-
-        if debug:
-            if i == 0:
-                print_log(f'''GET_INCLINATION_PA: We initially find these indeces min {min_index } {angles[min_index]} max {max_index} {angles[max_index]}.
-''',Configuration['OUTPUTLOG'])
-            else:
-                print_log(f'''GET_INCLINATION_PA: From the cleaned map we find these indeces min {min_index }  {angles[min_index]} max {max_index} {angles[max_index]}.
-''',Configuration['OUTPUTLOG'])
+        if i == 0:
+            print_log(f'''GET_INCLINATION_PA: We initially find these indeces min {min_index } {angles[min_index]} max {max_index} {angles[max_index]}.
+''',Configuration['OUTPUTLOG'],case=['debug_add'])
+        else:
+            print_log(f'''GET_INCLINATION_PA: From the cleaned map we find these indeces min {min_index }  {angles[min_index]} max {max_index} {angles[max_index]}.
+''',Configuration['OUTPUTLOG'],case=['debug_add'])
         #get a 10% bracket
 
         tenp_max_index = np.where(ratios > np.nanmax(ratios)*0.9)[0]
@@ -1959,27 +1927,15 @@ def get_inclination_pa(Configuration, Image, center, cutoff = 0., debug = False,
             pa = float(np.nanmean(np.array([angles[min_index]-90,angles[max_index]],dtype=float)))
         else:
             pa = float(np.nanmean(np.array([angles[min_index]+90,angles[max_index]],dtype=float)))
-        '''
-        if angles[min_index]-90 > 0.:
-            if angles[max_index] > 165:
-                pa = float(np.nanmean(np.array([angles[min_index]+90,angles[max_index]],dtype=float)))
-            else:
-                pa = float(np.nanmean(np.array([angles[min_index]-90,angles[max_index]],dtype=float)))
-        else:
-            if angles[max_index] < 15:
-                pa = float(np.nanmean(np.array([angles[min_index]-90,angles[max_index]],dtype=float)))
-            else:
-                pa = float(np.nanmean(np.array([angles[min_index]+90,angles[max_index]],dtype=float)))
-        '''
         if 180. < pa:
             pa = pa -180
-        if debug:
-            if i == 0:
-                print_log(f'''GET_INCLINATION_PA: The initial  pa = {pa}.
-''',Configuration['OUTPUTLOG'])
-            else:
-                print_log(f'''GET_INCLINATION_PA: The pa from the cleaned map  = {pa}.
-''',Configuration['OUTPUTLOG'])
+
+        if i == 0:
+            print_log(f'''GET_INCLINATION_PA: The initial  pa = {pa}.
+''',Configuration['OUTPUTLOG'],case=['debug_add'])
+        else:
+            print_log(f'''GET_INCLINATION_PA: The pa from the cleaned map  = {pa}.
+''',Configuration['OUTPUTLOG'],case=['debug_add'])
         pa_error = set_limits(np.nanmean([abs(float(angles[int(tenp_min_index[0])])-float(angles[min_index])),\
                             abs(float(angles[int(tenp_min_index[-1])])-float(angles[min_index])),\
                             abs(float(angles[int(tenp_max_index[0])])-float(angles[max_index])), \
@@ -2012,16 +1968,16 @@ def get_inclination_pa(Configuration, Image, center, cutoff = 0., debug = False,
             inclination = float(inclination+(inclination/10.*np.sqrt(4./(maj_extent/Configuration['BEAM'][0]*3600.))))
             if i == 0:
                 inclination_error = float(inclination_error*4./(maj_extent*3600./Configuration['BEAM'][0]))
-        if debug:
-            if i == 0:
-                print_log(f'''GET_INCLINATION_PA: The initial inclination = {inclination}.
-''',Configuration['OUTPUTLOG'])
-            else:
-                print_log(f'''GET_INCLINATION_PA: From the cleaned map we find inclination = {inclination}.
-''',Configuration['OUTPUTLOG'])
+
+        if i == 0:
+            print_log(f'''GET_INCLINATION_PA: The initial inclination = {inclination}.
+''',Configuration['OUTPUTLOG'],case=['debug_add'])
+        else:
+            print_log(f'''GET_INCLINATION_PA: From the cleaned map we find inclination = {inclination}.
+''',Configuration['OUTPUTLOG'],case=['debug_add'])
         # this leads to trouble for small sources due to uncertain PA and inclination estimates
         if inclination < 70. and maj_extent*3600./Configuration['BEAM'][0] > 4:
-            Image_clean = remove_inhomogeneities(Configuration,Image,inclination=inclination, pa = pa,iteration=i, center = center,WCS_center = False, debug=debug)
+            Image_clean = remove_inhomogeneities(Configuration,Image,inclination=inclination, pa = pa,iteration=i, center = center,WCS_center = False )
             map = Image_clean[0].data
             Image_clean.close()
         else:
@@ -2044,7 +2000,7 @@ get_inclination_pa.__doc__ =f'''
     center = center of the galaxy in pixels
 
  OPTIONAL INPUTS:
-    debug = False
+
 
     cutoff = 0.
     Limit to trust the map to, below this values are not evaluated
@@ -2062,9 +2018,9 @@ get_inclination_pa.__doc__ =f'''
  NOTE:
 '''
 
-def get_new_center(Configuration, map_in, inclination=-1,pa=-1, noise= 0., debug = False):
+def get_new_center(Configuration, map_in, inclination=-1,pa=-1, noise= 0.):
 
-    new_center = fit_center_ellipse(Configuration,map_in,inclination=inclination,pa=pa,debug=debug)
+    new_center = fit_center_ellipse(Configuration,map_in,inclination=inclination,pa=pa )
 
 
     return new_center,True,False
@@ -2086,7 +2042,7 @@ get_new_center.__doc__ =f'''
     pa =  the current inclination for weighing purposes
 
  OPTIONAL INPUTS:
-    debug = False
+
 
 
  OUTPUTS:
@@ -2103,12 +2059,11 @@ get_new_center.__doc__ =f'''
 
 
 # Function to get the amount of inner rings to fix
-def get_inner_fix(Configuration,Tirific_Template, debug =False):
-    if debug:
-        print_log(f'''GET_INNER_FIX: Attempting to get the inner rings to be fixed.
-''',Configuration['OUTPUTLOG'], debug = True)
+def get_inner_fix(Configuration,Tirific_Template ):
+    print_log(f'''GET_INNER_FIX: Attempting to get the inner rings to be fixed.
+''',Configuration['OUTPUTLOG'],case=['debug_start'])
     sbr_av = np.array([(float(x)+float(y))/2. for x,y  in zip(Tirific_Template['SBR'].split(),Tirific_Template['SBR_2'].split())],dtype = float)
-    column_levels = columndensity(Configuration,sbr_av, arcsquare = True, debug = debug)
+    column_levels = columndensity(Configuration,sbr_av, arcsquare = True )
     column_levels[0]= 1e21
     tmp = np.where(column_levels > 1e20)[0]
     if Configuration['OUTER_RINGS_DOUBLED']:
@@ -2118,8 +2073,8 @@ def get_inner_fix(Configuration,Tirific_Template, debug =False):
     inner_min = int(set_limits(np.floor(tmp[-1]/1.5-1), inner_min, Configuration['NO_RINGS']*0.9))
 
 
-    tiltogram = make_tiltogram(Configuration,Tirific_Template,debug=debug)
-    check_tiltogram(Configuration,tiltogram,inner_min=inner_min,debug=debug)
+    tiltogram = make_tiltogram(Configuration,Tirific_Template )
+    check_tiltogram(Configuration,tiltogram,inner_min=inner_min )
 get_inner_fix.__doc__ =f'''
  NAME:
     get_inner_fix
@@ -2136,7 +2091,7 @@ get_inner_fix.__doc__ =f'''
     Tirific_Template = Standard Tirific template containing the SBR profiles
 
  OPTIONAL INPUTS:
-    debug = False
+
 
  OUTPUTS:
     Update INNER_FIX in the configuration
@@ -2150,7 +2105,7 @@ get_inner_fix.__doc__ =f'''
     !!!!!!!!!!!!!This appears to currently not be working well.
 '''
 
-def get_kinematical_center(Configuration,map,angle,center= [0.,0],debug=False ):
+def get_kinematical_center(Configuration,map,angle,center= [0.,0] ):
     if np.sum(center) == 0.:
         center = [len(map[0,:])/2.,len(map[:,0])/2.]
     if angle > 180.:
@@ -2161,13 +2116,13 @@ def get_kinematical_center(Configuration,map,angle,center= [0.,0],debug=False ):
     else:
         angle= angle-90.
     buffer = int(round(np.mean(Configuration['BEAM_IN_PIXELS'][:2])/3.))
-    min_axis_prof, min_axis, min_res = get_profile(Configuration,map,angle,center= center,debug=debug)
+    min_axis_prof, min_axis, min_res = get_profile(Configuration,map,angle,center= center )
     found_vsys = [np.nanmean(min_axis_prof),0,0]
     found_diff=  abs(np.nanmin(min_axis_prof)-np.nanmax(min_axis_prof))+ np.nansum([abs(x-found_vsys[0]) for x in min_axis_prof])
     for x in range(-buffer,buffer):
         for y in range(-buffer,buffer):
                 var_center = [int(round(center[0]+x)),int(round(center[1]+y))]
-                min_axis_prof, min_axis, min_res = get_profile(Configuration,map,angle,center= var_center,debug=debug)
+                min_axis_prof, min_axis, min_res = get_profile(Configuration,map,angle,center= var_center )
                 var_diff=  abs(np.nanmin(min_axis_prof)-np.nanmax(min_axis_prof))+np.nansum([abs(x-np.nanmean(min_axis_prof)) for x in min_axis_prof])
                 if var_diff < found_diff:
                     found_diff = copy.deepcopy(var_diff)
@@ -2190,7 +2145,7 @@ get_kinematical_center.__doc__=f'''
     angle = the angle of the major axis, with error
 
  OPTIONAL INPUTS:
-    debug = False
+
     center= [0.,0.]
     default is the cenetr of the map given in pixels
 
@@ -2207,10 +2162,10 @@ get_kinematical_center.__doc__=f'''
 
 
 
-def get_profile(Configuration,map,angle,center= [0.,0.],debug=False):
+def get_profile(Configuration,map,angle,center= [0.,0.]):
     if np.sum(center) == 0.:
         center = [len(map[0,:])/2.,len(map[:,0])/2.]
-    x1,x2,y1,y2 = obtain_border_pix(Configuration,angle,center,debug=debug)
+    x1,x2,y1,y2 = obtain_border_pix(Configuration,angle,center )
     linex,liney = np.linspace(x1,x2,1000), np.linspace(y1,y2,1000)
     resolution = np.sqrt((x2-x1)**2+(y2-y1)**2)/1000.
     #maj_resolution = abs((abs(x2-x1)/1000.)*np.sin(np.radians(pa[0])))+abs(abs(y2-y1)/1000.*np.cos(np.radians(pa[0])))
@@ -2233,7 +2188,7 @@ get_profile.__doc__=f'''
     pa = the angle
 
  OPTIONAL INPUTS:
-    debug = False
+
     center= [0.,0.]
     default is the cenetr of the map given in pixels
 
@@ -2248,23 +2203,21 @@ get_profile.__doc__=f'''
  NOTE:
 '''
 
-def get_ring_weights(Configuration,Tirific_Template,debug = False):
-    if debug:
-        print_log(f'''GET_RING_WEIGTHS: Getting the importance of the rings in terms of SBR.
-''',Configuration['OUTPUTLOG'], debug = True)
+def get_ring_weights(Configuration,Tirific_Template):
+    print_log(f'''GET_RING_WEIGTHS: Getting the importance of the rings in terms of SBR.
+''',Configuration['OUTPUTLOG'],case=['debug_start'])
     sbr = load_tirific(Configuration,Tirific_Template,Variables=["SBR",f"SBR_2"],\
-                array=True,debug=debug)
-    radii,cut_off_limits = sbr_limits(Configuration,Tirific_Template, debug = debug)
+                array=True )
+    radii,cut_off_limits = sbr_limits(Configuration,Tirific_Template )
     weights= [[],[]]
     for i in [0,1]:
         weights[i] = [set_limits(x/y,0.1,10.) for x,y in zip(sbr[i],cut_off_limits)]
         weights[i] = weights[i]/np.nanmax(weights[i])
         weights[i][0:2] = np.nanmin(weights[i])
         weights[i] = [set_limits(x,0.1,1.) for x in weights[i]]
-    if debug:
-        print_log(f'''GET_RING_WEIGTHS: Obtained the following weights.
+    print_log(f'''GET_RING_WEIGTHS: Obtained the following weights.
 {'':8s}{weights}
-''',Configuration['OUTPUTLOG'])
+''',Configuration['OUTPUTLOG'],case=['debug_add'])
     return np.array(weights,dtype = float)
 
 get_ring_weights.__doc__=f'''
@@ -2282,7 +2235,7 @@ get_ring_weights.__doc__=f'''
     Tirific_Template = Standard Tirific template containg the SBR profiles
 
  OPTIONAL INPUTS:
-    debug = False
+
 
  OUTPUTS:
     numpy array with the weight normalized to the the maximum.
@@ -2328,12 +2281,11 @@ get_system_string.__doc__=f'''
 
  NOTE:
 '''
-def get_tirific_output_names(Configuration,work_dir,deffile,debug=False):
-    if debug:
-        print_log(f'''GET_TIRIFIC_OUTPUT_NAMES: Starting the extraction of the output names in {deffile} tot be ran in {work_dir})
-''',Configuration['OUTPUTLOG'])
+def get_tirific_output_names(Configuration,work_dir,deffile):
+    print_log(f'''GET_TIRIFIC_OUTPUT_NAMES: Starting the extraction of the output names in {deffile} tot be ran in {work_dir})
+''',Configuration['OUTPUTLOG'],case=['debug_start'])
 
-    fitsfile,deffile = load_tirific(Configuration,f'{work_dir}/{deffile}',debug=debug,\
+    fitsfile,deffile = load_tirific(Configuration,f'{work_dir}/{deffile}' ,\
         Variables=['OUTSET','TIRDEF'])
     output_fits = f'{work_dir}/{fitsfile[0]}'
     output_deffile = f'{work_dir}/{deffile[0]}'
@@ -2369,7 +2321,7 @@ get_tirific_output_names.__doc__=f'''
  NOTE:
 '''
 
-def get_usage_statistics(Configuration,process, debug = False):
+def get_usage_statistics(Configuration,process):
     #try:
     memory_in_mb = (process.memory_info()[0])/2**20. #psutilreturns bytes
     cpu_percent = process.cpu_percent(interval=1)
@@ -2392,7 +2344,7 @@ get_usage_statistics.__doc__ =f'''
     process_id = process id of the tirific currently running.
 
  OPTIONAL INPUTS:
-    debug = False
+
 
  OUTPUTS:
     CPU = The current CPU usage
@@ -2407,10 +2359,9 @@ get_usage_statistics.__doc__ =f'''
     pyFAT version < 1.0.0 uses top which only works on unix and has an error in the MB calculation
 '''
 
-def get_vel_pa(Configuration,velocity_field,center= [0.,0.], debug =False):
-    if debug:
-        print_log(f'''GET_VEL_PA: This is the center we use {center}
-''',Configuration['OUTPUTLOG'],debug = True)
+def get_vel_pa(Configuration,velocity_field,center= [0.,0.] ):
+    print_log(f'''GET_VEL_PA: This is the center we use {center}
+''',Configuration['OUTPUTLOG'],case=['debug_start'])
     # because python is stupid the ceneter should be reversed to match the map
     center.reverse()
     if np.sum(center) == 0.:
@@ -2431,9 +2382,8 @@ def get_vel_pa(Configuration,velocity_field,center= [0.,0.], debug =False):
     min_pos = np.where(np.nanmin(sm_velocity_field) == sm_velocity_field)
     min_pos = [float(min_pos[0]),float(min_pos[1])]
 
-    if debug:
-        print_log(f'''GET_VEL_PA: This is the location of the maximum {max_pos} and minimum {min_pos}
-''',Configuration['OUTPUTLOG'])
+    print_log(f'''GET_VEL_PA: This is the location of the maximum {max_pos} and minimum {min_pos}
+''',Configuration['OUTPUTLOG'],case=['debug_add'])
     try:
         pa_from_max = np.arctan((center[1]-max_pos[1])/(center[0]-max_pos[0]))
     except ZeroDivisionError:
@@ -2486,18 +2436,16 @@ def get_vel_pa(Configuration,velocity_field,center= [0.,0.], debug =False):
                 pa = abs(pa)
             else:
                 pa = np.radians(180.) - pa
-    if debug:
-        print_log(f'''GET_VEL_PA: This is the PA
+    print_log(f'''GET_VEL_PA: This is the PA
 {'':8s} pa = {pa} pa_from_max = {pa_from_max} pa_from_min = {pa_from_min}
-''',Configuration['OUTPUTLOG'])
+''',Configuration['OUTPUTLOG'],case=['debug_add'])
     if np.degrees(abs(pa-pa_from_max)) > 170. or   np.degrees(abs(pa-pa_from_min)) > 170:
         pa = pa
     else:
         pa = np.nanmean([pa,pa_from_max,pa_from_min])
     center.reverse()
-    if debug:
-        print_log(f'''GET_VEL_PA: This is the PA we extract from the velpa {np.degrees(pa)}
-''',Configuration['OUTPUTLOG'])
+    print_log(f'''GET_VEL_PA: This is the PA we extract from the velpa {np.degrees(pa)}
+''',Configuration['OUTPUTLOG'],case=['debug_add'])
     return np.degrees([pa, np.nanstd([pa,pa_from_max,pa_from_min])])
 get_vel_pa.__doc__ =f'''
  NAME:
@@ -2514,7 +2462,7 @@ get_vel_pa.__doc__ =f'''
     velocity_field = the VF
 
  OPTIONAL INPUTS:
-    debug = False
+
     center = center of the galaxy
 
  OUTPUTS:
@@ -2567,18 +2515,25 @@ isiterable.__doc__ =f'''
 
 
 # A simple function to return the line numbers in the stack from where the functions are called
-def linenumber(debug=False):
+def linenumber(debug='short'):
     '''get the line number of the print statement in the main.'''
     line = []
     for key in stack():
         if key[1] == 'main.py':
             break
-        if key[3] != 'linenumber' and key[3] != 'print_log':
+        if key[3] != 'linenumber' and key[3] != 'print_log' and key[3] != '<module>':
             file = key[1].split('/')
-            line.append(f"In the function {key[3]} at line {key[2]} in file {file[-1]}")
+            to_add= f"In the function {key[3]} at line {key[2]}"
+            if debug == 'long':
+                to_add = f"{to_add} in file {file[-1]}."
+            else:
+                to_add = f"{to_add}."
+            line.append(to_add)
     if len(line) > 0:
-        if debug:
+        if debug == 'long':
             line = ', '.join(line)+f'\n{"":8s}'
+        elif debug == 'short':
+            line = line[0]+f'\n{"":8s}'
         else:
             line = f'{"":8s}'
     else:
@@ -2601,7 +2556,7 @@ linenumber.__doc__ =f'''
  INPUTS:
 
  OPTIONAL INPUTS:
-    debug = False
+
 
  OUTPUTS:
     the line number of the print statement
@@ -2622,11 +2577,11 @@ linenumber.__doc__ =f'''
 def load_tirific(Configuration,def_input,Variables = ['BMIN','BMAJ','BPA','RMS',\
             'DISTANCE','NUR','RADI','VROT','Z0', 'SBR', 'INCL','PA','XPOS','YPOS',\
             'VSYS','SDIS','VROT_2',  'Z0_2','SBR_2','INCL_2','PA_2','XPOS_2',\
-            'YPOS_2','VSYS_2','SDIS_2','CONDISP','CFLUX','CFLUX_2'],debug = False,\
+            'YPOS_2','VSYS_2','SDIS_2','CONDISP','CFLUX','CFLUX_2'],\
              array = False,ensure_rings =False ):
     # if the input is a string we first load the template
     if isinstance(def_input,str):
-        def_input = tirific_template(filename = def_input, debug = debug)
+        def_input = tirific_template(filename = def_input )
 
     out = []
     for key in Variables:
@@ -2655,11 +2610,10 @@ def load_tirific(Configuration,def_input,Variables = ['BMIN','BMAJ','BPA','RMS',
 
     if len(Variables) == 1:
         out= out[0]
-    if debug:
-        print_log(f'''LOAD_TIRIFIC: We extracted the following profiles from the Template.
+    print_log(f'''LOAD_TIRIFIC: We extracted the following profiles from the Template.
 {'':8s}Requested Variables = {Variables}
 {'':8s}Extracted = {out}
-''',Configuration['OUTPUTLOG'])
+''',Configuration['OUTPUTLOG'],case=['debug_start'])
     #Beware that lists are stupid i.e. sbr[0][0] = SBR[0], sbr[1][0] = SBR_2[0] but  sbr[:][0] = SBR[:] not SBR[0],SBR_2[0] as logic would demand
     # However if you make a np. array from it make sure that you specify float  or have lists of the same length else you get an array of lists which behave just as dumb
     return out
@@ -2682,7 +2636,7 @@ load_tirific.__doc__ =f'''
                  'Z0', 'SBR', 'INCL','PA','XPOS','YPOS','VSYS','SDIS','VROT_2',  'Z0_2','SBR_2',
                  'INCL_2','PA_2','XPOS_2','YPOS_2','VSYS_2','SDIS_2','CONDISP','CFLUX','CFLUX_2']
 
-    debug = False
+
     array = False
         Specify that the output should be an numpy array with all varables having the same length
 
@@ -2734,7 +2688,7 @@ make_equal_length.__doc__ =f'''
     list1, list2
 
  OPTIONAL INPUTS:
-    debug = False
+
 
  OUTPUTS:
     the lists with the same length.
@@ -2751,15 +2705,14 @@ make_equal_length.__doc__ =f'''
 '''
 
 
-def make_tiltogram(Configuration,Tirific_Template,debug =False):
-    if debug:
-        print_log(f'''MAKE_TILTOGRAM: Starting tiltogram.
-''',Configuration['OUTPUTLOG'])
+def make_tiltogram(Configuration,Tirific_Template):
+    print_log(f'''MAKE_TILTOGRAM: Starting tiltogram.
+''',Configuration['OUTPUTLOG'],case=['debug_start'])
     pa_incl = load_tirific(Configuration,Tirific_Template,\
             Variables=['PA','PA_2','INCL','INCL_2'],array=True)
     sbr = load_tirific(Configuration,Tirific_Template,Variables=["SBR",f"SBR_2"]\
             ,array=True)
-    radii,cut_off_limits = sbr_limits(Configuration,Tirific_Template, debug = debug)
+    radii,cut_off_limits = sbr_limits(Configuration,Tirific_Template )
     add = [[],[]]
     Theta = [[],[]]
     phi = [[],[]]
@@ -2778,12 +2731,11 @@ def make_tiltogram(Configuration,Tirific_Template,debug =False):
             x[i]=np.sin(Theta[i])*np.cos(phi[i])
             y[i]=np.sin(Theta[i])*np.sin(phi[i])
             z[i]=np.cos(Theta[i])
-            if debug:
-                print_log(f'''MAKE_TILTOGRAM: For the cartesian coordinates we find in side {i}
+            print_log(f'''MAKE_TILTOGRAM: For the cartesian coordinates we find in side {i}
 {'':8s} x = {x[i]}
 {'':8s} y = {y[i]}
 {'':8s} z = {z[i]}
-''',Configuration['OUTPUTLOG'])
+''',Configuration['OUTPUTLOG'],case=['debug_add'])
 
             tiltogram[i] = np.degrees(np.arccos(np.multiply.outer(x[i], x[i]).ravel().reshape(len(x[i]),len(x[i])) + \
                                          np.multiply.outer(y[i], y[i]).ravel().reshape(len(x[i]),len(x[i])) + \
@@ -2808,7 +2760,7 @@ make_tiltogram.__doc__ =f'''
     Tirific_Template = Standard Tirific template
 
  OPTIONAL INPUTS:
-    debug = False
+
 
  OUTPUTS:
     a multidimensionals array containig the tiltograms for both sides
@@ -2825,8 +2777,11 @@ make_tiltogram.__doc__ =f'''
 
 
 def max_profile_change(Configuration,radius,profile,key,max_change=None,\
-                        slope = None,debug=False):
-    radkpc =[convertskyangle(Configuration,float(x)) for x in radius]
+                        slope = None, kpc_radius=False):
+    if not kpc_radius:
+        radkpc = convertskyangle(Configuration,radius)
+    else:
+        radkpc = copy.deepcopy(radius)
     new_profile = copy.deepcopy(profile)
     sm_profile = savgol_filter(profile, 3, 1)
     if key == 'ARBITRARY' and not max_change:
@@ -2836,15 +2791,14 @@ def max_profile_change(Configuration,radius,profile,key,max_change=None,\
     diff_rad =  [float(y-x) for x,y in zip(radkpc,radkpc[1:])]
     diff_profile = [float(y-x) for x,y in zip(profile,profile[1:])]
     diff_sm_profile = [float(y-x) for x,y in zip(sm_profile,sm_profile[1:])]
-    if debug:
-        print_log(f'''MAX_CHANGE_PROFILE: The profile {key} starts with.
+    print_log(f'''MAX_CHANGE_PROFILE: The profile {key} starts with.
 {'':8s} {key} = {new_profile} and max change = {max_change}
 {'':8s} smoothed {key}  = {sm_profile}
 {'':8s} diff per ring = {diff_profile}
 {'':8s} smoothed dif per ring = {diff_sm_profile}
 {'':8s} slope = {slope}
 {'':8s} diff/kpc = {[x/y for x,y in zip(diff_profile,diff_rad)]}
-''', Configuration['OUTPUTLOG'],debug=True)
+''', Configuration['OUTPUTLOG'],case=['debug_start'])
 
     for i,diff in enumerate(diff_profile):
         if abs(diff)/diff_rad[i] > max_change:
@@ -2875,10 +2829,9 @@ def max_profile_change(Configuration,radius,profile,key,max_change=None,\
             if i < len(diff_profile)-1:
                 diff_profile[i+1] = float(new_profile[i+2]-new_profile[i+1])
 
-    if debug:
-        print_log(f'''MAX_CHANGE_PROFILE: The returned profile is:
+    print_log(f'''MAX_CHANGE_PROFILE: The returned profile is:
 {'':8s}{key} = {new_profile}
-''', Configuration['OUTPUTLOG'],debug=True)
+''', Configuration['OUTPUTLOG'],case=['debug_add'])
     return new_profile
 max_profile_change.__doc__ =f'''
  NAME:
@@ -2897,7 +2850,7 @@ max_profile_change.__doc__ =f'''
     key = the parameter to indicate the type of profile
 
  OPTIONAL INPUTS:
-    debug = False
+
 
  OUTPUTS:
     new_profile
@@ -2913,7 +2866,7 @@ max_profile_change.__doc__ =f'''
 '''
 
 
-def obtain_border_pix(Configuration,angle,center, debug = False):
+def obtain_border_pix(Configuration,angle,center):
     rotate = False
     # only setup for 0-180 but 180.-360 is the same but -180
     if angle > 180.:
@@ -2972,7 +2925,7 @@ obtain_border_pix.__doc__ =f'''
     center = center of the line running through the map
 
  OPTIONAL INPUTS:
-    debug = False
+
 
  OUTPUTS:
     x,y
@@ -2986,17 +2939,13 @@ obtain_border_pix.__doc__ =f'''
  NOTE:
 '''
 
-def obtain_ratios(Configuration, map, center, angles, noise = 0. ,debug = False):
+def obtain_ratios(Configuration, map, center, angles, noise = 0. ):
     ratios = []
     max_extent = 0.
     for angle in angles:
         #major axis
-        maj_profile,maj_axis,maj_resolution = get_profile(Configuration,map,angle,center=center,debug=debug)
+        maj_profile,maj_axis,maj_resolution = get_profile(Configuration,map,angle,center=center )
         tmp = np.where(maj_profile > noise)[0]
-
-        #gauss =fit_gaussian(maj_axis[tmp], maj_profile[tmp])
-        #maj_gaus = gaussian_function(maj_profile, *gauss)
-        #tmp = np.where(maj_gaus > 0.2*np.nanmax(maj_gaus))[0]
         if tmp.shape[0] == 0.:
              width_maj = 0.
         else:
@@ -3011,13 +2960,10 @@ def obtain_ratios(Configuration, map, center, angles, noise = 0. ,debug = False)
             max_extent = width_maj
         #minor axis
         if angle < 90:
-            min_profile,min_axis,min_resolution = get_profile(Configuration,map,angle+90,center=center,debug=debug)
+            min_profile,min_axis,min_resolution = get_profile(Configuration,map,angle+90,center=center )
         else:
-            min_profile,min_axis,min_resolution = get_profile(Configuration,map,angle-90,center=center,debug=debug)
+            min_profile,min_axis,min_resolution = get_profile(Configuration,map,angle-90,center=center )
         tmp = np.where(min_profile > noise)[0]
-        #gauss =fit_gaussian(min_axis[tmp], maj_profile[tmp])
-        #min_gaus = gaussian_function(min_profile,*gauss)
-        #tmp = np.where(min_gaus > 0.2*np.nanmax(min_gaus))[0]
         if tmp.shape[0] == 0.:
              width_min = 0.
         else:
@@ -3060,7 +3006,7 @@ obtain_ratios.__doc__ = '''
        noise = 0.
        noise level in the map
 
-       debug = False
+
 
  OUTPUTS:
          ratios =  ratios corresponding to the input angles
@@ -3074,13 +3020,30 @@ obtain_ratios.__doc__ = '''
  NOTE:
 '''
 
-def print_log(log_statement,log, screen = False,debug = False):
+def print_log(log_statement,log,case=['main']):
+
+    if pyFAT_astro.debug:
+        if 'debug_start' in case:
+            debug = 'long'
+        else:
+            debug= 'short'
+    else:
+        debug = 'empty'
     log_statement = f"{linenumber(debug=debug)}{log_statement}"
-    if screen or not log:
-        print(log_statement)
-    if log:
-        with open(log,'a') as log_file:
-            log_file.write(log_statement)
+    print_statement = False
+    if (pyFAT_astro.debug and ('debug_start' in case or 'debug_add' in case))\
+        or 'verbose' in case and (pyFAT_astro.verbose_log or pyFAT_astro.debug)\
+         or 'main' in case:
+            print_statement = True
+    if print_statement:
+        if pyFAT_astro.screen \
+            or not log \
+            or 'screen' in case \
+            or (pyFAT_astro.verbose_log and 'main' in case):
+            print(log_statement)
+        if log:
+            with open(log,'a') as log_file:
+                log_file.write(log_statement)
 
 print_log.__doc__ =f'''
  NAME:
@@ -3095,7 +3058,7 @@ print_log.__doc__ =f'''
     log = log to print to, can be None
 
  OPTIONAL INPUTS:
-    debug = False
+
 
     screen = False
     also print the statement to the screen
@@ -3113,15 +3076,14 @@ print_log.__doc__ =f'''
     This is useful for testing functions.
 '''
 
-def remove_inhomogeneities(Configuration,fits_map_in,inclination=30., pa = 90. , center = [0.,0.],WCS_center = True, iteration= 0 , debug=False):
+def remove_inhomogeneities(Configuration,fits_map_in,inclination=30., pa = 90. , center = [0.,0.],WCS_center = True, iteration= 0 ):
     fits_map = copy.deepcopy(fits_map_in)
-    if debug:
-        print_log(f'''REMOVE_INHOMOGENEITIES: These are the values we get as input
+    print_log(f'''REMOVE_INHOMOGENEITIES: These are the values we get as input
 {'':8s}Inclination = {inclination}
 {'':8s}pa = {pa}
 {'':8s}center = {center}, WCS = {WCS_center}
 {'':8s}map shape = {np.shape(fits_map[0].data)}
-''',Configuration['OUTPUTLOG'],debug = True)
+''',Configuration['OUTPUTLOG'],case=['debug_start'])
     map = fits_map[0].data
     # first rotate the pa
     with warnings.catch_warnings():
@@ -3133,24 +3095,24 @@ def remove_inhomogeneities(Configuration,fits_map_in,inclination=30., pa = 90. ,
     else:
         x = center[0]
         y = center[1]
-    rot_map = rotateImage(Configuration,map,pa-90,[x,y],debug=debug)
+    rot_map = rotateImage(Configuration,map,pa-90,[x,y] )
     # deproject
-    dep_map = deproject(Configuration,copy.deepcopy(rot_map),inclination,center = y, debug=debug)
+    dep_map = deproject(Configuration,copy.deepcopy(rot_map),inclination,center = y )
 
-    if debug:
+    if pyFAT_astro.debug:
         fits.writeto(f"{Configuration['FITTING_DIR']}rot_map_{int(iteration)}.fits",rot_map,fits_map[0].header,overwrite = True)
         fits.writeto(f"{Configuration['FITTING_DIR']}dep_map_{int(iteration)}.fits",dep_map,fits_map[0].header,overwrite = True)
 
     angles = np.linspace(5.,360.,71)
     minimum_map = copy.deepcopy(dep_map)
     for angle in angles:
-        rot_dep_map =  rotateImage(Configuration,copy.deepcopy(dep_map),angle,[x,y],debug=debug)
+        rot_dep_map =  rotateImage(Configuration,copy.deepcopy(dep_map),angle,[x,y] )
 
         #tmp = np.where(rot_dep_map < minimum_map)[0]
         minimum_map[rot_dep_map < minimum_map] =rot_dep_map[rot_dep_map < minimum_map]
-    clean_map = rotateImage(Configuration,deproject(Configuration,copy.deepcopy(minimum_map),inclination,center = y,invert= True,debug=debug),-1*(pa-90),[x,y],debug=debug)
+    clean_map = rotateImage(Configuration,deproject(Configuration,copy.deepcopy(minimum_map),inclination,center = y,invert= True ),-1*(pa-90),[x,y] )
 
-    if debug:
+    if pyFAT_astro.debug:
         fits.writeto(f"{Configuration['FITTING_DIR']}minimum_map_{int(iteration)}.fits",minimum_map,fits_map[0].header,overwrite = True)
         fits.writeto(f"{Configuration['FITTING_DIR']}clean_map_{int(iteration)}.fits",clean_map,fits_map[0].header,overwrite = True)
     fits_map[0].data = clean_map
@@ -3172,7 +3134,7 @@ remove_inhomogeneities
     fits_map = intensity map of the galaxy as an astropy structure, i.e fits_map[0].header and fits_map[0].data
 
  OPTIONAL INPUTS:
-    debug = False
+
 
     inclination=30.
     inclination of the galaxy
@@ -3206,7 +3168,7 @@ remove_inhomogeneities
  NOTE:
 '''
 
-def rename_fit_products(Configuration,stage = 'initial', fit_type='Undefined',debug = False):
+def rename_fit_products(Configuration,stage = 'initial', fit_type='Undefined'):
     extensions = ['def','log','ps','fits']
     for filetype in extensions:
         source = get_system_string(f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.{filetype}")
@@ -3246,7 +3208,7 @@ rename_fit_products.__doc__ =f'''
     Configuration = Standard FAT configuration
 
  OPTIONAL INPUTS:
-    debug = False
+
 
     stage = 'initial'
     stage of the type of fitting
@@ -3265,7 +3227,7 @@ rename_fit_products.__doc__ =f'''
 '''
 
 #function to rotate an image without losing info
-def rotateImage(Configuration,image, angle, pivot, debug = False):
+def rotateImage(Configuration,image, angle, pivot):
     padX = [int(image.shape[1] - pivot[0]), int(pivot[0])]
     padY = [int(image.shape[0] - pivot[1]), int(pivot[1])]
     imgP = np.pad(image, [padY, padX], 'constant')
@@ -3289,7 +3251,7 @@ rotateImage.__doc__ =f'''
     pivot = the center around which to rotate
 
  OPTIONAL INPUTS:
-    debug = False
+
 
  OUTPUTS:
     The rotated image is returned
@@ -3303,16 +3265,15 @@ rotateImage.__doc__ =f'''
 '''
 
 
-def run_tirific(Configuration, current_run, stage = 'initial',fit_type = 'Undefined',deffile='Undefined', debug = False):
-    if debug:
-        print_log(f'''RUN_TIRIFIC: For the galaxy {Configuration['ID']} in directory {Configuration['SUB_DIR']} we are starting a new TiRiFiC.
+def run_tirific(Configuration, current_run, stage = 'initial',fit_type = 'Undefined',deffile='Undefined'):
+    print_log(f'''RUN_TIRIFIC: For the galaxy {Configuration['ID']} in directory {Configuration['SUB_DIR']} we are starting a new TiRiFiC.
 We are in in stage {stage} and fit_type {fit_type} and have done {Configuration['ITERATIONS']} loops
-''',Configuration['OUTPUTLOG'], screen = True,debug = debug)
+''',Configuration['OUTPUTLOG'],case=['debug_start'])
     if deffile == 'Undefined':
         deffile=f"{fit_type}_In.def"
 
     # First move the previous fits
-    rename_fit_products(Configuration,fit_type = fit_type, stage=stage, debug = debug)
+    rename_fit_products(Configuration,fit_type = fit_type, stage=stage )
     if fit_type == 'Error_Shaker':
         work_dir = os.getcwd()
         restart_file = f"restart_Error_Shaker.txt"
@@ -3320,17 +3281,17 @@ We are in in stage {stage} and fit_type {fit_type} and have done {Configuration[
         restart_file = f"{Configuration['LOG_DIRECTORY']}restart_{fit_type}.txt"
         work_dir = Configuration['FITTING_DIR']
     #Get the output fits file and def file defined in workdir+ deffile
-    output_fits,output_deffile = get_tirific_output_names(Configuration,work_dir,deffile,debug=debug)
+    output_fits,output_deffile = get_tirific_output_names(Configuration,work_dir,deffile )
     # Then if already running change restart file
     if Configuration['TIRIFIC_RUNNING']:
         print_log(f'''RUN_TIRIFIC: We are using an initialized tirific in {Configuration['FITTING_DIR']} with the file {deffile}
-''',Configuration['OUTPUTLOG'], screen=Configuration['VERBOSE'])
+''',Configuration['OUTPUTLOG'])
 
         with open(restart_file,'a') as file:
             file.write("Restarting from previous run \n")
     else:
         print_log(f'''RUN_TIRIFIC: We are starting a new TiRiFiC in {Configuration['FITTING_DIR']} with the file {deffile}
-''',Configuration['OUTPUTLOG'], screen=Configuration['VERBOSE'])
+''',Configuration['OUTPUTLOG'])
         with open(restart_file,'w') as file:
             file.write("Initialized a new run \n")
         current_run = subprocess.Popen([Configuration['TIRIFIC'],f"DEFFILE={deffile}","ACTION= 1"],\
@@ -3398,10 +3359,12 @@ We are in in stage {stage} and fit_type {fit_type} and have done {Configuration[
             time.sleep(0.5)
             wait_counter += 1
             if wait_counter/100. == int(wait_counter/100.):
-                    print_log(f'''RUN_TIRIFIC: we have waited {0.5*wait_counter} seconds for the output of tirific but it is not there yet.
-''',Configuration['OUTPUTLOG'], screen=Configuration['VERBOSE'])
+                print_log(f'''RUN_TIRIFIC: we have waited {0.5*wait_counter} seconds for the output of tirific but it is not there yet.
+''',Configuration['OUTPUTLOG'])
         if not  os.path.exists(output_fits) \
             or not  os.path.exists(output_deffile):
+            print_log(f'''RUN_TIRIFIC: After 500 seconds we could not find the expected output from the tirific run. We are raising an error for this galaxy.
+''',Configuration['OUTPUTLOG'],case=['main','screen'])
             raise FittingError(f'''The tirific subprocess did not produce the correct output
 We were running {deffile} and failed to find the output {output_fits} or {output_deffile}
 ''')
@@ -3425,7 +3388,7 @@ run_tirific.__doc__ =f'''
     current_run = subprocess structure of tirific
 
  OPTIONAL INPUTS:
-    debug = False
+
 
     fit_type = 'Undefined'
     type of fitting
@@ -3444,10 +3407,9 @@ run_tirific.__doc__ =f'''
 '''
 
 
-def set_boundaries(Configuration,key,lower,upper,input=False,debug=False):
-    if debug:
-        print_log(f'''SET_BOUNDARIES: Starting to implement the boundaries for {key} with lower = {lower} and upper = {upper}.
-''',Configuration['OUTPUTLOG'], debug=True)
+def set_boundaries(Configuration,key,lower,upper,input=False):
+    print_log(f'''SET_BOUNDARIES: Starting to implement the boundaries for {key} with lower = {lower} and upper = {upper}.
+''',Configuration['OUTPUTLOG'],case=['debug_start'])
 
     check=False
     key = key.upper()
@@ -3495,7 +3457,7 @@ set_boundaries.__doc__ =f'''
     upper = upper boundary
 
  OPTIONAL INPUTS:
-    debug = False
+
     input = False
     if set to true the user input parameters are updated. this should only be used
     when reading the cube to set the input VSYS, XPOS and YPOS limits.
@@ -3541,7 +3503,6 @@ def setup_configuration(cfg):
         cfg.advanced.multiprocessing = False
         cfg.fitting.catalogue_start_id= '-1'
         cfg.fitting.catalogue_end_id= '-1'
-
 
     Configuration = Proper_Dictionary({})
 
@@ -3616,7 +3577,7 @@ def setup_configuration(cfg):
                'NO_RINGS': 0., # The number of rings in the fit,
                'LAST_RELIABLE_RINGS': [0.,0.], # Location of the rings where the SBR drops below the cutoff limits, adapted after every run. Should only be modified in check_size
                'LIMIT_MODIFIER': [1.], #Modifier for the cutoff limits based on the inclination , adapted after every run.
-               'OLD_SIZE': [['0.','0.']], # List to keep track of the size in beams.
+               'OLD_SIZE': [[0.,0.]], # List to keep track of the size in beams.
 
                'NO_POINTSOURCES': 0. , # Number of point sources, set in run_tirific
 
@@ -3680,7 +3641,9 @@ Please provide the correct path and file name.
     #Make sure there is only one Fit_ stage
 
     # Make sure all selected stages exist
-    possible_stages = ['Fit_Tirific_OSC','Create_FAT_Cube','Run_Sofia','Existing_Sofia','Sofia_Catalogue','Tirshaker']
+    possible_stages = ['Fit_Tirific_OSC','Create_FAT_Cube',\
+        'Run_Sofia','Restart_Fitting','External_Sofia','Sofia_Catalogue',\
+        'Tirshaker','Fit_Make_Your_Own']
     possible_stages_l = [x.lower() for x in possible_stages]
     approved_stages = []
     fit_count = 0
@@ -3696,6 +3659,7 @@ Please pick one of the following {', '.join(possible_stages)}.
             if fit_count == 1:
                 Configuration['USED_FITTING'] = possible_stages[possible_stages_l.index(stage.lower())]
 
+
         if fit_count > 1 and 'fit_' in stage.lower():
             print(f''' FAT only supports one single fitting stage. You have already selected one and hence {stage} will be ignored.
     ''')
@@ -3703,14 +3667,14 @@ Please pick one of the following {', '.join(possible_stages)}.
             approved_stages.append(stage.lower())
 
     Configuration['FITTING_STAGES'] =approved_stages
-    if 'sofia_catalogue' in Configuration['FITTING_STAGES'] and 'existing_sofia' in Configuration['FITTING_STAGES']:
-        Configuration['FITTING_STAGES'].remove('existing_sofia')
-    if ('sofia_catalogue' in Configuration['FITTING_STAGES'] or 'existing_sofia' in Configuration['FITTING_STAGES']) and 'run_sofia' in Configuration['FITTING_STAGES']:
+    if 'sofia_catalogue' in Configuration['FITTING_STAGES'] and 'external_sofia' in Configuration['FITTING_STAGES']:
+        Configuration['FITTING_STAGES'].remove('external_sofia')
+    if ('sofia_catalogue' in Configuration['FITTING_STAGES'] or 'external_sofia' in Configuration['FITTING_STAGES']) and 'run_sofia' in Configuration['FITTING_STAGES']:
         Configuration['FITTING_STAGES'].remove('run_sofia')
     if 'sofia_catalogue' in Configuration['FITTING_STAGES'] and 'create_fat_cube' in Configuration['FITTING_STAGES']:
         Configuration['FITTING_STAGES'].remove('create_fat_cube')
 
-    if 'run_sofia' in Configuration['FITTING_STAGES'] and 'existing_sofia' in Configuration['FITTING_STAGES']:
+    if 'run_sofia' in Configuration['FITTING_STAGES'] and 'external_sofia' in Configuration['FITTING_STAGES']:
         raise InputError(f"You are both providing existing sofia input and ask for sofia to be ran. This won't work exiting.")
 
     #Check that the channel_dependency is acceptable
@@ -3757,7 +3721,7 @@ setup_configuration.__doc__ =f'''
     cfg = OmegaConf input object
 
  OPTIONAL INPUTS:
-    debug = False
+
     fit_type = 'Undefined'
 
  OUTPUTS:
@@ -3773,14 +3737,13 @@ setup_configuration.__doc__ =f'''
 
 
 
-def sbr_limits(Configuration, Tirific_Template , debug = False):
-    radii = set_rings(Configuration,debug=debug)
-    if debug:
-        print_log(f'''SBR_LIMITS: Got {len(radii)} radii
-''',Configuration['OUTPUTLOG'], debug=True)
+def sbr_limits(Configuration, Tirific_Template ):
+    radii = set_rings(Configuration )
+    print_log(f'''SBR_LIMITS: Got {len(radii)} radii
+''',Configuration['OUTPUTLOG'], case=['debug_start'])
     level = Configuration['NOISE']*1000
     noise_in_column = columndensity(Configuration,level,systemic = \
-        float(load_tirific(Configuration,Tirific_Template,Variables=['VSYS'],debug=debug)[0]))
+        float(load_tirific(Configuration,Tirific_Template,Variables=['VSYS'] )[0]))
     J2007col=9.61097e+19
     #J2007scl= 2. #arcsec in a sech^2 layer
     ratio=(noise_in_column/J2007col)**0.5
@@ -3797,10 +3760,9 @@ def sbr_limits(Configuration, Tirific_Template , debug = False):
     if ringarea[0] == 0.:
          sbr_ring_limits[0]=np.nanmin(sbr_ring_limits)
          sbr_ring_limits[1]=sbr_ring_limits[2]/2.
-    if debug:
-        print_log(f'''SBR_LIMITS: Applying the modifiier:
+    print_log(f'''SBR_LIMITS: Applying the modifiier:
 {'':8s}{Configuration['LIMIT_MODIFIER']}
-''',Configuration['OUTPUTLOG'])
+''',Configuration['OUTPUTLOG'],case=['debug_add'])
     if len(Configuration['LIMIT_MODIFIER']) == 1:
         sbr_ring_limits= sbr_ring_limits*float(Configuration['LIMIT_MODIFIER'][0])
     else:
@@ -3809,11 +3771,10 @@ def sbr_limits(Configuration, Tirific_Template , debug = False):
             mod_list.append(Configuration['LIMIT_MODIFIER'][-1])
         Configuration['LIMIT_MODIFIER'] = np.array(mod_list,dtype=float)
         sbr_ring_limits=[x*y for x,y in zip(sbr_ring_limits,Configuration['LIMIT_MODIFIER'])]
-    if debug:
-        print_log(f'''SBR_LIMITS: Retrieved these radii and limits:
+    print_log(f'''SBR_LIMITS: Retrieved these radii and limits:
 {'':8s}{radii}
 {'':8s}{sbr_ring_limits}
-''',Configuration['OUTPUTLOG'])
+''',Configuration['OUTPUTLOG'],case=['debug_add'])
     return radii,sbr_ring_limits
 
 sbr_limits.__doc__ =f'''
@@ -3832,7 +3793,7 @@ sbr_limits.__doc__ =f'''
 
 
  OPTIONAL INPUTS:
-    debug = False
+
 
  OUTPUTS:
     radii = the radii of the rings in arcsec
@@ -3882,14 +3843,14 @@ set_format.__doc__ =f'''
 '''
 
 #simple function keep track of how to modify the edge limits
-def set_limit_modifier(Configuration,Tirific_Template, debug= False):
+def set_limit_modifier(Configuration,Tirific_Template):
     '''Write to the Configuration a value or list of values to modify sbr dependent values.'''
     Profiles = load_tirific(Configuration,Tirific_Template,
-        Variables=['INCL','INCL_2','Z0','Z0_2'],array=True,debug=debug)
+        Variables=['INCL','INCL_2','Z0','Z0_2'],array=True )
     Inclination = [np.mean([x,y]) for x,y in zip(Profiles[0],Profiles[1])]
     Z0_av = [np.mean([x,y]) for x,y in zip(Profiles[2],Profiles[3])]
     kpc_radius=convertskyangle(Configuration,load_tirific(Configuration,\
-        Tirific_Template,['RADI'],debug=debug))
+        Tirific_Template,['RADI'] ))
     modifier_list = []
     # This should be per kpc
     if len(Inclination) > 1:
@@ -3923,12 +3884,11 @@ def set_limit_modifier(Configuration,Tirific_Template, debug= False):
     modifier_list=[set_limits(x*(1.125-0.625*y)*set_limits(((Configuration['RING_SIZE']*Configuration['BEAM'][0])/45.)**0.25,0.75,1.25),0.5,3.) for x,y in zip(modifier_list,Z0_kpc)]
 
     Configuration['LIMIT_MODIFIER'] = np.array(modifier_list,dtype=float)
-    if debug:
-        print_log(f'''SET_LIMIT_MODIFIER: Based on a Z0 in kpc {Z0_kpc}
+    print_log(f'''SET_LIMIT_MODIFIER: Based on a Z0 in kpc {Z0_kpc}
 {'':8s} and Inclination = {Inclination}
-''', Configuration['OUTPUTLOG'],debug = True)
-    print_log(f'''SET_LIMIT_MODIFIER: We updated the LIMIT_MODIFIER to {Configuration['LIMIT_MODIFIER']}.
-''', Configuration['OUTPUTLOG'])
+{'':8s} We updated the LIMIT_MODIFIER to {Configuration['LIMIT_MODIFIER']}.
+''', Configuration['OUTPUTLOG'],case=['debug_start'])
+
 
 set_limit_modifier.__doc__ =f'''
  NAME:
@@ -3945,7 +3905,7 @@ set_limit_modifier.__doc__ =f'''
     Tirific_Template = Standard Tirific template
 
  OPTIONAL INPUTS:
-    debug = False
+
 
  OUTPUTS:
     'LIMIT_MODIFIER' is updated in the Configuration.
@@ -3958,7 +3918,7 @@ set_limit_modifier.__doc__ =f'''
  NOTE:
 '''
 
-def set_limits(value,minv,maxv,debug = False):
+def set_limits(value,minv,maxv):
     if value < minv:
         return minv
     elif value > maxv:
@@ -3980,7 +3940,7 @@ set_limits.__doc__ =f'''
     maxv = maximum allowed value
 
  OPTIONAL INPUTS:
-    debug = False
+
 
  OUTPUTS:
     the limited Value
@@ -3992,7 +3952,7 @@ set_limits.__doc__ =f'''
 
  NOTE:
 '''
-def set_ring_size(Configuration, debug = False,requested_ring_size = 0., size_in_beams = 0., check_set_rings = False):
+def set_ring_size(Configuration,requested_ring_size = 0., size_in_beams = 0., check_set_rings = False):
     double_size = False
     if size_in_beams == 0.:
         size_in_beams =  np.min(Configuration['SIZE_IN_BEAMS'])
@@ -4000,11 +3960,10 @@ def set_ring_size(Configuration, debug = False,requested_ring_size = 0., size_in
     if requested_ring_size == 0.:
          requested_ring_size =  Configuration['RING_SIZE']
 
-    if debug:
-        print_log(f'''SET_RING_SIZE: Starting with the following parameters.
+    print_log(f'''SET_RING_SIZE: Starting with the following parameters.
 {'':8s}size in beams = {size_in_beams}
 {'':8s}requested ring size = {requested_ring_size}
-''', Configuration['OUTPUTLOG'],debug=True)
+''', Configuration['OUTPUTLOG'],case=['debug_start'])
     if not Configuration['FIX_RING_SIZE']:
         no_rings = 0.
         ring_size = 100.
@@ -4012,35 +3971,33 @@ def set_ring_size(Configuration, debug = False,requested_ring_size = 0., size_in
 
             est_rings = set_limits(round((size_in_beams-1./5.)/(requested_ring_size)),8.,float('NaN'))
 
-            ring_size = set_limits((size_in_beams-1./5.)/est_rings,0.5,float('NaN'),debug=debug)
+            ring_size = set_limits((size_in_beams-1./5.)/est_rings,0.5,float('NaN') )
 
-            no_rings = calc_rings(Configuration,ring_size=ring_size,size_in_beams=size_in_beams,debug=debug)
+            no_rings = calc_rings(Configuration,ring_size=ring_size,size_in_beams=size_in_beams )
 
             if no_rings < Configuration['MINIMUM_RINGS'] and requested_ring_size > 0.5:
                 previous_ringsize = copy.deepcopy(requested_ring_size)
-                requested_ring_size = set_limits(requested_ring_size/1.25,0.5,float('NaN'),debug=debug)
+                requested_ring_size = set_limits(requested_ring_size/1.25,0.5,float('NaN') )
                 print_log(f'''SET_RING_SIZE: Because we had less than {Configuration['MINIMUM_RINGS']} rings we have reduced the requested ring size from {previous_ringsize} to {requested_ring_size}
     ''',Configuration['OUTPUTLOG'])
 
         if double_size:
             # we had two values in the size_in beams we get the number of rings from the maximum
             #As we used the minimum to calate the ring size we need to recalculated the number of rings
-            no_rings = calc_rings(Configuration,ring_size=ring_size,size_in_beams=np.max(Configuration['SIZE_IN_BEAMS']),debug=debug)
+            no_rings = calc_rings(Configuration,ring_size=ring_size,size_in_beams=np.max(Configuration['SIZE_IN_BEAMS']) )
     else:
         ring_size = requested_ring_size
-        no_rings = calc_rings(Configuration,ring_size=ring_size,size_in_beams=np.max(Configuration['SIZE_IN_BEAMS']),debug=debug)
+        no_rings = calc_rings(Configuration,ring_size=ring_size,size_in_beams=np.max(Configuration['SIZE_IN_BEAMS']) )
 
-    if debug:
-        print_log(f'''SET_RING_SIZE: After checking the size we get
+    print_log(f'''SET_RING_SIZE: After checking the size we get
 {'':8s}size in beams = {size_in_beams}, ring size = {ring_size} and the number of ring = {no_rings}
-''', Configuration['OUTPUTLOG'])
+''', Configuration['OUTPUTLOG'],case=['debug_add'])
 
-    if no_rings <  Configuration['MINIMUM_RINGS']:
-        print_log(f'''SET_RING_SIZE: With a ring size of {ring_size} we still only find {no_rings}.
-{"":8s}SET_RING_SIZE: This is not enough for a fit.
-''',Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
     if not check_set_rings:
         if no_rings <  Configuration['MINIMUM_RINGS']:
+            print_log(f'''SET_RING_SIZE: With a ring size of {ring_size} we still only find {no_rings}.
+{"":8s}SET_RING_SIZE: This is not enough for a fit.
+''',Configuration['OUTPUTLOG'],case=['main','screen'])
             raise SmallSourceError('This source is too small to reliably fit.')
         Configuration['NO_RINGS'] = int(no_rings)
         Configuration['RING_SIZE'] = ring_size
@@ -4060,91 +4017,7 @@ set_ring_size.__doc__ =f'''
     Configuration = Standard FAT configuration
 
  OPTIONAL INPUTS:
-    debug = False
 
-    size_in_beams = 0.
-    The size of the galaxy in beams across the major axis radius, if unset it is taken from the Configuration
-
-    check_set_rings = False
-    Set this parameter to True to not apply the calaculated ring size and number and size of the model to the
-    Configuration but to return the parameters as  size_in_beams,ring_size,no_rings
-
- OUTPUTS:
-    Will raise an error when the number of rings goes below the minimum
-
- OPTIONAL OUTPUTS:
-    size_in_beams,ring_size,no_rings
-
- PROCEDURES CALLED:
-    Unspecified
-
- NOTE:
-'''
-def set_ring_size_old(Configuration, debug = False, size_in_beams = 0., check_set_rings = False):
-    if size_in_beams == 0.:
-        size_in_beams =  np.min(Configuration['SIZE_IN_BEAMS'])
-
-    if debug:
-        print_log(f'''SET_RING_SIZE: Starting with the following parameters.
-{'':8s}size in beams = {size_in_beams}
-''', Configuration['OUTPUTLOG'],debug=True)
-    no_rings = 0.
-    ring_size = 100.
-    while ring_size > 0.5 and  no_rings < 5.:
-        if Configuration['RING_SIZE'] > 0.5:
-            est_rings = set_limits(round((size_in_beams-1./5.)/(Configuration['RING_SIZE'])),Configuration['MINIMUM_RINGS'],float('NaN'))
-            previous_ringsize = Configuration['RING_SIZE']
-            ring_size = set_limits((size_in_beams-1./5.)/est_rings,0.5,float('NaN'),debug=debug)
-
-        no_rings = calc_rings(Configuration,ring_size=ring_size,size_in_beams=size_in_beams,debug=debug)
-        if Configuration['MINIMUM_RINGS'] <= no_rings and  no_rings < 8.:
-            Configuration['RING_SIZE']=set_limits(ring_size/1.5,0.5,float('NaN'),debug=debug)
-            print_log(f'''SET_RING_SIZE: Because we had less than eight rings we have reduced the ring size from {previous_ringsize} to {ring_size}
-''',Configuration['OUTPUTLOG'])
-        elif Configuration['MINIMUM_RINGS'] > no_rings and size_in_beams <  Configuration['MAX_SIZE_IN_BEAMS']:
-            size_in_beams = set_limits(size_in_beams+1.,1., Configuration['MAX_SIZE_IN_BEAMS'])
-            print_log(f'''SET_RING_SIZE: The initial estimate is too small to fit adding a ring to it.
-''',Configuration['OUTPUTLOG'])
-        else:
-            pass
-
-
-
-    if debug:
-        print_log(f'''SET_RING_SIZE: After checking the size we get
-{'':8s}size in beams = {size_in_beams}, ring size = {ring_size} and the number of ring = {no_rings}
-''', Configuration['OUTPUTLOG'])
-
-    if check_set_rings:
-        return size_in_beams,ring_size,int(no_rings)
-    else:
-        Configuration['NO_RINGS'] = int(no_rings)
-        for i in [0,1]:
-            if size_in_beams > Configuration['SIZE_IN_BEAMS'][i]:
-                Configuration['SIZE_IN_BEAMS'][i] = size_in_beams
-        Configuration['RING_SIZE'] = ring_size
-        if Configuration['NO_RINGS'] < Configuration['MINIMUM_RINGS']:
-            print_log(f'''SET_RING_SIZE: With a ring size of {Configuration['RING_SIZE']} we still only find {Configuration['NO_RINGS']}.
-{"":8s}SET_RING_SIZE: This is not enough for a fit.
-''',Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
-            raise SmallSourceError('This source is too small to reliably fit.')
-        return size_in_beams,ring_size,int(no_rings)
-
-set_ring_size_old.__doc__ =f'''
- NAME:
-    set_ring_size
-
- PURPOSE:
-    Calculate the size and number of rings and the galaxy size in beams and update them in the Configuration dictionary
-
- CATEGORY:
-    support_functions
-
- INPUTS:
-    Configuration = Standard FAT configuration
-
- OPTIONAL INPUTS:
-    debug = False
 
     size_in_beams = 0.
     The size of the galaxy in beams across the major axis radius, if unset it is taken from the Configuration
@@ -4165,20 +4038,18 @@ set_ring_size_old.__doc__ =f'''
  NOTE:
 '''
 
-def set_rings(Configuration,ring_size = 0. , debug = False):
+def set_rings(Configuration,ring_size = 0. ):
     if ring_size == 0.:
         ring_size = Configuration['RING_SIZE']
-    if debug:
-        print_log(f'''SET_RINGS: Starting with the following parameters.
+    print_log(f'''SET_RINGS: Starting with the following parameters.
 {'':8s}RING_SIZE = {ring_size}
-''', Configuration['OUTPUTLOG'],debug=True)
-    no_rings = calc_rings(Configuration,debug=debug)
-    if debug:
-        print_log(f'''SET_RINGS: We find {no_rings} rings.
-''', Configuration['OUTPUTLOG'])
+''', Configuration['OUTPUTLOG'], case=['debug_start'])
+    no_rings = calc_rings(Configuration )
+    print_log(f'''SET_RINGS: We find {no_rings} rings.
+''', Configuration['OUTPUTLOG'], case=['debug_add'])
     if Configuration['OUTER_RINGS_DOUBLED']:
         print_log(f'''SET_RINGS: This is a large galaxy. Therefore we use twice the ring size in the outer parts.
-''',Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
+''',Configuration['OUTPUTLOG'],case=['verbose'])
         radii = [0.,1./5.*Configuration['BEAM'][0]]
         radii = np.hstack((radii,(np.linspace(Configuration['BEAM'][0]*ring_size,Configuration['BEAM'][0]*10.*ring_size, \
                                         10)+1./5*Configuration['BEAM'][0])))
@@ -4191,7 +4062,7 @@ def set_rings(Configuration,ring_size = 0. , debug = False):
         radii = [0.,1./5.*Configuration['BEAM'][0]]
         radii = np.hstack((radii,(np.linspace(Configuration['BEAM'][0]*ring_size,Configuration['BEAM'][0]*ring_size*(no_rings-2.), \
                                         no_rings-2)+1./5.*Configuration['BEAM'][0])))
-    if debug:
+    if pyFAT_astro.debug:
         if Configuration['OUTER_RINGS_DOUBLED']:
             req_outer_ring = 2.*Configuration['BEAM'][0]*ring_size
         else:
@@ -4203,7 +4074,7 @@ def set_rings(Configuration,ring_size = 0. , debug = False):
 {'':8s}The last ring should be around {Configuration['BEAM'][0]*np.max(Configuration['SIZE_IN_BEAMS'])}
 {'':8s}The rings should be size {Configuration['BEAM'][0]*ring_size} and outer rings {req_outer_ring}
 {'':8s}They are {radii[3]-radii[2]} and {radii[-1]-radii[-2]}
-''', Configuration['OUTPUTLOG'])
+''', Configuration['OUTPUTLOG'], case=['debug_add'])
     return np.array(radii,dtype = float)
 
 set_rings.__doc__ =f'''
@@ -4219,7 +4090,7 @@ set_rings.__doc__ =f'''
     Configuration = Standard FAT configuration
 
  OPTIONAL INPUTS:
-    debug = False
+
 
     ring_size = 0.
     Width of the rings
@@ -4267,22 +4138,21 @@ sine.__doc__ =f'''
  NOTE:
 '''
 
-def sofia_output_exists(Configuration,Fits_Files, debug = False):
-    if debug:
-        print_log(f'''SOFIA_OUTPUT_EXISTS: Starting check
-''', Configuration['OUTPUTLOG'],debug = True)
+def sofia_output_exists(Configuration,Fits_Files):
+    print_log(f'''SOFIA_OUTPUT_EXISTS: Starting check
+''', Configuration['OUTPUTLOG'], case=['debug_start'])
     req_files= ['MOMENT1','MOMENT0','MASK']
     for file in req_files:
         if os.path.exists(f"{Configuration['FITTING_DIR']}{Fits_Files[file]}"):
             continue
         else:
-            log_statement = f"SOFIA_OUTPUT_EXISTS: The file {Configuration['FITTING_DIR']}{Fits_Files[file]} is not found."
-            print_log(log_statement, Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
+            log_statement=f'''SOFIA_OUTPUT_EXISTS: The file {Configuration['FITTING_DIR']}{Fits_Files[file]} is not found.'''
+            print_log(log_statement, Configuration['OUTPUTLOG'],case=['main','screen'])
             raise FileNotFoundError(log_statement)
 
     if not os.path.exists(Configuration['FITTING_DIR']+'Sofia_Output/'+Configuration['BASE_NAME']+'_cat.txt'):
-        log_statement = f"SOFIA_OUTPUT_EXISTS: The file {Configuration['FITTING_DIR']+'Sofia_Output/'+Configuration['BASE_NAME']+'_cat.txt'} is not found."
-        print_log(log_statement, Configuration['OUTPUTLOG'],screen=Configuration['VERBOSE'])
+        log_statement=f'''SOFIA_OUTPUT_EXISTS: The file {Configuration['FITTING_DIR']+'Sofia_Output/'+Configuration['BASE_NAME']+'_cat.txt'} is not found.'''
+        print_log(log_statement, Configuration['OUTPUTLOG'],case=['main','screen'])
         raise FileNotFoundError(log_statement)
 
 sofia_output_exists.__doc__ =f'''
@@ -4298,7 +4168,7 @@ sofia_output_exists.__doc__ =f'''
     Fits_Files = Standard FAT dictionary with filenames
 
  OPTIONAL INPUTS:
-    debug = False
+
 
  OUTPUTS:
     Raises a FileNotFoundError if the files are not found.
@@ -4311,7 +4181,7 @@ sofia_output_exists.__doc__ =f'''
  NOTE:
 '''
 
-def tirific_template(filename = '', debug = False):
+def tirific_template(filename = ''):
     if filename == '':
         with pack_open_txt(templates, 'template.def') as tmp:
             template = tmp.readlines()
@@ -4351,7 +4221,7 @@ tirific_template.__doc__ ='''
     filename = ''
     Name of the def file, if unset the def file in Templates is used
 
-    debug =False
+
 
  OUTPUTS:
     result = dictionary with the read file
@@ -4364,7 +4234,7 @@ tirific_template.__doc__ ='''
  NOTE:
 '''
 
-def update_statistic(Configuration,process= None,message = None ,debug=False):
+def update_statistic(Configuration,process= None,message = None ):
     if Configuration['TIMING']:
         function = traceback.format_stack()[-2].split('\n')
         function = function[0].split()[-1].strip()
