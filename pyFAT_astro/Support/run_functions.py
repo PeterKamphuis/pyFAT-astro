@@ -36,7 +36,7 @@ import re
 from datetime import datetime
 
 def check_angle_convergence(Configuration,Tirific_Template, fit_type = 'Undefined'):
-    angles= {'PA': 10., 'INCL': 5.}
+    angles= {'PA': 20., 'INCL': 10.}
     angles_ok = True
     for key in angles:
         new_angle = sf.load_tirific(Configuration,\
@@ -75,7 +75,6 @@ the maximum change is {float(Configuration['MIN_ERROR'][key][0])*float(angles[ke
         sf.print_log(f'''CHECK_ANGLE_CONVERGENCE: The angles were modified in check_angles
 ''',Configuration['OUTPUTLOG'])
         angles_ok = False
-    else:
         sf.print_log(f'''CHECK_ANGLE_CONVERGENCE: The angles were unchanged in check_angles
 ''',Configuration['OUTPUTLOG'],case= ['debug_add'])
     return angles_ok

@@ -308,6 +308,9 @@ def calculate_am_vector(Configuration,PA_in,Inclination_in,multiple = [None], in
                         +multiple*90.+np.arctan(np.sin(Theta[0])*np.tan(Phi[0]))*(360./(2*np.pi))
         else:
             PA= abs(np.arctan(np.sin(Theta)*np.tan(Phi))*(360./(2*np.pi)))+multiple*90.
+        # And make sure the inner 3 rings are the same
+        Inclination[0:3] = np.mean(Inclination[0:3])
+        PA[0:3] = np.mean(PA[0:3])
         return PA,Inclination
     else:
         # For this the PA has to be between 0-90
