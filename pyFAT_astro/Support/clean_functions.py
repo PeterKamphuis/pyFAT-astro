@@ -9,7 +9,7 @@ from datetime import datetime
 
 from pyFAT_astro.Support.fits_functions import make_moments
 from pyFAT_astro.Support.modify_template import get_error
-from pyFAT_astro.Support.write_functions import make_overview_plot,plot_usage_stats,tirific,write_config
+from pyFAT_astro.Support.write_functions import make_overview_plot,plot_usage_stats,tirific
 from pyFAT_astro.Support.fat_errors import SofiaMissingError
 import pyFAT_astro.Support.support_functions as sf
 import pyFAT_astro
@@ -514,7 +514,7 @@ def finish_galaxy(Configuration,current_run = 'Not initialized',\
 {'':8s} {Fits_Files}
 ''',Configuration,case = ['debug_start','verbose'])
     if Configuration['DEBUG']:
-        write_config(f'{Configuration["LOG_DIRECTORY"]}CFG_At_Finish.txt',Configuration)
+        sf.write_config(f'{Configuration["LOG_DIRECTORY"]}CFG_At_Finish.txt',Configuration)
 
     #make sure we are not leaving stuff
     sf.finish_current_run(Configuration,current_run)

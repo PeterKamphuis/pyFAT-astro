@@ -6,7 +6,6 @@ from pyFAT_astro.Support.fat_errors import SupportRunError,SmallSourceError,\
                                               InputError,ProgramError,DefFileError,\
                                               BadHeaderError,FittingError,TirificOutputError
 
-from pyFAT_astro.Support.write_functions import write_config
 from pyFAT_astro import Templates as templates
 from collections import OrderedDict #used in Proper_Dictionary
 from inspect import getframeinfo,stack
@@ -443,8 +442,9 @@ Inclination = {inclination}
 ''',Configuration,case= ['debug_add'])
     #if len(np.where(np.array([abs(x-y) for x,y in zip(pa_in,pa) ],dtype=float) != 0.)) != 0. or \
     #    len(np.where(np.array([abs(x-y) for x,y in zip(inclination_in,inclination) ],dtype=float) != 0.)) != 0.:
-    if not np.isclose(pa_in,pa, atol=Configuration['MIN_ERROR']['PA']*3.).any() or \
-        not np.isclose(inclination_in,inclination, atol=Configuration['MIN_ERROR']['INCL']*3.).any():
+
+    if not np.isclose(pa_in,pa, atol=float(Configuration['MIN_ERROR']['PA'][0])*3.).any() or \
+        not np.isclose(inclination_in,inclination, atol=float(Configuration['MIN_ERROR']['INCL'][0])*3.).any():
         modified= True
     return pa,inclination, modified
 check_angular_momentum_vector.__doc__ =f'''
@@ -4268,3 +4268,50 @@ def update_statistic(Configuration,process= None,message = None ):
                 file.write(f"# {function.upper()}: {message} at {datetime.now()} \n")
             # We cannot copy the process so initialize in the configuration
             file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Mb for {program} \n")
+
+def write_config(file,Configuration ):
+    #be clear we are pickle dumping
+    tmp = os.path.splitext(file)
+    file = f'{tmp[0]}.pkl'
+    sf.print_log(f'''WRITE_CONFIG: writing the configuration to {file}
+''',Configuration,case=['debug_start'])
+    # Separate the keyword names
+    #Proper dictionaries are not pickable
+
+    Pick_Configuration = {}
+    for key in Configuration:
+        Pick_Configuration[key] = Configuration[key]
+        if key == 'FAT_PSUPROCESS':
+            Pick_Configuration[key] = None
+    import pickle
+    with open(file,'wb') as tmp:
+        pickle.dump(Pick_Configuration,tmp)
+
+
+write_config.__doc__ =f'''
+ NAME:
+    write_config
+
+ PURPOSE:
+    Write a config file to the fitting directory.
+
+ CATEGORY:
+    write_functions
+
+ INPUTS:
+    file = name of the file to write to
+    Configuration = Standard FAT configuration
+
+ OPTIONAL INPUTS:
+
+
+ OUTPUTS:
+    A FAT config file.
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE: This doesn't work in python 3.6
+'''

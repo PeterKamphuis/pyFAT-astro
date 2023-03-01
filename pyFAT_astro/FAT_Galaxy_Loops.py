@@ -161,7 +161,7 @@ Therefore we remove the Create_FAT_Cube stages from the loop.
 
             #If we have Sofia Preprocessed Output request make sure it all exists
             if Configuration['DEBUG']:
-                wf.write_config(
+                sf.write_config(
                     f'{Configuration["LOG_DIRECTORY"]}CFG_Before_Sofia.txt', Configuration)
 
             if 'external_sofia' in Configuration['FITTING_STAGES']:
@@ -195,7 +195,7 @@ Therefore we remove the Create_FAT_Cube stages from the loop.
 ''', Configuration)
                     #Add your personal fitting types here
                     if Configuration['DEBUG']:
-                        wf.write_config(
+                        sf.write_config(
                             f'{Configuration["LOG_DIRECTORY"]}CFG_Before_Fitting.txt', Configuration)
 
                 if 'fit_tirific_osc' in Configuration['FITTING_STAGES']:

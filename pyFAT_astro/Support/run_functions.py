@@ -841,7 +841,7 @@ def fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run, s
     sf.print_log(f'''FIT_SMOOTHED_CHECK: Starting stage {stage} and fit_type {fit_type}.
 ''',Configuration,case= ['debug_start'])
     if Configuration['DEBUG']:
-        wf.write_config(
+        sf.write_config(
             f'{Configuration["LOG_DIRECTORY"]}CFG_Before_Smoothing.txt', Configuration)
         wf.tirific(Configuration,Tirific_Template, name = 'Input_to_Smooth.def')
         os.system(f'''mv {Configuration['FITTING_DIR']}/Input_to_Smooth.def {Configuration['LOG_DIRECTORY']}''')

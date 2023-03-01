@@ -658,7 +658,6 @@ def guess_orientation(Configuration,Fits_Files, vsys = -1 ,center = None, smooth
     Image.close()
     #we want to make sure the SBr is gaussian
     # We want to make this is sure this is a decent profile and thus we fit it with the gaussian
-    print(SBR_initial)
     #Configuration['SIZE_IN_BEAMS'] = len(SBR_initial)-1
     format = sf.set_format('SBR')
     Temp_template = {'SBR':' '.join([f'{float(x):{format}}' for x in SBR_initial])\
