@@ -4273,7 +4273,7 @@ def write_config(file,Configuration ):
     #be clear we are pickle dumping
     tmp = os.path.splitext(file)
     file = f'{tmp[0]}.pkl'
-    sf.print_log(f'''WRITE_CONFIG: writing the configuration to {file}
+    print_log(f'''WRITE_CONFIG: writing the configuration to {file}
 ''',Configuration,case=['debug_start'])
     # Separate the keyword names
     #Proper dictionaries are not pickable
