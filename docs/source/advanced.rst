@@ -283,7 +283,7 @@ Advanced Keywords
 
   *str, optional, default = '|'*
 
-  The character used to split the columns in the input catalogue. If left unset pyFAT asumes the default and if it can not find all columns then it tries to was a space as a seperation character.
+  The character used to split the columns in the input catalogue. If left unset pyFAT asumes the default and if it can not find all columns then it tries a space as a seperation character.
   If it still fails it will thow a bad catalogue error.
 
 **pa_input_boundary**
