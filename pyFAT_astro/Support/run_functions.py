@@ -13,7 +13,7 @@ from pyFAT_astro.Support.modify_template import write_new_to_template,\
 from pyFAT_astro.Support.constants import H_0
 from pyFAT_astro.Support.fat_errors import SofiaFaintError,BadConfigurationError,\
                                               InclinationRunError,SofiaRunError,\
-                                              BadSourceError,TirificOutputError
+                                              BadSourceError,TirificOutputError,ProgramError
 from pyFAT_astro.Support.tirshaker import tirshaker
 
 from astropy.wcs import WCS
@@ -48,10 +48,10 @@ def check_angle_convergence(Configuration,Tirific_Template, fit_type = 'Undefine
 
         sf.print_log(f'''CHECK_ANGLE_CONVERGENCE: For {key} we had {old_angle[0]} which changed to {new_angle[0]}.
 the maximum change is {float(Configuration['MIN_ERROR'][key][0])*float(angles[key])}
-''',Configuration['OUTPUTLOG'],case= ['debug_add'])
+''',Configuration,case= ['debug_add'])
         if abs(old_angle[0]-new_angle[0]) > float(Configuration['MIN_ERROR'][key][0])*float(angles[key]):
             sf.print_log(f'''CHECK_ANGLE_CONVERGENCE: The {key} changed too much between iterations.
-''',Configuration['OUTPUTLOG'])
+''',Configuration)
             angles_ok = False
         if key in Configuration['FIXED_PARAMETERS'][0]:
             fixed=True
@@ -66,17 +66,18 @@ the maximum change is {float(Configuration['MIN_ERROR'][key][0])*float(angles[ke
             sf.print_log(f'''CHECK_ANGLE_CONVERGENCE: The {key} boundaries changed from:
 {'':8s} old boundaries =  {old_boun}
 {'':8s} new boundaries =  {new_boun}
-''',Configuration['OUTPUTLOG'],case= ['verbose'])
+''',Configuration,case= ['verbose'])
             angles_ok = False
 
     #And we chek that the angles are well behaved
     changed_angles = check_angles(Configuration,Tirific_Template)
     if changed_angles:
         sf.print_log(f'''CHECK_ANGLE_CONVERGENCE: The angles were modified in check_angles
-''',Configuration['OUTPUTLOG'])
+''',Configuration)
         angles_ok = False
+    else:
         sf.print_log(f'''CHECK_ANGLE_CONVERGENCE: The angles were unchanged in check_angles
-''',Configuration['OUTPUTLOG'],case= ['debug_add'])
+''',Configuration,case= ['debug_add'])
     return angles_ok
 check_angle_convergence.__doc__ =f'''
  NAME:
@@ -112,7 +113,7 @@ check_angle_convergence.__doc__ =f'''
 def check_central_convergence(Configuration,Tirific_Template, fit_type = 'Undefined'):
     #The new values are already loaded into the Tirific_Template so if we do accept we have to reset the values
     sf.print_log(f'''CHECK_CENTRAL_CONVERGE: Starting stage {fit_type}.
-''',Configuration['OUTPUTLOG'],case= ['debug_start'])
+''',Configuration,case= ['debug_start'])
     sf.update_statistic(Configuration, message= "Starting the central convergence run")
 
     new_pos = sf.load_tirific(Configuration,\
@@ -147,7 +148,7 @@ def check_central_convergence(Configuration,Tirific_Template, fit_type = 'Undefi
         if any([True if abs(x[0]-y[0]) > apply_limit else False for x,y in zip(old_pos[:-1],new_pos[:-1]) ]):
            sf.print_log(f'''CHECK_CONVERGENCE: The center shifted more than {apply_limit/(Configuration['BEAM'][0]/3600.)} FWHM.
 {"":8s}CHECK_CONVERGENCE: Not applying this shift
-''', Configuration['OUTPUTLOG'],case= ['verbose'])
+''', Configuration,case= ['verbose'])
            write_center(Configuration,Tirific_Template, [x[0] for x in old_pos])
 
            #write_new_to_template(Configuration,f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def", Tirific_Template, Variables = ['VROT',
@@ -160,16 +161,16 @@ def check_central_convergence(Configuration,Tirific_Template, fit_type = 'Undefi
                     Variables = ['XPOS','YPOS','VSYS'],array=True)
                 if any([True if abs(x[0]-y[0]) > lim else False for x,y,lim in zip(old_pos_2,new_pos,limits) ]):
                     sf.print_log(f'''CHECK_CONVERGENCE: The center shifted back to the old position. Moving on to the next stage.
-''', Configuration['OUTPUTLOG'],case= ['debug_add'])
+''', Configuration,case= ['debug_add'])
                    #write_new_to_template(Configuration,f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def", Tirific_Template)
                     return True
             sf.print_log(f'''CHECK_CONVERGENCE: The center shifted too much trying again with new center.
-{outstr}''', Configuration['OUTPUTLOG'])
+{outstr}''', Configuration)
             if np.sum(Configuration['SIZE_IN_BEAMS']) > 16.:
                 for i,var in enumerate(vars):
                     if  abs(new_pos[i][0] - old_pos[i][0]) < limits[i]:
                         sf.print_log(f'''CHECK_CONVERGENCE: We are fixing the {var}.
-''', Configuration['OUTPUTLOG'],case= ['debug_add'])
+''', Configuration,case= ['debug_add'])
                         if var not in Configuration['CENTRAL_FIX']:
                             Configuration['CENTRAL_FIX'].append(var)
                     else:
@@ -180,7 +181,7 @@ def check_central_convergence(Configuration,Tirific_Template, fit_type = 'Undefi
             return False
     else:
         sf.print_log(f'''CHECK_CONVERGENCE: The center is accepted. The shift is:
-{outstr}''', Configuration['OUTPUTLOG'],case= ['verbose'])
+{outstr}''', Configuration,case= ['verbose'])
         #write_new_to_template(Configuration,f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def", Tirific_Template)
         return True
 check_central_convergence.__doc__ =f'''
@@ -216,7 +217,7 @@ check_central_convergence.__doc__ =f'''
 
 def check_inclination(Configuration,Tirific_Template,Fits_Files, fit_type = 'Undefined'):
     sf.print_log(f'''CHECK_INCLINATION: estimating whether our inclination estimate is decent.
-''',Configuration['OUTPUTLOG'],case= ['debug_start'])
+''',Configuration,case= ['debug_start'])
     sf.update_statistic(Configuration, message= "Starting the the inclination run")
 
     to_extract=['VROT','INCL','INCL_2','PA','XPOS','YPOS']
@@ -226,7 +227,7 @@ def check_inclination(Configuration,Tirific_Template,Fits_Files, fit_type = 'Und
 
     inclination = float(current[to_extract.index('INCL')][0])
     sf.print_log(f'''CHECK_INCLINATION: This is the initial inclination {inclination}
-''',Configuration['OUTPUTLOG'],case= ['debug_add'])
+''',Configuration,case= ['debug_add'])
 
     if np.sum(Configuration['SIZE_IN_BEAMS']) < 10.:
         incl_to_check = np.linspace(-15.,+15.,20)
@@ -243,7 +244,7 @@ def check_inclination(Configuration,Tirific_Template,Fits_Files, fit_type = 'Und
     #and a copy of the tirific template
     sf.print_log(f'''CHECK_INCLINATION: python is so stupid
 {'':8s}PA = {Tirific_Template['PA']}
-''',Configuration['OUTPUTLOG'],case= ['debug_add'])
+''',Configuration,case= ['debug_add'])
     Check_Template = copy.deepcopy(Tirific_Template)
     #write_new_to_template(Configuration, f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def", Check_Template)
     Check_Template['LOOPS'] = '0'
@@ -272,7 +273,7 @@ def check_inclination(Configuration,Tirific_Template,Fits_Files, fit_type = 'Und
 {'':8s}Vrot = {current[to_extract.index('VROT')][:]}
 {'':8s}Vobs = {vobs}
 {'':8s}PA = {Check_Template['PA']}
-''',Configuration['OUTPUTLOG'],case= ['debug_add'])
+''',Configuration,case= ['debug_add'])
     mom_chi = []
     model_mom0 = fits.open(f"{Configuration['FITTING_DIR']}{Fits_Files['MOMENT0']}")
     #model_mom0 = sf.remove_inhomogeneities(Configuration,model_mom0,inclination=float(current[1][0]), pa = float(current[2][0]), center = [current[3][0],current[4][0]])
@@ -297,9 +298,9 @@ def check_inclination(Configuration,Tirific_Template,Fits_Files, fit_type = 'Und
                      overwrite = True, vel_unit = 'm/s')
         #make_moments(filename = f"{Configuration['FITTING_DIR']}{tmp_stage}/{tmp_stage}.fits", basename = 'tmp_incl', directory = f"{Configuration['FITTING_DIR']}{tmp_stage}/",\
         #             moments = [0],level = 3.*Configuration['NOISE'], \
-        #             overwrite = True, log= Configuration['OUTPUTLOG'], vel_unit = 'm/s')
+        #             overwrite = True, log= Configuration, vel_unit = 'm/s')
         incl_mom0 = fits.open(f"{Configuration['FITTING_DIR']}{tmp_stage}/{tmp_stage}_mom0.fits")
-        if pyFAT_astro.debug:
+        if Configuration['DEBUG']:
             try:
                 os.remove(f"{Configuration['FITTING_DIR']}{tmp_stage}/tmp_{incl:.1f}_mom0.fits")
             except FileNotFoundError:
@@ -321,7 +322,7 @@ def check_inclination(Configuration,Tirific_Template,Fits_Files, fit_type = 'Und
     sf.print_log(f'''CHECK_INCLINATION: This is the new inclination {new_incl} it was {current[1][0]}.
 {'':8s}mom_chi = {mom_chi}
 {'':8s}low = {low}
-''',Configuration['OUTPUTLOG'],case= ['debug_add'])
+''',Configuration,case= ['debug_add'])
 
 
     #exit()
@@ -331,7 +332,7 @@ def check_inclination(Configuration,Tirific_Template,Fits_Files, fit_type = 'Und
         incl_err = 5.
     if not current[1][0]-incl_err < new_incl < current[1][0]+incl_err:
         sf.print_log(f'''CHECK_INCLINATION: The inclination has changed, writing to file.
-''',Configuration['OUTPUTLOG'],case= ['debug_add'])
+''',Configuration,case= ['debug_add'])
 
         vrot = [x/np.sin(np.radians(np.mean([float(y),float(z)])+new_incl)) for x,y,z in \
             zip(vobs,current[to_extract.index('INCL')][:],current[to_extract.index('INCL_2')][:])]
@@ -345,7 +346,7 @@ def check_inclination(Configuration,Tirific_Template,Fits_Files, fit_type = 'Und
 {'':8s} vrot = {Tirific_Template['VROT']}
 {'':8s} incl = {Tirific_Template['INCL']}
 {'':8s} incl_2 = {Tirific_Template['INCL_2']}
-''',Configuration['OUTPUTLOG'],case= ['debug_add'])
+''',Configuration,case= ['debug_add'])
 
         #Tirific_Template = copy.deepcopy(Check_Template)
         wf.tirific(Configuration,Tirific_Template,name = f"{fit_type}/{fit_type}.def")
@@ -384,7 +385,7 @@ check_inclination.__doc__ =f'''
 
 def check_source(Configuration, Fits_Files):
     sf.print_log(f'''CHECK_SOURCE: Starting.
-''',Configuration['OUTPUTLOG'],case= ['debug_start'])
+''',Configuration,case= ['debug_start'])
     sf.update_statistic(Configuration, message= "Starting the check source run")
 
 
@@ -400,17 +401,17 @@ def check_source(Configuration, Fits_Files):
     # Need to check for that here if NaNs are included
     if f_sum < 0.:
         sf.print_log(f'''CHECK_SOURCE: This galaxy has negative total flux. That will not work. Aborting.
-''',Configuration['OUTPUTLOG'],case=['main','screen'])
+''',Configuration,case=['main','screen'])
         raise BadSourceError('We found an initial negative total flux.')
     sf.print_log(f'''CHECK_SOURCE:  From the input we get Distance = {Configuration['DISTANCE']}
-''',Configuration['OUTPUTLOG'],case= ['debug_add'])
+''',Configuration,case= ['debug_add'])
     # If the provided distance  = -1 we assume a Hubble follow
     if float(Configuration['DISTANCE']) == -1.:
         Configuration['DISTANCE'] = v_app/H_0
     if float(Configuration['DISTANCE']) < 0.5:
         Configuration['DISTANCE'] = 0.5
     sf.print_log(f'''CHECK_SOURCE: After the checks we get Distance = {Configuration['DISTANCE']}.
-''',Configuration['OUTPUTLOG'],case= ['debug_add'])
+''',Configuration,case= ['debug_add'])
     if np.sum(Configuration['Z0_INPUT_BOUNDARY']) == 0.:
         sf.set_boundaries(Configuration,'Z0',*sf.convertskyangle(Configuration,[0.05,1.0], physical = True),input=True)
 
@@ -441,21 +442,21 @@ def check_source(Configuration, Fits_Files):
     Max_SNR = np.nanmax(masked_data)/Configuration['NOISE']
     if Max_SNR < 2.5:
         sf.print_log(f'''CHECK_SOURCE: The max SNR of the pixels in the mask is {Max_SNR}, that is not enough for a fit.
-''', Configuration['OUTPUTLOG'],case= ['main','screen'])
+''', Configuration,case= ['main','screen'])
         raise BadSourceError(f"The max SNR of the pixels in the mask is {Max_SNR}. This is too faint.")
     else:
         sf.print_log(f'''CHECK_SOURCE: The Max SNR of the pixels in the mask is {Max_SNR}.
-''', Configuration['OUTPUTLOG'])
+''', Configuration)
 
     Mean_SNR = np.nanmean(masked_data[masked_data > 0.])/Configuration['NOISE']
     del masked_data
     if Mean_SNR < 0.75:
         sf.print_log(f'''CHECK_SOURCE: The mean SNR of the pixels in the mask is {Mean_SNR}, that is not enough for a fit.
-''', Configuration['OUTPUTLOG'],case= ['main','screen'])
+''', Configuration,case= ['main','screen'])
         raise BadSourceError(f"The mean SNR of the pixels in the mask is {Mean_SNR}. This is too faint.")
     else:
         sf.print_log(f'''CHECK_SOURCE: The mean SNR of the pixels in the mask is {Mean_SNR}.
-''', Configuration['OUTPUTLOG'])
+''', Configuration)
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
@@ -480,19 +481,19 @@ def check_source(Configuration, Fits_Files):
 {"":8s}CHECK_SOURCE: RA center = {ra} deg or {rahr}  with boundaries {','.join(sf.convert_type(RAboun,type='str'))}
 {"":8s}CHECK_SOURCE: DEC center = {dec} deg  or {dechr}  with boundaries {','.join(sf.convert_type(DECboun,type='str'))}
 {"":8s}CHECK_SOURCE: Sofia V_sys center = {v_app:.2f} with boundaries {','.join(sf.convert_type(VELboun/1000.,type='str'))}
-''', Configuration['OUTPUTLOG'])
+''', Configuration)
 
     #There is a factor of two missing here but this is necessary otherwise the maxima are far to small
     Configuration['MAX_SIZE_IN_BEAMS'] = int(round(np.sqrt(((x_max-x_min)/2.)**2+((y_max-y_min)/2.)**2) \
                 /(Configuration['BEAM_IN_PIXELS'][0])+5.))
     sf.print_log(f'''CHECK_SOURCE: From Sofia we find a max extend of {Configuration['MAX_SIZE_IN_BEAMS']}
-''', Configuration['OUTPUTLOG'],case= ['verbose'])
+''', Configuration,case= ['verbose'])
     if Configuration['MAX_SIZE_IN_BEAMS'] > 20.:
         smooth_field = True
     else:
         smooth_field = False
 
-    pa, inclination, SBR_initial, maj_extent,x_new,y_new,new_vsys,VROT_initial =\
+    pa, inclination, SBR_initial,x_new,y_new,new_vsys,VROT_initial =\
         rf.guess_orientation(Configuration,Fits_Files, vsys= v_app, \
             smooth = smooth_field,center = [x,y])
 
@@ -507,23 +508,22 @@ def check_source(Configuration, Fits_Files):
 {"":8s}CHECK_SOURCE: RA center = {ra} with boundaries {','.join(sf.convert_type(RAboun,type='str'))}
 {"":8s}CHECK_SOURCE: DEC center = {dec} with boundaries {','.join(sf.convert_type(DECboun,type='str'))}
 {"":8s}CHECK_SOURCE: V_sys center = {v_app:.2f} with boundaries {','.join(sf.convert_type(VELboun/1000.,type='str'))}
-''', Configuration['OUTPUTLOG'])
+''', Configuration)
     sf.set_boundaries(Configuration,'XPOS',*RAboun,input=True)
     sf.set_boundaries(Configuration,'YPOS',*DECboun,input=True)
     sf.set_boundaries(Configuration,'VSYS',*VELboun/1000.,input=True)
 
     if np.sum(pa) == 0. or any(np.isnan(pa)) or \
         np.sum(inclination) == 0. or any(np.isnan(inclination)) or \
-        np.sum(maj_extent) == 0. or np.isnan(maj_extent) or \
         np.sum(SBR_initial) == 0. or all(np.isnan(SBR_initial)) or \
         np.sum(VROT_initial) == 0. or all(np.isnan(VROT_initial)):
         sf.print_log(f'''CHECK_SOURCE: We could not establish proper initial estimates from the moment maps. These are what we got
 {"":8s}CHECK_SOURCE: pa = {pa}
 {"":8s}CHECK_SOURCE: inclination = {inclination}
-{"":8s}CHECK_SOURCE: maj_extent = {maj_extent}
+{"":8s}CHECK_SOURCE: maj_extent = {Configuration['SIZE_IN_BEAMS']}
 {"":8s}CHECK_SOURCE: SBR_initial = {SBR_initial}
 {"":8s}CHECK_SOURCE: VROT_initial = {VROT_initial}
-''', Configuration['OUTPUTLOG'])
+''', Configuration)
 
         raise BadSourceError("No initial estimates. Likely the source is too faint.")
      # Determine whether the centre is blanked or not
@@ -533,29 +533,28 @@ def check_source(Configuration, Fits_Files):
 {"":8s}CHECK_SOURCE: x,y,z = {int(round(x))}, {int(round(y))}, {int(round(z))}.
 {'':8s}CHECK_SOURCE: we will use a systemic velocity of {v_app}
 Checking the central flux in a box with size of {Configuration['BEAM_IN_PIXELS'][0]} in pixels around the central coordinates
-''',Configuration['OUTPUTLOG'],case= ['debug_add'])
+''',Configuration,case= ['debug_add'])
     Central_Flux = np.mean(data[int(round(z-1)):int(round(z+1)),\
                                 int(round(y-Configuration['BEAM_IN_PIXELS'][0]/2.)):int(round(y+Configuration['BEAM_IN_PIXELS'][0]/2.)),\
                                 int(round(x-Configuration['BEAM_IN_PIXELS'][0]/2.)):int(round(x+Configuration['BEAM_IN_PIXELS'][0]/2.))])
     del data
     sf.print_log(f'''CHECK_SOURCE: In the center we find an average flux of  {Central_Flux} Jy/beam around the location:
 {"":8s}CHECK_SOURCE: x,y,z = {int(round(x))}, {int(round(y))}, {int(round(z))}.
-''',Configuration['OUTPUTLOG'],case= ['debug_add'])
+''',Configuration,case= ['debug_add'])
 
     if not np.isfinite(Central_Flux):
         Configuration['EXCLUDE_CENTRAL'] = True
         sf.print_log(f'''CHECK_SOURCE: The flux in the central part is blanked. We exclude the central rings.
-''',Configuration['OUTPUTLOG'],case=['verbose'])
+''',Configuration,case=['verbose'])
     else:
         Configuration['EXCLUDE_CENTRAL'] = False
 
 
     # Size of the galaxy in beams
-    Configuration['SIZE_IN_BEAMS'] = np.full(2,sf.set_limits(maj_extent/(Configuration['BEAM'][0]/3600.),1.0,Configuration['MAX_SIZE_IN_BEAMS']))
     if np.sum(Configuration['SIZE_IN_BEAMS']) <= 2.*Configuration['TOO_SMALL_GALAXY']:
         sf.print_log(f'''CHECK_SOURCE: This galaxy has an estimated size of  {np.sum(Configuration['SIZE_IN_BEAMS'])} beams in diameter.
 {'':8s}This is not large enough too fit. We will exit this fit.
-''',Configuration['OUTPUTLOG'],case= ['main','screen'])
+''',Configuration,case= ['main','screen'])
         raise BadSourceError('The extracted source is too small')
     ring_size, number_of_rings = sf.set_ring_size(Configuration)
     old_radii = np.linspace(0.,Configuration['BEAM'][0]*(len(SBR_initial)-1),len(SBR_initial))
@@ -567,7 +566,7 @@ Checking the central flux in a box with size of {Configuration['BEAM_IN_PIXELS']
     sf.print_log(f'''CHECK_SOURCE: Interpolating the SBR and VROT estimates to these radi.
 {'':8s} {new_radii}
 {'':8s} We got SBR = {SBR_initial}, VROT = {VROT_initial}
-''',Configuration['OUTPUTLOG'],case= ['debug_add'])
+''',Configuration,case= ['debug_add'])
 
 
     # The extent is fairly well determined and the maximum should be no more than +3 beams and a minimum no less than 4
@@ -586,7 +585,7 @@ Checking the central flux in a box with size of {Configuration['BEAM_IN_PIXELS']
 {"":8s}CHECK_SOURCE: We start with an inclination of {inclination[0]:.2f} +/- {inclination[1]:.2f}{"":8s}
 {"":8s}CHECK_SOURCE: SoFiA found a W50 of {w50:.2f} km/s
 {"":8s}CHECK_SOURCE: We will use {2.*(Configuration['NO_RINGS']-1)} rings for the model with a ring size of {Configuration['RING_SIZE']}.
-''',Configuration['OUTPUTLOG'])
+''',Configuration)
 
 
 
@@ -613,13 +612,13 @@ Checking the central flux in a box with size of {Configuration['BEAM_IN_PIXELS']
               DEC=[dec,abs(err_y*header['CDELT2'])],
               VSYS =[v_app,abs(err_z*header['CDELT3']/1000.)],
               PA=pa, Inclination = inclination, Max_Vrot = [max_vrot,max_vrot_dev], Tot_Flux = [f_sum,f_sum_err], V_mask = [VELboun[1]-VELboun[0],vres],
-              Distance = Configuration['DISTANCE'] , DHI = [2*maj_extent*3600.,Configuration['BEAM'][0]*Configuration['RING_SIZE']])
+              Distance = Configuration['DISTANCE'] , DHI = [2*Configuration['SIZE_IN_BEAMS'][0]*Configuration['BEAM'][0],Configuration['BEAM'][0]*Configuration['RING_SIZE']])
 
 
     # extract a PV-Diagram
     if not os.path.exists(f"{Configuration['FITTING_DIR']}/Sofia_Output/{Configuration['SOFIA_BASENAME']}_sofia_xv.fits"):
         PV =extract_pv(Configuration,Cube, pa[0], center=[ra,dec,v_app*1000.], convert = 1000.,
-                       finalsize = [int(round(maj_extent/np.mean([abs(header['CDELT1']),abs(header['CDELT2'])])*1.25+header['NAXIS1']*0.2)),
+                       finalsize = [int(round(Configuration['SIZE_IN_BEAMS'][0]*Configuration['BEAM'][0]/np.mean([abs(header['CDELT1']),abs(header['CDELT2'])])*1.25+header['NAXIS1']*0.2)),
                                     int(round(z_max-z_min)+10.)])
         fits.writeto(f"{Configuration['FITTING_DIR']}/Sofia_Output/{Configuration['BASE_NAME']}_sofia_xv.fits",PV[0].data,PV[0].header)
     Cube.close()
@@ -683,7 +682,7 @@ check_source.__doc__='''
 
 def check_initial_boundaries(Configuration, Initial_Parameters):
     sf.print_log(f'''CHECK_INITIAL_BOUNDARIES: Starting Check
-''',Configuration['OUTPUTLOG'],case= ['debug_start'])
+''',Configuration,case= ['debug_start'])
     for parameter in Initial_Parameters:
         #some initial parameters we do not want to check as they are not in the models
         if parameter in ['FLUX']:
@@ -709,7 +708,7 @@ def check_initial_boundaries(Configuration, Initial_Parameters):
 {'':8s} boundaries = {Configuration[f'{stripped_parameter}_INPUT_BOUNDARY']}
 {'':8s} length = {length}
 {'':8s} error = {error}
-''',Configuration['OUTPUTLOG'],case= ['debug_add'])
+''',Configuration,case= ['debug_add'])
             for i in range(length):
                 Initial_Parameters[parameter][i] = sf.set_limits(\
                     Initial_Parameters[parameter][i],\
@@ -733,7 +732,7 @@ def check_vobs(Configuration,Tirific_Template,fit_type = 'Undefined'):
     for i,pair in enumerate(vobs):
         sf.print_log(f'''CHECK_VOBS:For ring {i} we find vobs {pair}
 {'':8s} And the differences {[delta[i-1] if i >0 else [0,0,0]]}.
-''',Configuration['OUTPUTLOG'],case= ['debug_add'])
+''',Configuration,case= ['debug_add'])
 
     passed=True
     return passed
@@ -776,7 +775,7 @@ def fitting_osc(Configuration,Fits_Files,Tirific_Template,Initial_Parameters):
                            Initial_Parameters= Initial_Parameters, \
                            fit_type=Configuration['USED_FITTING'])
     sf.print_log(f'''FITTING_OSC: The initial def file is written and we will now start fitting.
-''' ,Configuration['OUTPUTLOG'])
+''' ,Configuration)
     Configuration['PREP_END_TIME'] = datetime.now()
         # If we have no directory to put the output we create it
 
@@ -789,12 +788,12 @@ def fitting_osc(Configuration,Fits_Files,Tirific_Template,Initial_Parameters):
             sf.print_log(f'''FITTING_OSC: Checking the inclination due to small galaxy size.
 {'':8s}PA = {Tirific_Template['PA']}
 {'':8s}INCL = {Tirific_Template['INCL']}
-''',Configuration['OUTPUTLOG'],case= ['debug_add'])
+''',Configuration,case= ['debug_add'])
             check_inclination(Configuration,Tirific_Template,Fits_Files, fit_type =Configuration['USED_FITTING'])
 
     if Configuration['ACCEPTED']:
         sf.print_log(f'''FITTING_OSC: The model has converged in center and extent and we make a smoothed version.
-''',Configuration['OUTPUTLOG'])
+''',Configuration)
         current_run = fit_smoothed_check(Configuration, Fits_Files,\
             Tirific_Template,current_run,stage = 'after_os',\
              fit_type = Configuration['USED_FITTING'])
@@ -803,7 +802,7 @@ def fitting_osc(Configuration,Fits_Files,Tirific_Template,Initial_Parameters):
                 current_run = current_run,fit_type = Configuration['USED_FITTING'])
     elif Configuration['INSTALLATION_CHECK']:
         sf.print_log(f'''FITTING_OSC: The Installation_check has run a fit successfully.
-''',Configuration['OUTPUTLOG'])
+''',Configuration)
     else:
         Configuration['FINAL_COMMENT'] = 'We could not converge on the extent or centre of the galaxy'
         Configuration['OUTPUT_QUANTITY'] = 5
@@ -840,7 +839,13 @@ fitting_osc.__doc__ =f'''
 def fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run, stage = 'initial',fit_type='Undefined'):
     sf.update_statistic(Configuration, message= "Starting the smoothed check run")
     sf.print_log(f'''FIT_SMOOTHED_CHECK: Starting stage {stage} and fit_type {fit_type}.
-''',Configuration['OUTPUTLOG'],case= ['debug_start'])
+''',Configuration,case= ['debug_start'])
+    if Configuration['DEBUG']:
+        wf.write_config(
+            f'{Configuration["LOG_DIRECTORY"]}CFG_Before_Smoothing.txt', Configuration)
+        wf.tirific(Configuration,Tirific_Template, name = 'Input_to_Smooth.def')
+        os.system(f'''mv {Configuration['FITTING_DIR']}/Input_to_Smooth.def {Configuration['LOG_DIRECTORY']}''')
+
     #if we have only a few rings we only smooth. else we fit a polynomial to the RC and smooth the SBR
     #smoothed_sbr = smooth_profile(Configuration,Tirific_Template,'SBR',hdr, min_error= np.max([float(Tirific_Template['CFLUX']),float(Tirific_Template['CFLUX_2'])]))
     fix_sbr(Configuration,Tirific_Template,smooth = True)
@@ -903,7 +908,6 @@ def fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run, s
                           initial_estimates = parameters,parameters_to_adjust = parameters_to_adjust)
 
 
-    target = f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}_Last_Unsmoothed_Input.def"
     source = sf.get_system_string(f"{Configuration['FITTING_DIR']}{fit_type}_In.def")
     target = sf.get_system_string(f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}_Last_Unsmoothed_Input.def")
     os.system(f"cp {source} {target}")
@@ -961,7 +965,7 @@ def make_full_resolution(Configuration,Tirific_Template,Fits_Files,fit_type = 'U
     sf.update_statistic(Configuration, message= "Starting to make a full resolution model run")
 
     sf.print_log(f'''MAKE_FULL_RESOLUTION: creating full resolution for stage {fit_type}.
-''',Configuration['OUTPUTLOG'],case= ['main','debug_start'])
+''',Configuration,case= ['main','debug_start'])
     write_new_to_template(Configuration, f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def", Tirific_Template)
     Tirific_Template['INSET'] = f"{Fits_Files['FITTING_CUBE']}"
     Tirific_Template['VARY'] = f" VROT 1:3"
@@ -974,11 +978,11 @@ def make_full_resolution(Configuration,Tirific_Template,Fits_Files,fit_type = 'U
         accepted,current_run = sf.run_tirific(Configuration,'Not zed', stage = 'full_res', fit_type=fit_type)
     except TirificOutputError:
         sf.print_log(f'''MAKE_FULL_RESOLUTION: The  original size is {Configuration['SIZE_IN_BEAMS']}
-''',Configuration['OUTPUTLOG'], case=['debug_add','screen'])
+''',Configuration, case=['debug_add','screen'])
         Configuration['SIZE_IN_BEAMS'] = Configuration['SIZE_IN_BEAMS']*0.99
         ring_size, number_of_rings = sf.set_ring_size(Configuration)
         sf.print_log(f'''MAKE_FULL_RESOLUTION: Applied the size of {Configuration['SIZE_IN_BEAMS']}, ring size {ring_size} resulting in {number_of_rings} rings
-''',Configuration['OUTPUTLOG'], case=['main','screen'])
+''',Configuration, case=['main','screen'])
         set_new_size(Configuration,Tirific_Template,Fits_Files,fit_type= fit_type,\
             current_run = current_run)
         Tirific_Template['INSET'] = f"{Fits_Files['FITTING_CUBE']}"
@@ -1028,7 +1032,7 @@ make_full_resolution.__doc__ =f'''
 def one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run):
 
     sf.print_log(f'''ONE_STEP_CONVERGENCE: For {Configuration['ID']} we are starting loop {Configuration['ITERATIONS']} out of maximum {Configuration['MAX_ITERATIONS']}.
-''',Configuration['OUTPUTLOG'], case=['main','screen','debug_start'])
+''',Configuration, case=['main','screen','debug_start'])
     fit_type = 'Fit_Tirific_OSC'
     stage = 'run_os'
     #First we run tirific
@@ -1037,7 +1041,7 @@ def one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run):
     except TirificOutputError:
         sf.print_log(f'''ONE_STEP_CONVERGENCE: Tirific failed to produce output. It might be an unspecified crash.
 we try once more else we break off the fitting. As this sometimes happens due to a gsl interpolation error we modify the ring size by 1%
-''',Configuration['OUTPUTLOG'], case=['main','screen'])
+''',Configuration, case=['main','screen'])
         #There appears to be a case where the last ring can cause an interpolation error.
         #Deal with the this we take 0.99% of the beam ring size and
         accepted,current_run = sf.run_tirific(Configuration,current_run,stage = stage, fit_type = fit_type)
@@ -1047,7 +1051,7 @@ we try once more else we break off the fitting. As this sometimes happens due to
         Configuration['ACCEPTED_TIRIFIC'] = False
         if Configuration['LOOPS'] < 20.:
             sf.print_log(f'''ONE_STEP_CONVERGENCE: Tirific ran the maximum amount of loops ({Configuration['LOOPS']}) increasing this by 1.
-''',Configuration['OUTPUTLOG'])
+''',Configuration)
             Configuration['LOOPS'] += 1
     else:
         Configuration['ACCEPTED_TIRIFIC'] = True
@@ -1062,14 +1066,32 @@ we try once more else we break off the fitting. As this sometimes happens due to
         Configuration['CENTRAL_FIX'] = []
 
     # Check whether we have the correct sizes,
-    if not all(Configuration['FIX_SIZE']):
-        accepted_size = check_size(Configuration,Tirific_Template, fit_type = fit_type, stage = stage, current_run = current_run,Fits_Files=Fits_Files)
-    else:
-        accepted_size = True
+
     #This currently doesn't do anything
     #accepted_proj_vrot = check_vobs(Configuration,Tirific_Template, fit_type = fit_type)
-    # Check whether the central INCL and PA are stable.
-    accepted_angle = check_angle_convergence(Configuration,Tirific_Template, fit_type = fit_type)
+    # Check whether the central INCL and PA are stable. But only if the center is accepted
+    if accepted_central:
+        accepted_angle = check_angle_convergence(Configuration,Tirific_Template, fit_type = fit_type)
+    else:
+        accepted_angle = False
+    #We only adapt the size if the other checks are ok
+    if not all(Configuration['FIX_SIZE']) and accepted_central and accepted_angle:
+        accepted_size = check_size(Configuration,Tirific_Template, fit_type = fit_type, stage = stage, current_run = current_run,Fits_Files=Fits_Files)
+    else:
+        if all(Configuration['FIX_SIZE']):
+            accepted_size = True
+        elif not accepted_central :
+            sf.print_log(f'''ONE_STEP_CONVERGENCE: The central position is not accepted so we do not modify the size.
+''',Configuration)
+            accepted_size = False
+        elif not accepted_angle:
+            sf.print_log(f'''ONE_STEP_CONVERGENCE: The angles changed too much thus we do not modify the size.
+''',Configuration)
+            accepted_size = False
+        else:
+            sf.print_log(f'''ONE_STEP_CONVERGENCE: This should never happen
+''',Configuration)
+            raise ProgramError('A logical fallacy has occured please list an github issue')
 
     if accepted and accepted_size and accepted_central and accepted_angle: #and accepted_proj_vrot:
         Configuration['ACCEPTED'] = True
@@ -1077,27 +1099,28 @@ we try once more else we break off the fitting. As this sometimes happens due to
         Configuration['ACCEPTED'] = False
         if Configuration['ITERATIONS'] > Configuration['MAX_ITERATIONS']:
                 sf.print_log(f'''ONE_STEP_CONVERGENCE: We have ran the convergence more than {Configuration['MAX_ITERATIONS']} times aborting the fit.
-''',Configuration['OUTPUTLOG'])
+''',Configuration)
                 return current_run
         if not accepted:
             sf.print_log(f'''ONE_STEP_CONVERGENCE: Tirific ran the maximum amount of loops hence we do not accept and we smooth and retry.
-''',Configuration['OUTPUTLOG'])
+''',Configuration)
         if not accepted_central:
             sf.print_log(f'''ONE_STEP_CONVERGENCE: The center varied too much hence we do not accept and we smooth and retry.
-''',Configuration['OUTPUTLOG'])
-        if not accepted_size:
-            sf.print_log(f'''ONE_STEP_CONVERGENCE: FAT adjusted the rings. Refitting with new settings after smoothing them.
-''',Configuration['OUTPUTLOG'])
-        if not accepted_angle:
+''',Configuration)
+        elif not accepted_angle:
             sf.print_log(f'''ONE_STEP_CONVERGENCE: The central disk PA or INCL have changed too much or the boundaries have been adapted.
-''',Configuration['OUTPUTLOG'])
+''',Configuration)
+        elif not accepted_size:
+            sf.print_log(f'''ONE_STEP_CONVERGENCE: FAT adjusted the rings. Refitting with new settings after smoothing them.
+''',Configuration)
+
 
         #if not accepted_proj_vrot:
         #    sf.print_log(f'''ONE_STEP_CONVERGENCE: The outer VROT and INCL did not converge on the minimumal change that allows for VROT*Sin(INCL)
-#''',Configuration['OUTPUTLOG'])
+#''',Configuration)
 
 
-                    # First we fix the SBR we are left with also to set the reliable ring to configuration.
+        # First we fix the SBR we are left with also to set the reliable ring to configuration.
         fix_sbr(Configuration,Tirific_Template,smooth = True)    # Then we determine the inner rings that should remain fixed
 
         sf.get_inner_fix(Configuration, Tirific_Template)
@@ -1159,7 +1182,7 @@ one_step_converge.__doc__ =f'''
 
 def sofia(Configuration, Fits_Files):
     sf.print_log(f'''RUN_SOFIA: starting sofia run from the template.
-''',Configuration['OUTPUTLOG'],case= ['debug_start'])
+''',Configuration,case= ['debug_start'])
     sf.update_statistic(Configuration, message= "Starting the SoFiA run")
 
     sofia_template = rf.sofia_template()
@@ -1175,18 +1198,18 @@ def sofia(Configuration, Fits_Files):
         clean_before_sofia(Configuration)
         sofia_template['scfind.threshold'] = str(threshold)
         wf.sofia(sofia_template,'sofia_input.par')
-        sf.print_log("RUN_SOFIA: Running SoFiA. \n",Configuration['OUTPUTLOG'])
+        sf.print_log("RUN_SOFIA: Running SoFiA. \n",Configuration)
         # Check which sofia to start
         sfrun = subprocess.Popen([Configuration['SOFIA2'],'sofia_input.par'], stdout = subprocess.PIPE, stderr = subprocess.PIPE)
         sofia_run, sofia_warnings_are_annoying = sfrun.communicate()
-        sf.print_log(sofia_run.decode("utf-8"), Configuration['OUTPUTLOG'])
+        sf.print_log(sofia_run.decode("utf-8"), Configuration)
 
         if sfrun.returncode == 8:
             if threshold > 3.:
                 log_statement = f'''RUN_SOFIA: We did not find a source at a threshold of {threshold}
 {"":8s} RUN_SOFIA: Lowering the threshold and trying again."
 '''
-                sf.print_log(log_statement,Configuration['OUTPUTLOG'])
+                sf.print_log(log_statement,Configuration)
                 threshold -= 2
             else:
                 clean_after_sofia(Configuration)
@@ -1194,12 +1217,12 @@ def sofia(Configuration, Fits_Files):
 {"":8s}RUN_SOFIA: We cannot lower the threshold lower as the risk of fitting noise becomes too high.
 {"":8s}Continuing to the next galaxy.
 '''
-                sf.print_log(log_statement,Configuration['OUTPUTLOG'])
+                sf.print_log(log_statement,Configuration)
                 raise SofiaFaintError("RUN_SOFIA:Sofia cannot find a source above a threshold of 3.")
         elif sfrun.returncode == 0:
             sofia_ok = True
         else:
-            sf.print_log(sofia_warnings_are_annoying.decode("utf-8"), Configuration['OUTPUTLOG'],case=['main','screen'])
+            sf.print_log(sofia_warnings_are_annoying.decode("utf-8"), Configuration,case=['main','screen'])
             raise SofiaRunError("RUN_SOFIA:Sofia did not execute properly. See log for details")
 
     #Move sofia output to the desired Directory
@@ -1247,7 +1270,7 @@ def construct_kernels(Configuration,sofia_template):
 
     sf.print_log(f'''CONSTRUCT_KERNELS: We use the following spatial_kernels
 {'':8s} spatial kernels = {spatial_kernels}
-''', Configuration['OUTPUTLOG'])
+''', Configuration)
     velocity_kernels = [0]
     if Configuration['NAXES'][2] > 12:
         velocity_kernels.append(3)
@@ -1259,11 +1282,11 @@ def construct_kernels(Configuration,sofia_template):
         velocity_kernels.append(16)
         Configuration['VEL_SMOOTH_EXTENDED'] = True
         sf.print_log(f'''CONSTRUCT_KERNELS: Using a very extended velocity smoothing as the cube has more than 52 channels.
-''', Configuration['OUTPUTLOG'])
+''', Configuration)
 
     sf.print_log(f'''CONSTRUCT_KERNELS: We use the following velocity kernels
 {'':8s} velocity kernels = {velocity_kernels}
-''', Configuration['OUTPUTLOG'])
+''', Configuration)
     sofia_template['scfind.kernelsXY'] = ','.join([str(x) for x in spatial_kernels])
     sofia_template['scfind.kernelsZ'] = ','.join([str(x) for x in velocity_kernels])
     return spatial_kernels,velocity_kernels
@@ -1336,7 +1359,7 @@ def tirshaker_call(Configuration):
 {'':8s}block = {block}
 {'':8s}variation = {variation}
 {'':8s}variation_type = {variation_type}
-''',Configuration['OUTPUTLOG'],case= ['debug_add'])
+''',Configuration,case= ['debug_add'])
 
     iterations = Configuration['SHAKER_ITERATIONS']
     random_seed = 2

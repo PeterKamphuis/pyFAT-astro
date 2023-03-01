@@ -233,7 +233,7 @@ initialize_def_file.__doc__ =f'''
 def make_overview_plot(Configuration,Fits_Files ):
     fit_type = Configuration['USED_FITTING']
     sf.print_log(f'''MAKE_OVERVIEW_PLOT: We are starting the overview plot.
-''',Configuration['OUTPUTLOG'],case=['debug_start'])
+''',Configuration,case=['debug_start'])
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
@@ -250,7 +250,7 @@ def make_overview_plot(Configuration,Fits_Files ):
 
     # Open the model info
     sf.print_log(f'''MAKE_OVERVIEW_PLOT: Reading the variables from the final model
-''',Configuration['OUTPUTLOG'],case=['debug_add'])
+''',Configuration,case=['debug_add'])
     Vars_to_plot_short= ['RADI','XPOS','YPOS','VSYS','VROT','INCL','PA','SDIS',\
                     'SBR','Z0']
     Vars_to_plot=copy.deepcopy(Vars_to_plot_short)
@@ -272,7 +272,7 @@ def make_overview_plot(Configuration,Fits_Files ):
         Extra_Model = []
     sf.print_log(f'''MAKE_OVERVIEW_PLOT: We find the following model values.
 {'':8s}{[f"{x} = {FAT_Model[i,:]}" for i,x in enumerate(Vars_to_plot)]}
-''',Configuration['OUTPUTLOG'],case=['debug_add'])
+''',Configuration,case=['debug_add'])
 
     if os.path.exists(f"{Configuration['FITTING_DIR']}ModelInput.def"):
         Input_Model = sf.load_tirific(Configuration,\
@@ -285,10 +285,13 @@ def make_overview_plot(Configuration,Fits_Files ):
 
 
     #Let's start plotting
+    ysize = 23.2
+    xsize = 0.7*ysize
+    Overview = plt.figure(2, figsize=(xsize, ysize), dpi=300, facecolor='w', edgecolor='k')
 
-    Overview = plt.figure(2, figsize=(8.2, 11.6), dpi=300, facecolor='w', edgecolor='k')
+    size_factor= ysize/11.6
+    size_ratio = ysize/xsize
 
-    size_ratio = 11.6/8.2
     #stupid pythonic layout for grid spec, which means it is yx instead of xy like for normal human beings
     gs = Overview.add_gridspec(int(20*size_ratio),20)
     try:
@@ -298,7 +301,7 @@ def make_overview_plot(Configuration,Fits_Files ):
         font_name = 'DejaVu Sans'
     labelfont = {'family': font_name,
              'weight': 'normal',
-             'size': 8}
+             'size': 8*size_factor}
     plt.rc('font', **labelfont)
     plt.rcParams['xtick.direction'] = 'in'
     plt.rcParams['ytick.direction'] = 'in'
@@ -321,10 +324,10 @@ def make_overview_plot(Configuration,Fits_Files ):
         left= False,
         labelleft = False)
     ax_text.text(0.5,1.0,f'''Overview for {name}''',rotation=0, va='top',ha='center', color='black',transform = ax_text.transAxes,
-      bbox=dict(facecolor='white',edgecolor='white',pad=0.,alpha=0.),zorder=7,fontsize=14)
+      bbox=dict(facecolor='white',edgecolor='white',pad=0.,alpha=0.),zorder=7,fontsize=14*size_factor)
     ax_text.text(0.5,0.25,f'''The ring size used in the model is {Configuration['RING_SIZE']:.2f} x BMAJ, with BMAJ = {Configuration['BEAM'][0]:.1f} arcsec. We assumed a distance  of {Configuration['DISTANCE']:.1f} Mpc.'''
       ,rotation=0, va='top',ha='center', color='black',transform = ax_text.transAxes,
-      bbox=dict(facecolor='white',edgecolor='white',pad=0.,alpha=0.),zorder=7,fontsize=10)
+      bbox=dict(facecolor='white',edgecolor='white',pad=0.,alpha=0.),zorder=7,fontsize=10*size_factor)
 
 
 #-----------------------------------------------------------------Moment 0 ------------------------------------------------------
@@ -366,13 +369,13 @@ def make_overview_plot(Configuration,Fits_Files ):
     if momlevel.size == 0:
         momlevel=0.5*mindism0
     ax_moment0.contour(moment0[0].data, transform=ax_moment0.get_transform(im_wcs),
-               levels=momlevel, colors='white',linewidths=1.5 , zorder =4)
+               levels=momlevel, colors='white',linewidths=1.5*size_factor , zorder =4)
     ax_moment0.contour(moment0[0].data, transform=ax_moment0.get_transform(im_wcs),
-              levels=momlevel, colors='k',zorder=6, linewidths=1.2)
+              levels=momlevel, colors='k',zorder=6, linewidths=1.2*size_factor)
     ax_moment0.contour(moment0_mod[0].data, transform=ax_moment0.get_transform(im_wcs),
-               levels=momlevel, colors='white',linewidths=1.2 , zorder =7)
+               levels=momlevel, colors='white',linewidths=1.2*size_factor , zorder =7)
     ax_moment0.contour(moment0_mod[0].data, transform=ax_moment0.get_transform(im_wcs),
-              levels=momlevel, colors='r',zorder=8, linewidths=0.9)
+              levels=momlevel, colors='r',zorder=8, linewidths=0.9*size_factor)
     xmin, xmax = ax_moment0.get_xlim()
     ymin, ymax = ax_moment0.get_ylim()
     if xmax > ymax:
@@ -400,7 +403,7 @@ def make_overview_plot(Configuration,Fits_Files ):
     cbar = plt.colorbar(moment0_plot, cax=cax, orientation='horizontal')
     cax.xaxis.set_ticks_position('top')
     cbar.set_ticks([min_color, max_color])
-    cbar.ax.set_title(f"{moment0[0].header['BUNIT']}", y= 0.2)
+    cbar.ax.set_title(f"{moment0[0].header['BUNIT']}", y= 0.2*size_factor**2)
 
 
     column_levels = sf.columndensity(Configuration,momlevel*1000.,systemic = FAT_Model[Vars_to_plot.index('VSYS'),0])
@@ -456,11 +459,11 @@ def make_overview_plot(Configuration,Fits_Files ):
     integer_array = np.linspace(0,20,21)-10
     momlevel = [FAT_Model[Vars_to_plot.index('VSYS'),0]+x*velocity_step for x in integer_array if min_color < FAT_Model[Vars_to_plot.index('VSYS'),0]+x*velocity_step < max_color]
     ax_moment1.contour(moment1[0].data, transform=ax_moment1.get_transform(im_wcs),
-               levels=momlevel, colors='white',linewidths=1.2 , zorder =4)
+               levels=momlevel, colors='white',linewidths=1.5 *size_factor, zorder =4)
     ax_moment1.contour(moment1[0].data, transform=ax_moment1.get_transform(im_wcs),
-              levels=momlevel, colors='k',zorder=6, linewidths=0.9)
+              levels=momlevel, colors='k',zorder=6, linewidths=0.9*size_factor)
     ax_moment1.contour(moment1_mod[0].data, transform=ax_moment1.get_transform(im_wcs),
-               levels=momlevel, colors='white',linewidths=1.2 , zorder =7)
+               levels=momlevel, colors='white',linewidths=1.2*size_factor , zorder =7)
     #ax_moment1.contour(moment1_mod[0].data, transform=ax_moment1.get_transform(im_wcs),
     #          levels=momlevel, colors='r',zorder=8, linewidths=0.9)
     xmin, xmax = ax_moment1.get_xlim()
@@ -490,12 +493,12 @@ def make_overview_plot(Configuration,Fits_Files ):
     cbar = plt.colorbar(moment1_plot, cax=cax, orientation='horizontal')
     cax.xaxis.set_ticks_position('top')
     cbar.set_ticks([min_color, max_color])
-    cbar.ax.set_title(f"{moment1[0].header['BUNIT']}", y= 0.2)
+    cbar.ax.set_title(f"{moment1[0].header['BUNIT']}", y= 0.2*size_factor**2)
 
     column_levels = ', '.join(["{:.1f}".format(x) for x in momlevel])
     info_string= f'''The contours start at {float(momlevel[0]):.1f} km/s'''
     if len(momlevel) > 1:
-        info_string=f'''{info_string} and increase with {float(momlevel[1])-float(momlevel[0]):.1f} km/s.'''
+        info_string=f'''{info_string} \n and increase with {float(momlevel[1])-float(momlevel[0]):.1f} km/s.'''
     else:
         info_string=f'''{info_string}.'''
 
@@ -523,11 +526,11 @@ def make_overview_plot(Configuration,Fits_Files ):
     momlevel = np.linspace(min_color,max_color*0.8,5)
 
     ax_moment2.contour(moment2[0].data, transform=ax_moment2.get_transform(im_wcs),
-               levels=momlevel, colors='white',linewidths=1.5 , zorder =4)
+               levels=momlevel, colors='white',linewidths=1.5*size_factor , zorder =4)
     ax_moment2.contour(moment2[0].data, transform=ax_moment2.get_transform(im_wcs),
-              levels=momlevel, colors='k',zorder=6, linewidths=1.2)
+              levels=momlevel, colors='k',zorder=6, linewidths=1.2*size_factor)
     ax_moment2.contour(moment2_mod[0].data, transform=ax_moment2.get_transform(im_wcs),
-               levels=momlevel, colors='white',linewidths=1.2 , zorder =7)
+               levels=momlevel, colors='white',linewidths=1.2*size_factor , zorder =7)
 
     xmin, xmax = ax_moment2.get_xlim()
     ymin, ymax = ax_moment2.get_ylim()
@@ -561,7 +564,7 @@ def make_overview_plot(Configuration,Fits_Files ):
     cax.xaxis.set_ticks_position('top')
     cbar.set_ticks([min_color, max_color])
     #cbar.set_title(label=f"{moment2[0].header['BUNIT']}")
-    cbar.ax.set_title(f"{moment2[0].header['BUNIT']}", y= 0.2)
+    cbar.ax.set_title(f"{moment2[0].header['BUNIT']}", y= 0.2*size_factor**2)
 
     column_levels = ', '.join(["{:.1f}".format(x) for x in momlevel])
     if len(momlevel) < 4:
@@ -597,13 +600,17 @@ def make_overview_plot(Configuration,Fits_Files ):
         fits.writeto(f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel_xv.fits",PV_model[0].data,PV_model[0].header)
     ratio=PV[0].header['NAXIS2']/PV[0].header['NAXIS1']
     # Then we want to plot our PV-Diagram
+    '''
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         #As astropy is the dumbest piece of software ever invented and it cannot separate stray keywords from extra dimensions
         # we need to specify we want the first two axes.
         xv_proj = WCS(PV[0].header,naxis=[0,1])
         xv_model_proj = WCS(PV_model[0].header,naxis=[0,1])
-    ax_PV = Overview.add_subplot(gs[2:8,8:14], projection=xv_proj)
+    # As astropy is really a dumb piece of shit using a WCS messes up the the axes modifications
+    #ax_PV = Overview.add_subplot(gs[2:8,8:14], projection=xv_proj)
+    '''
+    ax_PV = Overview.add_subplot(gs[2:8,8:14])
     #Comp_ax2.set_title('PV-Diagram')
 
     maxint= np.nanmax(PV[0].data)*0.85
@@ -611,14 +618,16 @@ def make_overview_plot(Configuration,Fits_Files ):
 
 
     PV_plot = ax_PV.imshow(PV[0].data,  cmap='hot_r', origin='lower', alpha=1, vmin=minint, vmax=maxint,aspect='auto')
+
     xaxis = [PV[0].header['CRVAL1'] + (i - PV[0].header['CRPIX1'] + 1) * (PV[0].header['CDELT1']) for i in
              range(PV[0].header['NAXIS1'])]
     yaxis = [PV[0].header['CRVAL2'] + (i - PV[0].header['CRPIX2'] + 1) * (PV[0].header['CDELT2']) for i in
              range(PV[0].header['NAXIS2'])]
-    plt.gca().set_xticks(range(len(xaxis))[0:-1:int(len(xaxis) / 5)])
-    plt.gca().set_yticks(range(len(yaxis))[0:-1:int(len(yaxis) / 5)])
-    plt.gca().set_xticklabels(['{:10.1f}'.format(i) for i in xaxis[0:-1:int(len(xaxis) / 5)]])
-    plt.gca().set_yticklabels(['{:10.1f}'.format(i) for i in yaxis[0:-1:int(len(yaxis) / 5)]])
+    #something is going wrong here, Fixed as usual astropy was fucking thing up
+    ax_PV.set_xticks(range(len(xaxis))[0:-1:int(len(xaxis) / 5)])
+    ax_PV.set_yticks(range(len(yaxis))[0:-1:int(len(yaxis) / 5)])
+    ax_PV.set_xticklabels(['{:10.1f}'.format(i) for i in xaxis[0:-1:int(len(xaxis) / 5)]])
+    ax_PV.set_yticklabels(['{:10.1f}'.format(i) for i in yaxis[0:-1:int(len(yaxis) / 5)]])
 
     #Add some contours
     neg_cont = np.array([-3,-1.5],dtype=float)*Configuration['NOISE']
@@ -628,13 +637,17 @@ def make_overview_plot(Configuration,Fits_Files ):
         pos_cont =  np.array([0,1,2,3,4,5,6,7],dtype=float)*(np.nanmax(PV[0].data) * 0.95-3.*Configuration['NOISE'])/7. +3.*Configuration['NOISE']
     pos_cont = np.array([x for x in pos_cont if x <= np.nanmax(PV[0].data) * 0.95],dtype=float)
     sf.print_log(f'''MAKE_OVERVIEW_PLOT: postive {pos_cont}, negative {neg_cont}, noise {Configuration['NOISE']}
-''',Configuration['OUTPUTLOG'],case=['debug_add'] )
+''',Configuration,case=['debug_add'] )
     if pos_cont.size == 0:
         pos_cont = 0.5 * np.nanmax(PV[0].data) * 0.95
 
-    ax_PV.contour(PV[0].data, levels=pos_cont, colors='k',transform=ax_PV.get_transform(xv_proj))
-    ax_PV.contour(PV[0].data, levels=neg_cont, colors='grey',linestyles='--',transform=ax_PV.get_transform(xv_proj))
-    ax_PV.contour(PV_model[0].data, levels=pos_cont, colors='b',transform=ax_PV.get_transform(xv_model_proj),linewidths=1.)
+    #ax_PV.contour(PV[0].data, levels=pos_cont, colors='k',transform=ax_PV.get_transform(xv_proj))
+    #ax_PV.contour(PV[0].data, levels=neg_cont, colors='grey',linestyles='--',transform=ax_PV.get_transform(xv_proj))
+    #ax_PV.contour(PV_model[0].data, levels=pos_cont, colors='b',transform=ax_PV.get_transform(xv_model_proj),linewidths=1.)
+    ax_PV.contour(PV[0].data, levels=pos_cont,linewidths=1.*size_factor, colors='k')
+    ax_PV.contour(PV[0].data, levels=neg_cont,linewidths=1.*size_factor, colors='grey',linestyles='--')
+    ax_PV.contour(PV_model[0].data, levels=pos_cont, colors='b',linewidths=1.*size_factor)
+
     momlevel = np.hstack((neg_cont,pos_cont))
     column_levels = ', '.join(["{:.1f}".format(x*1000.) for x in momlevel])
     if len(momlevel) < 4:
@@ -652,7 +665,7 @@ def make_overview_plot(Configuration,Fits_Files ):
     cbar = plt.colorbar(PV_plot, cax=cax, orientation='horizontal')
     cax.xaxis.set_ticks_position('top')
     cbar.set_ticks([minint, maxint])
-    cbar.ax.set_title(f"{PV[0].header['BUNIT']}", y= 0.2)
+    cbar.ax.set_title(f"{PV[0].header['BUNIT']}", y= 0.2*size_factor**2)
 
     ax_PV.text(-0.1,-0.2,info_string, va='top',ha='left', color='black',transform = ax_PV.transAxes,
           bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7)
@@ -698,7 +711,7 @@ def make_overview_plot(Configuration,Fits_Files ):
 
     labelfont= {'family':font_name,
             'weight':'normal',
-            'size':10}
+            'size':10*size_factor}
     ax_RC = plot_parameters(Configuration,Vars_to_plot,FAT_Model,gs[19:22,3:9],\
                             Overview,'VROT',Input_Model = Input_Model,initial_extent= sof_basic_extent[0], \
                             initial = sof_basic_maxrot[0],Extra_Model = Extra_Model)
@@ -754,7 +767,7 @@ def make_overview_plot(Configuration,Fits_Files ):
         labelbottom=False)
     if 'INCL' in Configuration['FIXED_PARAMETERS'][0]:
         ax_INCL.text(1.01,0.5,'Forced Flat', rotation =-90,va='center',ha='left', color='black',transform = ax_INCL.transAxes,
-          bbox=dict(facecolor='white',edgecolor='white',pad=0.,alpha=0.),zorder=7,fontsize=10)
+          bbox=dict(facecolor='white',edgecolor='white',pad=0.,alpha=0.),zorder=7,fontsize=10*size_factor)
     plt.ylabel('Incl ($^{\circ}$)',**labelfont)
     arcmin,arcmax = ax_INCL.get_xlim()
     sec_ax = ax_INCL.twiny()
@@ -776,7 +789,7 @@ def make_overview_plot(Configuration,Fits_Files ):
         labelbottom=True)
     if 'PA' in Configuration['FIXED_PARAMETERS'][0]:
         ax_PA.text(1.01,0.5,'Forced Flat', va='center',ha='left', color='black',rotation = -90, transform = ax_PA.transAxes,
-          bbox=dict(facecolor='white',edgecolor='white',pad=0.,alpha=0.),zorder=7,fontsize=10)
+          bbox=dict(facecolor='white',edgecolor='white',pad=0.,alpha=0.),zorder=7,fontsize=10*size_factor)
     plt.xlabel('Radius (arcsec)',**labelfont)
     plt.ylabel('PA ($^{\circ}$)',**labelfont)
     arcmin,arcmax = ax_PA.get_xlim()
@@ -799,7 +812,7 @@ def make_overview_plot(Configuration,Fits_Files ):
         labeltop= True)
     if 'SDIS' in Configuration['FIXED_PARAMETERS'][0]:
         ax_SDIS.text(1.01,0.5,'Forced Flat',rotation=-90, va='center',ha='left', color='black',transform = ax_SDIS.transAxes,
-          bbox=dict(facecolor='white',edgecolor='white',pad=0.,alpha=0.),zorder=7,fontsize=10)
+          bbox=dict(facecolor='white',edgecolor='white',pad=0.,alpha=0.),zorder=7,fontsize=10*size_factor)
 
     plt.ylabel('Disp (km s$^{-1}$)',**labelfont)
     arcmin,arcmax = ax_SDIS.get_xlim()
@@ -824,7 +837,7 @@ def make_overview_plot(Configuration,Fits_Files ):
         labeltop=False)
     if 'Z0' in Configuration['FIXED_PARAMETERS'][0]:
         ax_Z0.text(1.25,0.5,'Forced Flat',rotation=-90, va='center',ha='left', color='black',transform = ax_Z0.transAxes,
-          bbox=dict(facecolor='white',edgecolor='white',pad=0.,alpha=0.),zorder=7,fontsize=10)
+          bbox=dict(facecolor='white',edgecolor='white',pad=0.,alpha=0.),zorder=7,fontsize=10*size_factor)
     plt.ylabel('Z0 (arcsec)',**labelfont)
     arcmin,arcmax = ax_Z0.get_ylim()
     sec_ax = ax_Z0.twinx()
@@ -862,7 +875,7 @@ def make_overview_plot(Configuration,Fits_Files ):
     sec_ax.figure.canvas.draw()
     if 'SBR' in Configuration['FIXED_PARAMETERS'][0]:
         ax_SBR.text(1.25,0.5,'Forced Gaussian',rotation=-90, va='center',ha='left', color='black',transform = ax_SBR.transAxes,
-          bbox=dict(facecolor='white',edgecolor='white',pad=0.,alpha=0.),zorder=7,fontsize=10)
+          bbox=dict(facecolor='white',edgecolor='white',pad=0.,alpha=0.),zorder=7,fontsize=10*size_factor)
     sec_ax = ax_SBR.twiny()
     arcmin,arcmax = ax_SBR.get_xlim()
     sec_ax.set_xticklabels([])
@@ -924,8 +937,8 @@ def make_overview_plot(Configuration,Fits_Files ):
     cube_mod.close()
     cube.close()
     channels_map.close()
-
     plt.savefig(f"{Configuration['FITTING_DIR']}Overview.png", bbox_inches='tight')
+    #plt.savefig(f"Overview_Test.png", bbox_inches='tight')
     plt.close()
 
 make_overview_plot.__doc__ =f'''
@@ -960,14 +973,14 @@ def plot_parameters(Configuration,Vars_to_plot,FAT_Model,location,Figure,paramet
                     Input_Model = [],legend = ['Empty','Empty','Empty','Empty'],
                     initial = None, initial_extent=  None, Extra_Model = [] ):
     sf.print_log(f'''PLOT_PARAMETERS: We are starting to plot {parameter}
-''', Configuration['OUTPUTLOG'],case=['debug_start'])
+''', Configuration,case=['debug_start'])
     ax = Figure.add_subplot(location)
     try:
         yerr = FAT_Model[Vars_to_plot.index(f'# {parameter}_ERR'),:]
     except ValueError:
         yerr =np.zeros(len(FAT_Model[Vars_to_plot.index('RADI'),:]))
     sf.print_log(f'''PLOT_PARAMETERS: We found these errors {yerr}
-''', Configuration['OUTPUTLOG'],case=['debug_add'])
+''', Configuration,case=['debug_add'])
 
     ax.errorbar(FAT_Model[Vars_to_plot.index('RADI'),:],FAT_Model[Vars_to_plot.index(f'{parameter}'),:],yerr= yerr, c ='k', label=f'{legend[0]}',zorder=3)
     ax.plot(FAT_Model[Vars_to_plot.index('RADI'),:],FAT_Model[Vars_to_plot.index(f'{parameter}'),:],'ko', ms = 3.,zorder=3)
@@ -1363,12 +1376,23 @@ tirific.__doc__ =f'''
 
 
 def write_config(file,Configuration ):
+    #be clear we are pickle dumping
+    tmp = os.path.splitext(file)
+    file = f'{tmp[0]}.pkl'
     sf.print_log(f'''WRITE_CONFIG: writing the configuration to {file}
-''',Configuration['OUTPUTLOG'],case=['debug_start'])
+''',Configuration,case=['debug_start'])
     # Separate the keyword names
-    with open(file,'w') as tmp:
-        for key in Configuration:
-            tmp.write(f'{key} = {Configuration[key]} \n')
+    #Proper dictionaries are not pickable
+
+    Pick_Configuration = {}
+    for key in Configuration:
+        Pick_Configuration[key] = Configuration[key]
+        if key == 'FAT_PSUPROCESS':
+            Pick_Configuration[key] = None
+    import pickle
+    with open(file,'wb') as tmp:
+        pickle.dump(Pick_Configuration,tmp)
+
 
 write_config.__doc__ =f'''
  NAME:
@@ -1395,5 +1419,5 @@ write_config.__doc__ =f'''
  PROCEDURES CALLED:
     Unspecified
 
- NOTE:
+ NOTE: This doesn't work in python 3.6
 '''

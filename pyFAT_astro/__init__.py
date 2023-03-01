@@ -51,12 +51,4 @@ def report_branch():
 __version__ = report_version()
 __branch__ =report_branch()
 
-def set_logger_values():
-    global screen
-    screen = False
-    global debug
-    debug = False
-    global verbose_log
-    verbose_log = False
-
-set_logger_values()
+#set_logger_values()

@@ -4,6 +4,7 @@
 from pyFAT_astro.Support.fits_functions import check_mask,create_fat_cube
 from pyFAT_astro.Support.fat_errors import BadCatalogueError, NoConfigFile, \
     BadSourceError
+from pyFAT_astro.Support.modify_template import fix_sbr
 import pyFAT_astro.Support.support_functions as sf
 import pyFAT_astro
 
@@ -118,19 +119,19 @@ def check_edge_limits(xmin,xmax,ymin,ymax,zmin,zmax,Configuration ,beam_edge = 0
                      ymin,abs(ymax - Configuration['NAXES'][1])],dtype = float)
     sf.print_log(f'''CHECK_EDGE_LIMIT: We find these differences and this edge size {beam_edge*Configuration['BEAM_IN_PIXELS'][0]}
 {'':8s} diff  = {diff}
-''',Configuration['OUTPUTLOG'], case=['debug_start'])
+''',Configuration, case=['debug_start'])
     if np.where(diff < beam_edge*Configuration['BEAM_IN_PIXELS'][0])[0].size:
         return True
     diff = np.array([zmin,abs(zmax-Configuration['NAXES'][2])],dtype=float)
     sf.print_log(f'''CHECK_EDGE_LIMIT: And for velocity edge =  {vel_edge}
 {'':8s} diff  = {diff}
-''',Configuration['OUTPUTLOG'], case=['debug_add'])
+''',Configuration, case=['debug_add'])
     if np.where(diff < vel_edge)[0].size:
-        sf.print_log(f"CHECK_EDGE_LIMIT: On the edge",Configuration['OUTPUTLOG'],\
+        sf.print_log(f"CHECK_EDGE_LIMIT: On the edge",Configuration,\
             case=['verbose'])
         return True
     else:
-        sf.print_log(f"CHECK_EDGE_LIMIT: Off the edge",Configuration['OUTPUTLOG'],\
+        sf.print_log(f"CHECK_EDGE_LIMIT: Off the edge",Configuration,\
             case=['verbose'])
         return False
 check_edge_limits.__doc__ =f'''
@@ -170,7 +171,7 @@ def extract_vrot(Configuration,map ,angle,center):
     sf.print_log(f'''EXTRACT_VROT: starting extraction of initial VROT.
 {'':8s} PA= {angle}
 {'':8s} center= {center}
-''',Configuration['OUTPUTLOG'], case=['debug_start'])
+''',Configuration, case=['debug_start'])
     maj_profile,maj_axis,maj_resolution = sf.get_profile(Configuration,map,angle,center=center)
     # We should base extracting the RC on where the profile is negative and positive to avoid mistakes in the ceneter coming through
     neg_index = np.where(maj_profile < 0.)[0]
@@ -178,7 +179,7 @@ def extract_vrot(Configuration,map ,angle,center):
 
     sf.print_log(f'''EXTRACT_VROT: The resolution on the extracted axis
 {'':8s} resolution = {maj_resolution}
-''',Configuration['OUTPUTLOG'],case= ['debug_add'])
+''',Configuration,case= ['debug_add'])
     avg_profile = []
     neg_profile = []
     #pos_profile = []
@@ -208,12 +209,12 @@ def extract_vrot(Configuration,map ,angle,center):
             #neg_profile[beam_back] = neg_profile[beam_back]+0.5*neg_profile[int(beam_back/2.)]+0.1*neg_profile[-1]
             #pos_profile[beam_back] = pos_profile[beam_back]+0.5*pos_profile[int(beam_back/2.)]+0.1*pos_profile[-1]
     sf.print_log(f'''EXTRACT_VROT: starting extraction of initial VROT.
-''',Configuration['OUTPUTLOG'],case= ['debug_add'])
+''',Configuration,case= ['debug_add'])
     ring_size_req = Configuration['BEAM_IN_PIXELS'][0]/maj_resolution
     sf.print_log(f'''EXTRACT_VROT: We need a rings size of
 {'':8s} ringsize= {ring_size_req}
 {'':8s} because bmaj in pixels  ={Configuration['BEAM_IN_PIXELS'][0]}  and the resolution of the profile = {maj_resolution} pixels
-''',Configuration['OUTPUTLOG'],case= ['debug_add'])
+''',Configuration,case= ['debug_add'])
     profile = np.array(avg_profile[0::int(ring_size_req)],dtype=float)
 
     try:
@@ -228,7 +229,7 @@ def extract_vrot(Configuration,map ,angle,center):
             profile = np.array([Configuration['CHANNEL_WIDTH']*2.],dtype=float)
     sf.print_log(f'''EXTRACT_VROT: Unlimited profile
 {'':8s} unlimited  RC= {profile}
-''',Configuration['OUTPUTLOG'],case= ['debug_add'])
+''',Configuration,case= ['debug_add'])
     profile[profile > 300.] = 300.
     profile[profile < Configuration['CHANNEL_WIDTH']*2.] = Configuration['CHANNEL_WIDTH']*2.
 
@@ -237,7 +238,7 @@ def extract_vrot(Configuration,map ,angle,center):
     sf.print_log(f'''EXTRACT_VROT: Constructing the final RC
 {'':8s} initial RC= {profile}
 {'':8s} at step width= {ring_size_req}
-''',Configuration['OUTPUTLOG'],case= ['debug_add'])
+''',Configuration,case= ['debug_add'])
     return profile
 extract_vrot.__doc__ =f'''
  NAME:
@@ -364,7 +365,7 @@ def guess_orientation(Configuration,Fits_Files, vsys = -1 ,center = None, smooth
     #open the moment 0
 
     sf.print_log(f'''GUESS_ORIENTATION: starting extraction of initial parameters.
-''',Configuration['OUTPUTLOG'], case=['debug_start','verbose'])
+''',Configuration, case=['debug_start','verbose'])
     sf.update_statistic(Configuration, message= "Starting the guess orientation run")
 
     Image = fits.open(f"{Configuration['FITTING_DIR']}{Fits_Files['MOMENT0']}",\
@@ -387,16 +388,16 @@ def guess_orientation(Configuration,Fits_Files, vsys = -1 ,center = None, smooth
     if smooth:
         sigma = sf.set_limits(Configuration['BEAM_IN_PIXELS'][0]*Configuration['MAX_SIZE_IN_BEAMS']/12.*2.,Configuration['BEAM_IN_PIXELS'][0],Configuration['BEAM_IN_PIXELS'][0]*5)
         sf.print_log(f'''GUESS_ORIENTATION: We are smoothing the maps with {sigma} pixels
-''',Configuration['OUTPUTLOG'],case= ['debug_add'])
+''',Configuration,case= ['debug_add'])
         tmp =  ndimage.gaussian_filter(map, sigma=(sigma, sigma), order=0)
         tmp[map <= 0.] = 0.
         map = copy.deepcopy(tmp)
-        if pyFAT_astro.debug:
+        if Configuration['DEBUG']:
             fits.writeto(f"{Configuration['LOG_DIRECTORY']}smooth_mom_map.fits",map,hdr,overwrite = True)
         tmp = ndimage.gaussian_filter(noise_map, sigma=(sigma, sigma), order=0)
         tmp[noise_map <= 0.] = 0.
         noise_map = copy.deepcopy(tmp)
-        if pyFAT_astro.debug:
+        if Configuration['DEBUG']:
             fits.writeto(f"{Configuration['LOG_DIRECTORY']}smooth_noise_map.fits",noise_map,hdr,overwrite = True)
 
 
@@ -419,17 +420,19 @@ def guess_orientation(Configuration,Fits_Files, vsys = -1 ,center = None, smooth
     scale_factor = sf.set_limits(SNR/3.*minimum_noise_in_map/median_noise_in_map, 0.05, 1.)
     sf.print_log(f'''GUESS_ORIENTATION: We find SNR = {SNR} and a scale factor {scale_factor} and the noise median {median_noise_in_map}
 {'':8s} minimum {minimum_noise_in_map}
-''',Configuration['OUTPUTLOG'],case= ['debug_add'])
+''',Configuration,case= ['debug_add'])
+    '''
     if np.mean(Configuration['SIZE_IN_BEAMS']) >10:
         beam_check=[Configuration['BEAM_IN_PIXELS'][0],Configuration['BEAM_IN_PIXELS'][0]/2.]
     else:
-        beam_check=[Configuration['BEAM_IN_PIXELS'][0]/2.]
+    '''
+    beam_check=[Configuration['BEAM_IN_PIXELS'][0]/2.]
     center_stable = False
     checked_center = False
     center_counter = 0.
     original_center = copy.deepcopy(center)
     sf.print_log(f'''GUESS_ORIENTATION: Looking for the center, pa and inclination
-''',Configuration['OUTPUTLOG'], case= ['verbose'])
+''',Configuration, case= ['verbose'])
 
     sf.update_statistic(Configuration, message= "Starting the initial search for the pa, inclination and center.")
 
@@ -441,14 +444,14 @@ def guess_orientation(Configuration,Fits_Files, vsys = -1 ,center = None, smooth
         maj_extent_av = [maj_extent_av]
         sf.print_log(f'''GUESS_ORIENTATION: From the the initial guess with center {center}.
 {'':8s} We get pa = {pa_av}, inclination = {inclination_av}, maj_extent_av {maj_extent_av}
-''',Configuration['OUTPUTLOG'],case= ['debug_add'])
+''',Configuration,case= ['debug_add'])
         for mod in beam_check:
 
             for i in [[-1,-1],[-1,1],[1,-1],[1,1]]:
                 center_tmp = [center[0]+mod*i[0],center[1]+mod*i[1]]
 
                 sf.print_log(f'''GUESS_ORIENTATION: Checking at location RA = {center_tmp[0]} pix, DEC = {center_tmp[1]} pix
-''',Configuration['OUTPUTLOG'],case= ['debug_add'])
+''',Configuration,case= ['debug_add'])
 
                 inclination_tmp, pa_tmp, maj_extent_tmp= \
                     sf.get_inclination_pa(Configuration, mom0, center_tmp,\
@@ -461,7 +464,7 @@ def guess_orientation(Configuration,Fits_Files, vsys = -1 ,center = None, smooth
 
         if np.isnan(np.array(inclination_av,dtype=float)).all():
             sf.print_log(f'''GUESS_ORIENTATION: We are unable to find an  inclination.
-''',Configuration['OUTPUTLOG'],case= ['main','screen'])
+''',Configuration,case= ['main','screen'])
             raise BadSourceError(f'We are unable to find an initial inclination.')
 
         int_weight = np.array(int_weight)
@@ -473,7 +476,7 @@ def guess_orientation(Configuration,Fits_Files, vsys = -1 ,center = None, smooth
 
         if np.isnan(np.array(inclination_av,dtype=float)).all():
             sf.print_log(f'''GUESS_ORIENTATION: We are unable to find an PA.
-''',Configuration['OUTPUTLOG'],case=['main','screen'])
+''',Configuration,case=['main','screen'])
             raise BadSourceError(f'We are unable to find an initial PA.')
         weight = np.array([1./x[1] for x in pa_av],dtype= float)
         sf.print_log(f'''GUESS_ORIENTATION: We find these pa and inclination
@@ -481,11 +484,12 @@ def guess_orientation(Configuration,Fits_Files, vsys = -1 ,center = None, smooth
 {'':8s} inclination = {' '.join([f'{float(x[0]):.2f}' for x in inclination_av])}
 {'':8s} int_weights = {' '.join([f'{float(x):.2f}' for x in int_weight])}
 {'':8s} weights = {' '.join([f'{float(x):.2f}' for x in weight])}
-''',Configuration['OUTPUTLOG'],case= ['debug_add'])
+''',Configuration,case= ['debug_add'])
         pa = np.array([np.nansum(np.array([x[0] for x in pa_av],dtype=float)*weight)/np.nansum(weight),\
                                 np.nansum(np.array([x[1] for x in pa_av],dtype=float)*weight)/np.nansum(weight)],dtype=float)
 
         maj_extent= np.nansum(maj_extent_av*weight)/np.nansum(weight)
+
         if center_counter == 0:
             original_pa = copy.deepcopy(pa)
             original_maj_extent = copy.deepcopy(maj_extent)
@@ -506,7 +510,7 @@ def guess_orientation(Configuration,Fits_Files, vsys = -1 ,center = None, smooth
 {'':8s} inclination = {inclination}
 {'':8s} pa = {pa}
 {'':8s} size in beams = {maj_extent/(Configuration['BEAM'][0]/3600.)}
-''',Configuration['OUTPUTLOG'],case= ['debug_add'])
+''',Configuration,case= ['debug_add'])
                 #map[3*minimum_noise_in_map > noise_map] = 0.
         # From these estimates we also get an initial SBR
         maj_profile,maj_axis,maj_resolution = sf.get_profile(Configuration,map, pa[0],center)
@@ -528,7 +532,7 @@ def guess_orientation(Configuration,Fits_Files, vsys = -1 ,center = None, smooth
         diff = diff/np.nanmin([neg_index.size,pos_index.size])
         sf.print_log(f'''GUESS_ORIENTATION:'BMAJ in pixels, center of the profile, current center, difference between pos and neg
 {'':8s}{Configuration['BEAM_IN_PIXELS'][0]} {center_of_profile} {center} {diff}
-''',Configuration['OUTPUTLOG'],case= ['debug_add'])
+''',Configuration,case= ['debug_add'])
 
         # if the center of the profile is more than half a beam off from the Sofia center let's see which on provides a more symmetric profile
         #if False:
@@ -536,7 +540,7 @@ def guess_orientation(Configuration,Fits_Files, vsys = -1 ,center = None, smooth
             or abs(center_of_profile/(2.*np.cos(np.radians(pa[0])))*maj_resolution) > Configuration['BEAM_IN_PIXELS'][0]*0.5) and SNR > 3. and not checked_center:
             sf.print_log(f'''GUESS_ORIENTATION: The SoFiA center and that of the SBR profile are separated by more than half a beam.
 {'':8s}GUESS_ORIENTATION: Determining the more symmetric profile.
-''',Configuration['OUTPUTLOG'],case= ['debug_add'])
+''',Configuration,case= ['debug_add'])
             # let's check against a central absorption
 
             cube = fits.open(f"{Configuration['FITTING_DIR']}{Fits_Files['FITTING_CUBE']}",\
@@ -548,47 +552,57 @@ def guess_orientation(Configuration,Fits_Files, vsys = -1 ,center = None, smooth
                 center,checked_center,center_stable = sf.get_new_center(Configuration,map,inclination=inclination[0],pa=pa[0],noise=median_noise_in_map)
                 center_counter += 1
                 sf.print_log(f'''GUESS_ORIENTATION: We calculated a new center {center}.
-''',Configuration['OUTPUTLOG'],case= ['debug_add'])
+''',Configuration,case= ['debug_add'])
             else:
                 center_stable = True
                 sf.print_log(f'''GUESS_ORIENTATION: There appears to be a central absorption source. We are relying on sofia
-''',Configuration['OUTPUTLOG'],case= ['debug_add'])
+''',Configuration,case= ['debug_add'])
 
         else:
             sf.print_log(f'''GUESS_ORIENTATION: The previous center and that of the SBR profile are not separated by more than half a beam.
 {'':8s}GUESS_ORIENTATION: Keeping the last center
-''',Configuration['OUTPUTLOG'],case= ['debug_add'])
+''',Configuration,case= ['debug_add'])
             center_stable = True
+
     sf.print_log(f'''GUESS_ORIENTATION: Looking for the Initial surface brightness profile.
-''',Configuration['OUTPUTLOG'], case= ['verbose'])
+''',Configuration, case= ['verbose'])
     sf.update_statistic(Configuration, message= "Starting the initial search for the SBR and VROT.")
+    Configuration['SIZE_IN_BEAMS'] = np.full(2,sf.set_limits(maj_extent/(Configuration['BEAM'][0]/3600.),1.0,Configuration['MAX_SIZE_IN_BEAMS']))
 
-
-    ring_size_req = Configuration['BEAM_IN_PIXELS'][0]/maj_resolution
+    ring_size_req = Configuration['BEAM_IN_PIXELS'][0]/maj_resolution*Configuration['RING_SIZE']
 
     SBR_initial = avg_profile[0::int(ring_size_req)]/(np.pi*Configuration['BEAM'][0]*Configuration['BEAM'][1]/(4.*np.log(2.))) # Jy*km/s
+    #deproject the SBR
+    SBR_initial = SBR_initial*np.cos(np.radians(inclination[0]))
     SBR_initial =np.hstack((SBR_initial[0],SBR_initial,SBR_initial[-1]))
-
+    # unclear why we have this extra correction on the inner 3 points
     SBR_initial[0:3] = SBR_initial[0:3] * (1.2 -float(inclination[0])/90.)
-
+    # make sure it is the right size
+    number_of_rings = sf.calc_rings(Configuration)
+    SBR_initial = list(SBR_initial)
+    while len(SBR_initial) < number_of_rings:
+         SBR_initial.append(SBR_initial[-1])
+    while len(SBR_initial) > number_of_rings:
+         SBR_initial.pop()
+    SBR_initial = np.array(SBR_initial,dtype=float)
     #We need to know which is the approaching side and which is receding
 
 
     sf.print_log(f'''GUESS_ORIENTATION: Looking for the Initial Rotation Curve.
-''',Configuration['OUTPUTLOG'],case= ['verbose'])
+''',Configuration,case= ['verbose'])
     Image = fits.open(f"{Configuration['FITTING_DIR']}{Fits_Files['MOMENT1']}",\
             uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
     map = copy.deepcopy(Image[0].data)
 
     hdr = Image[0].header
     sf.print_log(f'''GUESS_ORIENTATION: This is the amount of values we find initially {len(map[noise_map > 0.])}
-''',Configuration['OUTPUTLOG'],case= ['debug_add'])
+''',Configuration,case= ['debug_add'])
     #Image.close()
     #map[3*minimum_noise_in_map > noise_map] = float('NaN')
 
     map[3.*minimum_noise_in_map > noise_map] = float('NaN')
     sf.print_log(f'''GUESS_ORIENTATION: This is the amount of values we find after blanking low SNR {len(map[~np.isnan(map)])}
-''',Configuration['OUTPUTLOG'],case= ['debug_add'])
+''',Configuration,case= ['debug_add'])
     if vsys == -1 or center_counter > 0.:
         #As python is utterly moronic the center goes in back wards to the map
         with warnings.catch_warnings():
@@ -599,13 +613,15 @@ def guess_orientation(Configuration,Fits_Files, vsys = -1 ,center = None, smooth
             map_vsys = (vsys+map_vsys)/2.
     else:
         map_vsys = vsys
+
+
     if len(map[~np.isnan(map)]) < 10 or np.isnan(map_vsys):
         no_values  = True
         noise_level = 2.5
         sigma = [0.5,0.5]
         while no_values:
             sf.print_log(f'''GUESS_ORIENTATION: We smooth the velocity field to use a lower Noise threshold
-''',Configuration['OUTPUTLOG'],case= ['debug_add'])
+''',Configuration,case= ['debug_add'])
             tmp = copy.deepcopy(Image[0].data)
             tmp =  ndimage.gaussian_filter(Image[0].data, sigma=(sigma[1], sigma[0]), order=0)
             tmp[noise_level*minimum_noise_in_map > noise_map] =  float('NaN')
@@ -626,7 +642,7 @@ def guess_orientation(Configuration,Fits_Files, vsys = -1 ,center = None, smooth
 
             sf.print_log(f'''GUESS_ORIENTATION: We used the threshold {noise_level} and sigma = {sigma}
 {'':8s}We find the len {len(tmp[~np.isnan(tmp)])} and the central velocity {map_vsys}
-''',Configuration['OUTPUTLOG'],case= ['debug_add'])
+''',Configuration,case= ['debug_add'])
             if len(tmp[~np.isnan(tmp)]) < 10 or np.isnan(map_vsys):
                 sigma = [sigma[0]+0.5,sigma[0]+0.5]
                 noise_level -= 0.5
@@ -637,9 +653,21 @@ def guess_orientation(Configuration,Fits_Files, vsys = -1 ,center = None, smooth
                 VROT_initial = [0]
                 SBR_initial = [0]
                 Image.close()
-                return np.array(pa,dtype=float),np.array(inclination,dtype=float),SBR_initial,maj_extent,center[0],center[1],float('NaN'),VROT_initial
+                return np.array(pa,dtype=float),np.array(inclination,dtype=float),SBR_initial,center[0],center[1],float('NaN'),VROT_initial
 
     Image.close()
+    #we want to make sure the SBr is gaussian
+    # We want to make this is sure this is a decent profile and thus we fit it with the gaussian
+    print(SBR_initial)
+    #Configuration['SIZE_IN_BEAMS'] = len(SBR_initial)-1
+    format = sf.set_format('SBR')
+    Temp_template = {'SBR':' '.join([f'{float(x):{format}}' for x in SBR_initial])\
+                        ,'SBR_2':' '.join([f'{float(x):{format}}' for x in SBR_initial]),\
+                        'VSYS':' '.join([f'{float(x):{sf.set_format("VSYS")}}' for x in [vsys,vsys]])}
+    SBR_initial = fix_sbr(Configuration,Temp_template,\
+                        smooth = True,initial=True)
+    SBR_initial = np.array([float(x) for x in Temp_template['SBR'].split()],dtype=float)
+
     noise_map = []
 
     # First we look for the kinematics center
@@ -652,11 +680,11 @@ def guess_orientation(Configuration,Fits_Files, vsys = -1 ,center = None, smooth
     if all(np.isnan(maj_profile)):
         sf.print_log(f'''GUESS_ORIENTATION: The RC extracted from the VF is all NaN's, this means something has gone very wrong.
 {'':8s} Raising an error.
-''' , Configuration['OUTPUTLOG'],case= ['main','screen'])
+''' , Configuration,case= ['main','screen'])
         VROT_initial = [0]
         SBR_initial = [0]
         Image.close()
-        return np.array(pa,dtype=float),np.array(inclination,dtype=float),SBR_initial,maj_extent,center[0],center[1],float('NaN'),VROT_initial
+        return np.array(pa,dtype=float),np.array(inclination,dtype=float),SBR_initial,center[0],center[1],float('NaN'),VROT_initial
 
     loc_max = np.mean(maj_axis[np.where(maj_profile == np.nanmax(maj_profile))[0]])
     loc_min = np.mean(maj_axis[np.where(maj_profile == np.nanmin(maj_profile))[0]])
@@ -664,10 +692,10 @@ def guess_orientation(Configuration,Fits_Files, vsys = -1 ,center = None, smooth
     if loc_max > loc_min:
         pa[0] = pa[0]+180
         sf.print_log(f'''GUESS_ORIENTATION: We have modified the pa by 180 deg as we found the maximum velocity west of the minimum.
-''' , Configuration['OUTPUTLOG'])
+''' , Configuration)
 
     sf.print_log(f'''GUESS_ORIENTATION: this is the pa {pa} and the vel_pa {vel_pa}
-''' , Configuration['OUTPUTLOG'],case= ['debug_add'])
+''' , Configuration,case= ['debug_add'])
 
     if abs(pa[0]-vel_pa[0]) > 300.:
         if pa[0] > 180.:
@@ -688,7 +716,7 @@ def guess_orientation(Configuration,Fits_Files, vsys = -1 ,center = None, smooth
                 pa[0]/pa[1]])/np.nansum([1./vel_pa[1],1./pa[1]]),\
                 2.*1./np.sqrt(np.nansum([1./vel_pa[1],1./pa[1]]))]
     sf.print_log(f'''GUESS_ORIENTATION: this is the final pa {pa}
-''' , Configuration['OUTPUTLOG'],case= ['debug_add'])
+''' , Configuration,case= ['debug_add'])
 
     if smooth:
         buffer = int(Configuration['BEAM_IN_PIXELS'][0]*5.)
@@ -696,7 +724,7 @@ def guess_orientation(Configuration,Fits_Files, vsys = -1 ,center = None, smooth
         buffer = int(round(np.mean(Configuration['BEAM_IN_PIXELS'][:2])/2.))
     sf.print_log(f'''GUESS_ORIENTATION: We start with vsys = {vsys:.2f} km/s
 {'':8s}GUESS_ORIENTATION:We subtract {map_vsys:.2f} km/s from the moment 1 map to get the VROT
-''' , Configuration['OUTPUTLOG'],case= ['debug_add'])
+''' , Configuration,case= ['debug_add'])
 
     map = map  - map_vsys
     VROT_initial = extract_vrot(Configuration,map ,pa[0],center)
@@ -712,7 +740,7 @@ def guess_orientation(Configuration,Fits_Files, vsys = -1 ,center = None, smooth
 {'':8s}GUESS_ORIENTATION: RC length = {RC_length}, min_RC length = {min_RC_length}, Vrot ini = {len(VROT_initial)}, tmnp = {len(tmp)}
 {'':8s}GUESS_ORIENTATION: Vrot {VROT_initial}
 {'':8s}GUESS_ORIENTATION: tmp {tmp}
-''',Configuration['OUTPUTLOG'],case= ['debug_add'])
+''',Configuration,case= ['debug_add'])
                 VROT_initial = np.vstack((VROT_initial[:min_RC_length],tmp[:min_RC_length]))
                 VROT_initial = np.mean(VROT_initial,axis=0)
 
@@ -729,8 +757,8 @@ def guess_orientation(Configuration,Fits_Files, vsys = -1 ,center = None, smooth
 
     sf.print_log(f'''GUESS_ORIENTATION: We found the following initial rotation curve:
 {'':8s}GUESS_ORIENTATION: RC = {VROT_initial}
-''',Configuration['OUTPUTLOG'],case= ['debug_add'])
-    return np.array(pa,dtype=float),np.array(inclination,dtype=float),SBR_initial,maj_extent,center[0],center[1],map_vsys,VROT_initial
+''',Configuration,case= ['debug_add'])
+    return np.array(pa,dtype=float),np.array(inclination,dtype=float),SBR_initial,center[0],center[1],map_vsys,VROT_initial
 guess_orientation.__doc__ =f'''
  NAME:
     guess_orientation
@@ -907,7 +935,7 @@ read_cube.__doc__ =f'''
 def sofia_catalogue(Configuration,Fits_Files, Variables =['id','x','x_min','x_max','y','y_min','y_max','z','z_min','z_max','ra',\
                     'dec','v_app','f_sum','kin_pa','w50','err_f_sum','err_x','err_y','err_z','rms']):
     sf.print_log(f'''SOFIA_CATALOGUE: Reading the source from the catalogue.
-''',Configuration['OUTPUTLOG'],case= ['debug_start'])
+''',Configuration,case= ['debug_start'])
     outlist = [[] for x in Variables]
     with open(Configuration['FITTING_DIR']+'Sofia_Output/'+Configuration['BASE_NAME']+'_cat.txt') as sof_cat:
         for line in sof_cat.readlines():
@@ -933,7 +961,7 @@ def sofia_catalogue(Configuration,Fits_Files, Variables =['id','x','x_min','x_ma
 {"":8s}SOFIA_CATALOGUE:    In this case please file a bug report at https://github.com/PeterKamphuis/FAT/issues/'
 {"":8s}SOFIA_CATALOGUE: c) You are using pre processed SoFiA output of your own and do not have all the output'
 {"":8s}SOFIA_CATALOGUE:    Required output is {','.join(Variables)})
-''',Configuration['OUTPUTLOG'],case= ['main','screen'])
+''',Configuration,case= ['main','screen'])
                             raise BadCatalogueError("SOFIA_CATALOGUE: The required columns could not be found in the sofia catalogue.")
             else:
                 for col in Variables:
@@ -961,7 +989,7 @@ def sofia_catalogue(Configuration,Fits_Files, Variables =['id','x','x_min','x_ma
     # we want to fit a specific source
     if len(outlist[0]) > 1 and 'f_sum' in Variables:
         sf.print_log(f'''SOFIA_CATALOGUE: Multiple sources were found we will try to select the correct one.
-''',Configuration['OUTPUTLOG'],case= ['debug_add'])
+''',Configuration,case= ['debug_add'])
         if Configuration['SOFIA_RAN']:
             found = False
             beam_edge=2.
@@ -1005,12 +1033,12 @@ def sofia_catalogue(Configuration,Fits_Files, Variables =['id','x','x_min','x_ma
                             if source_size/cube > 0.5:
                                 sf.print_log(f'''SOFIA_CATALOGUE: We discarded a very large source, so we will restore is and try for that.
 !!!!!!!!!!!!!!!!!!!!!!!!! This means your original cube is in principle too small!!!!!!!!!!!!!!!!!!!!!!!!
-''',Configuration['OUTPUTLOG'])
+''',Configuration)
                                 many_sources[Variables.index('f_sum')][i]=outlist[Variables.index('f_sum')][i]
                         if np.nansum(many_sources[Variables.index('f_sum')]) == 0.:
                             sf.print_log(f'''SOFIA_CATALOGUE:The found sources are too close to the edges of the cube. And not large enough to warrant trying them.
 {'':8s} The edge limits were {beam_edge} beams spatially and {vel_edge} channels.
-''',Configuration['OUTPUTLOG'],case= ['main','screen'])
+''',Configuration,case= ['main','screen'])
                             raise BadCatalogueError("The found sources are too close to the edges of the cube. And not large enough to warrant trying them.")
                         else:
                             found = True
@@ -1022,7 +1050,7 @@ def sofia_catalogue(Configuration,Fits_Files, Variables =['id','x','x_min','x_ma
                 no_edge_fluxes = np.array(outlist[Variables.index('f_sum')],dtype =float)
                 if np.nanmax(no_edge_fluxes) > 10.* np.nanmax(fluxes):
                     sf.print_log(f'''SOFIA_CATALOGUE: We discarded a very bright source, let's check wether it satisfies our minimum boundaries.
-''',Configuration['OUTPUTLOG'],case= ['debug_add'])
+''',Configuration,case= ['debug_add'])
                     index = np.where(np.nanmax(no_edge_fluxes) == no_edge_fluxes)[0][0]
                     edge = check_edge_limits(float(outlist[Variables.index('x_min')][index]),
                                     float(outlist[Variables.index('x_max')][index]),
@@ -1037,26 +1065,26 @@ def sofia_catalogue(Configuration,Fits_Files, Variables =['id','x','x_min','x_ma
 
                     if edge and source_size/cube < 0.5:
                         sf.print_log(f'''SOFIA_CATALOGUE: The bright source is very close to limits and not more than half a channel in size.
-''',Configuration['OUTPUTLOG'])
+''',Configuration)
 
                         if float(outlist[Variables.index('rms')][index])*1e6 < float(outlist[Variables.index('f_sum')][index]):
                             sf.print_log(f'''SOFIA_CATALOGUE: There appears to be no noise in this cube. restoring the source.
-''',Configuration['OUTPUTLOG'])
+''',Configuration)
                             many_sources  = copy.deepcopy(outlist)
                             fluxes = np.array(outlist[Variables.index('f_sum')],dtype =float)
                     else:
                         if edge and source_size/cube >= 0.5:
                             sf.print_log(f'''SOFIA_CATALOGUE: The bright source is very close to limits but spans more than half a channel so we are restoring it.
 In principle your cube is too small.
-''',Configuration['OUTPUTLOG'])
+''',Configuration)
                         else:
                             sf.print_log(f'''SOFIA_CATALOGUE: The bright source is acceptable, restoring its flux.
-''',Configuration['OUTPUTLOG'])
+''',Configuration)
                         many_sources  = copy.deepcopy(outlist)
                         fluxes = np.array(outlist[Variables.index('f_sum')],dtype =float)
             sf.print_log(f'''SOFIA_CATALOGUE: after checking edges we find these fluxes:
 {'':8s}{many_sources[Variables.index('f_sum')]}
-''',Configuration['OUTPUTLOG'],case= ['debug_add'])
+''',Configuration,case= ['debug_add'])
         else:
             #If we did not run SoFia we simply assume we want to fit the brightest source in the cube
             many_sources  = copy.deepcopy(outlist)
@@ -1065,7 +1093,7 @@ In principle your cube is too small.
         #We want the source with the most total flux.
         index = np.where(np.nanmax(fluxes) == fluxes)[0][0]
         sf.print_log(f'''SOFIA_CATALOGUE: We select the {index} source of this list.
-''',Configuration['OUTPUTLOG'])
+''',Configuration)
         outlist = [x[index] for x in many_sources]
         # check that our mask has the selected source
     else:
@@ -1074,7 +1102,7 @@ In principle your cube is too small.
     check_mask(Configuration,outlist[Variables.index('id')],Fits_Files)
     sf.print_log(f'''SOFIA_CATALOGUE: we found these values:
 {chr(10).join([f'{"":8s}{x} = {y}' for x,y in zip(Variables,outlist)])}
-''',Configuration['OUTPUTLOG'],case= ['debug_add'])
+''',Configuration,case= ['debug_add'])
     return outlist
 sofia_catalogue.__doc__ =f'''
  NAME:
@@ -1153,7 +1181,7 @@ def sofia_input_catalogue(Configuration):
 {"":8s}SOFIA_CATALOGUE:    In this case please file a bug report at https://github.com/PeterKamphuis/FAT/issues/'
 {"":8s}SOFIA_CATALOGUE: c) You are using pre processed SoFiA output of your own and do not have all the output'
 {"":8s}SOFIA_CATALOGUE:    Required output is {','.join(Variables)})
-''',Configuration['OUTPUTLOG'],case= ['main','screen'])
+''',Configuration,case= ['main','screen'])
                             raise BadCatalogueError("SOFIA_CATALOGUE: The required columns could not be found in the sofia catalogue.")
             else:
 

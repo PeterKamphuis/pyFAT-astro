@@ -2,7 +2,7 @@
 
 import omegaconf
 import os
-
+import pyFAT_astro
 from dataclasses import dataclass, field
 from datetime import datetime
 from omegaconf import MISSING

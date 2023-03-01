@@ -1,5 +1,5 @@
 # -*- coding: future_fstrings -*-
-
+import pyFAT_astro
 #def initialize():
 global H_0
 H_0 = 69.7 #km/s/Mpc

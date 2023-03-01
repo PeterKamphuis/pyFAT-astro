@@ -88,7 +88,7 @@ def FAT_Galaxy_Loops(Proc_Configuration, Full_Catalogue):
                 if 'create_fat_cube' in Configuration['FITTING_STAGES']:
                     sf.print_log(f'''FAT_GALAXY_LOOPS: Your input cube ends in _FAT.fits indicating it is a FAT processed cube.
 Therefore we remove the Create_FAT_Cube stages from the loop.
-''', Configuration['OUTPUTLOG'])
+''', Configuration)
                     Configuration['FITTING_STAGES'].remove('create_fat_cube')
                 fat_ext = ''
             else:
@@ -114,7 +114,7 @@ Therefore we remove the Create_FAT_Cube stages from the loop.
 
             # then we want to read the template
             Tirific_Template = sf.tirific_template()
-            if pyFAT_astro.debug:
+            if Configuration['DEBUG']:
                 from numpy import __version__ as npversion
                 from scipy import __version__ as spversion
                 from astropy import __version__ as apversion
@@ -128,11 +128,11 @@ Therefore we remove the Create_FAT_Cube stages from the loop.
 {'':8s}SciPy {spversion}
 {'':8s}AstroPy {apversion}
 {'':8s}Matplotlib {mpversion}
-''', Configuration['OUTPUTLOG'])
+''', Configuration)
 
             log_statement = f'''We are starting the catalogue entry {Configuration['ID']} in the directory {Configuration['SUB_DIR']}.\n'''
             sf.print_log(
-                log_statement, Configuration['OUTPUTLOG'])
+                log_statement, Configuration)
 
             if Configuration['TIMING']:
                 Configuration['FAT_PSUPROCESS'] = psu.Process(
@@ -154,13 +154,13 @@ Therefore we remove the Create_FAT_Cube stages from the loop.
                     cf.finish_galaxy(Configuration, current_run=current_run,
                                          exiting=e)
                     continue
-        
+
             # Get a bunch of info from the cube
             rf.read_cube(
                 Configuration, Fits_Files['FITTING_CUBE'])
 
             #If we have Sofia Preprocessed Output request make sure it all exists
-            if pyFAT_astro.debug:
+            if Configuration['DEBUG']:
                 wf.write_config(
                     f'{Configuration["LOG_DIRECTORY"]}CFG_Before_Sofia.txt', Configuration)
 
@@ -192,9 +192,9 @@ Therefore we remove the Create_FAT_Cube stages from the loop.
                         Configuration, Fits_Files)
                     #sf.sofia_output_exists(Configuration,Fits_Files)
                     sf.print_log(f'''FAT_GALAXY_LOOPS: The source is well defined and we will now setup the initial tirific file
-''', Configuration['OUTPUTLOG'])
+''', Configuration)
                     #Add your personal fitting types here
-                    if pyFAT_astro.debug:
+                    if Configuration['DEBUG']:
                         wf.write_config(
                             f'{Configuration["LOG_DIRECTORY"]}CFG_Before_Fitting.txt', Configuration)
 
@@ -203,7 +203,7 @@ Therefore we remove the Create_FAT_Cube stages from the loop.
                         Configuration, Fits_Files, Tirific_Template, Initial_Parameters)
                 elif 'fit_make_your_own' in Configuration['FITTING_STAGES']:
                     sf.print_log(f'''FAT_GALAXY_LOOPS: If you add any fitting routine make sure that the fit stage  starts with Fit_
-''',Configuration['OUTPUTLOG'])
+''',Configuration)
                     sf.create_directory(Configuration['USED_FITTING'],Configuration['FITTING_DIR'])
                     Configuration['FINAL_COMMENT'] = 'This example does not work'
                     cf.finish_galaxy(Configuration)

@@ -82,7 +82,7 @@ def tirshaker(Configuration, Tirific_Template, outfilename = 'test_out.def', \
         *** Tirshaker iteration {i:02d} ***
         ******************************
         ******************************
-''',Configuration['OUTPUTLOG'])
+''',Configuration)
 
     #fortestin
     #    break
@@ -205,7 +205,7 @@ def tirshaker(Configuration, Tirific_Template, outfilename = 'test_out.def', \
                     #allnumbers_final_err[j][k].append(stats.tstd(np.array(allparamsturned[j][k][l])))
                     sf.print_log('TIRSHAKER: Parameter: {:s} Ring: {:d} Pure average+-std: {:.3e}+-{:.3e} Median+-madsigma: {:.3e}+-{:.3e} Average+-sigma filtered: {:.3e}+-{:.3e} \n'.format(\
                                 parameter_groups[j][k], l+1, average, std, median, madsigma, allnumbers_final[j][k][-1], allnumbers_final_err[j][k][-1])\
-                                ,Configuration['OUTPUTLOG'])
+                                ,Configuration)
                 else:
                     allnumbers_final[j][k].append(np.average(np.array(allparamsturned[j][k][l])))
                     allnumbers_final_err[j][k].append(np.sqrt(float(len(allparamsturned[j][k][l]))/float(len(allparamsturned[j][k][l])-1))*np.std(np.array(allparamsturned[j][k][l])))
