@@ -448,6 +448,7 @@ def check_flat(Configuration,profile,error,key, last_reliable_ring = -1,inner_fi
         outer_std = np.mean(error)
 
     if key in ['SDIS']:
+        mean_error = mean_error*0.5
         outer_std = 2.*mean_error
     if abs(outer-inner) < mean_error or outer_std  < mean_error:
         sf.print_log(f'''CHECK_FLAT: If  {abs(outer-inner)} less than {mean_error} or
@@ -503,7 +504,9 @@ check_flat.__doc__ = '''
  NOTE:
 '''
 
-def check_size(Configuration,Tirific_Template, fit_type = 'Undefined', stage = 'initial', Fits_Files= 'No Files' ,current_run='Not Initialized'):
+def check_size(Configuration,Tirific_Template, fit_type = 'Undefined', \
+        stage = 'initial', Fits_Files= 'No Files' ,current_run='Not Initialized',
+        no_apply=False):
 
     sf.print_log(f'''CHECK_SIZE: Starting check_size with the following parameters:
 {'':8s}Rings = {Configuration['NO_RINGS']}, Size in Beams = {Configuration['SIZE_IN_BEAMS']}
@@ -537,7 +540,10 @@ def check_size(Configuration,Tirific_Template, fit_type = 'Undefined', stage = '
 
     #This part has to change in something new
     size_in_beams = calc_new_size(Configuration,Tirific_Template,radii,sbr,sbr_ring_limits)
-    apply_size = apply_new_size(Configuration,size_in_beams)
+    if not no_apply:
+        apply_size = apply_new_size(Configuration,size_in_beams)
+    else:
+        apply_size = False
     sf.print_log(f'''CHECK_SIZE: These have been fitted before {Configuration['OLD_SIZE']}
 {'':8s} This is new_size {size_in_beams}, This is what currently is in {Configuration['SIZE_IN_BEAMS']}
 ''',Configuration,case= ['debug_add'])
@@ -574,6 +580,8 @@ def check_size(Configuration,Tirific_Template, fit_type = 'Undefined', stage = '
         # Do not move this from here else other routines such as sbr_limits are messed up
         set_new_size(Configuration,Tirific_Template,Fits_Files,fit_type= fit_type\
             ,current_run = current_run)
+        return False
+    elif no_apply:
         return False
     else:
         return True

@@ -1076,23 +1076,14 @@ we try once more else we break off the fitting. As this sometimes happens due to
         accepted_angle = False
     #We only adapt the size if the other checks are ok
     if not all(Configuration['FIX_SIZE']) and accepted_central and accepted_angle:
-        accepted_size = check_size(Configuration,Tirific_Template, fit_type = fit_type, stage = stage, current_run = current_run,Fits_Files=Fits_Files)
+        no_apply_size_change = False
     else:
-        if all(Configuration['FIX_SIZE']):
-            accepted_size = True
-        elif not accepted_central :
-            sf.print_log(f'''ONE_STEP_CONVERGENCE: The central position is not accepted so we do not modify the size.
-''',Configuration)
-            accepted_size = False
-        elif not accepted_angle:
-            sf.print_log(f'''ONE_STEP_CONVERGENCE: The angles changed too much thus we do not modify the size.
-''',Configuration)
-            accepted_size = False
-        else:
-            sf.print_log(f'''ONE_STEP_CONVERGENCE: This should never happen
-''',Configuration)
-            raise ProgramError('A logical fallacy has occured please list an github issue')
-
+        no_apply_size_change = True
+    accepted_size = check_size(Configuration,Tirific_Template, \
+        no_apply = no_apply_size_change, fit_type = fit_type, stage = stage, \
+        current_run = current_run,Fits_Files=Fits_Files)
+    if all(Configuration['FIX_SIZE']):
+        accepted_size = True
     if accepted and accepted_size and accepted_central and accepted_angle: #and accepted_proj_vrot:
         Configuration['ACCEPTED'] = True
     else:
