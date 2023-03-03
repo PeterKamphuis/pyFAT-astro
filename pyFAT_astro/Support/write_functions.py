@@ -1330,14 +1330,18 @@ sofia.__doc__ =f'''
  NOTE:
 '''
 
-def tirific(Configuration,Tirific_Template, name = 'tirific.def' ):
+def tirific(Configuration,Tirific_Template, name = 'tirific.def', full_name = False  ):
     #IF we're writing we bump up the restart_ID and adjust the AZ1P angles to the current warping
     update_disk_angles(Configuration,Tirific_Template )
     try:
         Tirific_Template['RESTARTID'] = str(int(Tirific_Template['RESTARTID'])+1)
     except ValueError:
         Tirific_Template['RESTARTID'] = 0
-    with open(Configuration['FITTING_DIR']+name, 'w') as file:
+    if full_name:
+        file_name = name
+    else:
+        file_name = f'{Configuration["FITTING_DIR"]}{name}'
+    with open(file_name, 'w') as file:
         for key in Tirific_Template:
             if key[0:5] == 'EMPTY':
                 file.write('\n')

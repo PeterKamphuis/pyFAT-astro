@@ -844,7 +844,7 @@ def fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run, s
         sf.write_config(
             f'{Configuration["LOG_DIRECTORY"]}CFG_Before_Smoothing.txt', Configuration)
         wf.tirific(Configuration,Tirific_Template, name = 'Input_to_Smooth.def')
-        os.system(f'''mv {Configuration['FITTING_DIR']}/Input_to_Smooth.def {Configuration['LOG_DIRECTORY']}''')
+        os.system(f'''mv {Configuration['FITTING_DIR']}/Input_to_Smoothed_Check.def {Configuration['LOG_DIRECTORY']}''')
 
     #if we have only a few rings we only smooth. else we fit a polynomial to the RC and smooth the SBR
     #smoothed_sbr = smooth_profile(Configuration,Tirific_Template,'SBR',hdr, min_error= np.max([float(Tirific_Template['CFLUX']),float(Tirific_Template['CFLUX_2'])]))
@@ -907,11 +907,15 @@ def fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run, s
         set_fitting_parameters(Configuration, Tirific_Template,stage = stage,\
                           initial_estimates = parameters,parameters_to_adjust = parameters_to_adjust)
 
-
-    source = sf.get_system_string(f"{Configuration['FITTING_DIR']}{fit_type}_In.def")
-    target = sf.get_system_string(f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}_Last_Unsmoothed_Input.def")
-    os.system(f"cp {source} {target}")
+    if Configuration['DEBUG']:
+        source = sf.get_system_string(f"{Configuration['FITTING_DIR']}{fit_type}_In.def")
+        target = sf.get_system_string(f"{Configuration['LOG_DIRECTORY']}/{fit_type}_Last_Unsmoothed_Input.def")
+        os.system(f"cp {source} {target}")
     wf.tirific(Configuration,Tirific_Template,name = f'{fit_type}_In.def')
+    if Configuration['DEBUG']:
+        source = sf.get_system_string(f"{Configuration['FITTING_DIR']}{fit_type}_In.def")
+        target = sf.get_system_string(f"{Configuration['LOG_DIRECTORY']}/{fit_type}_Smoothed_Input.def")
+        os.system(f"cp {source} {target}")
     accepted,current_run = sf.run_tirific(Configuration,current_run, stage = stage, fit_type=fit_type)
 
     write_new_to_template(Configuration, f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def", Tirific_Template)
@@ -919,10 +923,12 @@ def fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run, s
         smoothed_vrot = regularise_profile(Configuration,Tirific_Template,'VROT',min_error = Configuration['CHANNEL_WIDTH'])
         set_fitting_parameters(Configuration, Tirific_Template,stage = 'final_os',\
                           initial_estimates = parameters,parameters_to_adjust  = ['VROT'])
-        source = sf.get_system_string(f"{Configuration['FITTING_DIR']}{fit_type}_In.def")
-        target = sf.get_system_string(f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}_First_Smoothed_Input.def")
-        os.system(f"cp {source} {target}")
+
         wf.tirific(Configuration,Tirific_Template,name = f'{fit_type}_In.def')
+        if Configuration['DEBUG']:
+            source = sf.get_system_string(f"{Configuration['FITTING_DIR']}{fit_type}_In.def")
+            target = sf.get_system_string(f"{Configuration['LOG_DIRECTORY']}/{fit_type}_Second_Smoothed_Input.def")
+            os.system(f"cp {source} {target}")
         accepted,current_run = sf.run_tirific(Configuration,current_run, stage = 'final_os', fit_type=fit_type)
 
     return current_run
@@ -973,6 +979,10 @@ def make_full_resolution(Configuration,Tirific_Template,Fits_Files,fit_type = 'U
     Tirific_Template['LOOPS'] = "0"
     Tirific_Template['INIMODE'] = "0"
     wf.tirific(Configuration,Tirific_Template,name = f'{fit_type}_In.def')
+    if Configuration['DEBUG']:
+        wf.tirific(Configuration,Tirific_Template,\
+            name = f'{Configuration["LOG_DIRECTORY"]}/Full_Resolution_Input.def',\
+            full_name = True )
     sf.finish_current_run(Configuration,current_run)
     try:
         accepted,current_run = sf.run_tirific(Configuration,'Not zed', stage = 'full_res', fit_type=fit_type)

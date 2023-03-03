@@ -4091,7 +4091,7 @@ def set_rings(Configuration,ring_size = 0. ):
 {'':8s}We have {len(radii)} rings.
 {'':8s}The last ring should be around {Configuration['BEAM'][0]*np.max(Configuration['SIZE_IN_BEAMS'])}
 {'':8s}The rings should be size {Configuration['BEAM'][0]*ring_size} and outer rings {req_outer_ring}
-{'':8s}They are {radii[3]-radii[2]} and {radii[-1]-radii[-2]}
+{'':8s}They are {radii[2]-radii[1]} and {radii[-1]-radii[-2]}
 ''', Configuration, case=['debug_add'])
     return np.array(radii,dtype = float)
 
