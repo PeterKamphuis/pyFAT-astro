@@ -17,6 +17,8 @@ class CfluxError(Exception):
     pass
 class DefFileError(Exception):
     pass
+class FaintSourceError(Exception):
+    pass
 class FileNotFoundError(Exception):
     pass
 class FittingError(Exception):
@@ -36,8 +38,6 @@ class MissingProgramError(Exception):
 class ProgramError(Exception):
     pass
 class SmallSourceError(Exception):
-    pass
-class SofiaFaintError(Exception):
     pass
 class SofiaMissingError(Exception):
     pass

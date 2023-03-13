@@ -11,7 +11,7 @@ from pyFAT_astro.Support.modify_template import write_new_to_template,\
     check_size,no_declining_vrot,set_errors,get_warp_slope,check_angles,write_center,\
     set_boundary_limits,regularise_warp,set_new_size
 from pyFAT_astro.Support.constants import H_0
-from pyFAT_astro.Support.fat_errors import SofiaFaintError,BadConfigurationError,\
+from pyFAT_astro.Support.fat_errors import FaintSourceError,BadConfigurationError,\
                                               InclinationRunError,SofiaRunError,\
                                               BadSourceError,TirificOutputError,ProgramError
 from pyFAT_astro.Support.tirshaker import tirshaker
@@ -1219,7 +1219,7 @@ def sofia(Configuration, Fits_Files):
 {"":8s}Continuing to the next galaxy.
 '''
                 sf.print_log(log_statement,Configuration)
-                raise SofiaFaintError("RUN_SOFIA:Sofia cannot find a source above a threshold of 3.")
+                raise FaintSourceError("RUN_SOFIA:Sofia cannot find a source above a threshold of 3.")
         elif sfrun.returncode == 0:
             sofia_ok = True
         else:

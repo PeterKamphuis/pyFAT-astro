@@ -180,13 +180,16 @@ def calc_new_size(Configuration,Tirific_Template,radii,sbr_in,sbr_ring_limits ):
         else:
             #we need to find where we cross the zero line
             #but have to make sure it is the first from the end
-            loc =0
+            loc = 0
             counter = len(smooth_diff[i,:])-1
             while loc == 0:
-                if smooth_diff[i,counter-1] < 0.:
-                    counter -=1
+                if smooth_diff[i,counter-1] < 0. and counter > 1:
+                    counter -= 1
                 else:
-                    loc = counter
+                    if counter < 1:
+                        loc = 1
+                    else:
+                        loc = counter
             x1 = float(radii[loc-1])
             x2 = float(radii[loc])
             y1 = float(smooth_diff[i,loc-1])
@@ -1248,9 +1251,20 @@ def fix_sbr(Configuration,Tirific_Template, smooth = False, initial = False ):
             if Configuration['WARP_SLOPE'][i] <  0.75*(Configuration['NO_RINGS']) and Configuration['WARP_SLOPE'][i] != None:
                 sbr[i,Configuration['WARP_SLOPE'][i]:] = 0.5*sbr[i,Configuration['WARP_SLOPE'][i]-1]+2.5*sbr[i,Configuration['WARP_SLOPE'][i]:]
     else:
+
         sbr[np.where(sbr<cutoff_limits/2.)] = 1e-16
         #no rising outer end profiles
         for i in [0,1]:
+            counter = len(sbr[i,:])-1
+            found_good  = False
+            while not found_good and counter > 1:
+                if sbr[i, counter] < cutoff_limits[i,counter]/2.:
+                    sbr[i, counter] = 1e-16
+                    counter -= 1
+                else:
+                    found_good =True
+            if counter == 1:
+                raise FaintSourceError(f"After correcting the SBRs all values we're below the cutoff limit, your source is too faint.")
             if sbr[i,-2] < sbr[i,-1]:
                 last = sbr[i,-1]
                 second = sbr[i,-2]

@@ -3571,7 +3571,7 @@ def setup_configuration(cfg):
                'BASE_NAME': 'Unset', #Basename for FAT products, typically {input_cube}_FAT, set at start of loop
                'LOG_DIR': 'Unset', #Directory to put log files from run, set at start of loop
                'STOP_INDIVIDUAL_ERRORS': ['SmallSourceError','BadSourceError'\
-                                        ,'SofiaFaintError','BadHeaderError',\
+                                        ,'FaintSourceError','BadHeaderError',\
                                         'BadCubeError','BadMaskError',\
                                         'BadCatalogueError'],
                'MAXIMUM_DIRECTORY_LENGTH': len('Directory Name'),
