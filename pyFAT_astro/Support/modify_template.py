@@ -6,7 +6,7 @@
 import copy
 
 from pyFAT_astro.Support.fat_errors import InitializeError,CfluxError,\
-    FunctionCallError,BadConfigurationError,FittingError
+    FunctionCallError,BadConfigurationError,FittingError,FaintSourceError
 import pyFAT_astro.Support.support_functions as sf
 import pyFAT_astro
 
@@ -432,7 +432,7 @@ check_angles.__doc__=f'''
 
 
 def check_flat(Configuration,profile,error,key, last_reliable_ring = -1,inner_fix = 4):
-    if last_reliable_ring == -1:
+    if last_reliable_ring == -1 or last_reliable_ring > len(profile)-1:
         last_reliable_ring = len(profile)-1
 
     sf.print_log(f'''CHECK_FLAT: checking flatness
@@ -1252,32 +1252,60 @@ def fix_sbr(Configuration,Tirific_Template, smooth = False, initial = False ):
                 sbr[i,Configuration['WARP_SLOPE'][i]:] = 0.5*sbr[i,Configuration['WARP_SLOPE'][i]-1]+2.5*sbr[i,Configuration['WARP_SLOPE'][i]:]
     else:
 
-        sbr[np.where(sbr<cutoff_limits/2.)] = 1e-16
+        #sbr[np.where(sbr<cutoff_limits/2.)] = 1e-16
         #no rising outer end profiles
         for i in [0,1]:
             counter = len(sbr[i,:])-1
             found_good  = False
-            while not found_good and counter > 1:
+            sf.print_log(f'''FIX_SBR: check sbr vs limits
+{'':8s}sbr = {sbr[i, :]}
+{'':8s}cutoff_limits  = {cutoff_limits[i, :]}
+{'':8s}counter = {counter}
+''',Configuration,case=['debug_add'])
+            while not found_good and counter > 0:
                 if sbr[i, counter] < cutoff_limits[i,counter]/2.:
-                    sbr[i, counter] = 1e-16
+                    if counter > 3:
+                        sbr[i, counter] = 1e-16
+                    else:
+                        sbr[i, counter] = cutoff_limits[i,counter]*1.5
                     counter -= 1
                 else:
                     found_good =True
-            if counter == 1:
+            if counter == 0:
+                sf.print_log(f'''FIX_SBR: We set all off the SBR to 1e-16
+{'':8s}sbr = {sbr[i, :]}
+{'':8s}cutoff_limits  = {cutoff_limits[i, :]}
+{'':8s}counter = {counter}
+''',Configuration,case=['debug_add'])
                 raise FaintSourceError(f"After correcting the SBRs all values we're below the cutoff limit, your source is too faint.")
             if sbr[i,-2] < sbr[i,-1]:
                 last = sbr[i,-1]
                 second = sbr[i,-2]
                 sbr[i,-2] = last
                 sbr[i,-1] = second
+            sf.print_log(f'''FIX_SBR: check sbr vs limits after
+{'':8s}sbr = {sbr[i, :]}
+{'':8s}cutoff_limits  = {cutoff_limits[i, :]}
+{'':8s}counter = {counter}
+''',Configuration,case=['debug_add'])
 
     # and ensure that both sides the inner two rings are the same
     sbr[:,[0,1]] = np.mean(sbr[:,[0,1]])
+    sf.print_log(f'''FIX_SBR: after ensuring both ring are the same
+{'':8s}sbr = {sbr[i, :]}
+''',Configuration,case=['debug_add'])
+    #And that they are less then 3/4 of ring 3 unless ring 3 is blanked
+    ring_three = np.min(sbr[[0,1],2])
+    if ring_three < 1e-15:
+        ring_three = sbr[0,1]*4
 
-    #And that they are less then 3/4 of ring 3
-    if sbr[0,1] > 3/4.* np.min(sbr[[0,1],2]):
-        sbr[:,[0,1]] = 3/4.* np.min(sbr[[0,1],2])
-    if smooth:
+    if sbr[0,1] > 3/4.* ring_three:
+        sbr[:,[0,1]] = 3/4.* ring_three
+
+    sf.print_log(f'''FIX_SBR: after ring three
+{'':8s}sbr = {sbr[i, :]}
+''',Configuration,case=['debug_add'])
+    if smooth and len(sbr[0]) > 6:
         for j in [0,1]:
             fit_profile = sbr[j]
             for i in range(len(fit_profile)-5,len(fit_profile)):
@@ -3340,21 +3368,55 @@ def set_sbr_fitting(Configuration,Tirific_Template, stage = 'no_stage'):
                                 min_error= [sbr_ring_limits,sbr_ring_limits],no_apply = True,
                                 fix_sbr_call = True,profile_in = sbr_profile )
         sbr_av_smoothed = [(x+y)/2. for x,y in zip(sbr_smoothed_profile[0],sbr_smoothed_profile[1])]
+        sf.print_log(f'''SET_SBR_FITTING:
+{'':8s} This is the mean SNR {Configuration['SNR']}
+beamarea = {Configuration['BEAM_AREA']}, channelwidth = {Configuration['CHANNEL_WIDTH']}, noise = {Configuration['NOISE']}
+''',Configuration,case=['debug_add'])
+
+        #if x < 4:
+        limits_for_max = True
+        if Configuration['SNR'] > 10:
+            limits_for_max = False
+            sf.print_log(f'''SET_SBR_FITTING:
+{'':8s} The SNR is so high that we will not use the ring limits for parmax
+''',Configuration,case=['debug_add'])
+
         for i in [0,1]:
+            mean_signal = Configuration['SNR']*Configuration['NOISE']/\
+                    (Configuration['BEAM_AREA']*Configuration['SIZE_IN_BEAMS'][i]/2.)\
+                    *Configuration['CHANNEL_WIDTH'] #in Jy/arcsec *km/s
+            sf.print_log(f'''SET_SBR_FITTING:
+{'':8s} mean_signal = {mean_signal}
+''',Configuration,case=['debug_add'])
             for x in range(len(radii)-1,inner_ring-1,-1):
+
+                #    min_max = sf.set_limits(sbr_ring_limits[x]*30.,1e-3,0.9 )
+                #else:
+                #    min_max = sbr_ring_limits[x]*30.
+
                 if  sbr_profile[i,x] > 0.:
-                    pmax[i,x] = sf.set_limits(sbr_av_smoothed[x-1]*20.,sbr_ring_limits[x]*30.,1.)
+                    if limits_for_max:
+                        pmax[i,x] = sf.set_limits(sbr_av_smoothed[x-1]*20.,sbr_ring_limits[x]*30.,1.)
+                    else:
+                        pmax[i,x] = sf.set_limits(sbr_av_smoothed[x-1]*20.,\
+                            mean_signal*100./(radii[x])**0.5,1.)
                     pmin[i,x] = sbr_ring_limits[x]/fact[i]
                 else:
-                    pmax[i,x] = sf.set_limits(sbr_av_smoothed[x-1]*5.,sbr_ring_limits[x]*10,sbr_ring_limits[x]*30)
+                    if limits_for_max:
+                        pmax[i,x] = sf.set_limits(sbr_av_smoothed[x-1]*5.\
+                        ,sbr_ring_limits[x]*10.,sbr_ring_limits[x]*30.)
+                    else:
+                        pmax[i,x] = sf.set_limits(sbr_av_smoothed[x-1]*5.\
+                        , mean_signal*50./(radii[x])**0.5, mean_signal*200./(radii[x])**0.5)
                     pmin[i,x] = 0.
+
 
 
         if np.mean(Configuration['SIZE_IN_BEAMS']) < max_size:
             sbr_input['VARY'] =  np.array([f"SBR {x+1} SBR_2 {x+1}" for x in range(len(radii)-1,inner_ring-1,-1)],dtype=str)
 
 
-            sbr_input['PARMAX'] = np.array([sf.set_limits(sbr_av_smoothed[x-1]*10.,sbr_ring_limits[x]*15.,1.) for x in range(len(radii)-1,inner_ring-1,-1)],dtype=float)
+            sbr_input['PARMAX'] = np.array([sf.set_limits(sbr_av_smoothed[x-1]*10.,np.mean(pmax[:,x]),1.) for x in range(len(radii)-1,inner_ring-1,-1)],dtype=float)
             #if stage in ['initial','run_cc']:
             #    sbr_input['PARMIN'] = np.array([sbr_ring_limits[x]/2. if x <= (3./4.)*len(radii) else 0 for x in range(len(radii)-1,inner_ring-1,-1)])
             #elif stage in ['initialize_ec','run_ec']:
@@ -3384,7 +3446,11 @@ def set_sbr_fitting(Configuration,Tirific_Template, stage = 'no_stage'):
             sbr_input['MINDELTA'] = np.array([[sbr_ring_limits[x]/20.,sbr_ring_limits[x]/20.] for x in range(len(radii)-1,inner_ring-1,-1)],dtype=float).reshape((len(radii)-inner_ring)*2)
 
         sbr_input['VARY'] = np.concatenate((sbr_input['VARY'],[f"SBR {' '.join([str(int(x)) for x in range(1,inner_ring+1)])} SBR_2 {' '.join([str(int(x)) for x in range(1,inner_ring+1)])}"]),axis=0)
-        sbr_input['PARMAX'] = np.concatenate((sbr_input['PARMAX'],[sf.set_limits(np.mean([sbr_smoothed_profile[0,2:4],sbr_smoothed_profile[1,2:4]])*4.,sbr_ring_limits[2],np.max(sbr_profile))]))
+        if limits_for_max:
+            sbr_input['PARMAX'] = np.concatenate((sbr_input['PARMAX'],[sf.set_limits(np.mean([sbr_smoothed_profile[0,2:4],sbr_smoothed_profile[1,2:4]])*4.,sbr_ring_limits[2],np.max(sbr_profile))]))
+        else:
+            sbr_input['PARMAX'] = np.concatenate((sbr_input['PARMAX'],[sf.set_limits(np.mean([sbr_smoothed_profile[0,2:4],sbr_smoothed_profile[1,2:4]])*4.,mean_signal*100,1.)]))
+
         if Configuration['CENTRAL_CONVERGENCE']:
             sbr_input['PARMIN'] = np.concatenate((sbr_input['PARMIN'],[np.min(sbr_ring_limits)]))
         else:

@@ -3606,6 +3606,7 @@ def setup_configuration(cfg):
                'RC_UNRELIABLE': 1, # Ring number from where the RC values are set flat. Should only be set in check_size
 
                'NOISE': 0. , #Noise of the input cube in Jy/beam, set in read_cube
+               'SNR': 0, # the mean SNR in the moment 0 map sofia mask these are set in guess_orientation
                'BEAM_IN_PIXELS': [0.,0.,0.], #FWHM BMAJ, BMIN in pixels and total number of pixels in beam area, set in read_cube in read_functions
                'BEAM': [0.,0.,0.], #  FWHM BMAJ, BMIN in arcsec and BPA, set in main
                'BEAM_AREA': 0., #BEAM_AREA in arcsec set in main

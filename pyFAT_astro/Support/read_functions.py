@@ -402,6 +402,7 @@ def guess_orientation(Configuration,Fits_Files, vsys = -1 ,center = None, smooth
 
 
     SNR = np.nanmean(map[noise_map > 0.]/noise_map[noise_map > 0.])
+    Configuration['SNR'] = SNR
     noise_hdr = Image[0].header
     Image.close()
     noise_map [0. > map ] =0.

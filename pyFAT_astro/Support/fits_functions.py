@@ -762,9 +762,15 @@ def make_moments(Configuration,Fits_Files,fit_type = 'Undefined',
         hdr2D['BUNIT'] = f"{cube[0].header['BUNIT']}*{cube[0].header['CUNIT3']}"
         moment0 = np.nansum(cube[0].data, axis=0) * cube[0].header['CDELT3']
         moment0[np.invert(np.isfinite(moment0))] = float('NaN')
-        hdr2D['DATAMAX'] = np.nanmax(moment0)
-        hdr2D['DATAMIN'] = np.nanmin(moment0)
-        fits.writeto(f"{directory}/{basename}_mom0.fits",moment0,hdr2D,overwrite = overwrite)
+        try:
+            hdr2D['DATAMAX'] = np.nanmax(moment0)
+            hdr2D['DATAMIN'] = np.nanmin(moment0)
+            fits.writeto(f"{directory}/{basename}_mom0.fits",moment0,hdr2D,overwrite = overwrite)
+        except ValueError:
+            sf.print_log(f"MAKE_MOMENTS: Your Moment 0 has bad data and we could not write the moment 0 fits file", Configuration)
+
+
+        
     if 1 in moments or 2 in moments:
         zaxis = cube[0].header['CRVAL3'] + (np.arange(cube[0].header['NAXIS3'])+1 \
               - cube[0].header['CRPIX3']) * cube[0].header['CDELT3']
@@ -774,18 +780,30 @@ def make_moments(Configuration,Fits_Files,fit_type = 'Undefined',
         with np.errstate(invalid='ignore', divide='ignore'):
             moment1 = np.nansum(cube[0].data*c, axis=0)/ np.nansum(cube[0].data, axis=0)
         moment1[np.invert(np.isfinite(moment1))] = float('NaN')
-        hdr2D['DATAMAX'] = np.nanmax(moment1)
-        hdr2D['DATAMIN'] = np.nanmin(moment1)
-        if 1 in moments:
-            fits.writeto(f"{directory}/{basename}_mom1.fits",moment1,hdr2D,overwrite = overwrite)
+        try:
+            hdr2D['DATAMAX'] = np.nanmax(moment1)
+            hdr2D['DATAMIN'] = np.nanmin(moment1)
+            if 1 in moments:
+                fits.writeto(f"{directory}/{basename}_mom1.fits",moment1,hdr2D,\
+                    overwrite = overwrite)
+
+        except ValueError:
+            sf.print_log(f"MAKE_MOMENTS: Your Moment 1 has bad data and we could not write the moment 0 fits file", Configuration)
+
         if 2 in moments:
             d = c - np.resize(moment1,[len(zaxis),cube[0].header['NAXIS2'],cube[0].header['NAXIS1']])
             with np.errstate(invalid='ignore', divide='ignore'):
                 moment2 = np.sqrt(np.nansum(cube[0].data*d**2, axis=0)/ np.nansum(cube[0].data, axis=0))
             moment2[np.invert(np.isfinite(moment1))] = float('NaN')
-            hdr2D['DATAMAX'] = np.nanmax(moment2)
-            hdr2D['DATAMIN'] = np.nanmin(moment2)
-            fits.writeto(f"{directory}/{basename}_mom2.fits",moment2,hdr2D,overwrite = overwrite)
+            try:
+                hdr2D['DATAMAX'] = np.nanmax(moment2)
+                hdr2D['DATAMIN'] = np.nanmin(moment2)
+                fits.writeto(f"{directory}/{basename}_mom2.fits",\
+                    moment2,hdr2D,overwrite = overwrite)
+
+            except ValueError:
+                sf.print_log(f"MAKE_MOMENTS: Your Moment 1 has bad data and we could not write the moment 0 fits file", Configuration)
+
     cube.close()
 
 make_moments.__doc__ =f'''
