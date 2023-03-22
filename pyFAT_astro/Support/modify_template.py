@@ -581,8 +581,9 @@ def check_size(Configuration,Tirific_Template, fit_type = 'Undefined', \
 
     if apply_size:
         # Do not move this from here else other routines such as sbr_limits are messed up
-        set_new_size(Configuration,Tirific_Template,Fits_Files,fit_type= fit_type\
+        set_new_size(Configuration,Tirific_Template,fit_type= fit_type\
             ,current_run = current_run)
+        set_overall_parameters(Configuration, Fits_Files,Tirific_Template ,fit_type=fit_type)
         return False
     elif no_apply:
         return False
@@ -1646,6 +1647,9 @@ def get_warp_slope(Configuration,Tirific_Template):
 
         if final > Configuration['LAST_RELIABLE_RINGS'][i]-1:
             final = Configuration['LAST_RELIABLE_RINGS'][i]-1
+        # we have to vary some rings else tirific will break with a segmentation fault
+        if final < 2:
+            final = 2
 
         warp_slope[i] = int(final)
     sf.print_log(f'''GET_WARP_SLOPE: We find a slope of {warp_slope}.
@@ -3084,7 +3088,7 @@ set_model_parameters.__doc__ =f'''
  NOTE:
 '''
 #function to check that all parameters in template have the proper length.
-def set_new_size(Configuration,Tirific_Template, Fits_Files, fit_type = 'Undefined',
+def set_new_size(Configuration,Tirific_Template, fit_type = 'Undefined',
                     current_run='Not Initialized', Variables =
                     ['VROT','Z0', 'SBR', 'INCL','PA','XPOS','YPOS','VSYS','SDIS','VROT_2',  'Z0_2','SBR_2',
                      'INCL_2','PA_2','XPOS_2','YPOS_2','VSYS_2','SDIS_2', 'AZ1P', 'AZ1W' ,'AZ1P_2','AZ1W_2', 'RADI']):
@@ -3184,7 +3188,7 @@ def set_new_size(Configuration,Tirific_Template, Fits_Files, fit_type = 'Undefin
     #update the limit_modifier
     sf.set_limit_modifier(Configuration,Tirific_Template)
     # Maybe increase the amount of loops in smaller galaxies
-    set_overall_parameters(Configuration, Fits_Files,Tirific_Template ,fit_type=fit_type)
+    #set_overall_parameters(Configuration, Fits_Files,Tirific_Template ,fit_type=fit_type)
     # if we change the radii we need to restart tirific
     sf.finish_current_run(Configuration,current_run)
 set_new_size.__doc__ =f'''

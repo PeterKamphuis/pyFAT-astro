@@ -292,7 +292,9 @@ def check_inclination(Configuration,Tirific_Template,Fits_Files, fit_type = 'Und
         for key in ['VROT','VROT_2']:
             Check_Template[key]= f"{' '.join([f'{x:{format}}' for x in vrot])}"
         wf.tirific(Configuration,Check_Template,name = f'{tmp_stage}_In.def')
+
         accepted,incl_run = sf.run_tirific(Configuration,incl_run, stage = 'incl_check', fit_type=tmp_stage)
+
         make_moments(Configuration,Fits_Files,fit_type=tmp_stage,\
                      moments = [0], \
                      overwrite = True, vel_unit = 'm/s')
@@ -767,7 +769,112 @@ check_vobs.__doc__='''
 
  NOTE:
 '''
+def construct_kernels(Configuration,sofia_template):
+    #we always want the unsmoothed cube
+    spatial_kernels= [0]
+    if np.sum(Configuration['NAXES'][:2])/(2.*int(round(Configuration['BEAM_IN_PIXELS'][0])))  > 5:
+        spatial_kernels.append(int(round(Configuration['BEAM_IN_PIXELS'][0])))
+    if np.sum(Configuration['NAXES'][:2])/(2.*int(round(Configuration['BEAM_IN_PIXELS'][0])))  > 15:
+        spatial_kernels.append(int(round(Configuration['BEAM_IN_PIXELS'][0]*2.)))
+    if np.sum(Configuration['NAXES'][:2])/(2.*int(round(Configuration['BEAM_IN_PIXELS'][0])))  > 30:
+        spatial_kernels.append(int(round(Configuration['BEAM_IN_PIXELS'][0]))*3)
+    if np.sum(Configuration['NAXES'][:2])/(2.*int(round(Configuration['BEAM_IN_PIXELS'][0])))  > 45:
+        spatial_kernels.append(int(round(Configuration['BEAM_IN_PIXELS'][0]))*4)
 
+    sf.print_log(f'''CONSTRUCT_KERNELS: We use the following spatial_kernels
+{'':8s} spatial kernels = {spatial_kernels}
+''', Configuration)
+    velocity_kernels = [0]
+    if Configuration['NAXES'][2] > 12:
+        velocity_kernels.append(3)
+    if Configuration['NAXES'][2] > 24:
+        velocity_kernels.append(6)
+    if Configuration['NAXES'][2] > 48:
+        velocity_kernels.append(12)
+    if Configuration['NAXES'][2] > 52:
+        velocity_kernels.append(16)
+        Configuration['VEL_SMOOTH_EXTENDED'] = True
+        sf.print_log(f'''CONSTRUCT_KERNELS: Using a very extended velocity smoothing as the cube has more than 52 channels.
+''', Configuration)
+
+    sf.print_log(f'''CONSTRUCT_KERNELS: We use the following velocity kernels
+{'':8s} velocity kernels = {velocity_kernels}
+''', Configuration)
+    sofia_template['scfind.kernelsXY'] = ','.join([str(x) for x in spatial_kernels])
+    sofia_template['scfind.kernelsZ'] = ','.join([str(x) for x in velocity_kernels])
+    return spatial_kernels,velocity_kernels
+
+construct_kernels.__doc__ =f'''
+ NAME:
+    construct_kernels
+
+ PURPOSE:
+    run sofia on the cube to get a source mask and initial estimates.
+
+ CATEGORY:
+    run_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    Fits_Files = Standard FAT dictionary with filenames
+
+ OPTIONAL INPUTS:
+
+
+
+ OUTPUTS:
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
+def failed_fit(Configuration,Tirific_Template,current_run, Fits_Files,\
+        stage='initial', fit_type='Fit_Tirific_OSC'):
+    sf.print_log(f'''FAILED_FIT: Tirific failed to produce output in {fit_type}. It might be an unspecified crash.
+we try once more else we break off the fitting. As this sometimes happens due to a gsl interpolation error we modify the ring size by 1%
+''',Configuration, case=['main','screen'])
+    #There appears to be a case where the last ring can cause an interpolation error.
+    #Deal with this we take 0.95% of the beam ring size and run again
+    #I don't understand why we removed this again.
+    Configuration['OLD_SIZE'].append(list(copy.deepcopy(Configuration['SIZE_IN_BEAMS'])))
+    Configuration['SIZE_IN_BEAMS'] = Configuration['SIZE_IN_BEAMS']*0.95
+    ring_size, number_of_rings = sf.set_ring_size(Configuration)
+    set_new_size(Configuration,Tirific_Template,fit_type= fit_type\
+            ,current_run = current_run)
+    wf.tirific(Configuration,Tirific_Template,name = f'{fit_type}_In.def')
+    accepted,current_run = sf.run_tirific(Configuration,current_run,stage = stage, fit_type = fit_type)
+    return accepted,current_run
+
+failed_fit.__doc__ =f'''
+ NAME:
+    failed_fit
+
+ PURPOSE:
+    sometimes tirific fails on a gsl interpolation error and we have to rerun with slightly different rings
+
+ CATEGORY:
+    run_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    Fits_Files = Standard FAT dictionary with filenames
+
+ OPTIONAL INPUTS:
+
+
+
+ OUTPUTS:
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
 def fitting_osc(Configuration,Fits_Files,Tirific_Template,Initial_Parameters):
     current_run = 'Not Initialized'
     sf.create_directory(Configuration['USED_FITTING'],Configuration['FITTING_DIR'])
@@ -916,7 +1023,11 @@ def fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run, s
         source = sf.get_system_string(f"{Configuration['FITTING_DIR']}{fit_type}_In.def")
         target = sf.get_system_string(f"{Configuration['LOG_DIRECTORY']}/{fit_type}_Smoothed_Input.def")
         os.system(f"cp {source} {target}")
-    accepted,current_run = sf.run_tirific(Configuration,current_run, stage = stage, fit_type=fit_type)
+    try:
+        accepted,current_run = sf.run_tirific(Configuration,current_run, stage = stage, fit_type=fit_type)
+    except TirificOutputError:
+        accepted,current_run = failed_fit(Configuration,Tirific_Template,current_run,\
+            Fits_Files, stage=stage, fit_type=fit_type)
 
     write_new_to_template(Configuration, f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def", Tirific_Template)
     if Configuration['NO_RINGS'] > 5.:
@@ -929,7 +1040,11 @@ def fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run, s
             source = sf.get_system_string(f"{Configuration['FITTING_DIR']}{fit_type}_In.def")
             target = sf.get_system_string(f"{Configuration['LOG_DIRECTORY']}/{fit_type}_Second_Smoothed_Input.def")
             os.system(f"cp {source} {target}")
-        accepted,current_run = sf.run_tirific(Configuration,current_run, stage = 'final_os', fit_type=fit_type)
+        try:
+            accepted,current_run = sf.run_tirific(Configuration,current_run, stage = 'final_os', fit_type=fit_type)
+        except TirificOutputError:
+            accepted,current_run = failed_fit(Configuration,Tirific_Template,\
+                current_run,Fits_Files, stage='final_os', fit_type=fit_type)
 
     return current_run
 fit_smoothed_check.__doc__ =f'''
@@ -985,23 +1100,11 @@ def make_full_resolution(Configuration,Tirific_Template,Fits_Files,fit_type = 'U
             full_name = True )
     sf.finish_current_run(Configuration,current_run)
     try:
-        accepted,current_run = sf.run_tirific(Configuration,'Not zed', stage = 'full_res', fit_type=fit_type)
+        accepted,current_run = sf.run_tirific(Configuration,'Not zed', \
+            stage = 'full_res', fit_type=fit_type)
     except TirificOutputError:
-        sf.print_log(f'''MAKE_FULL_RESOLUTION: The  original size is {Configuration['SIZE_IN_BEAMS']}
-''',Configuration, case=['debug_add','screen'])
-        Configuration['SIZE_IN_BEAMS'] = Configuration['SIZE_IN_BEAMS']*0.99
-        ring_size, number_of_rings = sf.set_ring_size(Configuration)
-        sf.print_log(f'''MAKE_FULL_RESOLUTION: Applied the size of {Configuration['SIZE_IN_BEAMS']}, ring size {ring_size} resulting in {number_of_rings} rings
-''',Configuration, case=['main','screen'])
-        set_new_size(Configuration,Tirific_Template,Fits_Files,fit_type= fit_type,\
-            current_run = current_run)
-        Tirific_Template['INSET'] = f"{Fits_Files['FITTING_CUBE']}"
-        Tirific_Template['VARY'] = f" VROT 1:3"
-        Tirific_Template['VARINDX'] = f" "
-        Tirific_Template['LOOPS'] = "0"
-        Tirific_Template['INIMODE'] = "0"
-        wf.tirific(Configuration,Tirific_Template,name = f'{fit_type}_In.def')
-        accepted,current_run = sf.run_tirific(Configuration,'Not zed', stage = 'full_res', fit_type=fit_type)
+        accepted,current_run = failed_fit(Configuration,Tirific_Template,\
+            'Not Zed', Fits_Files,stage='full_res', fit_type=fit_type)
 
 
     sf.finish_current_run(Configuration,current_run)
@@ -1047,14 +1150,11 @@ def one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run):
     stage = 'run_os'
     #First we run tirific
     try:
-        accepted,current_run = sf.run_tirific(Configuration,current_run,stage = stage, fit_type = fit_type)
+        accepted,current_run = sf.run_tirific(Configuration,current_run,\
+            stage = stage, fit_type = fit_type)
     except TirificOutputError:
-        sf.print_log(f'''ONE_STEP_CONVERGENCE: Tirific failed to produce output. It might be an unspecified crash.
-we try once more else we break off the fitting. As this sometimes happens due to a gsl interpolation error we modify the ring size by 1%
-''',Configuration, case=['main','screen'])
-        #There appears to be a case where the last ring can cause an interpolation error.
-        #Deal with the this we take 0.99% of the beam ring size and
-        accepted,current_run = sf.run_tirific(Configuration,current_run,stage = stage, fit_type = fit_type)
+        accepted,current_run = failed_fit(Configuration,Tirific_Template,\
+            current_run, Fits_Files,stage=stage, fit_type=fit_type)
 
 
     if not accepted:
@@ -1257,68 +1357,7 @@ sofia.__doc__ =f'''
 
  NOTE:
 '''
-def construct_kernels(Configuration,sofia_template):
-    #we always want the unsmoothed cube
-    spatial_kernels= [0]
-    if np.sum(Configuration['NAXES'][:2])/(2.*int(round(Configuration['BEAM_IN_PIXELS'][0])))  > 5:
-        spatial_kernels.append(int(round(Configuration['BEAM_IN_PIXELS'][0])))
-    if np.sum(Configuration['NAXES'][:2])/(2.*int(round(Configuration['BEAM_IN_PIXELS'][0])))  > 15:
-        spatial_kernels.append(int(round(Configuration['BEAM_IN_PIXELS'][0]*2.)))
-    if np.sum(Configuration['NAXES'][:2])/(2.*int(round(Configuration['BEAM_IN_PIXELS'][0])))  > 30:
-        spatial_kernels.append(int(round(Configuration['BEAM_IN_PIXELS'][0]))*3)
-    if np.sum(Configuration['NAXES'][:2])/(2.*int(round(Configuration['BEAM_IN_PIXELS'][0])))  > 45:
-        spatial_kernels.append(int(round(Configuration['BEAM_IN_PIXELS'][0]))*4)
 
-    sf.print_log(f'''CONSTRUCT_KERNELS: We use the following spatial_kernels
-{'':8s} spatial kernels = {spatial_kernels}
-''', Configuration)
-    velocity_kernels = [0]
-    if Configuration['NAXES'][2] > 12:
-        velocity_kernels.append(3)
-    if Configuration['NAXES'][2] > 24:
-        velocity_kernels.append(6)
-    if Configuration['NAXES'][2] > 48:
-        velocity_kernels.append(12)
-    if Configuration['NAXES'][2] > 52:
-        velocity_kernels.append(16)
-        Configuration['VEL_SMOOTH_EXTENDED'] = True
-        sf.print_log(f'''CONSTRUCT_KERNELS: Using a very extended velocity smoothing as the cube has more than 52 channels.
-''', Configuration)
-
-    sf.print_log(f'''CONSTRUCT_KERNELS: We use the following velocity kernels
-{'':8s} velocity kernels = {velocity_kernels}
-''', Configuration)
-    sofia_template['scfind.kernelsXY'] = ','.join([str(x) for x in spatial_kernels])
-    sofia_template['scfind.kernelsZ'] = ','.join([str(x) for x in velocity_kernels])
-    return spatial_kernels,velocity_kernels
-
-construct_kernels.__doc__ =f'''
- NAME:
-    sofia
-
- PURPOSE:
-    run sofia on the cube to get a source mask and initial estimates.
-
- CATEGORY:
-    run_functions
-
- INPUTS:
-    Configuration = Standard FAT configuration
-    Fits_Files = Standard FAT dictionary with filenames
-
- OPTIONAL INPUTS:
-
-
-
- OUTPUTS:
-
- OPTIONAL OUTPUTS:
-
- PROCEDURES CALLED:
-    Unspecified
-
- NOTE:
-'''
 
 def tirshaker_call(Configuration):
     # First we make a directory to keep all contained
