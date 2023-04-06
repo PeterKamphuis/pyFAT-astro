@@ -650,6 +650,8 @@ def transfer_errors(Configuration,fit_type='Undefined'):
         sm_profile = sf.load_tirific(Configuration,\
             f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}_Iteration_{Configuration['ITERATIONS']}.def",\
             Variables=[parameter,f"{parameter}_2"],array=True)
+            #it is possible that the last iteration of the fitted smooth check
+            #Crashes and is rerun with
         if parameter == 'VROT':
             apply_max= False
         else:

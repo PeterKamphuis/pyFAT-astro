@@ -844,6 +844,17 @@ we try once more else we break off the fitting. As this sometimes happens due to
     ring_size, number_of_rings = sf.set_ring_size(Configuration)
     set_new_size(Configuration,Tirific_Template,fit_type= fit_type\
             ,current_run = current_run)
+    if stage == 'full_res':
+
+        #if the crash happens when make the full resolution  we need to
+        # rescale the last iteration
+        print_log(f'''FAILED_FIT: We are rescaleing {Configuration['FITTING_DIR']}{fit_type}/{fit_type}_Iteration_{Configuration['ITERATIONS']}.def
+    ''',Configuration,case=['main'])
+        Last_Iteration = sf.tirific_template(f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}_Iteration_{Configuration['ITERATIONS']}.def")
+        set_new_size(Configuration,Last_Iteration,fit_type= fit_type
+                ,current_run = 'Not Zed')
+        wf.tirific(Configuration,Tirific_Template,name = \
+            f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}_Iteration_{Configuration['ITERATIONS']}.def")
     wf.tirific(Configuration,Tirific_Template,name = f'{fit_type}_In.def')
     accepted,current_run = sf.run_tirific(Configuration,current_run,stage = stage, fit_type = fit_type)
     return accepted,current_run
