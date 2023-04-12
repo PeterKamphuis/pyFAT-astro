@@ -122,6 +122,7 @@ def main(argv):
     configuration_file = ''')
 
 
+
         cfg = OmegaConf.merge(cfg,inputconf)
 
         if not any([cfg.cube_name, cfg.configuration_file, cfg.installation_check\
@@ -205,7 +206,8 @@ def main(argv):
             sys.exit(1)
 
         if Original_Configuration['MULTIPROCESSING']:
-
+            #screen out put becomes a mess in multiprocessing so we turn it of
+            Original_Configuration['VERBOSE_SCREEN'] = False
             ids,no_processes,no_galaxies = sf.calculate_number_processes(Original_Configuration)
             to_maps = [(x,Original_Configuration,Full_Catalogue,100.*(x-Original_Configuration['CATALOGUE_START_ID'])/no_galaxies) for x in ids]
             #not issueing all galaxies individually in the pool leads to some splits taking a long time for which we then have to wait while others do nothing

@@ -3346,7 +3346,7 @@ We are in in stage {stage} and fit_type {fit_type} and have done {Configuration[
             file.write(f"# TIRIFIC: Finished this run {datetime.now()} \n")
             CPU,mem = get_usage_statistics(Configuration,current_process)
             file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Mb for TiRiFiC \n")
-    if if Configuration['VERBOSE_SCREEN']:
+    if Configuration['VERBOSE_SCREEN']:
         print(f"{'':8s}RUN_TIRIFIC: Finished the current tirific run.")
 
     #The break off goes faster sometimes than the writing of the file so let's make sure it is present
