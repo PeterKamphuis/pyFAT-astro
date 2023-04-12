@@ -3339,7 +3339,7 @@ We are in in stage {stage} and fit_type {fit_type} and have done {Configuration[
             break
         if tmp[0].strip() == 'Abort':
             break
-    if if Configuration['VERBOSE_SCREEN']:
+    if Configuration['VERBOSE_SCREEN']:
         print(f'\n')
     if Configuration['TIMING']:
         with open(f"{Configuration['LOG_DIRECTORY']}Usage_Statistics.txt",'a') as file:
