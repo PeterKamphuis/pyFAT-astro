@@ -3311,7 +3311,8 @@ We are in in stage {stage} and fit_type {fit_type} and have done {Configuration[
             file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Mb for TiRiFiC \n")
     else:
         time.sleep(0.1)
-    print(f"\r{'':8s}RUN_TIRIFIC: 0 % Completed", end =" ",flush = True)
+    if Configuration['VERBOSE_SCREEN']:
+        print(f"\r{'':8s}RUN_TIRIFIC: 0 % Completed", end =" ",flush = True)
     triggered = False
     for tir_out_line in current_run.stdout:
         tmp = re.split(r"[/: ]+",tir_out_line.strip())
@@ -3326,7 +3327,7 @@ We are in in stage {stage} and fit_type {fit_type} and have done {Configuration[
                     CPU,mem = get_usage_statistics(Configuration,current_process)
                     file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Mb for TiRiFiC \n")
         if tmp[0] == 'L':
-            if int(tmp[1]) != currentloop:
+            if int(tmp[1]) != currentloop and Configuration['VERBOSE_SCREEN']:
                 print(f"\r{'':8s}RUN_TIRIFIC: {set_limits(float(tmp[1])-1.,0.,float(max_loop))/float(max_loop)*100.:.1f} % Completed", end =" ",flush = True)
             currentloop  = int(tmp[1])
             if max_loop == 0:
@@ -3338,13 +3339,15 @@ We are in in stage {stage} and fit_type {fit_type} and have done {Configuration[
             break
         if tmp[0].strip() == 'Abort':
             break
-    print(f'\n')
+    if if Configuration['VERBOSE_SCREEN']:
+        print(f'\n')
     if Configuration['TIMING']:
         with open(f"{Configuration['LOG_DIRECTORY']}Usage_Statistics.txt",'a') as file:
             file.write(f"# TIRIFIC: Finished this run {datetime.now()} \n")
             CPU,mem = get_usage_statistics(Configuration,current_process)
             file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Mb for TiRiFiC \n")
-    print(f"{'':8s}RUN_TIRIFIC: Finished the current tirific run.")
+    if if Configuration['VERBOSE_SCREEN']:
+        print(f"{'':8s}RUN_TIRIFIC: Finished the current tirific run.")
 
     #The break off goes faster sometimes than the writing of the file so let's make sure it is present
     time.sleep(1.0)
