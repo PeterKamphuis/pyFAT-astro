@@ -603,9 +603,12 @@ Finished preparations at {Configuration['PREP_END_TIME']} \n''')
 
     cleanup_final(Configuration,Fits_Files)
     # Need to write to results catalog
+    catalogue_line = f"{Configuration['FITTING_DIR'].split('/')[-2]:{Configuration['MAXIMUM_DIRECTORY_LENGTH']}s} {str(Configuration['ACCEPTED']):>6s} {Configuration['FINAL_COMMENT']} \n"
+
     if Configuration['OUTPUT_CATALOGUE']:
         with open(Configuration['OUTPUT_CATALOGUE'],'a') as output_catalogue:
-            output_catalogue.write(f"{Configuration['FITTING_DIR'].split('/')[-2]:{Configuration['MAXIMUM_DIRECTORY_LENGTH']}s} {str(Configuration['ACCEPTED']):>6s} {Configuration['FINAL_COMMENT']} \n")
+            output_catalogue.write(catalogue_line)
+    return catalogue_line
 
 finish_galaxy.__doc__ =f'''
  NAME:

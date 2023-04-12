@@ -205,21 +205,20 @@ def main(argv):
             sys.exit(1)
 
         if Original_Configuration['MULTIPROCESSING']:
-            Original_Configurations,no_processes = sf.calculate_number_processes(Original_Configuration)
-            to_maps = [(x,Full_Catalogue ) for x in Original_Configurations]
+
+            ids,no_processes,no_galaxies = sf.calculate_number_processes(Original_Configuration)
+            to_maps = [(x,Original_Configuration,Full_Catalogue,100.*(x-Original_Configuration['CATALOGUE_START_ID'])/no_galaxies) for x in ids]
+            #not issueing all galaxies individually in the pool leads to some splits taking a long time for which we then have to wait while others do nothing
             with get_context("spawn").Pool(processes=no_processes) as pool:
                 results = pool.starmap(FAT_Galaxy_Loops, to_maps)
-            #Stitch all temporary outpu catalogues back together
+            #Put all results into the catalogue.
             with open(Original_Configuration['OUTPUT_CATALOGUE'],'a') as catalogue:
-                for x in Original_Configurations:
-                    with open(x['OUTPUT_CATALOGUE']) as tmp:
-                        lines = tmp.readlines()
-                    catalogue.writelines(lines[1:])
-                    #clean up
-                    os.remove(x['OUTPUT_CATALOGUE'])
+                for x in results:
+                    catalogue.writelines(x)
+
         else:
             Original_Configuration['PER_GALAXY_NCPU'] = sf.set_limits(Original_Configuration['NCPU'],1,20)
-            FAT_Galaxy_Loops(Original_Configuration,Full_Catalogue)
+            catalogue_line = FAT_Galaxy_Loops(None,Original_Configuration,Full_Catalogue,None)
     except SystemExit:
         pass
     except KeyboardInterrupt:

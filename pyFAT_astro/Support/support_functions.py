@@ -153,45 +153,28 @@ def calculate_number_processes(Configuration):
             cores_set = True
         extra_cores=  Configuration['NCPU']-  Configuration['PER_GALAXY_NCPU']*no_process
         if not cores_set and \
-            extra_cores > Configuration['PER_GALAXY_NCPU']*no_process/2. and \
+            extra_cores >= Configuration['PER_GALAXY_NCPU']*no_process/2. and \
             Configuration['PER_GALAXY_NCPU'] > 3.:
             Configuration['PER_GALAXY_NCPU'] -= 1
         else:
             cores_set = True
 
-    plus_core = 0
-    while plus_core*no_process < extra_cores:
-        plus_core += 1
 
+    input_cores = copy.deepcopy(Configuration['PER_GALAXY_NCPU'])
+    while no_process <= extra_cores:
+        Configuration['PER_GALAXY_NCPU'] += 1
+        extra_cores -= no_process
+    if Configuration['PER_GALAXY_NCPU'] > 2.*input_cores:
+        Configuration['PER_GALAXY_NCPU'] =  2.*input_cores
 
     print(f"We use {no_process} processes for {no_galaxies} galaxies")
-    cfgs=[]
     start_id =  Configuration['CATALOGUE_START_ID']
-    no_galaxies_per_process = int(np.ceil(no_galaxies/no_process))
-    print(f"We have  {no_galaxies_per_process} galaxies per process.")
-    for i in range(no_process):
-        proc_conf=copy.deepcopy(Configuration)
-        cores = proc_conf['PER_GALAXY_NCPU']
-        if extra_cores >= plus_core:
-            cores += plus_core
-            extra_cores -= plus_core
-        if cores > proc_conf['PER_GALAXY_NCPU']*2:
-            cores = proc_conf['PER_GALAXY_NCPU']*2
-        print(f"Process {i} with {cores} cores")
-        key=f"Conf_{i:d}"
-        proc_conf['PER_GALAXY_NCPU'] = cores
-        proc_conf['CATALOGUE_START_ID'] = start_id
-        proc_conf['CATALOGUE_END_ID'] = start_id+no_galaxies_per_process
-        if proc_conf['CATALOGUE_END_ID']  > Configuration['CATALOGUE_END_ID']:
-            proc_conf['CATALOGUE_END_ID'] = Configuration['CATALOGUE_END_ID']
-        start_id = proc_conf['CATALOGUE_END_ID']
-        proc_conf['OUTPUT_CATALOGUE'] = f"{proc_conf['OUTPUT_CATALOGUE']}_loop{i:d}"
-        with open(proc_conf['OUTPUT_CATALOGUE'],'w') as file:
-            comment = 'Comments on Fit Result'
-            AC1 = 'OS'
-            file.write(f"{'Directory Name':<{Configuration['MAXIMUM_DIRECTORY_LENGTH']}s} {AC1:>6s} {comment}\n")
-        cfgs.append(proc_conf)
-    return cfgs,no_process
+    print(f"We use  {Configuration['PER_GALAXY_NCPU']} cores per galaxy.")
+    ids = []
+    for i in range(no_galaxies):
+        ids.append(start_id+i)
+
+    return ids,no_process,no_galaxies
 
 calculate_number_processes.__doc__ =f'''
  NAME:
