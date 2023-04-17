@@ -206,16 +206,7 @@ def main(argv):
             sys.exit(1)
 
         if Original_Configuration['MULTIPROCESSING']:
-<<<<<<< HEAD
-            #screen out put becomes a mess in multiprocessing so we turn it of
-            Original_Configuration['VERBOSE_SCREEN'] = False
-            ids,no_processes,no_galaxies = sf.calculate_number_processes(Original_Configuration)
-            to_maps = [(x,Original_Configuration,Full_Catalogue,float(100.*(x-Original_Configuration['CATALOGUE_START_ID'])/no_galaxies)) for x in ids]
-            #not issueing all galaxies individually in the pool leads to some splits taking a long time for which we then have to wait while others do nothing
-            with get_context("spawn").Pool(processes=no_processes) as pool:
-                results = pool.starmap(FAT_Galaxy_Loops, to_maps)
-            #Put all results into the catalogue.
-=======
+
             no_processes = sf.calculate_number_processes(Original_Configuration)
             Configs = []
             for current_galaxy_index in range(Original_Configuration['CATALOGUE_START_ID'], Original_Configuration['CATALOGUE_END_ID']):
@@ -223,21 +214,16 @@ def main(argv):
             with get_context("spawn").Pool(processes=no_processes) as pool:
                 results = pool.map(FAT_Galaxy_Loop, Configs)
             #Stitch all temporary outpu catalogues back together
->>>>>>> pyFAT-Beta
             with open(Original_Configuration['OUTPUT_CATALOGUE'],'a') as catalogue:
                 for x in results:
                     catalogue.writelines(x)
 
         else:
             Original_Configuration['PER_GALAXY_NCPU'] = sf.set_limits(Original_Configuration['NCPU'],1,20)
-<<<<<<< HEAD
-            catalogue_line = FAT_Galaxy_Loops(None,Original_Configuration,Full_Catalogue,None)
-=======
             for current_galaxy_index in range(Original_Configuration['CATALOGUE_START_ID'], Original_Configuration['CATALOGUE_END_ID']):
                 Configuration = sf.set_individual_configuration(current_galaxy_index,Full_Catalogue,Original_Configuration)
                 FAT_Galaxy_Loop(Configuration)
 
->>>>>>> pyFAT-Beta
     except SystemExit:
         pass
     except KeyboardInterrupt:
