@@ -15,7 +15,7 @@ import warnings
 from datetime import datetime
 from multiprocessing import Pool,get_context
 from omegaconf import OmegaConf
-from pyFAT_astro.FAT_Galaxy_Loops import FAT_Galaxy_Loops
+from pyFAT_astro.FAT_Galaxy_Loop import FAT_Galaxy_Loop
 from pyFAT_astro.config.defaults import defaults
 from pyFAT_astro.Support.fat_errors import ProgramError
 
@@ -205,10 +205,12 @@ def main(argv):
             sys.exit(1)
 
         if Original_Configuration['MULTIPROCESSING']:
-            Original_Configurations,no_processes = sf.calculate_number_processes(Original_Configuration)
-            to_maps = [(x,Full_Catalogue ) for x in Original_Configurations]
+            no_processes = sf.calculate_number_processes(Original_Configuration)
+            Configs = []
+            for current_galaxy_index in range(Original_Configuration['CATALOGUE_START_ID'], Original_Configuration['CATALOGUE_END_ID']):
+                Configs.append(sf.set_individual_configuration(current_galaxy_index,Full_Catalogue,Original_Configuration))
             with get_context("spawn").Pool(processes=no_processes) as pool:
-                results = pool.starmap(FAT_Galaxy_Loops, to_maps)
+                results = pool.map(FAT_Galaxy_Loop, Configs)
             #Stitch all temporary outpu catalogues back together
             with open(Original_Configuration['OUTPUT_CATALOGUE'],'a') as catalogue:
                 for x in Original_Configurations:
@@ -219,7 +221,10 @@ def main(argv):
                     os.remove(x['OUTPUT_CATALOGUE'])
         else:
             Original_Configuration['PER_GALAXY_NCPU'] = sf.set_limits(Original_Configuration['NCPU'],1,20)
-            FAT_Galaxy_Loops(Original_Configuration,Full_Catalogue)
+            for current_galaxy_index in range(Original_Configuration['CATALOGUE_START_ID'], Original_Configuration['CATALOGUE_END_ID']):
+                Configuration = sf.set_individual_configuration(current_galaxy_index,Full_Catalogue,Original_Configuration)
+                FAT_Galaxy_Loop(Configuration)
+
     except SystemExit:
         pass
     except KeyboardInterrupt:
