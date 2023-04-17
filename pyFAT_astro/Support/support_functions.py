@@ -144,10 +144,8 @@ calc_rings.__doc__ =f'''
 def calculate_number_processes(Configuration):
     cores_set = False
     no_galaxies = set_limits(Configuration['CATALOGUE_END_ID']-Configuration['CATALOGUE_START_ID'],1,float('inf'))
-
     while not cores_set:
         no_process= int(np.floor(Configuration['NCPU']/ Configuration['PER_GALAXY_NCPU']))
-
         while no_process > no_galaxies:
             no_process -= 1
             cores_set = True
@@ -160,6 +158,10 @@ def calculate_number_processes(Configuration):
             cores_set = True
 
 
+    while no_process < extra_cores:
+        extra_cores -= no_process
+        Configuration['PER_GALAXY_NCPU'] += 1
+
     input_cores = copy.deepcopy(Configuration['PER_GALAXY_NCPU'])
     while no_process <= extra_cores:
         Configuration['PER_GALAXY_NCPU'] += 1
@@ -168,13 +170,9 @@ def calculate_number_processes(Configuration):
         Configuration['PER_GALAXY_NCPU'] =  2.*input_cores
 
     print(f"We use {no_process} processes for {no_galaxies} galaxies")
-    start_id =  Configuration['CATALOGUE_START_ID']
-    print(f"We use  {Configuration['PER_GALAXY_NCPU']} cores per galaxy.")
-    ids = []
-    for i in range(no_galaxies):
-        ids.append(start_id+i)
-
-    return ids,no_process,no_galaxies
+    print(f"With {Configuration['PER_GALAXY_NCPU']} per galaxy")
+    #The updated Configuration should be modified automatically
+    return no_process
 
 calculate_number_processes.__doc__ =f'''
  NAME:
@@ -723,7 +721,7 @@ clean_header.__doc__ =f'''
     supprot_functions
 
  INPUTS:
-    Configuration = Standard FAT configuration
+   Configuration = Standard FAT configuration
     hdr = header to be cleaned
 
  OPTIONAL INPUTS:
@@ -750,7 +748,6 @@ def columndensity(Configuration,levels,systemic = 100.,beam=[-1.,-1.],channel_wi
             channel_width = 1.
         else:
             channel_width = Configuration['CHANNEL_WIDTH']
-
     print_log(f'''COLUMNDENSITY: Starting conversion from the following input.
 {'':8s}Levels = {levels}
 {'':8s}Beam = {beam}
@@ -3471,6 +3468,58 @@ set_boundaries.__doc__ =f'''
 
  NOTE:
 '''
+#Set the indivdual configuration such that the loop can run without the full catalogue
+def set_individual_configuration(current_galaxy_index,Full_Catalogue,Original_Configuration):
+    Configuration = copy.deepcopy(Original_Configuration)
+    Configuration['ID'] = Full_Catalogue['ID'][current_galaxy_index]
+    if Full_Catalogue['DISTANCE'][current_galaxy_index] != -1.:
+        Configuration['DISTANCE'] = Full_Catalogue['DISTANCE'][current_galaxy_index]
+    Configuration['SUB_DIR'] = Full_Catalogue['DIRECTORYNAME'][current_galaxy_index]
+    Configuration['BASE_NAME'] = Full_Catalogue['CUBENAME'][current_galaxy_index]+'_FAT'
+    if not Configuration['SOFIA_BASENAME']:
+        if 'BASENAME' in Full_Catalogue['ENTRIES']:
+            Configuration['SOFIA_BASENAME'] = Full_Catalogue['BASENAME'][current_galaxy_index]
+        else:
+            Configuration['SOFIA_BASENAME'] = Configuration['BASE_NAME']
+    #Add our fitting directory to the Configuration
+    #Maindir always ends in slash already
+    if Full_Catalogue['DIRECTORYNAME'][current_galaxy_index] == './':
+        Configuration['FITTING_DIR'] = f"{Configuration['MAIN_DIRECTORY']}"
+    else:
+        Configuration['FITTING_DIR'] = f"{Configuration['MAIN_DIRECTORY']}{Full_Catalogue['DIRECTORYNAME'][current_galaxy_index]}/"
+
+    Configuration['INPUT_CUBE']= f"{Full_Catalogue['CUBENAME'][current_galaxy_index]}.fits"
+    return(Configuration)
+set_individual_configuration.__doc__ =f'''
+ NAME:
+    set_individual_configuration
+
+ PURPOSE:
+    Fill the parameters of the configuration file that come from the catalogue
+
+ CATEGORY:
+    support_functions
+
+ INPUTS:
+    current_galaxy_index = index in the full catalogue
+
+    Full_Catalogue = the full catalogue
+
+    Original_Configuration = The original Configuration that applies to each galaxy
+
+
+ OPTIONAL INPUTS:
+
+ OUTPUTS:
+    A configuration for an individual galaxy
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:Configf
+'''
 
 #Function to read FAT configuration file into a dictionary
 def setup_configuration(cfg):
@@ -3556,6 +3605,7 @@ def setup_configuration(cfg):
                'FITTING_DIR': 'Unset', # Full path of the directory in which the fitting takes place, set at start of loop
                'BASE_NAME': 'Unset', #Basename for FAT products, typically {input_cube}_FAT, set at start of loop
                'LOG_DIR': 'Unset', #Directory to put log files from run, set at start of loop
+               'INPUT_CUBE': 'Unset', # Name of the input cube as listed in full catalogue
                'STOP_INDIVIDUAL_ERRORS': ['SmallSourceError','BadSourceError'\
                                         ,'FaintSourceError','BadHeaderError',\
                                         'BadCubeError','BadMaskError',\
