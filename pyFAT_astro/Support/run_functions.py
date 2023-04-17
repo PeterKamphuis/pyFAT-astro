@@ -834,11 +834,11 @@ construct_kernels.__doc__ =f'''
 def failed_fit(Configuration,Tirific_Template,current_run, Fits_Files,\
         stage='initial', fit_type='Fit_Tirific_OSC'):
     sf.print_log(f'''FAILED_FIT: Tirific failed to produce output in {fit_type}. It might be an unspecified crash.
-we try once more else we break off the fitting. As this sometimes happens due to a gsl interpolation error we modify the ring size by 1%
+we try once more else we break off the fitting. As this sometimes happens due to a gsl interpolation error we modify the ring size by 5%
 ''',Configuration, case=['main','screen'])
-    #There appears to be a case where the last ring can cause an interpolation error.
-    #Deal with this we take 0.95% of the beam ring size and run again
-    #I don't understand why we removed this again.
+    # There appears to be a case where the last ring can cause an interpolation error.
+    # Deal with this we take 0.95% of the beam ring size and run again
+    # I don't understand why we removed this again.
     Configuration['OLD_SIZE'].append(list(copy.deepcopy(Configuration['SIZE_IN_BEAMS'])))
     Configuration['SIZE_IN_BEAMS'] = Configuration['SIZE_IN_BEAMS']*0.95
     ring_size, number_of_rings = sf.set_ring_size(Configuration)
