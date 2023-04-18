@@ -17,7 +17,7 @@ import pyFAT_astro.Support.write_functions as wf
 from datetime import datetime
 from pyFAT_astro.Support.fat_errors import BadCatalogueError
 
-def FAT_Galaxy_Loop(Configuration):
+def FAT_Galaxy_Loop(Configuration,timing_lock,catalogue_lock):
     try:
 
         registered_exception = None
@@ -134,7 +134,8 @@ Therefore we remove the Create_FAT_Cube stages from the loop.
                 else:
                     Configuration['OUTPUT_QUANTITY'] = 'error'
                 catalogue_line = cf.finish_galaxy(Configuration, current_run=current_run,
-                                     exiting=e)
+                                     timing_lock=timing_lock,
+                                     catalogue_lock = catalogue_lock, exiting=e)
                 return catalogue_line
 
         # Get a bunch of info from the cube
@@ -159,7 +160,9 @@ Therefore we remove the Create_FAT_Cube stages from the loop.
                     Configuration['OUTPUT_QUANTITY'] = 5
                 else:
                     Configuration['OUTPUT_QUANTITY'] = 'error'
-                catalogue_line = cf.finish_galaxy(Configuration, current_run=current_run, exiting=e)
+                catalogue_line = cf.finish_galaxy(Configuration,
+                        timing_lock=timing_lock, catalogue_lock = catalogue_lock, 
+                        current_run=current_run, exiting=e)
                 return catalogue_line
         else:
             sf.sofia_output_exists(
@@ -214,7 +217,9 @@ Therefore we remove the Create_FAT_Cube stages from the loop.
             pass
         #Only
         catalogue_line = cf.finish_galaxy(Configuration, current_run=current_run,
-                         Fits_Files=Fits_Files, exiting=registered_exception)
+                         Fits_Files=Fits_Files,timing_lock=timing_lock,
+                         catalogue_lock = catalogue_lock,
+                         exiting=registered_exception)
         if Configuration['OUTPUT_QUANTITY'] != 5:
             DHI = rf.get_DHI(
                 Configuration, Model=Configuration['USED_FITTING'])
@@ -229,6 +234,8 @@ Therefore we remove the Create_FAT_Cube stages from the loop.
         registered_exception = e
         Configuration['FINAL_COMMENT'] = e
         Configuration['OUTPUT_QUANTITY'] = 'error'
-        catalogue_line = cf.finish_galaxy(Configuration, current_run=current_run,Fits_Files=Fits_Files,
+        catalogue_line = cf.finish_galaxy(Configuration,
+                          current_run=current_run,Fits_Files=Fits_Files,
+                          timing_lock=timing_lock, catalogue_lock = catalogue_lock,
                           exiting=registered_exception)
     return catalogue_line

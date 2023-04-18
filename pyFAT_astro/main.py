@@ -13,11 +13,18 @@ import warnings
 
 
 from datetime import datetime
-from multiprocessing import Pool,get_context
+from multiprocessing import Pool,get_context,Lock,Manager
 from omegaconf import OmegaConf
 from pyFAT_astro.FAT_Galaxy_Loop import FAT_Galaxy_Loop
 from pyFAT_astro.config.defaults import defaults
 from pyFAT_astro.Support.fat_errors import ProgramError
+
+class DummyLock():
+    def __enter__(self):
+        pass
+
+    def __exit__(self, *args):
+        pass
 
 def warn_with_traceback(message, category, filename, lineno, file=None, line=None):
     log = file if hasattr(file,'write') else sys.stderr
@@ -208,25 +215,29 @@ def main(argv):
         if Original_Configuration['MULTIPROCESSING']:
             Original_Configuration['VERBOSE_SCREEN'] = False
             output_catalogue = copy.deepcopy(Original_Configuration['OUTPUT_CATALOGUE'])
-            Original_Configuration['OUTPUT_CATALOGUE'] = None
+            #Original_Configuration['OUTPUT_CATALOGUE'] = None
             no_processes = sf.calculate_number_processes(Original_Configuration)
-            Configs = []
-            for current_galaxy_index in range(Original_Configuration['CATALOGUE_START_ID'], Original_Configuration['CATALOGUE_END_ID']):
-                Configs.append(sf.set_individual_configuration(current_galaxy_index,Full_Catalogue,Original_Configuration))
-                Configs
-            with get_context("spawn").Pool(processes=no_processes) as pool:
-                results = pool.map(FAT_Galaxy_Loop, Configs)
+            Configs_and_Locks = []
+
+            with Manager() as loop_manager:
+                timing_lock = loop_manager.Lock()
+                catalogue_lock = loop_manager.Lock()
+                for current_galaxy_index in range(Original_Configuration['CATALOGUE_START_ID'], Original_Configuration['CATALOGUE_END_ID']):
+                    Configs_and_Locks.append([sf.set_individual_configuration(current_galaxy_index,Full_Catalogue,Original_Configuration),timing_lock,catalogue_lock])
+
+                with get_context("spawn").Pool(processes=no_processes) as pool:
+                    results = pool.starmap(FAT_Galaxy_Loop, Configs_and_Locks)
+
             #Stitch all temporary outpu catalogues back together
-            print(results)
-            with open(output_catalogue,'a') as catalogue:
-                for x in results:
-                    catalogue.writelines(x)
+            #with open(output_catalogue,'a') as catalogue:
+            #    for x in results:
+            #        catalogue.writelines(x)
 
         else:
             Original_Configuration['PER_GALAXY_NCPU'] = sf.set_limits(Original_Configuration['NCPU'],1,20)
             for current_galaxy_index in range(Original_Configuration['CATALOGUE_START_ID'], Original_Configuration['CATALOGUE_END_ID']):
                 Configuration = sf.set_individual_configuration(current_galaxy_index,Full_Catalogue,Original_Configuration)
-                catalogue_line = FAT_Galaxy_Loop(Configuration)
+                catalogue_line = FAT_Galaxy_Loop(Configuration,DummyLock(),DummyLock())
 
     except SystemExit:
         pass
