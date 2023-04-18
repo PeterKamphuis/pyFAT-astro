@@ -1,7 +1,7 @@
 # -*- coding: future_fstrings -*-
 
 # This is the python version of FAT
-
+import copy
 import numpy as np
 import os
 import pyFAT_astro
@@ -206,15 +206,19 @@ def main(argv):
             sys.exit(1)
 
         if Original_Configuration['MULTIPROCESSING']:
-
+            Original_Configuration['VERBOSE_SCREEN'] = False
+            output_catalogue = copy.deepcopy(Original_Configuration['OUTPUT_CATALOGUE'])
+            Original_Configuration['OUTPUT_CATALOGUE'] = None
             no_processes = sf.calculate_number_processes(Original_Configuration)
             Configs = []
             for current_galaxy_index in range(Original_Configuration['CATALOGUE_START_ID'], Original_Configuration['CATALOGUE_END_ID']):
                 Configs.append(sf.set_individual_configuration(current_galaxy_index,Full_Catalogue,Original_Configuration))
+                Configs
             with get_context("spawn").Pool(processes=no_processes) as pool:
                 results = pool.map(FAT_Galaxy_Loop, Configs)
             #Stitch all temporary outpu catalogues back together
-            with open(Original_Configuration['OUTPUT_CATALOGUE'],'a') as catalogue:
+            print(results)
+            with open(output_catalogue,'a') as catalogue:
                 for x in results:
                     catalogue.writelines(x)
 
@@ -222,7 +226,7 @@ def main(argv):
             Original_Configuration['PER_GALAXY_NCPU'] = sf.set_limits(Original_Configuration['NCPU'],1,20)
             for current_galaxy_index in range(Original_Configuration['CATALOGUE_START_ID'], Original_Configuration['CATALOGUE_END_ID']):
                 Configuration = sf.set_individual_configuration(current_galaxy_index,Full_Catalogue,Original_Configuration)
-                FAT_Galaxy_Loop(Configuration)
+                catalogue_line = FAT_Galaxy_Loop(Configuration)
 
     except SystemExit:
         pass
