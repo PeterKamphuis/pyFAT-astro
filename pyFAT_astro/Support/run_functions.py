@@ -848,7 +848,7 @@ we try once more else we break off the fitting. As this sometimes happens due to
 
         #if the crash happens when make the full resolution  we need to
         # rescale the last iteration
-        print_log(f'''FAILED_FIT: We are rescaleing {Configuration['FITTING_DIR']}{fit_type}/{fit_type}_Iteration_{Configuration['ITERATIONS']}.def
+        sf.print_log(f'''FAILED_FIT: We are rescaleing {Configuration['FITTING_DIR']}{fit_type}/{fit_type}_Iteration_{Configuration['ITERATIONS']}.def
     ''',Configuration,case=['main'])
         Last_Iteration = sf.tirific_template(f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}_Iteration_{Configuration['ITERATIONS']}.def")
         set_new_size(Configuration,Last_Iteration,fit_type= fit_type
