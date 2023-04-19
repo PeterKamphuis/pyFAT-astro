@@ -1286,6 +1286,62 @@ plot_usage_stats.__doc__ =f'''
  NOTE:
 '''
 
+def reorder_output_catalogue(Configuration,Full_Catalogue):
+    #Read in the output catalogue
+    with open(Configuration['OUTPUT_CATALOGUE']) as file:
+        lines = file.readlines()
+    #Determine column sizes
+    header = lines[0]
+    output = lines[1:]
+    #IDs cannot have spaces
+    outputIDs = []
+    for line in output:
+        outputIDs.append(line.split()[0].strip())
+    #Sort based on the inpu IDs
+    with open(Configuration['OUTPUT_CATALOGUE'],'w') as file:
+        file.write(header)
+        for galaxy in Full_Catalogue['DIRECTORYNAME']:
+            print(galaxy)
+            try:
+                index_no = np.where(galaxy == \
+                    np.array(outputIDs))[0][0]
+                print(index_no)
+                file.write(output[index_no])
+            except IndexError:
+                pass
+            
+
+
+
+reorder_output_catalogue.__doc__ =f'''
+ NAME:
+    reorder_output_catalogue
+
+ PURPOSE:
+    When running in multiprocessing mode the output catalogue can be
+    in a different order as the input. This function makes sure the are sorted
+
+ CATEGORY:
+    write_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    Full_Catalogue = Full input catalogue
+
+ OPTIONAL INPUTS:
+
+
+ OUTPUTS:
+    reorder output catalogue
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
+
 def extract_date(string):
     tmp = string.split(' ')
     tmp2 = tmp[0].split('-')

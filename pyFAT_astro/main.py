@@ -18,6 +18,7 @@ from omegaconf import OmegaConf
 from pyFAT_astro.FAT_Galaxy_Loop import FAT_Galaxy_Loop
 from pyFAT_astro.config.defaults import defaults
 from pyFAT_astro.Support.fat_errors import ProgramError
+from pyFAT_astro.Support.write_functions import reorder_output_catalogue
 
 class DummyLock():
     def __enter__(self):
@@ -214,7 +215,7 @@ def main(argv):
 
         if Original_Configuration['MULTIPROCESSING']:
             Original_Configuration['VERBOSE_SCREEN'] = False
-            output_catalogue = copy.deepcopy(Original_Configuration['OUTPUT_CATALOGUE'])
+            #output_catalogue = copy.deepcopy(Original_Configuration['OUTPUT_CATALOGUE'])
             #Original_Configuration['OUTPUT_CATALOGUE'] = None
             no_processes = sf.calculate_number_processes(Original_Configuration)
             Configs_and_Locks = []
@@ -228,6 +229,8 @@ def main(argv):
                 with get_context("spawn").Pool(processes=no_processes) as pool:
                     results = pool.starmap(FAT_Galaxy_Loop, Configs_and_Locks)
 
+            #For clarity we reorder the output results to match the input
+            reorder_output_catalogue(Full_Catalogue,Original_Configuration['OUTPUT_CATALOGUE'])
             #Stitch all temporary outpu catalogues back together
             #with open(output_catalogue,'a') as catalogue:
             #    for x in results:
