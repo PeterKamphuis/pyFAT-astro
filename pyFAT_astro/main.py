@@ -7,10 +7,12 @@ import os
 import pyFAT_astro
 import pyFAT_astro.Support.support_functions as sf
 import pyFAT_astro.Support.read_functions as rf
+import pyFAT_astro.Support.write_functions as wf
 import sys
 import traceback
 import warnings
-
+import threading
+import Queue
 
 from datetime import datetime
 from multiprocessing import Pool,get_context,Lock,Manager
@@ -194,7 +196,11 @@ def main(argv):
         if Original_Configuration['TIMING']:
             with open(Original_Configuration['MAIN_DIRECTORY']+'Timing_Result.txt','w') as timing_result:
                 timing_result.write("This file contains the system start and end times for the fitting of each galaxy. \n")
-
+            #full_tracking_queue = Queue.Queue()
+            fst = threading.Thread(target=wf.full_system_tracking,\
+                        args = Original_Configuration)
+            fst.daemon = True
+            fst.start()
         #if start_galaxy not negative then it is catalogue ID
 
         if Original_Configuration['CATALOGUE_START_ID'] in ['-1','-1.']:
@@ -241,6 +247,9 @@ def main(argv):
             for current_galaxy_index in range(Original_Configuration['CATALOGUE_START_ID'], Original_Configuration['CATALOGUE_END_ID']):
                 Configuration = sf.set_individual_configuration(current_galaxy_index,Full_Catalogue,Original_Configuration)
                 catalogue_line = FAT_Galaxy_Loop(Configuration,DummyLock(),DummyLock())
+        if Original_Configuration['TIMING']:
+            fst.stop()
+            wf.plot_full_system(Original_Configuration)
 
     except SystemExit:
         pass
