@@ -51,11 +51,11 @@ def main(argv):
         print(f"This is version {pyFAT_astro.__version__} of the program.")
         if pyFAT_astro.__branch__:
             print(f"This is a github distribution and we are on the branch {pyFAT_astro.__branch__}.")
-    
+
         if '-v' in argv or '--version' in argv:
-            print(f"This is version {pyFAT_astro.__version__} of the program.")
-            if pyFAT_astro.__branch__:
-                print(f"This is a github distribution and we are on the branch {pyFAT_astro.__branch__}.")
+            #print(f"This is version {pyFAT_astro.__version__} of the program.")
+            #if pyFAT_astro.__branch__:
+            #    print(f"This is a github distribution and we are on the branch {pyFAT_astro.__branch__}.")
             sys.exit()
 
 
