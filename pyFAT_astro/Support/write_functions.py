@@ -254,27 +254,30 @@ class full_system_tracking:
 
     def start_monitoring(self):
         while not self.stop:
-            self.sys_cpu= psu.cpu_percent(interval=1)
-            self.sys_ram= psu.virtual_memory().used/2**30.
-            self.all_user_processes = {proc for proc \
-                in psu.process_iter() if proc.username() == self.user \
-                    and (proc.name() == self.python or\
-                     proc.name() == self.tirific or\
-                     proc.name() == self.sofia)
-                     or proc.name() == 'python3'}
-            self.CPU = 0.
-            self.RAM = 0.
-            for proc in self.all_user_processes:
-                if proc.status() == 'running':
-                    try:
-                        self.CPU += proc.cpu_percent(interval=0.5)/self.cpus
-                        self.RAM += (proc.memory_info()[0])/2**30.
-                    except:
-                        pass
-            #file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Gb for TiRiFiC \n")
-            with open(self.file,'a') as resources:
-                resources.write(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S'):20s} {self.sys_cpu:>10.1f} {self.sys_ram:>10.2f} {self.CPU:>10.1f} {self.RAM:>10.2f} \n")
-
+            try:
+                self.sys_cpu= psu.cpu_percent(interval=1)
+                self.sys_ram= psu.virtual_memory().used/2**30.
+                self.all_user_processes = {proc for proc \
+                    in psu.process_iter() if proc.username() == self.user \
+                        and (proc.name() == self.python or\
+                         proc.name() == self.tirific or\
+                         proc.name() == self.sofia)
+                         or proc.name() == 'python3'}
+                self.CPU = 0.
+                self.RAM = 0.
+                for proc in self.all_user_processes:
+                    if proc.status() == 'running':
+                        try:
+                            self.CPU += proc.cpu_percent(interval=0.5)/self.cpus
+                            self.RAM += (proc.memory_info()[0])/2**30.
+                        except:
+                            pass
+                #file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Gb for TiRiFiC \n")
+                with open(self.file,'a') as resources:
+                    resources.write(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S'):20s} {self.sys_cpu:>10.1f} {self.sys_ram:>10.2f} {self.CPU:>10.1f} {self.RAM:>10.2f} \n")
+            except:
+                #We do not care if something goes wrong once. We don't want the monitor to crash
+                pass
             time.sleep(self.interval)
     def stop_monitoring(self):
         self.stop = True
