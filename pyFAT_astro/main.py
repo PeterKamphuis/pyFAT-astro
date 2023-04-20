@@ -12,7 +12,7 @@ import sys
 import traceback
 import warnings
 import threading
-import Queue
+
 
 from datetime import datetime
 from multiprocessing import Pool,get_context,Lock,Manager
@@ -194,12 +194,12 @@ def main(argv):
                     output_catalogue.write(f"{'Directory Name':<{Original_Configuration['MAXIMUM_DIRECTORY_LENGTH']}s} {AC1:>6s} {comment}\n")
 
         if Original_Configuration['TIMING']:
+
             with open(Original_Configuration['MAIN_DIRECTORY']+'Timing_Result.txt','w') as timing_result:
                 timing_result.write("This file contains the system start and end times for the fitting of each galaxy. \n")
-            #full_tracking_queue = Queue.Queue()
-            fst = threading.Thread(target=wf.full_system_tracking,\
-                        args = Original_Configuration)
-            fst.daemon = True
+
+            system_monitor = wf.full_system_tracking(Original_Configuration)
+            fst = threading.Thread(target=system_monitor.start_monitoring)
             fst.start()
         #if start_galaxy not negative then it is catalogue ID
 
@@ -236,7 +236,7 @@ def main(argv):
                     results = pool.starmap(FAT_Galaxy_Loop, Configs_and_Locks)
 
             #For clarity we reorder the output results to match the input
-            reorder_output_catalogue(Full_Catalogue,Original_Configuration['OUTPUT_CATALOGUE'])
+            reorder_output_catalogue(Original_Configuration,Full_Catalogue)
             #Stitch all temporary outpu catalogues back together
             #with open(output_catalogue,'a') as catalogue:
             #    for x in results:
@@ -248,8 +248,8 @@ def main(argv):
                 Configuration = sf.set_individual_configuration(current_galaxy_index,Full_Catalogue,Original_Configuration)
                 catalogue_line = FAT_Galaxy_Loop(Configuration,DummyLock(),DummyLock())
         if Original_Configuration['TIMING']:
-            fst.stop()
-            wf.plot_full_system(Original_Configuration)
+            system_monitor.stop_monitoring()
+            fst.join()
 
     except SystemExit:
         pass
