@@ -48,6 +48,10 @@ except ImportError:
 def main(argv):
     try:
         #Get default settings
+        print(f"This is version {pyFAT_astro.__version__} of the program.")
+        if pyFAT_astro.__branch__:
+            print(f"This is a github distribution and we are on the branch {pyFAT_astro.__branch__}.")
+    
         if '-v' in argv or '--version' in argv:
             print(f"This is version {pyFAT_astro.__version__} of the program.")
             if pyFAT_astro.__branch__:
@@ -198,7 +202,7 @@ def main(argv):
             with open(Original_Configuration['MAIN_DIRECTORY']+'Timing_Result.txt','w') as timing_result:
                 timing_result.write("This file contains the system start and end times for the fitting of each galaxy. \n")
             # If we do this we should have 1 cpu to keep going
-            Configuration['NCPU'] -= 1
+            Original_Configuration['NCPU'] -= 1
             system_monitor = wf.full_system_tracking(Original_Configuration)
             fst = threading.Thread(target=system_monitor.start_monitoring)
             fst.start()

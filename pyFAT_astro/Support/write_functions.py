@@ -257,16 +257,15 @@ class full_system_tracking:
             try:
                 self.sys_cpu= psu.cpu_percent(interval=1)
                 self.sys_ram= psu.virtual_memory().used/2**30.
-                self.all_user_processes = {proc for proc \
-                    in psu.process_iter() if proc.username() == self.user \
-                        and (proc.name() == self.python or\
-                         proc.name() == self.tirific or\
-                         proc.name() == self.sofia)
-                         or proc.name() == 'python3'}
                 self.CPU = 0.
                 self.RAM = 0.
-                for proc in self.all_user_processes:
-                    if proc.status() == 'running':
+                for proc in psu.process_iter():
+                    if proc.username() == self.user \
+                        and proc.status() == 'running'\
+                        and (proc.name() == self.python or\
+                         proc.name() == self.tirific or\
+                         proc.name() == self.sofia or\
+                         proc.name() == 'python3'):
                         try:
                             self.CPU += proc.cpu_percent(interval=0.5)/self.cpus
                             self.RAM += (proc.memory_info()[0])/2**30.
@@ -281,6 +280,7 @@ class full_system_tracking:
                 traceback.print_exception(type(e),e,e.__traceback__)
                 pass
             time.sleep(self.interval)
+
     def stop_monitoring(self):
         self.stop = True
         loads = {'Time':[]}
