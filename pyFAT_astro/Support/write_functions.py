@@ -275,8 +275,10 @@ class full_system_tracking:
                 #file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Gb for TiRiFiC \n")
                 with open(self.file,'a') as resources:
                     resources.write(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S'):20s} {self.sys_cpu:>10.1f} {self.sys_ram:>10.2f} {self.CPU:>10.1f} {self.RAM:>10.2f} \n")
-            except:
+            except Exception as e:
                 #We do not care if something goes wrong once. We don't want the monitor to crash
+                #but we would like to know what went wrong
+                traceback.print_exception(type(e),e,e.__traceback__)
                 pass
             time.sleep(self.interval)
     def stop_monitoring(self):
