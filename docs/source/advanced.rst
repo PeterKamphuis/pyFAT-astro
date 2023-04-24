@@ -124,6 +124,7 @@ Output Keywords
  *bool, optional, default = False*
 
  Switch for tracking fitting time, CPU usage and RAM usage. This helps a lot to keep track on which stages are taking resources.
+ !!!!!!Note that this will subtract 1 cpu from the fitting processses!!!!
 
 
 **font_file**

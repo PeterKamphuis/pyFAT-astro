@@ -14,6 +14,13 @@ from pyFAT_astro.Support.fat_errors import SofiaMissingError
 import pyFAT_astro.Support.support_functions as sf
 import pyFAT_astro
 
+class DummyLock():
+    def __enter__(self):
+        pass
+
+    def __exit__(self, *args):
+        pass
+
 def check_legitimacy_osc(Configuration):
     sf.print_log(f'''CHECK_LEGITIMACY_OSC: Start.
 ''',Configuration,case=['debug_start'])
@@ -508,6 +515,7 @@ installation_check.__doc__ =f'''
 '''
 
 def finish_galaxy(Configuration,current_run = 'Not initialized',\
+        timing_lock= DummyLock(), catalogue_lock = DummyLock(),
         Fits_Files= {'ORIGINAL_CUBE': "Unset.fits"},exiting = None):
     Configuration['END_TIME'] = datetime.now()
     sf.print_log(f'''FINISH_GALAXY: These fits files are used:
@@ -588,24 +596,28 @@ def finish_galaxy(Configuration,current_run = 'Not initialized',\
     # Need to organize the fitting output orderly
     # Need to write date and Time to timing log
     if Configuration['TIMING']:
-
         plot_usage_stats(Configuration)
-        timing_result = open(Configuration['MAIN_DIRECTORY']+'/Timing_Result.txt','a')
-        timing_result.write(f'''The galaxy in directory {Configuration['FITTING_DIR']} started at {Configuration['START_TIME']}.
-Finished preparations at {Configuration['PREP_END_TIME']} \n''')
-        timing_result.write(f'''Converged to a galaxy size at {Configuration['END_TIME']}. \n''')
-        timing_result.write(f'''It finished the whole process at {datetime.now()}
+        with timing_lock:
+            with open(Configuration['MAIN_DIRECTORY']+'/Timing_Result.txt','a') as timing_result:
+                timing_result.write(f'''The galaxy in directory {Configuration['FITTING_DIR']} started at {Configuration['START_TIME']}.
+Finished preparations at {Configuration['PREP_END_TIME']}.
+Converged to a galaxy size at {Configuration['END_TIME']}.
+It finished the whole process at {datetime.now()}.
 ''')
-        timing_result.close()
 
         sf.print_log(f'''Finished timing statistics for the galaxy in {Configuration['FITTING_DIR']}.
 ''',Configuration)
 
     cleanup_final(Configuration,Fits_Files)
     # Need to write to results catalog
+    catalogue_line = f"{Configuration['FITTING_DIR'].split('/')[-2]:{Configuration['MAXIMUM_DIRECTORY_LENGTH']}s} {str(Configuration['ACCEPTED']):>6s} {Configuration['FINAL_COMMENT']} \n"
+
     if Configuration['OUTPUT_CATALOGUE']:
-        with open(Configuration['OUTPUT_CATALOGUE'],'a') as output_catalogue:
-            output_catalogue.write(f"{Configuration['FITTING_DIR'].split('/')[-2]:{Configuration['MAXIMUM_DIRECTORY_LENGTH']}s} {str(Configuration['ACCEPTED']):>6s} {Configuration['FINAL_COMMENT']} \n")
+        with catalogue_lock:
+            with open(Configuration['OUTPUT_CATALOGUE'],'a') as output_catalogue:
+                output_catalogue.write(catalogue_line)
+
+    return catalogue_line
 
 finish_galaxy.__doc__ =f'''
  NAME:

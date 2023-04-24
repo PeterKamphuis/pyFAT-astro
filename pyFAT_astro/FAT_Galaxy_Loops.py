@@ -17,8 +17,17 @@ import pyFAT_astro.Support.write_functions as wf
 from datetime import datetime
 from pyFAT_astro.Support.fat_errors import BadCatalogueError
 
-def FAT_Galaxy_Loops(Proc_Configuration, Full_Catalogue):
+def FAT_Galaxy_Loops(id,Proc_Configuration, Full_Catalogue,progress):
     try:
+        # we can make a single line when id is set
+        if id:
+            Proc_Configuration['CATALOGUE_START_ID'] = id
+            Proc_Configuration['CATALOGUE_END_ID'] = id+1
+            Proc_Configuration['OUTPUT_CATALOGUE'] = None
+
+
+
+
         for current_galaxy_index in range(Proc_Configuration['CATALOGUE_START_ID'], Proc_Configuration['CATALOGUE_END_ID']):
             registered_exception = None
             current_run = 'Not Initialized'
@@ -151,7 +160,7 @@ Therefore we remove the Create_FAT_Cube stages from the loop.
                         Configuration['OUTPUT_QUANTITY'] = 5
                     else:
                         Configuration['OUTPUT_QUANTITY'] = 'error'
-                    cf.finish_galaxy(Configuration, current_run=current_run,
+                    catalogue_line = cf.finish_galaxy(Configuration, current_run=current_run,
                                          exiting=e)
                     continue
 
@@ -177,7 +186,7 @@ Therefore we remove the Create_FAT_Cube stages from the loop.
                         Configuration['OUTPUT_QUANTITY'] = 5
                     else:
                         Configuration['OUTPUT_QUANTITY'] = 'error'
-                    cf.finish_galaxy(Configuration, current_run=current_run, exiting=e)
+                    catalogue_line = cf.finish_galaxy(Configuration, current_run=current_run, exiting=e)
                     continue
             else:
                 sf.sofia_output_exists(
@@ -206,11 +215,11 @@ Therefore we remove the Create_FAT_Cube stages from the loop.
 ''',Configuration)
                     sf.create_directory(Configuration['USED_FITTING'],Configuration['FITTING_DIR'])
                     Configuration['FINAL_COMMENT'] = 'This example does not work'
-                    cf.finish_galaxy(Configuration)
+                    catalogue_line = cf.finish_galaxy(Configuration)
                     continue
                 else:
                     Configuration['FINAL_COMMENT'] = 'You have chosen not to do any fitting'
-                    cf.finish_galaxy(Configuration)
+                    catalogue_line = cf.finish_galaxy(Configuration)
                     continue
 
                 #if all the fitting has gone properly we create nice errors
@@ -230,7 +239,7 @@ Therefore we remove the Create_FAT_Cube stages from the loop.
                 else:
                     Configuration['OUTPUT_QUANTITY'] = 'error'
             #Only
-            cf.finish_galaxy(Configuration, current_run=current_run,
+            catalogue_line = cf.finish_galaxy(Configuration, current_run=current_run,
                              Fits_Files=Fits_Files, exiting=registered_exception)
             if Configuration['OUTPUT_QUANTITY'] != 5:
                 DHI = rf.get_DHI(
@@ -246,5 +255,8 @@ Therefore we remove the Create_FAT_Cube stages from the loop.
         registered_exception = e
         Configuration['FINAL_COMMENT'] = e
         Configuration['OUTPUT_QUANTITY'] = 'error'
-        cf.finish_galaxy(Configuration, current_run=current_run,Fits_Files=Fits_Files,
+        catalogue_line = cf.finish_galaxy(Configuration, current_run=current_run,Fits_Files=Fits_Files,
                           exiting=registered_exception)
+    if progress:
+        print(f'We are at {progress}% of processing the catalogue')
+    return catalogue_line

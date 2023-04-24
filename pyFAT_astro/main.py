@@ -1,23 +1,33 @@
 # -*- coding: future_fstrings -*-
 
 # This is the python version of FAT
-
+import copy
 import numpy as np
 import os
 import pyFAT_astro
 import pyFAT_astro.Support.support_functions as sf
 import pyFAT_astro.Support.read_functions as rf
+import pyFAT_astro.Support.write_functions as wf
 import sys
 import traceback
 import warnings
+import threading
 
 
 from datetime import datetime
-from multiprocessing import Pool,get_context
+from multiprocessing import Pool,get_context,Lock,Manager
 from omegaconf import OmegaConf
-from pyFAT_astro.FAT_Galaxy_Loops import FAT_Galaxy_Loops
+from pyFAT_astro.FAT_Galaxy_Loop import FAT_Galaxy_Loop
 from pyFAT_astro.config.defaults import defaults
 from pyFAT_astro.Support.fat_errors import ProgramError
+from pyFAT_astro.Support.write_functions import reorder_output_catalogue
+
+class DummyLock():
+    def __enter__(self):
+        pass
+
+    def __exit__(self, *args):
+        pass
 
 def warn_with_traceback(message, category, filename, lineno, file=None, line=None):
     log = file if hasattr(file,'write') else sys.stderr
@@ -38,10 +48,14 @@ except ImportError:
 def main(argv):
     try:
         #Get default settings
+        print(f"This is version {pyFAT_astro.__version__} of pyFAT.")
+        if pyFAT_astro.__branch__:
+            print(f"This is a github distribution and we are on the branch {pyFAT_astro.__branch__}.")
+
         if '-v' in argv or '--version' in argv:
-            print(f"This is version {pyFAT_astro.__version__} of the program.")
-            if pyFAT_astro.__branch__:
-                print(f"This is a github distribution and we are on the branch {pyFAT_astro.__branch__}.")
+            #print(f"This is version {pyFAT_astro.__version__} of the program.")
+            #if pyFAT_astro.__branch__:
+            #    print(f"This is a github distribution and we are on the branch {pyFAT_astro.__branch__}.")
             sys.exit()
 
 
@@ -122,6 +136,7 @@ def main(argv):
     configuration_file = ''')
 
 
+
         cfg = OmegaConf.merge(cfg,inputconf)
 
         if not any([cfg.cube_name, cfg.configuration_file, cfg.installation_check\
@@ -183,9 +198,14 @@ def main(argv):
                     output_catalogue.write(f"{'Directory Name':<{Original_Configuration['MAXIMUM_DIRECTORY_LENGTH']}s} {AC1:>6s} {comment}\n")
 
         if Original_Configuration['TIMING']:
+
             with open(Original_Configuration['MAIN_DIRECTORY']+'Timing_Result.txt','w') as timing_result:
                 timing_result.write("This file contains the system start and end times for the fitting of each galaxy. \n")
-
+            # If we do this we should have 1 cpu to keep going
+            Original_Configuration['NCPU'] -= 1
+            system_monitor = wf.full_system_tracking(Original_Configuration)
+            fst = threading.Thread(target=system_monitor.start_monitoring)
+            fst.start()
         #if start_galaxy not negative then it is catalogue ID
 
         if Original_Configuration['CATALOGUE_START_ID'] in ['-1','-1.']:
@@ -205,21 +225,37 @@ def main(argv):
             sys.exit(1)
 
         if Original_Configuration['MULTIPROCESSING']:
-            Original_Configurations,no_processes = sf.calculate_number_processes(Original_Configuration)
-            to_maps = [(x,Full_Catalogue ) for x in Original_Configurations]
-            with get_context("spawn").Pool(processes=no_processes) as pool:
-                results = pool.starmap(FAT_Galaxy_Loops, to_maps)
+            Original_Configuration['VERBOSE_SCREEN'] = False
+            #output_catalogue = copy.deepcopy(Original_Configuration['OUTPUT_CATALOGUE'])
+            #Original_Configuration['OUTPUT_CATALOGUE'] = None
+            no_processes = sf.calculate_number_processes(Original_Configuration)
+            Configs_and_Locks = []
+
+            with Manager() as loop_manager:
+                timing_lock = loop_manager.Lock()
+                catalogue_lock = loop_manager.Lock()
+                for current_galaxy_index in range(Original_Configuration['CATALOGUE_START_ID'], Original_Configuration['CATALOGUE_END_ID']):
+                    Configs_and_Locks.append([sf.set_individual_configuration(current_galaxy_index,Full_Catalogue,Original_Configuration),timing_lock,catalogue_lock])
+
+                with get_context("spawn").Pool(processes=no_processes) as pool:
+                    results = pool.starmap(FAT_Galaxy_Loop, Configs_and_Locks)
+
+            #For clarity we reorder the output results to match the input
+            reorder_output_catalogue(Original_Configuration,Full_Catalogue)
             #Stitch all temporary outpu catalogues back together
-            with open(Original_Configuration['OUTPUT_CATALOGUE'],'a') as catalogue:
-                for x in Original_Configurations:
-                    with open(x['OUTPUT_CATALOGUE']) as tmp:
-                        lines = tmp.readlines()
-                    catalogue.writelines(lines[1:])
-                    #clean up
-                    os.remove(x['OUTPUT_CATALOGUE'])
+            #with open(output_catalogue,'a') as catalogue:
+            #    for x in results:
+            #        catalogue.writelines(x)
+
         else:
             Original_Configuration['PER_GALAXY_NCPU'] = sf.set_limits(Original_Configuration['NCPU'],1,20)
-            FAT_Galaxy_Loops(Original_Configuration,Full_Catalogue)
+            for current_galaxy_index in range(Original_Configuration['CATALOGUE_START_ID'], Original_Configuration['CATALOGUE_END_ID']):
+                Configuration = sf.set_individual_configuration(current_galaxy_index,Full_Catalogue,Original_Configuration)
+                catalogue_line = FAT_Galaxy_Loop(Configuration,DummyLock(),DummyLock())
+        if Original_Configuration['TIMING']:
+            system_monitor.stop_monitoring()
+            fst.join()
+
     except SystemExit:
         pass
     except KeyboardInterrupt:
