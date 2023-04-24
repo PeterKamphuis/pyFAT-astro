@@ -168,11 +168,14 @@ def calculate_number_processes(Configuration):
         extra_cores -= no_process
     if Configuration['PER_GALAXY_NCPU'] > 2.*input_cores:
         Configuration['PER_GALAXY_NCPU'] =  2.*input_cores
-
-    print(f"We use {no_process} processes for {no_galaxies} galaxies")
-    print(f"With {Configuration['PER_GALAXY_NCPU']} per galaxy")
+    sofia_processes = Configuration['NCPU']
+    if sofia_processes > no_galaxies:
+        sofia_processes = no_galaxies
+    print(f"We use {no_process} processes for {no_galaxies} galaxies.")
+    print(f"With {Configuration['PER_GALAXY_NCPU']} cpus per galaxy.")
+    print(f"For SoFiA and initial estimates we use {sofia_processes} processes.")
     #The updated Configuration should be modified automatically
-    return no_process
+    return no_process,sofia_processes
 
 calculate_number_processes.__doc__ =f'''
  NAME:
@@ -3623,7 +3626,7 @@ def setup_configuration(cfg):
                'TIRIFIC_PID': 'Not Initialized', #Process ID of tirific that is running
                'FAT_PID': os.getpid(), #Process ID of FAT that is running
                'FAT_PSUPROCESS': 'cant copy',
-               'FINAL_COMMENT': "This fitting stopped with an unregistered exit.", 
+               'FINAL_COMMENT': "This fitting stopped with an unregistered exit.",
 
                'MAX_SIZE_IN_BEAMS': 30, # The galaxy is not allowed to extend beyond this number of beams in radius, set in check_source
                'MIN_SIZE_IN_BEAMS': 0., # Minimum allowed radius in number of beams of the galaxy, set in check_source

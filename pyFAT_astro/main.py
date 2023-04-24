@@ -17,17 +17,11 @@ import threading
 from datetime import datetime
 from multiprocessing import Pool,get_context,Lock,Manager
 from omegaconf import OmegaConf
-from pyFAT_astro.FAT_Galaxy_Loop import FAT_Galaxy_Loop
+from pyFAT_astro.FAT_Galaxy_Loop import FAT_Galaxy_Loop,MP_initialize_sofia,\
+                                        MP_Fitting_Loop
 from pyFAT_astro.config.defaults import defaults
 from pyFAT_astro.Support.fat_errors import ProgramError
 from pyFAT_astro.Support.write_functions import reorder_output_catalogue
-
-class DummyLock():
-    def __enter__(self):
-        pass
-
-    def __exit__(self, *args):
-        pass
 
 def warn_with_traceback(message, category, filename, lineno, file=None, line=None):
     log = file if hasattr(file,'write') else sys.stderr
@@ -228,17 +222,39 @@ def main(argv):
             Original_Configuration['VERBOSE_SCREEN'] = False
             #output_catalogue = copy.deepcopy(Original_Configuration['OUTPUT_CATALOGUE'])
             #Original_Configuration['OUTPUT_CATALOGUE'] = None
-            no_processes = sf.calculate_number_processes(Original_Configuration)
+            no_processes,sofia_processes = sf.calculate_number_processes(Original_Configuration)
             Configs_and_Locks = []
 
             with Manager() as loop_manager:
                 timing_lock = loop_manager.Lock()
                 catalogue_lock = loop_manager.Lock()
+                #In case of multiprocessing we want to make sure to start with
+                #The big galaxies
+                #Setup an array of configs with locks
                 for current_galaxy_index in range(Original_Configuration['CATALOGUE_START_ID'], Original_Configuration['CATALOGUE_END_ID']):
                     Configs_and_Locks.append([sf.set_individual_configuration(current_galaxy_index,Full_Catalogue,Original_Configuration),timing_lock,catalogue_lock])
 
+                #Get all intitial setups
+                with get_context("spawn").Pool(processes=sofia_processes) as pool:
+                    print(f'Starting size estimates with {sofia_processes} processes')
+                    initial_setups = pool.starmap(MP_initialize_sofia, Configs_and_Locks)
+
+                initial_setups = [x for x in initial_setups if x['Succes']]
+                sizes = np.array([np.mean(x['Size']) for x in initial_setups]\
+                    ,dtype=float)
+                if len(sizes) >0.:
+                    sorted_ind = np.flip(sizes.argsort())
+                    sorted_initial_setups = [[initial_setups[x],timing_lock,catalogue_lock] \
+                        for x in sorted_ind]
+                    ## Do not put this in a list interprter as then it keep the old order
+                    #for x in sorted_ind:
+                    #    sorted_initial_setups.append([copy.deepcopy(initial_setups[x])\
+                    #        ,timing_lock,catalogue_lock])
+                initial_setups =[]
+            
                 with get_context("spawn").Pool(processes=no_processes) as pool:
-                    results = pool.starmap(FAT_Galaxy_Loop, Configs_and_Locks)
+                    print(f'Starting fitting with {no_processes} processes')
+                    finals = pool.starmap(MP_Fitting_Loop, sorted_initial_setups)
 
             #For clarity we reorder the output results to match the input
             reorder_output_catalogue(Original_Configuration,Full_Catalogue)
@@ -251,17 +267,23 @@ def main(argv):
             Original_Configuration['PER_GALAXY_NCPU'] = sf.set_limits(Original_Configuration['NCPU'],1,20)
             for current_galaxy_index in range(Original_Configuration['CATALOGUE_START_ID'], Original_Configuration['CATALOGUE_END_ID']):
                 Configuration = sf.set_individual_configuration(current_galaxy_index,Full_Catalogue,Original_Configuration)
-                catalogue_line = FAT_Galaxy_Loop(Configuration,DummyLock(),DummyLock())
+                catalogue_line = FAT_Galaxy_Loop(Configuration)
         if Original_Configuration['TIMING']:
             system_monitor.stop_monitoring()
             fst.join()
 
     except SystemExit:
+        system_monitor.stop_monitoring()
+        fst.join()
         pass
     except KeyboardInterrupt:
         traceback.print_exception(*sys.exc_info())
+        system_monitor.stop_monitoring()
+        fst.join()
         pass
     except:
+        system_monitor.stop_monitoring()
+        fst.join()
         raise ProgramError(f'''Something went wrong in the main. This should not happen. Please list an issue on github.''')
 
 main.__doc__ = '''
