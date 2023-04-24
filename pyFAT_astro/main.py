@@ -48,7 +48,7 @@ except ImportError:
 def main(argv):
     try:
         #Get default settings
-        print(f"This is version {pyFAT_astro.__version__} of the program.")
+        print(f"This is version {pyFAT_astro.__version__} of pyFAT.")
         if pyFAT_astro.__branch__:
             print(f"This is a github distribution and we are on the branch {pyFAT_astro.__branch__}.")
 
