@@ -553,7 +553,6 @@ Checking the central flux in a box with size of {Configuration['BEAM_IN_PIXELS']
 
 
     # Size of the galaxy in beams
-    Configuration['SIZE_IN_BEAMS'] = 1.8
     if np.sum(Configuration['SIZE_IN_BEAMS']) <= 2.*Configuration['TOO_SMALL_GALAXY']:
         sf.print_log(f'''CHECK_SOURCE: This galaxy has an estimated size of  {np.sum(Configuration['SIZE_IN_BEAMS'])} beams in diameter.
 {'':8s}This is not large enough too fit. We will exit this fit.
