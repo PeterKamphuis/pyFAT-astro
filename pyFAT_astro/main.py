@@ -201,7 +201,7 @@ def main(argv):
             fst = threading.Thread(target=system_monitor.start_monitoring)
             fst.start()
         #if start_galaxy not negative then it is catalogue ID
-
+        print(f"We are using {Original_Configuration['NCPU']} cpus.")
         if Original_Configuration['CATALOGUE_START_ID'] in ['-1','-1.']:
             Original_Configuration['CATALOGUE_START_ID'] = int(0)
         else:
@@ -251,7 +251,7 @@ def main(argv):
                     #    sorted_initial_setups.append([copy.deepcopy(initial_setups[x])\
                     #        ,timing_lock,catalogue_lock])
                 initial_setups =[]
-            
+
                 with get_context("spawn").Pool(processes=no_processes) as pool:
                     print(f'Starting fitting with {no_processes} processes')
                     finals = pool.starmap(MP_Fitting_Loop, sorted_initial_setups)
@@ -273,17 +273,26 @@ def main(argv):
             fst.join()
 
     except SystemExit:
-        system_monitor.stop_monitoring()
-        fst.join()
+        try:
+            system_monitor.stop_monitoring()
+            fst.join()
+        except:
+            pass
         pass
     except KeyboardInterrupt:
         traceback.print_exception(*sys.exc_info())
-        system_monitor.stop_monitoring()
-        fst.join()
+        try:
+            system_monitor.stop_monitoring()
+            fst.join()
+        except:
+            pass
         pass
     except:
-        system_monitor.stop_monitoring()
-        fst.join()
+        try:
+            system_monitor.stop_monitoring()
+            fst.join()
+        except:
+            pass
         raise ProgramError(f'''Something went wrong in the main. This should not happen. Please list an issue on github.''')
 
 main.__doc__ = '''

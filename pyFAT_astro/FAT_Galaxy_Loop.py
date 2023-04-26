@@ -219,6 +219,8 @@ def MP_initialize_sofia(Configuration,timing_lock,catalogue_lock):
     current_run = 'Not Initialized'
     succes = False
     catalogue_line = 'unset'
+    Initial_Parameters = []
+    Fits_Files = {}
     try:
         Fits_Files = initialize_loop(Configuration)
         loop_sofia(Configuration,Fits_Files)
@@ -245,6 +247,7 @@ def MP_initialize_sofia(Configuration,timing_lock,catalogue_lock):
                           current_run=current_run,Fits_Files=Fits_Files,
                           timing_lock=timing_lock, catalogue_lock = catalogue_lock,
                           exiting=registered_exception)
+
     Configuration['FAT_PSUPROCESS'] = None
     sofia_output = {'Succes': succes, 'Configuration': Configuration,
                       'catalogue_line': catalogue_line, 'Fits_Files':Fits_Files,
