@@ -4,6 +4,7 @@
 import copy
 import numpy as np
 import os
+import psutil
 import pyFAT_astro
 import pyFAT_astro.Support.support_functions as sf
 import pyFAT_astro.Support.read_functions as rf
@@ -97,6 +98,8 @@ def main(argv):
             sys.exit()
 
         cfg = OmegaConf.structured(defaults)
+        if cfg.ncpu == psutil.cpu_count():
+            cfg.ncpu -= 1
 
         # read command line arguments anything list input should be set in '' e.g. pyROTMOD 'rotmass.MD=[1.4,True,True]'
         inputconf = OmegaConf.from_cli(argv)
@@ -137,6 +140,10 @@ def main(argv):
                     ,cfg.print_examples,cfg.input.catalogue]):
             print(help_message)
             sys.exit()
+        # if we set more cpus than available we limit to the avaliable cpus
+        if cfg.ncpu > len(psutil.Process().cpu_affinity()):
+            cfg.ncpu  = len(psutil.Process().cpu_affinity())
+
         #Let's write and input example to the main directory
         if cfg.output.debug:
             with open(f'{cfg.input.main_directory}/FAT_Inputs-Run_{datetime.now().strftime("%d-%m-%Y")}.yml','w') as default_write:

@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from omegaconf import MISSING
 #from multiprocessing import cpu_count
-from psutil import cpu_count
+import psutil
 from typing import List, Optional
 
 
@@ -109,7 +109,7 @@ class Advanced:
 
 @dataclass
 class defaults:
-    ncpu: int = cpu_count()-1
+    ncpu: int = len(psutil.Process().cpu_affinity())
     print_examples: bool = False
     installation_check: bool = False
     cube_name: Optional[str] = None
