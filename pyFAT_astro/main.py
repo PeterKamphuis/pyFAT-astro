@@ -249,19 +249,17 @@ def main(argv):
                 initial_setups = [x for x in initial_setups if x['Succes']]
                 sizes = np.array([np.mean(x['Size']) for x in initial_setups]\
                     ,dtype=float)
-                if len(sizes) >0.:
+                if len(sizes) > 0.:
                     sorted_ind = np.flip(sizes.argsort())
                     sorted_initial_setups = [[initial_setups[x],timing_lock,catalogue_lock] \
                         for x in sorted_ind]
-                    ## Do not put this in a list interprter as then it keep the old order
-                    #for x in sorted_ind:
-                    #    sorted_initial_setups.append([copy.deepcopy(initial_setups[x])\
-                    #        ,timing_lock,catalogue_lock])
-                initial_setups =[]
+                    initial_setups =[]
+                    with get_context("spawn").Pool(processes=no_processes) as pool:
+                        print(f'Starting fitting with {no_processes} processes')
+                        finals = pool.starmap(MP_Fitting_Loop, sorted_initial_setups)
 
-                with get_context("spawn").Pool(processes=no_processes) as pool:
-                    print(f'Starting fitting with {no_processes} processes')
-                    finals = pool.starmap(MP_Fitting_Loop, sorted_initial_setups)
+                else:
+                    print(f'All galaxies can not be fitted')
 
             #For clarity we reorder the output results to match the input
             reorder_output_catalogue(Original_Configuration,Full_Catalogue)

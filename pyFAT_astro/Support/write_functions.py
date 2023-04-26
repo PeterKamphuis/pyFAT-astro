@@ -1403,11 +1403,9 @@ def reorder_output_catalogue(Configuration,Full_Catalogue):
     with open(Configuration['OUTPUT_CATALOGUE'],'w') as file:
         file.write(header)
         for galaxy in Full_Catalogue['DIRECTORYNAME']:
-            print(galaxy)
             try:
                 index_no = np.where(galaxy == \
                     np.array(outputIDs))[0][0]
-                print(index_no)
                 file.write(output[index_no])
             except IndexError:
                 pass

@@ -235,6 +235,7 @@ def MP_initialize_sofia(Configuration,timing_lock,catalogue_lock):
                           timing_lock=timing_lock, catalogue_lock = catalogue_lock,
                           exiting=registered_exception)
     except Exception as e:
+        print(f"What going on {e}, {e.__class__.__name__} ")
         succes =False
         if e.__class__.__name__ in Configuration['STOP_INDIVIDUAL_ERRORS']:
             Configuration['OUTPUT_QUANTITY'] = 5
@@ -242,7 +243,6 @@ def MP_initialize_sofia(Configuration,timing_lock,catalogue_lock):
             Configuration['OUTPUT_QUANTITY'] = 'error'
         registered_exception = e
         Configuration['FINAL_COMMENT'] = e
-        Configuration['OUTPUT_QUANTITY'] = 'error'
         catalogue_line = cf.finish_galaxy(Configuration,
                           current_run=current_run,Fits_Files=Fits_Files,
                           timing_lock=timing_lock, catalogue_lock = catalogue_lock,
