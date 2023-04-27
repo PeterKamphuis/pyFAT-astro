@@ -3020,7 +3020,10 @@ def print_log(log_statement,Configuration,case=['main']):
             debug= 'short'
     else:
         debug = 'empty'
-    log_statement = f"{linenumber(debug=debug)}{log_statement}"
+    if Configuration['TIMING']:
+        log_statement = f"{linenumber(debug=debug)} {datetime.now()} {log_statement}"
+    else:
+        log_statement = f"{linenumber(debug=debug)}{log_statement}"
     print_statement = False
     if (Configuration['DEBUG'] and ('debug_start' in case or 'debug_add' in case))\
         or ('verbose' in case and (Configuration['VERBOSE_LOG'] or Configuration['DEBUG']))\
@@ -3306,8 +3309,9 @@ We are in in stage {stage} and fit_type {fit_type} and have done {Configuration[
     if Configuration['TIMING']:
         time.sleep(0.1)
         with open(f"{Configuration['LOG_DIRECTORY']}Usage_Statistics.txt",'a') as file:
-            file.write(f"# TIRIFIC: Initializing Tirific at stage = {fit_type} {datetime.now()} \n")
+            file.write(f"# TIRIFIC: Initializing Tirific at stage = {fit_type}, Loop = {Configuration["ITERATIONS"]} {datetime.now()} \n")
             CPU,mem = get_usage_statistics(Configuration,current_process)
+            initialized = datetime.now()
             file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Mb for TiRiFiC \n")
     else:
         time.sleep(0.1)
@@ -3339,6 +3343,14 @@ We are in in stage {stage} and fit_type {fit_type} and have done {Configuration[
             break
         if tmp[0].strip() == 'Abort':
             break
+        if not triggered:
+            #Check that the initialization doesn't take to long
+            check = datetime.now()
+            diff = (check-initialized).total_seconds()
+            if diff > 600:
+                raise TirificOutputError(f'''10 minutes after initialization the fitting has still not started.
+We were running {deffile} and failed to find the output {output_fits} or {output_deffile}.
+''')
     if Configuration['VERBOSE_SCREEN']:
         print(f'\n')
     if Configuration['TIMING']:
