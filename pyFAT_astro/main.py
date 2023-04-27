@@ -4,6 +4,7 @@
 import copy
 import numpy as np
 import os
+import psutil
 import pyFAT_astro
 import pyFAT_astro.Support.support_functions as sf
 import pyFAT_astro.Support.read_functions as rf
@@ -97,6 +98,8 @@ def main(argv):
             sys.exit()
 
         cfg = OmegaConf.structured(defaults)
+        if cfg.ncpu == psutil.cpu_count():
+            cfg.ncpu -= 1
 
         # read command line arguments anything list input should be set in '' e.g. pyROTMOD 'rotmass.MD=[1.4,True,True]'
         inputconf = OmegaConf.from_cli(argv)
@@ -137,6 +140,10 @@ def main(argv):
                     ,cfg.print_examples,cfg.input.catalogue]):
             print(help_message)
             sys.exit()
+        # if we set more cpus than available we limit to the avaliable cpus
+        if cfg.ncpu > len(psutil.Process().cpu_affinity()):
+            cfg.ncpu  = len(psutil.Process().cpu_affinity())
+
         #Let's write and input example to the main directory
         if cfg.output.debug:
             with open(f'{cfg.input.main_directory}/FAT_Inputs-Run_{datetime.now().strftime("%d-%m-%Y")}.yml','w') as default_write:
@@ -201,7 +208,7 @@ def main(argv):
             fst = threading.Thread(target=system_monitor.start_monitoring)
             fst.start()
         #if start_galaxy not negative then it is catalogue ID
-
+        print(f"We are using {Original_Configuration['NCPU']} cpus.")
         if Original_Configuration['CATALOGUE_START_ID'] in ['-1','-1.']:
             Original_Configuration['CATALOGUE_START_ID'] = int(0)
         else:
@@ -242,19 +249,17 @@ def main(argv):
                 initial_setups = [x for x in initial_setups if x['Succes']]
                 sizes = np.array([np.mean(x['Size']) for x in initial_setups]\
                     ,dtype=float)
-                if len(sizes) >0.:
+                if len(sizes) > 0.:
                     sorted_ind = np.flip(sizes.argsort())
                     sorted_initial_setups = [[initial_setups[x],timing_lock,catalogue_lock] \
                         for x in sorted_ind]
-                    ## Do not put this in a list interprter as then it keep the old order
-                    #for x in sorted_ind:
-                    #    sorted_initial_setups.append([copy.deepcopy(initial_setups[x])\
-                    #        ,timing_lock,catalogue_lock])
-                initial_setups =[]
-            
-                with get_context("spawn").Pool(processes=no_processes) as pool:
-                    print(f'Starting fitting with {no_processes} processes')
-                    finals = pool.starmap(MP_Fitting_Loop, sorted_initial_setups)
+                    initial_setups =[]
+                    with get_context("spawn").Pool(processes=no_processes) as pool:
+                        print(f'Starting fitting with {no_processes} processes')
+                        finals = pool.starmap(MP_Fitting_Loop, sorted_initial_setups)
+
+                else:
+                    print(f'All galaxies can not be fitted')
 
             #For clarity we reorder the output results to match the input
             reorder_output_catalogue(Original_Configuration,Full_Catalogue)
@@ -273,17 +278,26 @@ def main(argv):
             fst.join()
 
     except SystemExit:
-        system_monitor.stop_monitoring()
-        fst.join()
+        try:
+            system_monitor.stop_monitoring()
+            fst.join()
+        except:
+            pass
         pass
     except KeyboardInterrupt:
         traceback.print_exception(*sys.exc_info())
-        system_monitor.stop_monitoring()
-        fst.join()
+        try:
+            system_monitor.stop_monitoring()
+            fst.join()
+        except:
+            pass
         pass
     except:
-        system_monitor.stop_monitoring()
-        fst.join()
+        try:
+            system_monitor.stop_monitoring()
+            fst.join()
+        except:
+            pass
         raise ProgramError(f'''Something went wrong in the main. This should not happen. Please list an issue on github.''')
 
 main.__doc__ = '''
