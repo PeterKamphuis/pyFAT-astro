@@ -3309,7 +3309,7 @@ We are in in stage {stage} and fit_type {fit_type} and have done {Configuration[
     if Configuration['TIMING']:
         time.sleep(0.1)
         with open(f"{Configuration['LOG_DIRECTORY']}Usage_Statistics.txt",'a') as file:
-            file.write(f"# TIRIFIC: Initializing Tirific at stage = {fit_type}, Loop = {Configuration["ITERATIONS"]} {datetime.now()} \n")
+            file.write(f"# TIRIFIC: Initializing Tirific at stage = {fit_type}, Loop = {Configuration['ITERATIONS']} {datetime.now()} \n")
             CPU,mem = get_usage_statistics(Configuration,current_process)
             initialized = datetime.now()
             file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Mb for TiRiFiC \n")
