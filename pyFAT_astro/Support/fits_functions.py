@@ -295,7 +295,11 @@ cutout_cube.__doc__ =f'''
 '''
 
 # Extract a PV-Diagrams
-def extract_pv(Configuration,cube_in,angle,center=[-1,-1,-1],finalsize=[-1,-1],convert=-1):
+def extract_pv(Configuration,cube_in,angle,center= None,finalsize=None,convert=-1):
+    if center is None:
+        center=[-1,-1,-1]
+    if finalsize = None:
+        finalsize=[-1,-1]
     sf.print_log(f'''EXTRACT_PV: We are the extraction of a PV-Diagram
 {'':8s} PA = {angle}
 {'':8s} center = {center}
@@ -699,8 +703,10 @@ optimized_cube.__doc__ =f'''
 '''
 
 def make_moments(Configuration,Fits_Files,fit_type = 'Undefined',
-                 moments = [0,1,2],overwrite = False, level=None,
+                 moments = None,overwrite = False, level=None,
                   vel_unit= None):
+    if moments is None:
+        moments = [0,1,2]
     sf.print_log(f'''MAKE_MOMENTS: We are starting to create the moment maps.
 ''',Configuration, case = ['debug_start'])
     if fit_type == 'Generic_Initialize':
@@ -770,7 +776,7 @@ def make_moments(Configuration,Fits_Files,fit_type = 'Undefined',
             sf.print_log(f"MAKE_MOMENTS: Your Moment 0 has bad data and we could not write the moment 0 fits file", Configuration)
 
 
-        
+
     if 1 in moments or 2 in moments:
         zaxis = cube[0].header['CRVAL3'] + (np.arange(cube[0].header['NAXIS3'])+1 \
               - cube[0].header['CRPIX3']) * cube[0].header['CDELT3']

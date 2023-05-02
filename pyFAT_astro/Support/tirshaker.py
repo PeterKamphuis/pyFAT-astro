@@ -26,9 +26,19 @@ import pyFAT_astro
 #
 #tirshaker
 def tirshaker(Configuration, Tirific_Template, outfilename = 'test_out.def', \
-              outfileprefix = 'tirsh_', parameter_groups = [], rings = [], block = []\
-              , variation = [], variation_type = [], iterations = 0, random_seed = 0,\
-               mode = 'mad',fit_type='Error_Shaker'):
+              outfileprefix = 'tirsh_', parameter_groups = None, rings = None,\
+              block = None, variation = None, variation_type = None, iterations = 0, \
+              random_seed = 0, mode = 'mad',fit_type='Error_Shaker'):
+    if parameter_groups is None:
+        parameter_groups = []
+    if rings  is None:
+        rings = []
+    if block is None:
+        block = []
+    if  variation is None:
+        variation = []
+    if variation_type is None:
+        variation_type = []
     # Initiate rng
     random.seed(random_seed)
 

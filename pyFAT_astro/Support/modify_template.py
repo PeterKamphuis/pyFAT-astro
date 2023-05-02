@@ -431,7 +431,8 @@ check_angles.__doc__=f'''
 '''
 
 
-def check_flat(Configuration,profile,error,key, last_reliable_ring = -1,inner_fix = 4):
+def check_flat(Configuration,profile,error,key, last_reliable_ring = -1,\
+                inner_fix = 4):
     if last_reliable_ring == -1 or last_reliable_ring > len(profile)-1:
         last_reliable_ring = len(profile)-1
 
@@ -791,9 +792,14 @@ fit_arc.__doc__ =f'''
  NOTE:
 '''
 
-def fit_polynomial(Configuration,radii,profile,sm_profile,error, key, Tirific_Template,\
-                    inner_fix = 4,min_error =0.,boundary_limits = [0,0.],\
-                    allowed_order=[None,None],return_order= False ):
+def fit_polynomial(Configuration,radii,profile,sm_profile,error, key, \
+                   Tirific_Template,inner_fix = 4,min_error =0., \
+                   boundary_limits = None, allowed_order= None,
+                   return_order= False ):
+    if boundary_limits is None:
+        boundary_limits = [0,0.]
+    if allowed_order is None:
+        allowed_order=[None,None]
 
     sf.print_log(f'''FIT_POLYNOMIAL: starting to fit the polynomial with the following input:
 {'':8s} key = {key}
@@ -1030,8 +1036,10 @@ fix_outer_rotation.__doc__ =f'''
  NOTE: Declining rotation curves are dealt with in no_declining_vrot
 '''
 
-def fix_profile(Configuration, key, profile, Tirific_Template, inner_fix = [4,4],\
+def fix_profile(Configuration, key, profile, Tirific_Template, inner_fix = None,\
                     singular = False,only_inner = False ):
+    if inner_fix is None:
+        inner_fix = [4,4]
     if isinstance(inner_fix,int):
         inner_fix = [inner_fix]
     sf.print_log(f'''FIX_PROFILE: Starting to fix {key} with the input values:
@@ -1355,9 +1363,10 @@ fix_sbr.__doc__ =f'''
  NOTE:
 '''
 
-def fix_vrot_for_incl_change(Configuration,Tirific_Template, incl_original,incl_modified ):
-    vrot = sf.load_tirific(Configuration,Tirific_Template,Variables=["VROT","VROT_2"],\
-                array=True)
+def fix_vrot_for_incl_change(Configuration,Tirific_Template, \
+                            incl_original,incl_modified ):
+    vrot = sf.load_tirific(Configuration,Tirific_Template,\
+            Variables=["VROT","VROT_2"],array=True)
     new_vrot = copy.deepcopy(vrot)
     for i in [0,1]:
         vobs = np.array([x*np.sin(np.radians(y)) for x,y in zip(vrot[i],incl_original[i])],dtype=float)
@@ -1434,8 +1443,13 @@ flatten_the_curve.__doc__ =f'''
  NOTE:
 '''
 
-def get_error(Configuration,profile,sm_profile,key,min_error = [0.],singular = False,weights= [1.],apply_max_error = False ):
+def get_error(Configuration,profile,sm_profile,key,min_error = None,\
+    singular = False,weights= None,apply_max_error = False ):
 
+    if min_error is None:
+        min_error = [0.]
+    if weights is None:
+        weights= [1.]
     try:
         size= len(min_error)
         min_error = np.array(min_error,dtype=float)
@@ -1754,8 +1768,9 @@ inner_sbr_fix.__doc__ =f'''
  NOTE:
 '''
 
-def modify_flat(Configuration,profile,original_profile,errors,key,inner_fix = [4,4] ):
-
+def modify_flat(Configuration,profile,original_profile,errors,key,inner_fix = None):
+    if inner_fix is None:
+        inner_fix = [4,4]
     sf.print_log(f'''MODIFY_FLAT: These {key} profiles are checked to be flat.
 {'':8s} profile = {profile}
 {'':8s} original_profile = {original_profile}
@@ -1922,7 +1937,10 @@ no_declining_vrot.__doc__ =f'''
 '''
 
 
-def regularise_profile(Configuration,Tirific_Template, key,min_error= [0.], no_apply =False):
+def regularise_profile(Configuration,Tirific_Template, key,min_error= None, \
+                            no_apply =False):
+    if min_error is None:
+        min_error= [0.]
     if key in ['PA','INCL']:
         raise FunctionCallError('The warp is regularised in regularise_warp. regularise profile is for singular profiles only.')
 
@@ -2044,7 +2062,10 @@ regularise_profile.__doc__ =f'''
 '''
 
 
-def regularise_warp(Configuration,Tirific_Template, min_error= [0.,0.], no_apply =False,smooth_only=False):
+def regularise_warp(Configuration,Tirific_Template, min_error = None, \
+                        no_apply =False,smooth_only=False):
+    if min_error is None:
+        min_error = [0.,0.]
         # We start by getting an estimate for the errors
     min_error=np.array(min_error,dtype=float)
     weights = sf.get_ring_weights(Configuration,Tirific_Template)
@@ -2239,7 +2260,10 @@ regularise_warp.__doc__ =f'''
 '''
 
 
-def set_boundary_limits(Configuration,Tirific_Template,key,values = [0.,0.],  tolerance = 0.01, fixed = False):
+def set_boundary_limits(Configuration,Tirific_Template,key,values = None, \
+                        tolerance = 0.01, fixed = False):
+    if values is None:
+        values = [0.,0.]
     sf.print_log(f'''SET_BOUNDARY_LIMITS: checking limits for {key},
 {'':8s} current Boundaries = {Configuration[f"{key}_CURRENT_BOUNDARY"]}
 {'':8s} values = {values}
@@ -2457,7 +2481,15 @@ set_errors.__doc__ =f'''
  NOTE:
 '''
 
-def set_fitting_parameters(Configuration, Tirific_Template, parameters_to_adjust  = ['NO_ADJUSTMENT'], modifiers = ['EMPTY'], stage = 'initial', initial_estimates = ['EMPTY']):
+def set_fitting_parameters(Configuration, Tirific_Template, \
+        parameters_to_adjust= None, modifiers = None, stage = 'initial',\
+         initial_estimates = None):
+    if parameters_to_adjust is None:
+        parameters_to_adjust = ['NO_ADJUSTMENT']
+    if modifier is None:
+        modifiers = ['EMPTY']
+    if initial_estimates is None:
+        initial_estimates = ['EMPTY']
     sf.print_log(f'''SET_FITTING_PARAMETERS: We are starting with these modifiers.
 {'':8s} {modifiers}
 ''',Configuration,case=['debug_start'])
@@ -2801,10 +2833,15 @@ set_fitting_parameters.__doc__ = '''
 
 
 
-def set_generic_fitting(Configuration, key , stage = 'initial', basic_variation = 5., \
-                        slope = [None, None], flat_slope = False , symmetric = False,\
-                        fixed = True, moderate = 3, step_modifier = [1.,1.,1.],\
+def set_generic_fitting(Configuration, key , stage = 'initial', \
+        basic_variation = 5.,slope = None, flat_slope = False, symmetric = False,\
+                        fixed = True, moderate = 3, step_modifier = None,\
                         flat_inner = 3):
+    if slope is None:
+        slope = [None, None]
+    if step_modifier is None:
+        step_modifier = [1.,1.,1.]
+
     sf.print_log(f'''SET_GENERIC_FITTING: We are processing {key}.
 ''', Configuration, case=['debug_start'])
     if isinstance(flat_inner,int):
@@ -2970,7 +3007,8 @@ def set_generic_moderate(Configuration,key):
 
 
 #Function
-def set_model_parameters(Configuration, Tirific_Template,Model_Values, stage = 'initial'):
+def set_model_parameters(Configuration, Tirific_Template,Model_Values, \
+        stage = 'initial'):
     parameters_to_set = ['RADI','VROT_profile','Z0','SBR_profile','INCL','PA','XPOS','YPOS','VSYS','SDIS']
 
 
@@ -3089,9 +3127,12 @@ set_model_parameters.__doc__ =f'''
 '''
 #function to check that all parameters in template have the proper length.
 def set_new_size(Configuration,Tirific_Template, fit_type = 'Undefined',
-                    current_run='Not Initialized', Variables =
-                    ['VROT','Z0', 'SBR', 'INCL','PA','XPOS','YPOS','VSYS','SDIS','VROT_2',  'Z0_2','SBR_2',
-                     'INCL_2','PA_2','XPOS_2','YPOS_2','VSYS_2','SDIS_2', 'AZ1P', 'AZ1W' ,'AZ1P_2','AZ1W_2', 'RADI']):
+                    current_run='Not Initialized', Variables = None):
+    if Variables is None:
+        Variables =['VROT','Z0', 'SBR', 'INCL','PA','XPOS','YPOS','VSYS','SDIS',\
+            'VROT_2',  'Z0_2','SBR_2','INCL_2','PA_2','XPOS_2','YPOS_2','VSYS_2',\
+            'SDIS_2', 'AZ1P', 'AZ1W' ,'AZ1P_2','AZ1W_2', 'RADI']
+
     sf.print_log(f'''SET_NEW_SIZE: Starting the adaptation of the size in the template
 ''',Configuration,case=['debug_start'])
     for key in Variables:
@@ -3231,62 +3272,63 @@ set_new_size.__doc__ =f'''
  NOTE:
 '''
 
-def set_overall_parameters(Configuration, Fits_Files,Tirific_Template,fit_type='Undefined', flux = None):
+def set_overall_parameters(Configuration, Fits_Files,Tirific_Template,\
+                fit_type='Undefined', flux = None):
 
-            if Configuration['OPTIMIZED']:
-                Tirific_Template['INSET'] = f"{Fits_Files['OPTIMIZED_CUBE']}"
-            else:
-                Tirific_Template['INSET'] = f"{Fits_Files['FITTING_CUBE']}"
+    if Configuration['OPTIMIZED']:
+        Tirific_Template['INSET'] = f"{Fits_Files['OPTIMIZED_CUBE']}"
+    else:
+        Tirific_Template['INSET'] = f"{Fits_Files['FITTING_CUBE']}"
 
-            if Configuration['NO_RINGS'] < 20:
-                Tirific_Template['INIMODE'] = '1'
-            elif Configuration['NO_RINGS'] < 30:
-                Tirific_Template['INIMODE'] = '2'
-            else:
-                Tirific_Template['INIMODE'] = '3'
+    if Configuration['NO_RINGS'] < 20:
+        Tirific_Template['INIMODE'] = '1'
+    elif Configuration['NO_RINGS'] < 30:
+        Tirific_Template['INIMODE'] = '2'
+    else:
+        Tirific_Template['INIMODE'] = '3'
 
-            if Configuration['NO_RINGS'] > 8.:
+    if Configuration['NO_RINGS'] > 8.:
 
-                Tirific_Template['INTY'] = 0
-                #Tirific_Template['INDINTY'] = 0
-            else:
-                #This should not be used with 8 <  rings.
-                Tirific_Template['INTY'] = 2
-                #preferably we'd use the akima spline but there is an issue with that where the final ring does not get modified
-                #Tirific_Template['INDINTY'] = 2
-            Tirific_Template['NUR'] = f"{Configuration['NO_RINGS']}"
-            #current_cwd = os.getcwd()
-            short_log = Configuration['LOG_DIRECTORY'].replace(Configuration['FITTING_DIR'],'')
-            Tirific_Template['RESTARTNAME'] = f"{short_log}restart_{fit_type}.txt"
-            #this could be fancier
-            Tirific_Template['NCORES'] = Configuration['PER_GALAXY_NCPU']
+        Tirific_Template['INTY'] = 0
+        #Tirific_Template['INDINTY'] = 0
+    else:
+        #This should not be used with 8 <  rings.
+        Tirific_Template['INTY'] = 2
+        #preferably we'd use the akima spline but there is an issue with that where the final ring does not get modified
+        #Tirific_Template['INDINTY'] = 2
+    Tirific_Template['NUR'] = f"{Configuration['NO_RINGS']}"
+    #current_cwd = os.getcwd()
+    short_log = Configuration['LOG_DIRECTORY'].replace(Configuration['FITTING_DIR'],'')
+    Tirific_Template['RESTARTNAME'] = f"{short_log}restart_{fit_type}.txt"
+    #this could be fancier
+    Tirific_Template['NCORES'] = Configuration['PER_GALAXY_NCPU']
 
-            Tirific_Template['LOOPS'] = f"{Configuration['LOOPS']}"
-            Tirific_Template['DISTANCE'] = f"{Configuration['DISTANCE']}"
-            out_keys = ['LOGNAME','OUTSET','TIRDEF']
-            out_extensions = ['log','fits','def']
-            for i,key in enumerate(out_keys):
-                Tirific_Template[key] = f"{fit_type}/{fit_type}.{out_extensions[i]}"
-            #some things we only set if a header is provided
+    Tirific_Template['LOOPS'] = f"{Configuration['LOOPS']}"
+    Tirific_Template['DISTANCE'] = f"{Configuration['DISTANCE']}"
+    out_keys = ['LOGNAME','OUTSET','TIRDEF']
+    out_extensions = ['log','fits','def']
+    for i,key in enumerate(out_keys):
+        Tirific_Template[key] = f"{fit_type}/{fit_type}.{out_extensions[i]}"
+    #some things we only set if a header is provided
 
-            Tirific_Template['BMAJ'] = f"{Configuration['BEAM'][0]:.2f}"
-            Tirific_Template['BMIN'] = f"{Configuration['BEAM'][1]:.2f}"
-            Tirific_Template['BPA'] = f"{Configuration['BEAM'][2]:.2f}"
-            Tirific_Template['RMS'] = f"{Configuration['NOISE']:.2e}"
+    Tirific_Template['BMAJ'] = f"{Configuration['BEAM'][0]:.2f}"
+    Tirific_Template['BMIN'] = f"{Configuration['BEAM'][1]:.2f}"
+    Tirific_Template['BPA'] = f"{Configuration['BEAM'][2]:.2f}"
+    Tirific_Template['RMS'] = f"{Configuration['NOISE']:.2e}"
 
-            if Configuration['CHANNEL_DEPENDENCY'].lower() == 'hanning':
-                instrumental_vres = (Configuration['CHANNEL_WIDTH']*2)/(2.*np.sqrt(2.*np.log(2)))
-            elif Configuration['CHANNEL_DEPENDENCY'].lower() == 'sinusoidal':
-                instrumental_vres = (Configuration['CHANNEL_WIDTH']*1.2)/(2.*np.sqrt(2.*np.log(2)))
-            elif Configuration['CHANNEL_DEPENDENCY'].lower() == 'independent':
-                instrumental_vres = 0.
-            else:
-                raise BadConfigurationError('Something went wrong in the Configuration setup')
+    if Configuration['CHANNEL_DEPENDENCY'].lower() == 'hanning':
+        instrumental_vres = (Configuration['CHANNEL_WIDTH']*2)/(2.*np.sqrt(2.*np.log(2)))
+    elif Configuration['CHANNEL_DEPENDENCY'].lower() == 'sinusoidal':
+        instrumental_vres = (Configuration['CHANNEL_WIDTH']*1.2)/(2.*np.sqrt(2.*np.log(2)))
+    elif Configuration['CHANNEL_DEPENDENCY'].lower() == 'independent':
+        instrumental_vres = 0.
+    else:
+        raise BadConfigurationError('Something went wrong in the Configuration setup')
 
-            Tirific_Template['CONDISP'] = f"{instrumental_vres:.2f}"
-            if flux:
-                Tirific_Template['CFLUX'] = f"{sf.set_limits(flux/1.5e7,1e-6,1e-3):.2e}"
-                Tirific_Template['CFLUX_2'] = f"{sf.set_limits(flux/1.5e7,1e-6,1e-3):.2e}"
+    Tirific_Template['CONDISP'] = f"{instrumental_vres:.2f}"
+    if flux:
+        Tirific_Template['CFLUX'] = f"{sf.set_limits(flux/1.5e7,1e-6,1e-3):.2e}"
+        Tirific_Template['CFLUX_2'] = f"{sf.set_limits(flux/1.5e7,1e-6,1e-3):.2e}"
 set_overall_parameters.__doc__ =f'''
  NAME:
     set_overall_parameters
@@ -3507,7 +3549,9 @@ set_sbr_fitting.__doc__ =f'''
  NOTE:
 '''
 
-def set_vrot_fitting(Configuration, stage = 'initial', rotation = [100,5.]):
+def set_vrot_fitting(Configuration, stage = 'initial', rotation = None):
+    if rotation is None:
+        rotation = [100,5.]
     NUR = Configuration['NO_RINGS']
     vrot_input = {}
 
@@ -3600,7 +3644,8 @@ set_vrot_fitting.__doc__ =f'''
 '''
 
 def smooth_profile(Configuration,Tirific_Template,key,min_error = 0.  \
-                    ,profile_in = None, no_apply =False,no_fix = False,fix_sbr_call=False):
+                    ,profile_in = None, no_apply =False,no_fix = False,\
+                    fix_sbr_call=False):
     sf.print_log(f'''SMOOTH_PROFILE: Starting to smooth the {key} profile.
 ''',Configuration,case= ['debug_start'])
     if key == 'SBR' and not fix_sbr_call:
@@ -3835,9 +3880,12 @@ write_center.__doc__ =f'''
 '''
 
 
-def write_new_to_template(Configuration, filename,Tirific_Template, Variables = ['VROT',
-                 'Z0', 'SBR', 'INCL','PA','XPOS','YPOS','VSYS','SDIS','VROT_2',  'Z0_2','SBR_2',
-                 'INCL_2','PA_2','XPOS_2','YPOS_2','VSYS_2','SDIS_2']):
+def write_new_to_template(Configuration, filename,Tirific_Template,\
+        Variables = None):
+    if Variables is None:
+        Variables = ['VROT','Z0', 'SBR', 'INCL','PA','XPOS','YPOS','VSYS','SDIS'\
+                    ,'VROT_2',  'Z0_2','SBR_2','INCL_2','PA_2','XPOS_2','YPOS_2'\
+                    ,'VSYS_2','SDIS_2']
     '''Write a def file into the template'''
     with open(filename, 'r') as tmp:
         # Separate the keyword names
