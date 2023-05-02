@@ -3084,7 +3084,7 @@ print_log.__doc__ =f'''
 
 def remove_inhomogeneities(Configuration,fits_map_in,inclination=30., pa = 90.\
         ,center = None, WCS_center = True, iteration= 0 ):
-    if center = None:
+    if center is None:
         center = [0.,0.]
     fits_map = copy.deepcopy(fits_map_in)
     print_log(f'''REMOVE_INHOMOGENEITIES: These are the values we get as input

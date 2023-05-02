@@ -298,7 +298,7 @@ cutout_cube.__doc__ =f'''
 def extract_pv(Configuration,cube_in,angle,center= None,finalsize=None,convert=-1):
     if center is None:
         center=[-1,-1,-1]
-    if finalsize = None:
+    if finalsize is None:
         finalsize=[-1,-1]
     sf.print_log(f'''EXTRACT_PV: We are the extraction of a PV-Diagram
 {'':8s} PA = {angle}
