@@ -310,8 +310,8 @@ def MP_Fitting_Loop(input,timing_lock,catalogue_lock):
                 Configuration, Model=Configuration['USED_FITTING'])
             Totflux = rf.get_totflux(
                 Configuration, f"/Finalmodel/Finalmodel_mom0.fits")
-            wf.basicinfo(Configuration, template=Tirific_Template, Tot_Flux=Totflux, DHI=[
-                         DHI, Configuration['BEAM'][0]*Configuration['RING_SIZE']])
+            wf.basicinfo(Configuration, template=Tirific_Template, Tot_Flux=Totflux,\
+                DHI=[DHI, Configuration['BEAM'][0]*Configuration['RING_SIZE']])
             if Configuration['INSTALLATION_CHECK']:
                 cf.installation_check(
                     Configuration)

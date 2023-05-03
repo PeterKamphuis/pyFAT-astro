@@ -39,19 +39,23 @@ def basicinfo(Configuration,initialize = False,stage='TiRiFiC' ,
     if RA is None:
         RA=[float('NaN'),float('NaN')]
     if DEC is None:
-        DEC=[float('NaN'),float('NaN')],
+        DEC=[float('NaN'),float('NaN')]
     if VSYS is None:
         VSYS =[float('NaN'),float('NaN')]
     if PA is None:
-        PA=[float('NaN'),float('NaN')],
+        PA=[float('NaN'),float('NaN')]
     if Inclination is None:
         Inclination = [float('NaN'),float('NaN')]
     if Max_Vrot is None:
-        Max_Vrot = [float('NaN'),float('NaN')],
+        Max_Vrot = [float('NaN'),float('NaN')]
     if Tot_Flux is None:
         Tot_Flux = [float('NaN'),float('NaN')]
     if V_mask is None:
-        V_mask = [float('NaN'),float('NaN')],
+        if np.sum(Configuration['VROT_CURRENT_BOUNDARY'])== 0.:
+            V_mask = [float('NaN'),float('NaN')]
+        else:
+            V_mask = [2.*np.max(Configuration['VROT_CURRENT_BOUNDARY']),\
+                        2* Configuration['CHANNEL_WIDTH']]
     if template is None:
         template = {}
 
@@ -86,7 +90,7 @@ def basicinfo(Configuration,initialize = False,stage='TiRiFiC' ,
         PA_c = f'{PA[0]:.2f}+/-{PA[1]:.2f}'
         INCL_c = f'{Inclination[0]:.2f}+/-{Inclination[1]:.2f}'
         MVROT_c = f'{Max_Vrot[0]:.2f}+/-{Max_Vrot[1]:.2f}'
-        Vmask_c = f'{V_mask[0]/1000.:.2f}+/-{V_mask[1]/1000.:.2f}'
+        Vmask_c = f'{float(V_mask[0])/1000.:.2f}+/-{float(V_mask[1])/1000.:.2f}'
         DHI_a = f'{DHI[0]:.2f}+/-{DHI[1]:.2f}'
         Dist = f'{Distance:.2f}'
         HIMass  = f'{Tot_Flux[0]*2.36E5*Distance**2:.2e}'

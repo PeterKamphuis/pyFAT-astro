@@ -2486,7 +2486,7 @@ def set_fitting_parameters(Configuration, Tirific_Template, \
          initial_estimates = None):
     if parameters_to_adjust is None:
         parameters_to_adjust = ['NO_ADJUSTMENT']
-    if modifier is None:
+    if modifiers is None:
         modifiers = ['EMPTY']
     if initial_estimates is None:
         initial_estimates = ['EMPTY']
