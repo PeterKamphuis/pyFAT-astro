@@ -505,8 +505,9 @@ def make_overview_plot(Configuration,Fits_Files ):
     cbar.set_ticks([min_color, max_color])
     cbar.ax.set_title(f"{moment0[0].header['BUNIT']}", y= 0.2*size_factor**2)
 
-
-    column_levels = sf.columndensity(Configuration,momlevel*1000.,systemic = FAT_Model[Vars_to_plot.index('VSYS'),0])
+    '''the channel width should be 1 as the map is already in Jy/beam*km/s'''
+    column_levels = sf.columndensity(Configuration,momlevel*1000.,\
+        systemic = FAT_Model[Vars_to_plot.index('VSYS'),0], channel_width=1)
 
     if 1e21 < np.min(column_levels):
         fact= 1e21
