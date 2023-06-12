@@ -517,7 +517,7 @@ installation_check.__doc__ =f'''
 def finish_galaxy(Configuration,current_run = 'Not initialized',\
         timing_lock= DummyLock(), catalogue_lock = DummyLock(),
         Fits_Files= {'ORIGINAL_CUBE': "Unset.fits"},exiting = None):
-    Configuration['END_TIME'] = datetime.now()
+    Configuration['FULL_TIME'][1] = datetime.now()
     sf.print_log(f'''FINISH_GALAXY: These fits files are used:
 {'':8s} {Fits_Files}
 ''',Configuration,case = ['debug_start','verbose'])
@@ -599,11 +599,21 @@ def finish_galaxy(Configuration,current_run = 'Not initialized',\
         plot_usage_stats(Configuration)
         with timing_lock:
             with open(Configuration['MAIN_DIRECTORY']+'/Timing_Result.txt','a') as timing_result:
-                timing_result.write(f'''The galaxy in directory {Configuration['FITTING_DIR']} started at {Configuration['START_TIME']}.
-Finished preparations at {Configuration['PREP_END_TIME']}.
-Converged to a galaxy size at {Configuration['END_TIME']}.
-It finished the whole process at {datetime.now()}.
-''')
+               timing_result.write(f'''The galaxy in directory {Configuration['FITTING_DIR']} has the following timing results.
+Inititalization from {Configuration['INITIALIZATION_TIME'][0]} to {Configuration['INITIALIZATION_TIME'][1]}
+Preparation time  from {Configuration['PREPARATION_TIME'][0]} to {Configuration['PREPARATION_TIME'][1]}
+Time to run Sofia from {Configuration['SOFIA_TIME'][0]} to {Configuration['SOFIA_TIME'][1]}
+Time to get Initial estimates {Configuration['INITIAL_GUESSES_TIME'][0]} to {Configuration['INITIAL_GUESSES_TIME'][1]}
+Time for the fitting {Configuration['FIT_TIME'][0]} to {Configuration['FIT_TIME'][1]}
+Time for TirShaking {Configuration['TIRSHAKER_TIME'][0]} to {Configuration['TIRSHAKER_TIME'][1]}
+Full run time from {Configuration['FULL_TIME'][0]} to {Configuration['FULL_TIME'][1]} \n''')
+
+
+            #    timing_result.write(f'''The galaxy in directory {Configuration['FITTING_DIR']} started at {Configuration['START_TIME']}.
+#Finished preparations at {Configuration['PREP_END_TIME']}.
+#Converged to a galaxy size at {Configuration['END_TIME']}.
+#It finished the whole process at {datetime.now()}.
+#''')
 
         sf.print_log(f'''Finished timing statistics for the galaxy in {Configuration['FITTING_DIR']}.
 ''',Configuration)

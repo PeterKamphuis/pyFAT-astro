@@ -18,6 +18,7 @@ from datetime import datetime
 from pyFAT_astro.Support.fat_errors import BadCatalogueError
 
 def FAT_Galaxy_Loop(Configuration):
+
     try:
 
         registered_exception = None
@@ -92,7 +93,7 @@ def FAT_Galaxy_Loop(Configuration):
 
 
 def initialize_loop(Configuration):
-    Configuration['START_TIME'] = datetime.now()
+    Configuration['INITIALIZATION_TIME'][0] = datetime.now()
     # First check the starttime
     if Configuration['FITTING_DIR'][-2:] == '//':
         Configuration['FITTING_DIR'] = Configuration['FITTING_DIR'][:-2]+'/'
@@ -108,7 +109,7 @@ def initialize_loop(Configuration):
         'ORIGINAL_CUBE': Configuration['INPUT_CUBE']}
 
     # If we have a fitting log we start writing
-    log_statement = f'''This file is a log of the fitting process run at {Configuration ['START_TIME']}.
+    log_statement = f'''This file is a log of the fitting process run at {Configuration ['FULL_TIME'][0]}.
 {"":8s}This is version {pyFAT_astro.__version__} of the program.
 '''
     if pyFAT_astro.__branch__:
@@ -197,9 +198,11 @@ Therefore we remove the Create_FAT_Cube stages from the loop.
     # Get a bunch of info from the cube
     rf.read_cube(
         Configuration, Fits_Files['FITTING_CUBE'])
+    Configuration['INITIALIZATION_TIME'][1] = datetime.now()
     return Fits_Files
 
 def loop_sofia(Configuration,Fits_Files):
+    Configuration['SOFIA_TIME'][0] = datetime.now()
     #If we have Sofia Preprocessed Output request make sure it all exists
     if Configuration['DEBUG']:
         sf.write_config(
@@ -213,6 +216,7 @@ def loop_sofia(Configuration,Fits_Files):
     else:
         sf.sofia_output_exists(
             Configuration, Fits_Files)
+    Configuration['SOFIA_TIME'][1] = datetime.now()
 
 def MP_initialize_sofia(Configuration,timing_lock,catalogue_lock):
     registered_exception = None

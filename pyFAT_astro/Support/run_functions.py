@@ -389,6 +389,7 @@ check_inclination.__doc__ =f'''
 '''
 
 def check_source(Configuration, Fits_Files):
+    Configuration['INITIAL_GUESSES_TIME'][0] = datetime.now()
     sf.print_log(f'''CHECK_SOURCE: Starting.
 ''',Configuration,case= ['debug_start'])
     sf.update_statistic(Configuration, message= "Starting the check source run")
@@ -655,7 +656,7 @@ Checking the central flux in a box with size of {Configuration['BEAM_IN_PIXELS']
 
     Initial_Parameters = check_initial_boundaries(Configuration, Initial_Parameters)
 
-
+    Configuration['INITIAL_GUESSES_TIME'][1] = datetime.now()
     return Initial_Parameters
 check_source.__doc__='''
  NAME:
@@ -892,13 +893,14 @@ failed_fit.__doc__ =f'''
 '''
 def fitting_osc(Configuration,Fits_Files,Tirific_Template,Initial_Parameters):
     current_run = 'Not Initialized'
+    Configuration['FIT_TIME'][0] = datetime.now()
     sf.create_directory(Configuration['USED_FITTING'],Configuration['FITTING_DIR'])
     wf.initialize_def_file(Configuration, Fits_Files,Tirific_Template, \
                            Initial_Parameters= Initial_Parameters, \
                            fit_type=Configuration['USED_FITTING'])
     sf.print_log(f'''FITTING_OSC: The initial def file is written and we will now start fitting.
 ''' ,Configuration)
-    Configuration['PREP_END_TIME'] = datetime.now()
+    
         # If we have no directory to put the output we create it
 
     while not Configuration['ACCEPTED'] and Configuration['ITERATIONS'] <  Configuration['MAX_ITERATIONS']:
@@ -928,6 +930,7 @@ def fitting_osc(Configuration,Fits_Files,Tirific_Template,Initial_Parameters):
     else:
         Configuration['FINAL_COMMENT'] = 'We could not converge on the extent or centre of the galaxy'
         Configuration['OUTPUT_QUANTITY'] = 5
+    Configuration['FIT_TIME'][1] = datetime.now()
     return current_run
 fitting_osc.__doc__ =f'''
  NAME:

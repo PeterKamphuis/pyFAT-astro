@@ -827,7 +827,7 @@ columndensity.__doc__ =f'''
     channelwidth of the observation if unset taken from Configuration
 
     column = false
-    if True input is columndensities else in mJy/beam
+    if True input is columndensities else in mJy
 
     arcsquare=False
     If true then  input is assumed to be in Jy/arcsec^2.
@@ -3321,16 +3321,16 @@ We are in in stage {stage} and fit_type {fit_type} and have done {Configuration[
     counter = 0
 
     current_process= psu.Process(current_run.pid)
-
+    initialized = datetime.now()
     if Configuration['TIMING']:
         time.sleep(0.1)
         with open(f"{Configuration['LOG_DIRECTORY']}Usage_Statistics.txt",'a') as file:
             file.write(f"# TIRIFIC: Initializing Tirific at stage = {fit_type}, Loop = {Configuration['ITERATIONS']} {datetime.now()} \n")
             CPU,mem = get_usage_statistics(Configuration,current_process)
-            initialized = datetime.now()
             file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Mb for TiRiFiC \n")
     else:
         time.sleep(0.1)
+
     if Configuration['VERBOSE_SCREEN']:
         print(f"\r{'':8s}RUN_TIRIFIC: 0 % Completed", end =" ",flush = True)
     triggered = False
@@ -3643,9 +3643,13 @@ def setup_configuration(cfg):
                                         'BadCubeError','BadMaskError',\
                                         'BadCatalogueError'],
                'MAXIMUM_DIRECTORY_LENGTH': len('Directory Name'),
-               'PREP_END_TIME': 'Not completed',
-               'START_TIME':'Not completed',
-               'END_TIME':'Not completed',
+               'FULL_TIME': [datetime.now(),'Not completed'],
+               'INITIALIZATION_TIME': ['Not started','Not completed'],
+               'PREPARATION_TIME': ['Not started','Not completed'],
+               'SOFIA_TIME': ['Not started','Not completed'],
+               'INITIAL_GUESSES_TIME': ['Not started','Not completed'],
+               'FIT_TIME': ['Not started','Not completed'],
+               'TIRSHAKER_TIME': ['Not started','Not completed'],
                'OUTPUTLOG': None,
                'RUN_COUNTER': 0,
                'CENTRAL_CONVERGENCE_COUNTER': 1.,

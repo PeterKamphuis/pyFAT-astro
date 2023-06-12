@@ -201,7 +201,7 @@ def main(argv):
         if Original_Configuration['TIMING']:
 
             with open(Original_Configuration['MAIN_DIRECTORY']+'Timing_Result.txt','w') as timing_result:
-                timing_result.write("This file contains the system start and end times for the fitting of each galaxy. \n")
+                timing_result.write("Timing results for every section of the fit process for all galaxies.  \n")
             # If we do this we should have 1 cpu to keep going
             Original_Configuration['NCPU'] -= 1
             system_monitor = wf.full_system_tracking(Original_Configuration)
