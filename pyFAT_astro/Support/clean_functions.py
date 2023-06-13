@@ -1,52 +1,58 @@
 # -*- coding: future_fstrings -*-
 # This module contains a set of functions and classes that are used in several different Python scripts in the Database.
 
-
+import pyFAT_astro
 import os,signal,sys
 import numpy as np
 import traceback
 from datetime import datetime
-from pyFAT_astro.Support.support_functions import print_log,finish_current_run,set_format,create_directory,get_system_string
+
 from pyFAT_astro.Support.fits_functions import make_moments
-from pyFAT_astro.Support.write_functions import make_overview_plot,plot_usage_stats,tirific,write_config
-from pyFAT_astro.Support.read_functions import tirific_template,load_tirific,load_template
-class SofiaMissingError(Exception):
-    pass
-def check_legitimacy(Configuration,debug=False):
-    if debug:
-        print_log(f'''CHECK_LEGITIMACY: Start.
-''',Configuration['OUTPUTLOG'],debug =True)
+from pyFAT_astro.Support.modify_template import get_error
+from pyFAT_astro.Support.write_functions import make_overview_plot,plot_usage_stats,tirific
+from pyFAT_astro.Support.fat_errors import SofiaMissingError
+import pyFAT_astro.Support.support_functions as sf
+import pyFAT_astro
+
+class DummyLock():
+    def __enter__(self):
+        pass
+
+    def __exit__(self, *args):
+        pass
+
+def check_legitimacy_osc(Configuration):
+    sf.print_log(f'''CHECK_LEGITIMACY_OSC: Start.
+''',Configuration,case=['debug_start'])
     if Configuration['OUTPUT_QUANTITY'] == 'error':
-        print_log(f'''CHECK_LEGITIMACY: An unspecified error is registered. The final message should reflect this.
-''',Configuration['OUTPUTLOG'])
+        sf.print_log(f'''CHECK_LEGITIMACY_OSC: An unspecified error is registered. The final message should reflect this.
+''',Configuration)
         return
     elif Configuration['OUTPUT_QUANTITY'] == 5:
-        print_log(f'''CHECK_LEGITIMACY: A FAT specific error is registered. The final message should reflect this.
-''',Configuration['OUTPUTLOG'])
+        sf.print_log(f'''CHECK_LEGITIMACY_OSC: A FAT specific error is registered. The final message should reflect this.
+''',Configuration)
         return
     else:
         fit_check=[True if 'fit_' in x.lower() else False for x in Configuration['FITTING_STAGES']]
         if any(fit_check):
             outfile = f"{Configuration['FITTING_DIR']}/{Configuration['USED_FITTING']}/{Configuration['USED_FITTING']}.def"
-    inclination = load_tirific(Configuration,outfile,Variables=['INCL'],debug=debug)[0]
+    inclination = sf.load_tirific(Configuration,outfile,Variables=['INCL'],array=True)
 
     if float(inclination[0]) < Configuration['UNRELIABLE_INCLINATION']:
         Configuration['ACCEPTED'] = False
         Configuration['FINAL_COMMENT'] = f"The final inclination is below {Configuration['UNRELIABLE_INCLINATION']}. FAT is not neccesarily reliable in this range."
-        if debug:
-            print_log(f'''CHECK_LEGITIMACY: The retrieved inclination {float(inclination[0])} is below {Configuration['UNRELIABLE_INCLINATION']} thus the fit is not accepted.
-''',Configuration['OUTPUTLOG'],debug =True)
-    if 2.*Configuration['SIZE_IN_BEAMS'] < Configuration['UNRELIABLE_SIZE']:
+        sf.print_log(f'''CHECK_LEGITIMACY_OSC: The retrieved inclination {float(inclination[0])} is below {Configuration['UNRELIABLE_INCLINATION']} thus the fit is not accepted.
+''',Configuration)
+    if np.sum(Configuration['SIZE_IN_BEAMS']) < Configuration['UNRELIABLE_SIZE']:
         Configuration['ACCEPTED'] = False
         Configuration['FINAL_COMMENT'] = f"The final size is below {Configuration['UNRELIABLE_SIZE']}. FAT is not neccesarily reliable in this range."
-        if debug:
-            print_log(f'''CHECK_LEGITIMACY: The retrieved size {2.*Configuration['SIZE_IN_BEAMS']} is below {Configuration['UNRELIABLE_SIZE']} thus the fit is not accepted.
-''',Configuration['OUTPUTLOG'],debug =True)
+        sf.print_log(f'''CHECK_LEGITIMACY_OSC: The retrieved size {np.sum(Configuration['SIZE_IN_BEAMS'])} is below {Configuration['UNRELIABLE_SIZE']} thus the fit is not accepted.
+''',Configuration)
     return
 
-check_legitimacy.__doc__ =f'''
+check_legitimacy_osc.__doc__ =f'''
  NAME:
-    check_legitimacy
+    check_legitimacy_osc
 
  PURPOSE:
     Check the final output to see if it falls in a reliable rangesee if the output fall in the range where FAT is reliable.
@@ -58,7 +64,6 @@ check_legitimacy.__doc__ =f'''
     Configuration = Standard FAT configuration
 
  OPTIONAL INPUTS:
-    debug = False
 
  OUTPUTS:
     Updated final comment in the configuration
@@ -72,10 +77,10 @@ check_legitimacy.__doc__ =f'''
     !!!!!!! Until release these are set ridiculously low for testing purposes.
 '''
 
-def clean_before_sofia(Configuration, debug = False):
-    if debug:
-        print_log(f'''CLEAN_BEFORE_SOFIA: Starting.
-''',Configuration['OUTPUTLOG'],debug = True)
+def clean_before_sofia(Configuration):
+
+    sf.print_log(f'''CLEAN_BEFORE_SOFIA: Starting.
+''',Configuration,case = ['debug_start'])
     files =['_mask.fits','_mom0.fits','_mom1.fits','_chan.fits','_mom2.fits','_cat.txt']
 
     for file in files:
@@ -110,7 +115,6 @@ clean_before_sofia.__doc__ =f'''
     Configuration = Standard FAT configuration
 
  OPTIONAL INPUTS:
-    debug = False
 
  OUTPUTS:
     Previous sofia output from fat is removed
@@ -123,17 +127,19 @@ clean_before_sofia.__doc__ =f'''
  NOTE:
 '''
 
-def clean_after_sofia(Configuration, debug = False):
+def clean_after_sofia(Configuration):
+    sf.print_log(f'''CLEAN_AFTER_SOFIA: Starting clean
+''',Configuration,case = ['debug_start'])
     files =['_mask.fits','_chan.fits','_cat.txt']
 
     for file in files:
         try:
             os.rename(Configuration['BASE_NAME']+file,'Sofia_Output/'+Configuration['BASE_NAME']+file )
-        except:
+        except FileNotFoundError:
             pass
     try:
         os.rename('sofia_input.par','Sofia_Output/sofia_input.par')
-    except:
+    except FileNotFoundError:
         pass
 
 clean_after_sofia.__doc__ =f'''
@@ -150,7 +156,6 @@ clean_after_sofia.__doc__ =f'''
     Configuration = Standard FAT configuration
 
  OPTIONAL INPUTS:
-    debug = False
 
  OUTPUTS:
     sofia output files are moved to a dedicated directory.
@@ -164,7 +169,9 @@ clean_after_sofia.__doc__ =f'''
 '''
 
 # cleanup dirty files before starting fitting
-def cleanup(Configuration,Fits_Files, debug = False):
+def cleanup(Configuration,Fits_Files):
+    sf.print_log(f'''CLEANUP: Starting clean
+''',Configuration,case = ['debug_start'])
         #Move any existing output to the Log directory
     if os.path.exists(f"{Configuration['LOG_DIRECTORY']}ram_cpu.pdf"):
         if os.path.exists(f"{Configuration['LOG_DIRECTORY']}ram_cpu_prev.pdf"):
@@ -174,18 +181,23 @@ def cleanup(Configuration,Fits_Files, debug = False):
     if os.path.exists(f"{Configuration['FITTING_DIR']}Overview.png"):
         if os.path.exists(f"{Configuration['LOG_DIRECTORY']}Overview_prev.png"):
             os.remove(f"{Configuration['LOG_DIRECTORY']}Overview_prev.png")
-            if debug:
-                print_log(f'''CLEANUP: Removing an old Overview_prev.png from {Configuration['LOG_DIRECTORY']}
-''',Configuration['OUTPUTLOG'])
+            sf.print_log(f'''CLEANUP: Removing an old Overview_prev.png from {Configuration['LOG_DIRECTORY']}
+''',Configuration,case = ['debug_add'])
         os.rename( f"{Configuration['FITTING_DIR']}Overview.png",f"{Configuration['LOG_DIRECTORY']}Overview_prev.png")
-        if debug:
-            print_log(f'''CLEANUP: We moved an old Overview.png to {Configuration['LOG_DIRECTORY']}Overview_prev.png
-''',Configuration['OUTPUTLOG'])
+        sf.print_log(f'''CLEANUP: We moved an old Overview.png to {Configuration['LOG_DIRECTORY']}Overview_prev.png
+''',Configuration,case = ['debug_add'])
     #clean the log directory of all files except those named Prev_ and not the Log as it is already moved if existing
     files_in_log = ['restart_One_Step_Convergence.txt','restart_Centre_Convergence.txt',f"restart_{Configuration['USED_FITTING']}.txt",\
                     'restart_Extent_Convergence.txt','Usage_Statistics.txt', 'clean_map_0.fits','clean_map_1.fits','clean_map.fits',\
                     'dep_map_0.fits','minimum_map_0.fits','rot_map_0.fits','dep_map.fits','minimum_map.fits','rot_map.fits',\
-                    'dep_map_1.fits','minimum_map_1.fits','rot_map_1.fits','Convolved_Cube_FAT_opt.fits','CFG_Before_Fitting.txt']
+                    'dep_map_1.fits','minimum_map_1.fits','rot_map_1.fits','Convolved_Cube_FAT_opt.fits']
+
+    #add all CFG files:
+    for file in os.listdir(Configuration['LOG_DIRECTORY']):
+        split_file = os.path.splitext(file)
+        if split_file[-1] in ['.pkl', '.txt'] and 'CFG' in file:
+            files_in_log.append(file)
+
     for file in files_in_log:
         try:
             os.remove(f"{Configuration['LOG_DIRECTORY']}{file}")
@@ -221,20 +233,20 @@ def cleanup(Configuration,Fits_Files, debug = False):
     if 'create_fat_cube' in Configuration['FITTING_STAGES']:
         files.append(Fits_Files['FITTING_CUBE'])
 
-    if 'run_sofia' in Configuration['FITTING_STAGES'] or 'existing_sofia' in Configuration['FITTING_STAGES']:
+    if 'run_sofia' in Configuration['FITTING_STAGES'] or 'external_sofia' in Configuration['FITTING_STAGES']:
         dir =f'{Configuration["FITTING_DIR"]}Sofia_Output/'
         file_ext=['_mask.fits','_mom0.fits','_mom1.fits','_mom2.fits','_chan.fits','_cat.txt','_sofia_xv.fits']
-        print_log(f'''CLEANUP: We are cleaning the following files in the directory {dir}:
+        sf.print_log(f'''CLEANUP: We are cleaning the following files in the directory {dir}:
 {"":8s}CLEANUP: sofia_input.par,{','.join([f'{Configuration["SOFIA_BASENAME"]}{x}' for x in file_ext])}
-''',Configuration['OUTPUTLOG'], screen =True,debug=debug)
+''',Configuration,case = ['verbose'])
         for extension in file_ext:
             try:
                 os.remove(f'{dir}{Configuration["BASE_NAME"]}{extension}')
-            except:
+            except FileNotFoundError:
                 pass
         try:
             os.remove(f'{dir}sofia_input.par')
-        except:
+        except FileNotFoundError:
             pass
     if 'tirshaker' in Configuration['FITTING_STAGES']:
         directories.append('Error_Shaker')
@@ -243,11 +255,11 @@ def cleanup(Configuration,Fits_Files, debug = False):
 
 
     if directories:
-        print_log(f'''CLEANUP: We are cleaning the following directories:
+        sf.print_log(f'''CLEANUP: We are cleaning the following directories:
 {"":8s}CLEANUP: {','.join(directories)}
 {"":8s}CLEANUP: and the following files:
 {"":8s}CLEANUP: {','.join(files)}
-''',Configuration['OUTPUTLOG'], screen =True,debug=debug)
+''',Configuration, case=['verbose'])
 
 
         ext=['.fits','_Prev.fits','.log','.ps','.def']
@@ -267,7 +279,7 @@ def cleanup(Configuration,Fits_Files, debug = False):
                         except FileNotFoundError:
                             pass
                     elif dir == Configuration['USED_FITTING'] and fe in ['.def']:
-                        target = get_system_string(f"{Configuration['FITTING_DIR']}{dir}/{dir}*{fe}")
+                        target = sf.get_system_string(f"{Configuration['FITTING_DIR']}{dir}/{dir}*{fe}")
                         os.system(f'rm -f {target}')
                     else:
                         try:
@@ -282,13 +294,11 @@ def cleanup(Configuration,Fits_Files, debug = False):
                         pass
 
 
-        for file in files:
-            try:
-                os.remove(f'{Configuration["FITTING_DIR"]}{file}')
-            except FileNotFoundError:
-                pass
-        #Change back to original dir
-        #os.chdir(Configuration['START_DIRECTORY'])
+    for file in files:
+        try:
+            os.remove(f'{Configuration["FITTING_DIR"]}{file}')
+        except FileNotFoundError:
+            pass
 
 cleanup.__doc__ =f'''
  NAME:
@@ -306,7 +316,6 @@ cleanup.__doc__ =f'''
     Fits_Files = Standard FAT dictionary with filenames
 
  OPTIONAL INPUTS:
-    debug = False
 
  OUTPUTS:
 
@@ -318,10 +327,10 @@ cleanup.__doc__ =f'''
  NOTE:
 '''
 
-def cleanup_final(Configuration,Fits_Files, debug =False):
-    if debug:
-         print_log(f'''Starting the final cleanup of the directory.
-''',Configuration['OUTPUTLOG'],debug = True)
+def cleanup_final(Configuration,Fits_Files):
+    sf.print_log(f'''CLEANUP_FINAL: Starting the final cleanup of the directory.
+{'':8s} The request is {Configuration['OUTPUT_QUANTITY']}
+''',Configuration,case = ['debug_start','verbose'] )
 
     if Configuration['USED_FITTING'] == 'Fit_Tirific_OSC':
         clean_files = [Fits_Files['OPTIMIZED_CUBE'],f"{Configuration['USED_FITTING']}_In.def",\
@@ -341,7 +350,6 @@ def cleanup_final(Configuration,Fits_Files, debug =False):
         except FileNotFoundError:
             pass
 
-    #fit_directories = ['Centre_Convergence', 'Extent_Convergence']
     fit_directories = [Configuration['USED_FITTING']]
     delete_ext = ['.log']
     if Configuration['OUTPUT_QUANTITY'] == 4:
@@ -360,10 +368,14 @@ def cleanup_final(Configuration,Fits_Files, debug =False):
                     os.remove(f"{Configuration['FITTING_DIR']}{dir}/{file}")
                 except FileNotFoundError:
                     pass
-            if (Configuration['OUTPUT_QUANTITY'] == 2 and extension != ".fits") or (5 >= Configuration['OUTPUT_QUANTITY'] >= 3) :
-                if (file != f"{Configuration['USED_FITTING']}.def" and file != f"{Configuration['USED_FITTING']}.fits") :
+                except IsADirectoryError:
+                    pass
+            if (Configuration['OUTPUT_QUANTITY'] == 2 and extension != ".fits") \
+                or (5 > Configuration['OUTPUT_QUANTITY'] >= 3):
+                if file != f"{Configuration['USED_FITTING']}.def" and file != f"{Configuration['USED_FITTING']}.fits":
                     try:
-                        os.remove(f"{Configuration['FITTING_DIR']}{dir}/{file}")
+                        if not (Configuration['DEBUG'] and extension == '.def'):
+                            os.remove(f"{Configuration['FITTING_DIR']}{dir}/{file}")
                     except FileNotFoundError:
                         pass
     stage_dirs = []
@@ -383,10 +395,10 @@ def cleanup_final(Configuration,Fits_Files, debug =False):
             os.rmdir(f"{Configuration['FITTING_DIR']}{dirs}")
         else:
             # else move this directory to the LOG
-            target = get_system_string(f"{Configuration['LOG_DIRECTORY']}{dirs}")
+            target = sf.get_system_string(f"{Configuration['LOG_DIRECTORY']}{dirs}")
             if  os.path.isdir(f"{Configuration['LOG_DIRECTORY']}{dirs}"):
                 os.system(f"rm -Rf {target}")
-            source = get_system_string(f"{Configuration['FITTING_DIR']}{dirs}")
+            source = sf.get_system_string(f"{Configuration['FITTING_DIR']}{dirs}")
             os.system(f"mv {source} {target}")
 
 
@@ -406,7 +418,6 @@ cleanup_final.__doc__ =f'''
     Fits_Files = Standard FAT dictionary with filenames
 
  OPTIONAL INPUTS:
-    debug = False
 
  OUTPUTS:
 
@@ -422,45 +433,44 @@ cleanup_final.__doc__ =f'''
 
 
 
-def installation_check(Configuration, debug =False):
-    if debug:
-         print_log(f'''INSTALLATION_CHECK: Starting to compare the output to what is expected.
-''',Configuration['OUTPUTLOG'],debug = True)
+def installation_check(Configuration):
+    sf.print_log(f'''INSTALLATION_CHECK: Starting to compare the output to what is expected.
+''',Configuration, case = ['debug_start', 'main'])
 
-    Model = tirific_template(filename = 'Installation_Check', debug= debug)
+    Model = sf.tirific_template(filename = 'Installation_Check')
     Variables_to_Compare = ['VROT','INCL','PA','SBR','SDIS','Z0','XPOS','YPOS','VSYS']
-    Model_values = load_template(Configuration,Model,Variables = Variables_to_Compare,unpack = False,debug=debug)
+    Model_values = sf.load_tirific(Configuration,Model,\
+        Variables = Variables_to_Compare,array=True)
     #Then the fitted file
-    Fitted_values =load_tirific(Configuration,f"{Configuration['FITTING_DIR']}Finalmodel/Finalmodel.def",Variables = Variables_to_Compare,unpack = False,debug=debug)
+    Fitted_values =sf.load_tirific(Configuration,\
+        f"{Configuration['FITTING_DIR']}Finalmodel/Finalmodel.def",\
+        Variables = Variables_to_Compare,array = True)
     succes = False
+    diff = np.abs(Model_values-Fitted_values)
 
-    try:
-        diff = np.abs(np.array(Model_values,dtype=float)-np.array(Fitted_values,dtype=float))
-        if debug:
-            print_log(f'''INSTALLATION_CHECK: the found differences
+    sf.print_log(f'''INSTALLATION_CHECK: the found differences
 {'':8s}{diff}
-''',Configuration['OUTPUTLOG'])
-        too_much = np.array(np.where(diff > 1e-3),dtype=bool)
-        if debug:
-            print_log(f'''INSTALLATION_CHECK: at the locations
+''',Configuration, case = ['verbose'])
+    too_much = np.array(np.where(diff > 1e-3),dtype=bool)
+
+    sf.print_log(f'''INSTALLATION_CHECK: at the locations
 {'':8s}{too_much}{np.where(diff > 1e-3)}
 {'':8s}{too_much.size}
-''',Configuration['OUTPUTLOG'])
+''',Configuration, case = ['verbose'])
 
-        if too_much.size == 0.:
-            succes = True
-    except:
-        pass
+    if too_much.size == 0.:
+        succes = True
+
 
     if succes:
-        print_log(f'''
+        sf.print_log(f'''
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!! All parameters are fitted within the expected variance. !!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!        We think pyFAT is installed succesfully          !!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-''',Configuration['OUTPUTLOG'],screen =True)
+''',Configuration, case = ['main','screen'])
     else:
-        print_log(f'''
+        sf.print_log(f'''
 !!!!---------------------------------------------!!!!!
 !!!! FAT ran through the fitting process but the !!!!!
 !!!! fitted values differ too much from their    !!!!!
@@ -476,7 +486,7 @@ def installation_check(Configuration, debug =False):
 !!!!{Configuration['LOG_DIRECTORY']}!!!!!
 !!!! and the Finalmodel.def.                     !!!!!
 !!!!---------------------------------------------!!!!!
-''',Configuration['OUTPUTLOG'],screen =True)
+''',Configuration,case = ['main','screen'])
 
 installation_check.__doc__ =f'''
  NAME:
@@ -492,7 +502,6 @@ installation_check.__doc__ =f'''
     Configuration = Standard FAT configuration
 
  OPTIONAL INPUTS:
-    debug = False
 
  OUTPUTS:
     Message with succes or not to the screen and log
@@ -505,24 +514,22 @@ installation_check.__doc__ =f'''
  NOTE:
 '''
 
-def finish_galaxy(Configuration,maximum_directory_length,current_run = 'Not initialized', Fits_Files= None, debug = False,exiting = None):
+def finish_galaxy(Configuration,current_run = 'Not initialized',\
+        timing_lock= DummyLock(), catalogue_lock = DummyLock(),
+        Fits_Files= {'ORIGINAL_CUBE': "Unset.fits"},exiting = None):
     Configuration['END_TIME'] = datetime.now()
-    if debug:
-        print_log(f'''FINISH_GALAXY: These fits files are used:
+    sf.print_log(f'''FINISH_GALAXY: These fits files are used:
 {'':8s} {Fits_Files}
-''',Configuration['OUTPUTLOG'])
-        write_config(f'{Configuration["LOG_DIRECTORY"]}CFG_At_Finish.txt',Configuration,debug = True)
+''',Configuration,case = ['debug_start','verbose'])
+    if Configuration['DEBUG']:
+        sf.write_config(f'{Configuration["LOG_DIRECTORY"]}CFG_At_Finish.txt',Configuration)
 
     #make sure we are not leaving stuff
-    finish_current_run(Configuration,current_run,debug=debug)
+    sf.finish_current_run(Configuration,current_run)
     # We need to check if the final output is legit
-    if Configuration['USED_FITTING']:
-        check_legitimacy(Configuration,debug=debug)
+    if Configuration['USED_FITTING'] == 'Fit_Tirific_OSC':
+        check_legitimacy_osc(Configuration)
 
-    # Need to write to results catalog
-    if Configuration['OUTPUT_CATALOGUE']:
-        with open(Configuration['OUTPUT_CATALOGUE'],'a') as output_catalogue:
-            output_catalogue.write(f"{Configuration['FITTING_DIR'].split('/')[-2]:{maximum_directory_length}s} {str(Configuration['ACCEPTED']):>6s} {Configuration['FINAL_COMMENT']} \n")
 
     if Configuration['OUTPUT_QUANTITY'] == 'error':
         error_message = '''
@@ -535,67 +542,82 @@ def finish_galaxy(Configuration,maximum_directory_length,current_run = 'Not init
 {"":8s}FAT did not run the full fitting routines for catalog entry {Configuration['ID']}.
 {"":8s}Which is the galaxy in directory {Configuration['FITTING_DIR']}.
 {"":8s}Please check this log and output_catalogue carefully for what went wrong.
-{"":8s}The detected exit reason is {Configuration['FINAL_COMMENT']}.
+{"":8s}The detected exit reason is: "{Configuration['FINAL_COMMENT']}".
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 '''
-        print_log(log_statement,Configuration['OUTPUTLOG'], screen = True)
-        print_log(error_message,Configuration['OUTPUTLOG'], screen = True)
+        sf.print_log(log_statement,Configuration, case = ['main','screen'])
+        sf.print_log(error_message,Configuration, case = ['main','screen'])
 
         if exiting:
             with open(Configuration['OUTPUTLOG'],'a') as log_file:
-                traceback.print_tb(exiting.__traceback__,file=log_file)
-            traceback.print_tb(exiting.__traceback__)
-        sys.exit(1)
+                traceback.print_exception(type(exiting),exiting,exiting.__traceback__,file=log_file)
+            traceback.print_exception(type(exiting),exiting,exiting.__traceback__)
+        if Configuration['MULTIPROCESSING']:
+            Configuration['ACCEPTED'] = False
+            Configuration['FINAL_COMMENT'] = f"The code crashed while fitting this galaxy please check it's log."
+            Configuration['OUTPUT_QUANTITY'] = 5
+        else:
+            if exiting:
+                sys.exit(1)
+            else:
+                Configuration['ACCEPTED'] = False
+                Configuration['FINAL_COMMENT'] = f"The code crashed while fitting this galaxy please check it's log."
+                Configuration['OUTPUT_QUANTITY'] = 5
     elif Configuration['OUTPUT_QUANTITY'] == 5:
-        log_statement = f'''
+        sf.print_log(f'''
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-{"":8s}FAT did not run the full fitting routines for the galaxy in directory {Configuration['FITTING_DIR']}.
-{"":8s}Please check this log and output_catalogue carefully for what went wrong.
-{"":8s}The detected exit reason is {Configuration['FINAL_COMMENT']}.
+{"":8s}FAT could not find an acceptable model for the galaxy in directory {Configuration['FITTING_DIR']}.
+{"":8s}Please check the log in {Configuration['LOG_DIRECTORY']} and the output_catalogue carefully for more information.
+{"":8s}The detected exit reason is: "{Configuration['FINAL_COMMENT']}".
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-'''
-        print_log(log_statement,Configuration['OUTPUTLOG'])
-        #No traceback as it is a proper exiting error
-        #if exiting:
-        #    with open(Configuration['OUTPUTLOG'],'a') as log_file:
-        #        traceback.print_tb(exiting.__traceback__,file=log_file)
-        #    traceback.print_tb(exiting.__traceback__)
+''',Configuration, case = ['main','screen'])
+
     elif Configuration['OUTPUT_QUANTITY'] < 4:
-        print_log( f'''Producing final output in {Configuration['FITTING_DIR']}.
-''',Configuration['OUTPUTLOG'], screen = True)
+        sf.print_log( f'''Producing final output in {Configuration['FITTING_DIR']}.
+''',Configuration)
         # We need to produce a FinalModel Directory with moment maps and an XV-Diagram of the model.
         if any([True if 'fit_' in x else False for x in Configuration['FITTING_STAGES']]):
-            create_directory('Finalmodel',Configuration['FITTING_DIR'])
-            transfer_errors(Configuration,fit_type=Configuration['USED_FITTING'])
-            linkname = f"../{Configuration['USED_FITTING']}/{Configuration['USED_FITTING']}"
-            os.symlink(f"{linkname}.fits",f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel.fits")
-            os.symlink(f"{linkname}.def",f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel.def")
+            if not 'Fit_Make_Your_Own' in  Configuration['USED_FITTING']:
+                sf.create_directory('Finalmodel',Configuration['FITTING_DIR'])
+                if 'tirshaker' not in Configuration['FITTING_STAGES'] and not Configuration['INSTALLATION_CHECK']:
+                    transfer_errors(Configuration,fit_type=Configuration['USED_FITTING'])
+                linkname = f"../{Configuration['USED_FITTING']}/{Configuration['USED_FITTING']}"
+                os.symlink(f"{linkname}.fits",f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel.fits")
+                os.symlink(f"{linkname}.def",f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel.def")
 
-            # We need to produce a FinalModel Directory with moment maps and an XV-Diagram of the model.
-            if Fits_Files and os.path.exists(f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel.fits"):
-                make_moments(Configuration,Fits_Files,fit_type = 'Generic_Final',vel_unit = 'm/s',debug=debug)
-                make_overview_plot(Configuration,Fits_Files,debug=debug)
+                # We need to produce a FinalModel Directory with moment maps and an XV-Diagram of the model.
+                if Fits_Files and os.path.exists(f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel.fits"):
+                    make_moments(Configuration,Fits_Files,fit_type = 'Generic_Final',vel_unit = 'm/s')
+                    make_overview_plot(Configuration,Fits_Files)
 
-    log_statement = f'''Finished final output in {Configuration['FITTING_DIR']}.
-'''
-    print_log(log_statement,Configuration['OUTPUTLOG'], screen = True)
+
+    sf.print_log(f'''Finished the fitting in {Configuration['FITTING_DIR']}.
+''',Configuration, case = ['main','screen'])
     # Need to organize the fitting output orderly
     # Need to write date and Time to timing log
     if Configuration['TIMING']:
-
-        plot_usage_stats(Configuration,debug = debug)
-        timing_result = open(Configuration['MAIN_DIRECTORY']+'/Timing_Result.txt','a')
-        timing_result.write(f'''The galaxy in directory {Configuration['FITTING_DIR']} started at {Configuration['START_TIME']}.
-Finished preparations at {Configuration['PREP_END_TIME']} \n''')
-        timing_result.write(f'''Converged to a galaxy size at {Configuration['END_TIME']}. \n''')
-        timing_result.write(f'''It finished the whole process at {datetime.now()}
+        plot_usage_stats(Configuration)
+        with timing_lock:
+            with open(Configuration['MAIN_DIRECTORY']+'/Timing_Result.txt','a') as timing_result:
+                timing_result.write(f'''The galaxy in directory {Configuration['FITTING_DIR']} started at {Configuration['START_TIME']}.
+Finished preparations at {Configuration['PREP_END_TIME']}.
+Converged to a galaxy size at {Configuration['END_TIME']}.
+It finished the whole process at {datetime.now()}.
 ''')
-        timing_result.close()
-        log_statement = f'''Finished timing statistics for the galaxy in {Configuration['FITTING_DIR']}.
-'''
-        print_log(log_statement,Configuration['OUTPUTLOG'], screen = True)
 
-    cleanup_final(Configuration,Fits_Files, debug=debug)
+        sf.print_log(f'''Finished timing statistics for the galaxy in {Configuration['FITTING_DIR']}.
+''',Configuration)
+
+    cleanup_final(Configuration,Fits_Files)
+    # Need to write to results catalog
+    catalogue_line = f"{Configuration['FITTING_DIR'].split('/')[-2]:{Configuration['MAXIMUM_DIRECTORY_LENGTH']}s} {str(Configuration['ACCEPTED']):>6s} {Configuration['FINAL_COMMENT']} \n"
+
+    if Configuration['OUTPUT_CATALOGUE']:
+        with catalogue_lock:
+            with open(Configuration['OUTPUT_CATALOGUE'],'a') as output_catalogue:
+                output_catalogue.write(catalogue_line)
+
+    return catalogue_line
 
 finish_galaxy.__doc__ =f'''
  NAME:
@@ -609,10 +631,9 @@ finish_galaxy.__doc__ =f'''
 
  INPUTS:
     Configuration = Standard FAT configuration
-    maximum_directory_length = the maximum string length of the input directory names
+
 
  OPTIONAL INPUTS:
-    debug = False
     current_run = subproccess structure of the currently running tirific
     Fits_Files = Standard FAT dictionary with filenames
 
@@ -626,25 +647,39 @@ finish_galaxy.__doc__ =f'''
  NOTE: This function should always be followed by a continue statement
 '''
 
-def transfer_errors(Configuration,fit_type='Undefined',debug = False):
+def transfer_errors(Configuration,fit_type='Undefined'):
+    sf.print_log(f'''TRANSFER_ERROR: Start.
+''',Configuration, case = ['debug_start'])
     # Load the final file
-    Tirific_Template = tirific_template(filename = f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def",debug= debug)
-    # Get the errors from the input
-    errors_to_transfer= ['VROT_ERR','VROT_2_ERR','INCL_ERR','INCL_2_ERR','PA_ERR','PA_2_ERR','SDIS_ERR','SDIS_2_ERR','Z0_ERR','Z0_2_ERR']
-    FAT_Model = load_tirific(Configuration,f"{Configuration['FITTING_DIR']}{fit_type}_In.def",Variables=errors_to_transfer,unpack=False,debug=debug)
-    # add to the templatethere
+    Tirific_Template = sf.tirific_template(filename = f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def")
+    variables = ['INCL','PA','VROT','SDIS','SBR','VSYS','XPOS','YPOS','Z0']
+    weights = sf.get_ring_weights(Configuration,Tirific_Template)
+    for parameter in variables:
+        sf.print_log(f'''TRANSFER_ERROR: Creating errors for {parameter}.
+''',Configuration, case = ['debug_add'])
+        profile = sf.load_tirific(Configuration,Tirific_Template,\
+            [parameter,f"{parameter}_2"],array=True)
+        sm_profile = sf.load_tirific(Configuration,\
+            f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}_Iteration_{Configuration['ITERATIONS']}.def",\
+            Variables=[parameter,f"{parameter}_2"],array=True)
+            #it is possible that the last iteration of the fitted smooth check
+            #Crashes and is rerun with
+        if parameter == 'VROT':
+            apply_max= False
+        else:
+            apply_max = True
+        errors = get_error(Configuration,sm_profile,profile,parameter,\
+            min_error=Configuration['MIN_ERROR'][parameter],\
+            apply_max_error = apply_max,weights = weights)
+        format = sf.set_format(parameter)
+        Tirific_Template.insert(parameter,f"# {parameter}_ERR",f"{' '.join([f'{x:{format}}' for x in errors[0]])}")
+        Tirific_Template.insert(f"{parameter}_2",f"# {parameter}_2_ERR",f"{' '.join([f'{x:{format}}' for x in errors[1]])}")
+
     Tirific_Template['GR_CONT']=' '
     Tirific_Template.insert('GR_CONT','RESTARTID','0')
     Tirific_Template.insert('MINDELTA','DISTANCE',Configuration['DISTANCE'])
-    length_of_current = int(Tirific_Template['NUR'])
-    for key in errors_to_transfer:
-        format = set_format(key[:-4])
-        Tirific_Template.insert(key[:-4],f"# {key}",f"{' '.join([f'{x:{format}}' for x in FAT_Model[:length_of_current,errors_to_transfer.index(key)]])}")
-        if length_of_current > len(FAT_Model[:,errors_to_transfer.index(key)]):
-            Tirific_Template[f"# {key}"] = Tirific_Template[f"# {key}"]+\
-                             f"{' '.join([f'{FAT_Model[-1,errors_to_transfer.index(key)]:{format}}' for x in range(length_of_current-len(FAT_Model[:,errors_to_transfer.index(key)]))])}"
     # write back to the File
-    tirific(Configuration,Tirific_Template, name = f"{fit_type}/{fit_type}.def", debug = debug)
+    tirific(Configuration,Tirific_Template, name = f"{fit_type}/{fit_type}.def")
 
 transfer_errors.__doc__ =f'''
  NAME:
@@ -660,7 +695,6 @@ transfer_errors.__doc__ =f'''
     Configuration = Standard FAT configuration
 
  OPTIONAL INPUTS:
-    debug = False
     fit_type = 'Undefined'
 
  OUTPUTS:

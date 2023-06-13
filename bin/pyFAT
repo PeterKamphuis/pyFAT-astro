@@ -3,5 +3,8 @@
 
 import pyFAT_astro.main as main
 import sys
+#from viztracer import VizTracer
 
-main.main(sys.argv[1:])
+if __name__ == '__main__':
+    #with VizTracer(output_file="FAT_Run_Viztracer.json",min_duration=1000) as tracer:
+    main.main(sys.argv[1:])

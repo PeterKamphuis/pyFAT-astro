@@ -124,7 +124,27 @@ Output Keywords
  *bool, optional, default = False*
 
  Switch for tracking fitting time, CPU usage and RAM usage. This helps a lot to keep track on which stages are taking resources.
+ !!!!!!Note that this will subtract 1 cpu from the fitting processses!!!!
 
+
+**font_file**
+
+ *str, optional, default =  "/usr/share/fonts/truetype/msttcorefonts/Times_New_Roman.ttf"*
+
+  As fonts are a nightmare in matplotlib one can set the location of their preferred font for the plotting.
+  On Ubuntu the default can be obtained by installing apt-get install ttf-mscorefonts-installer. This should point to the actual font, if the file is not fond we will fall back to DejaVu Sans.
+
+**verbose_log**
+
+  *bool, optional, default = False*
+
+  Be abundant with the messages when writing to the log.
+
+**verbose_screen**
+
+  *bool, optional, default = False*
+
+  Write all log messages to the screen. If set to False screen messages will be minimal, i.e. only start, finish and termination messages in case verbose_log = False. When verbose_log = True important messages go to screen as well.
 
 Fitting Keywords
 --------
@@ -164,25 +184,19 @@ Fitting Keywords
 
   *float, optional, default = 1.1*
 
-  The size of the rings in number of beams
+  The size of the rings in number of beams. The minimum is 0.5. A negative value indicates that FAT is not allowed to vary the ring size (although values smaller than 0.5 will still be set to 0.5 and for large galaxies the outer wings will still be doubled)
 
 **fixed_parameters**:
 
  *List, optional, default = ['Z0','XPOS','YPOS','VSYS']
 
- A list of the parameters that should stay fixed, i.e. all rings fitted as a single value, in the fitting. The rotation curve (VROT) can not be fixed at the moment. If the surface brightness is fixed it is fitted with a Gaussian after every iterations.
+ A list of the parameters that should stay fixed with radius, i.e. all rings fitted as a single value, in the fitting. The rotation curve (VROT) can not be fixed at the moment. If the surface brightness is fixed it is fitted with a Gaussian after every iterations.
  XPOS, YPOS, and VSYS are always fitted as singular.
 **opt_pixel_beam**:
 
   *int, optional, default=4*
 
   FAT can regrid the input cubes to have lesser pixels per FWHM of the gaussian clean beam. This can be useful to speed up the fitting process (See Kamphuis et al. 2015). If you want to prevent this set a high number of pixels. FAT will never increase the amount of pixels per FWHM.
-
-**ncpu**:
-
-  *int, optional, default = 6*
-
-  Number CPUs used for tirific fitting. A high number of cores can be beneficial for speeding up the fitting of larger galaxies however, for smaller galaxies less so.
 
 **distance**:
 
@@ -252,9 +266,103 @@ Advanced Keywords
 
   If the Tirshaker model is set this keyword controls the amount of iterations.
 
+**multiprocessing**:
+
+  *bool, optional, default = True*
+
+  Use multiprocessing
+
+**per_galaxy_ncpu**
+
+  *int, optional, default = 4*
+
+  When multiprocessing is on pyFAT will attempt to find a good balence between the number of simultaneuous processes, the total allowed number of cpus and the number of cpus available in tirific.
+  when multiprocessing is off this number will be set to the global ncpu parameter.
+  A high number of cores per galaxy can be beneficial for speeding up the fitting of larger galaxies however, for smaller galaxies less so.
+
+**catalogue_split_character**
+
+  *str, optional, default = '|'*
+
+  The character used to split the columns in the input catalogue. If left unset pyFAT asumes the default and if it can not find all columns then it tries a space as a seperation character.
+  If it still fails it will thow a bad catalogue error.
+
+**pa_input_boundary**
+
+  *list, optional, default = [[0., 0.], [0., 0.], [0., 0.]]*
+
+  The boundaries that the PA need to remain within. Too small boundaries can lead to FAT not finding a a succesfull model.
+  Given as min,max for the three areas of the fit: the central part, the approaching side warp, the receding side warp.
+
+**incl_input_boundary**
+
+  *list, optional, default = [[0., 0.], [0., 0.], [0., 0.]]*
+
+  The boundaries that the inclination needs to remain within. Too small boundaries can lead to FAT not finding a a succesfull model.
+  Given as min,max for the three areas of the fit: the central part, the approaching side warp, the receding side warp.
+
+**sdis_input_boundary**
+
+  *list, optional, default = [[0., 0.], [0., 0.], [0., 0.]]*
+
+  The boundaries that the dispersion need to remain within. Too small boundaries can lead to FAT not finding a a succesfull model.
+  Given as min,max for the three areas of the fit: the central part, the approaching side warp, the receding side warp.
+
+**z0_input_boundary**
+
+  *list, optional, default = [[0., 0.], [0., 0.], [0., 0.]]*
+
+  The boundaries that the scale height need to remain within. Too small boundaries can lead to FAT not finding a a succesfull model.
+  Given as min,max for the three areas of the fit: the central part, the approaching side warp, the receding side warp.
+
+**vsys_input_boundary**
+
+  *list, optional, default = [[0., 0.], [0., 0.], [0., 0.]]*
+
+  The boundaries that the systemic need to remain within. Too small boundaries can lead to FAT not finding a a succesfull model.
+  Given as min,max for the three areas of the fit: the central part, the approaching side warp, the receding side warp.
+
+**xpos_input_boundary**
+
+  *list, optional, default = [[0., 0.], [0., 0.], [0., 0.]]*
+
+  The boundaries that the right ascension needs to remain within. Too small boundaries can lead to FAT not finding a a succesfull model.
+  Given as min,max for the three areas of the fit: the central part, the approaching side warp, the receding side warp.
+
+**ypos_input_boundary**
+
+  *list, optional, default = [[0., 0.], [0., 0.], [0., 0.]]*
+
+  The boundaries that the declination needs to remain within. Too small boundaries can lead to FAT not finding a a succesfull model.
+  Given as min,max for the three areas of the fit: the central part, the approaching side warp, the receding side warp.
+
+**vrot_input_boundary**
+
+  *list, optional, default = [[0., 0.], [0., 0.], [0., 0.]]*
+
+  The boundaries that the rotation curve needs to remain within. Too small boundaries can lead to FAT not finding a a succesfull model.
+  Given as min,max for the three areas of the fit: the central part, the approaching side warp, the receding side warp.
+
+**sbr_input_boundary**
+
+    *list, optional, default = [[0., 0.], [0., 0.], [0., 0.]]*
+
+    The boundaries that the surface brightness profile needs to remain within. Too small boundaries can lead to FAT not finding a a succesfull model.
+    Given as min,max for the three areas of the fit: the central part, the approaching side warp, the receding side warp.
+
+
+
+
 Individual Keywords
  --------
 *No specifier*
+
+**ncpu**:
+
+  *int, optional, default = number of cores -1*
+
+  Number CPUs used for fitting. In the default mode pyFAT will distribute the input across several calls to the main code.
+  to set the number of cores used by tirific you can use the per_galaxy_ncpu parameter in the advanced section.
 
 **print_examples**:
 

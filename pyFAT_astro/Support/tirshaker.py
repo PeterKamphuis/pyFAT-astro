@@ -18,16 +18,17 @@ import scipy.special as spec
 from scipy.optimize import least_squares
 from matplotlib import colors as mplcolors
 from scipy import stats
-from pyFAT_astro.Support.support_functions import run_tirific,print_log,set_format,finish_current_run
+
 from pyFAT_astro.Support.write_functions import tirific as write_tirific
-from pyFAT_astro.Support.read_functions import load_tirific
+import pyFAT_astro.Support.support_functions as sf
+import pyFAT_astro
 
 #
 #tirshaker
 def tirshaker(Configuration, Tirific_Template, outfilename = 'test_out.def', \
               outfileprefix = 'tirsh_', parameter_groups = [], rings = [], block = []\
               , variation = [], variation_type = [], iterations = 0, random_seed = 0,\
-               mode = 'mad',debug=False,fit_type='Error_Shaker'):
+               mode = 'mad',fit_type='Error_Shaker'):
     # Initiate rng
     random.seed(random_seed)
 
@@ -69,17 +70,19 @@ def tirshaker(Configuration, Tirific_Template, outfilename = 'test_out.def', \
     Tirific_Template['LOGNAME'] = 'Error_Shaker.log'
     Tirific_Template['TIRDEF'] = 'Error_Shaker_Out.def'
     current_run='not set'
+    original_running = copy.deepcopy(Configuration['TIRIFIC_RUNNING'])
+    Configuration['TIRIFIC_RUNNING'] = False
     for i in range(iterations):
         Current_Template = copy.deepcopy(Tirific_Template)
         Current_Template['RESTARTID']= i
         # Provide some info where we are
-        print_log(f'''
+        sf.print_log(f'''
         ******************************
         ******************************
         *** Tirshaker iteration {i:02d} ***
         ******************************
         ******************************
-''',Configuration['OUTPUTLOG'],screen=True)
+''',Configuration)
 
     #fortestin
     #    break
@@ -114,7 +117,7 @@ def tirshaker(Configuration, Tirific_Template, outfilename = 'test_out.def', \
                         current_list[rings[j][l]-1] = current_list[rings[j][l]-1]+variations[l]
                     else:
                         current_list[rings[j][l]-1] = current_list[rings[j][l]-1]*(1.+variations[l])
-                format = set_format(parameter_groups[j][k])
+                format = sf.set_format(parameter_groups[j][k])
                 Current_Template[parameter_groups[j][k]] = ' '.join([f'{x:{format}}' for x in current_list])
 
 
@@ -122,8 +125,8 @@ def tirshaker(Configuration, Tirific_Template, outfilename = 'test_out.def', \
         #Current_Template['LOGNAME'] = logname
         #Current_Template['TIRDEF'] = defname
 
-        write_tirific(Configuration,Current_Template, name =f'Error_Shaker/{fit_type}_In.def' , debug = debug)
-        accepted,current_run = run_tirific(Configuration, current_run, stage = 'shaker',fit_type = fit_type, debug = debug)
+        write_tirific(Configuration,Current_Template, name =f'Error_Shaker/{fit_type}_In.def' )
+        accepted,current_run = sf.run_tirific(Configuration, current_run, stage = 'shaker',fit_type = fit_type)
         #os.system('tirific deffile= '+inname)
 
         # Read the values of the parameters requested
@@ -133,7 +136,10 @@ def tirshaker(Configuration, Tirific_Template, outfilename = 'test_out.def', \
             numbers = []
             # Then go through the parameter_groups
             for k in range(len(parameter_groups[j])):
-                numbers.append([float(x) for x in load_tirific(Configuration,f"{Configuration['FITTING_DIR']}Error_Shaker/Error_Shaker_Out.def",Variables = [parameter_groups[j][k]],debug=debug)[0]])
+                numbers.append([float(x) for x in \
+                    sf.load_tirific(Configuration,\
+                        f"{Configuration['FITTING_DIR']}Error_Shaker/Error_Shaker_Out.def",\
+                        Variables = [parameter_groups[j][k]],array=True)[0]])
                 if parameter_groups[j][k] == 'CONDISP':
                     pass
                 else:
@@ -197,9 +203,9 @@ def tirshaker(Configuration, Tirific_Template, outfilename = 'test_out.def', \
                     allnumbers_final_err[j][k].append(stats.tstd(np.array(allparamsturned[j][k][l]), (median-3*madsigma, median+3*madsigma)))
                     #allnumbers_final[j][k].append(stats.tmean(np.array(allparamsturned[j][k][l])))
                     #allnumbers_final_err[j][k].append(stats.tstd(np.array(allparamsturned[j][k][l])))
-                    print_log('TIRSHAKER: Parameter: {:s} Ring: {:d} Pure average+-std: {:.3e}+-{:.3e} Median+-madsigma: {:.3e}+-{:.3e} Average+-sigma filtered: {:.3e}+-{:.3e} \n'.format(\
+                    sf.print_log('TIRSHAKER: Parameter: {:s} Ring: {:d} Pure average+-std: {:.3e}+-{:.3e} Median+-madsigma: {:.3e}+-{:.3e} Average+-sigma filtered: {:.3e}+-{:.3e} \n'.format(\
                                 parameter_groups[j][k], l+1, average, std, median, madsigma, allnumbers_final[j][k][-1], allnumbers_final_err[j][k][-1])\
-                                ,Configuration['OUTPUTLOG'],screen=False)
+                                ,Configuration)
                 else:
                     allnumbers_final[j][k].append(np.average(np.array(allparamsturned[j][k][l])))
                     allnumbers_final_err[j][k].append(np.sqrt(float(len(allparamsturned[j][k][l]))/float(len(allparamsturned[j][k][l])-1))*np.std(np.array(allparamsturned[j][k][l])))
@@ -211,7 +217,7 @@ def tirshaker(Configuration, Tirific_Template, outfilename = 'test_out.def', \
 
     for j in range(len(parameter_groups)):
         for k in range(len(parameter_groups[j])):
-            format = set_format(parameter_groups[j][k])
+            format = sf.set_format(parameter_groups[j][k])
             #Tirific_Template[parameter_groups[j][k]] = ' '.join([f'{x:{format}}' for x in allnumbers_final[j][k]])
             Tirific_Template.insert(f'{parameter_groups[j][k]}',f'# {parameter_groups[j][k]}_ERR',f"{' '.join([f'{x:{format}}' for x in allnumbers_final_err[j][k]])}")
 
@@ -219,8 +225,11 @@ def tirshaker(Configuration, Tirific_Template, outfilename = 'test_out.def', \
 
     # Put them into the output file
     # Write it to a copy of the file replacing the parameters
-    finish_current_run(Configuration, current_run)
-    write_tirific(Configuration,Tirific_Template, name =f'Error_Shaker/{outfilename}' , debug = debug)
+
+
+    sf.finish_current_run(Configuration, current_run)
+    write_tirific(Configuration,Tirific_Template, name =f'Error_Shaker/{outfilename}' )
+    Configuration['TIRIFIC_RUNNING'] = original_running
 
 tirshaker.__doc__ =f'''
  NAME:
@@ -245,7 +254,6 @@ tirshaker.__doc__ =f'''
     mode (str)                             : If 'mad' implements an outlier rejection.
 
  OPTIONAL INPUTS:
-    debug = False
 
 
  OUTPUTS:

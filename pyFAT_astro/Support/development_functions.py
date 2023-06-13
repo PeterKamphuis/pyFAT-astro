@@ -1,7 +1,7 @@
 # -*- coding: future_fstrings -*-
 # This module contains a set of functions and classes that written for developments purposes but are not included in the main part of the code.
 # If you are too lazy to properly document please keep the functions in this file until you do document.
-
+import pyFAT_astro
 from pyFAT.Support.support_functions import print_log, convert_type,set_limits,rename_fit_products,\
                               set_ring_size,calc_rings,get_usage_statistics,get_inner_fix,convertskyangle,\
                               finish_current_run, remove_inhomogeneities,get_from_template,set_format, \

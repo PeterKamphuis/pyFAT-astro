@@ -1,17 +1,17 @@
 #!/usr/bin/env python
-
+''' This is the setup script for the pyFAT package'''
 import os
 
 try:
     from setuptools import setup
-except ImportError as e:
+except ImportError:
     from distutils.core import setup
 
 requirements = [
     'numpy>=1.14',
     'scipy',
     'astropy',
-    'omegaconf',
+    'omegaconf>=2.2.2',
     'matplotlib',
     'future-fstrings',
     'psutil',
@@ -19,12 +19,12 @@ requirements = [
 ]
 
 PACKAGE_NAME = 'pyFAT_astro'
-__version__ = 'v0.0.8'
+__version__ = 'v0.1.1'
 
 
 #with open("README.md", "r") as fh:
 #    long_description = fh.read()
-long_description = "Not sure what is going wrong here."
+long_description = ""
 
 setup(name=PACKAGE_NAME,
       version=__version__,
