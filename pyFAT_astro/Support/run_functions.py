@@ -35,7 +35,8 @@ import warnings
 import re
 from datetime import datetime
 
-def check_angle_convergence(Configuration,Tirific_Template, fit_type = 'Undefined'):
+def check_angle_convergence(Configuration,Tirific_Template,\
+        fit_type = 'Undefined'):
     angles= {'PA': 20., 'INCL': 10.}
     angles_ok = True
     for key in angles:
@@ -110,7 +111,8 @@ check_angle_convergence.__doc__ =f'''
  NOTE:
 '''
 
-def check_central_convergence(Configuration,Tirific_Template, fit_type = 'Undefined'):
+def check_central_convergence(Configuration,Tirific_Template, \
+        fit_type = 'Undefined'):
     #The new values are already loaded into the Tirific_Template so if we do accept we have to reset the values
     sf.print_log(f'''CHECK_CENTRAL_CONVERGE: Starting stage {fit_type}.
 ''',Configuration,case= ['debug_start'])
@@ -215,7 +217,8 @@ check_central_convergence.__doc__ =f'''
  NOTE:
 '''
 
-def check_inclination(Configuration,Tirific_Template,Fits_Files, fit_type = 'Undefined'):
+def check_inclination(Configuration,Tirific_Template,Fits_Files, \
+        fit_type = 'Undefined'):
     sf.print_log(f'''CHECK_INCLINATION: estimating whether our inclination estimate is decent.
 ''',Configuration,case= ['debug_start'])
     sf.update_statistic(Configuration, message= "Starting the the inclination run")
@@ -386,6 +389,7 @@ check_inclination.__doc__ =f'''
 '''
 
 def check_source(Configuration, Fits_Files):
+    Configuration['INITIAL_GUESSES_TIME'][0] = datetime.now()
     sf.print_log(f'''CHECK_SOURCE: Starting.
 ''',Configuration,case= ['debug_start'])
     sf.update_statistic(Configuration, message= "Starting the check source run")
@@ -652,7 +656,7 @@ Checking the central flux in a box with size of {Configuration['BEAM_IN_PIXELS']
 
     Initial_Parameters = check_initial_boundaries(Configuration, Initial_Parameters)
 
-
+    Configuration['INITIAL_GUESSES_TIME'][1] = datetime.now()
     return Initial_Parameters
 check_source.__doc__='''
  NAME:
@@ -889,13 +893,14 @@ failed_fit.__doc__ =f'''
 '''
 def fitting_osc(Configuration,Fits_Files,Tirific_Template,Initial_Parameters):
     current_run = 'Not Initialized'
+    Configuration['FIT_TIME'][0] = datetime.now()
     sf.create_directory(Configuration['USED_FITTING'],Configuration['FITTING_DIR'])
     wf.initialize_def_file(Configuration, Fits_Files,Tirific_Template, \
                            Initial_Parameters= Initial_Parameters, \
                            fit_type=Configuration['USED_FITTING'])
     sf.print_log(f'''FITTING_OSC: The initial def file is written and we will now start fitting.
 ''' ,Configuration)
-    Configuration['PREP_END_TIME'] = datetime.now()
+    
         # If we have no directory to put the output we create it
 
     while not Configuration['ACCEPTED'] and Configuration['ITERATIONS'] <  Configuration['MAX_ITERATIONS']:
@@ -925,6 +930,7 @@ def fitting_osc(Configuration,Fits_Files,Tirific_Template,Initial_Parameters):
     else:
         Configuration['FINAL_COMMENT'] = 'We could not converge on the extent or centre of the galaxy'
         Configuration['OUTPUT_QUANTITY'] = 5
+    Configuration['FIT_TIME'][1] = datetime.now()
     return current_run
 fitting_osc.__doc__ =f'''
  NAME:
@@ -955,7 +961,8 @@ fitting_osc.__doc__ =f'''
        This is the fitting type done for the installation check.
 '''
 
-def fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run, stage = 'initial',fit_type='Undefined'):
+def fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run, \
+            stage = 'initial',fit_type='Undefined'):
     sf.update_statistic(Configuration, message= "Starting the smoothed check run")
     sf.print_log(f'''FIT_SMOOTHED_CHECK: Starting stage {stage} and fit_type {fit_type}.
 ''',Configuration,case= ['debug_start'])
@@ -1094,7 +1101,8 @@ fit_smoothed_check.__doc__ =f'''
 
  NOTE:
 '''
-def make_full_resolution(Configuration,Tirific_Template,Fits_Files,fit_type = 'Undefined', current_run = 'Not zed'):
+def make_full_resolution(Configuration,Tirific_Template,Fits_Files,\
+        fit_type = 'Undefined', current_run = 'Not zed'):
     sf.update_statistic(Configuration, message= "Starting to make a full resolution model run")
 
     sf.print_log(f'''MAKE_FULL_RESOLUTION: creating full resolution for stage {fit_type}.

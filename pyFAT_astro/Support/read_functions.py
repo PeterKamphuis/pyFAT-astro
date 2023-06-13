@@ -114,7 +114,8 @@ catalogue.__doc__ =f'''
  NOTE:
 '''
 
-def check_edge_limits(xmin,xmax,ymin,ymax,zmin,zmax,Configuration ,beam_edge = 0.5, vel_edge = 0.5 ):
+def check_edge_limits(xmin,xmax,ymin,ymax,zmin,zmax,Configuration ,\
+        beam_edge = 0.5, vel_edge = 0.5 ):
     diff = np.array([xmin,abs(xmax - Configuration['NAXES'][0]),
                      ymin,abs(ymax - Configuration['NAXES'][1])],dtype = float)
     sf.print_log(f'''CHECK_EDGE_LIMIT: We find these differences and this edge size {beam_edge*Configuration['BEAM_IN_PIXELS'][0]}
@@ -271,7 +272,7 @@ extract_vrot.__doc__ =f'''
  NOTE:
 '''
 
-def get_DHI(Configuration,Model='Finalmodel' ):
+def get_DHI(Configuration, Model='Finalmodel'):
     #Get the sbrs
     radi,sbr,sbr_2,systemic = sf.load_tirific(Configuration,\
         f"{Configuration['FITTING_DIR']}{Model}/{Model}.def",\
@@ -361,7 +362,8 @@ get_totflux.__doc__ =f'''
 '''
 
 # Function to get the PA and inclination from the moment 0 for initial estimates
-def guess_orientation(Configuration,Fits_Files, vsys = -1 ,center = None, smooth = False):
+def guess_orientation(Configuration,Fits_Files, vsys = -1 ,center = None, \
+            smooth = False):
     #open the moment 0
 
     sf.print_log(f'''GUESS_ORIENTATION: starting extraction of initial parameters.
@@ -797,7 +799,9 @@ guess_orientation.__doc__ =f'''
 '''
 
 # load the basic info file to get the Sofia FAT Initial_Estimates
-def load_basicinfo(Configuration,filename, Variables = ['RA','DEC','VSYS','PA','Inclination','Max VRot','V_mask','Tot FLux','D_HI','Distance','HI_Mass' ,'D_HI_kpc' ], unpack = True):
+def load_basicinfo(Configuration,filename, Variables = None, unpack = True):
+    if Variables is None:
+        Variables = ['RA','DEC','VSYS','PA','Inclination','Max VRot','V_mask','Tot FLux','D_HI','Distance','HI_Mass' ,'D_HI_kpc' ]
     outputarray = np.zeros((2,len(Variables)), dtype=float)
     try:
         with open(filename, 'r') as tmp:
@@ -932,8 +936,11 @@ read_cube.__doc__ =f'''
 
 
 # function to read the sofia catalogue
-def sofia_catalogue(Configuration,Fits_Files, Variables =['id','x','x_min','x_max','y','y_min','y_max','z','z_min','z_max','ra',\
-                    'dec','v_app','f_sum','kin_pa','w50','err_f_sum','err_x','err_y','err_z','rms']):
+def sofia_catalogue(Configuration,Fits_Files, Variables = None ):
+    if Variables is None:
+        Variables =['id','x','x_min','x_max','y','y_min','y_max','z','z_min',\
+                    'z_max','ra','dec','v_app','f_sum','kin_pa','w50',\
+                    'err_f_sum','err_x','err_y','err_z','rms']
     sf.print_log(f'''SOFIA_CATALOGUE: Reading the source from the catalogue.
 ''',Configuration,case= ['debug_start'])
     outlist = [[] for x in Variables]

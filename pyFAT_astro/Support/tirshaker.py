@@ -22,13 +22,24 @@ from scipy import stats
 from pyFAT_astro.Support.write_functions import tirific as write_tirific
 import pyFAT_astro.Support.support_functions as sf
 import pyFAT_astro
-
+from datetime import datetime
 #
 #tirshaker
 def tirshaker(Configuration, Tirific_Template, outfilename = 'test_out.def', \
-              outfileprefix = 'tirsh_', parameter_groups = [], rings = [], block = []\
-              , variation = [], variation_type = [], iterations = 0, random_seed = 0,\
-               mode = 'mad',fit_type='Error_Shaker'):
+              outfileprefix = 'tirsh_', parameter_groups = None, rings = None,\
+              block = None, variation = None, variation_type = None, iterations = 0, \
+              random_seed = 0, mode = 'mad',fit_type='Error_Shaker'):
+    Configuration['TIRSHAKER_TIME'][0] = datetime.now()
+    if parameter_groups is None:
+        parameter_groups = []
+    if rings  is None:
+        rings = []
+    if block is None:
+        block = []
+    if  variation is None:
+        variation = []
+    if variation_type is None:
+        variation_type = []
     # Initiate rng
     random.seed(random_seed)
 
@@ -230,6 +241,7 @@ def tirshaker(Configuration, Tirific_Template, outfilename = 'test_out.def', \
     sf.finish_current_run(Configuration, current_run)
     write_tirific(Configuration,Tirific_Template, name =f'Error_Shaker/{outfilename}' )
     Configuration['TIRIFIC_RUNNING'] = original_running
+    Configuration['TIRSHAKER_TIME'][1] = datetime.now() 
 
 tirshaker.__doc__ =f'''
  NAME:

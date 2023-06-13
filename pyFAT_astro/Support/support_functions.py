@@ -168,11 +168,14 @@ def calculate_number_processes(Configuration):
         extra_cores -= no_process
     if Configuration['PER_GALAXY_NCPU'] > 2.*input_cores:
         Configuration['PER_GALAXY_NCPU'] =  2.*input_cores
-
-    print(f"We use {no_process} processes for {no_galaxies} galaxies")
-    print(f"With {Configuration['PER_GALAXY_NCPU']} per galaxy")
+    sofia_processes = Configuration['NCPU']
+    if sofia_processes > no_galaxies:
+        sofia_processes = no_galaxies
+    print(f"We use {no_process} processes for {no_galaxies} galaxies.")
+    print(f"With {Configuration['PER_GALAXY_NCPU']} cpus per galaxy.")
+    print(f"For SoFiA and initial estimates we use {sofia_processes} processes.")
     #The updated Configuration should be modified automatically
-    return no_process
+    return no_process,sofia_processes
 
 calculate_number_processes.__doc__ =f'''
  NAME:
@@ -267,8 +270,9 @@ def complex_am_invert(Configuration,Theta_in,Phi_in):
     return Theta_out,Phi_out
 
 
-def calculate_am_vector(Configuration,PA_in,Inclination_in,multiple = [None], invert=False):
-    if multiple[0] == None and invert:
+def calculate_am_vector(Configuration,PA_in,Inclination_in, multiple = None,
+        invert=False):
+    if multiple is None and invert:
         print_log(f'''CALCULATE_AM_VECTOR: inverting phi and theta without the multiple will result in all PAs being in the first quadrant.
 ''',Configuration,case= ['debug_start'])
         multiple=np.zeros(len(PA_in))
@@ -738,9 +742,10 @@ clean_header.__doc__ =f'''
  NOTE:
 '''
 
-def columndensity(Configuration,levels,systemic = 100.,beam=[-1.,-1.],channel_width=-1.,column= False,arcsquare=False,solar_mass_input =False,solar_mass_output=False):
-
-    if beam[0] == -1:
+def columndensity(Configuration,levels,systemic = 100.,beam=None,\
+        channel_width=-1.,column= False,arcsquare=False,solar_mass_input =False\
+        ,solar_mass_output=False):
+    if beam is None:
         if not arcsquare:
             beam = Configuration['BEAM'][:2]
     if channel_width == -1:
@@ -822,7 +827,7 @@ columndensity.__doc__ =f'''
     channelwidth of the observation if unset taken from Configuration
 
     column = false
-    if True input is columndensities else in mJy/beam
+    if True input is columndensities else in mJy
 
     arcsquare=False
     If true then  input is assumed to be in Jy/arcsec^2.
@@ -979,7 +984,8 @@ convert_type.__doc__ =f'''
 '''
 
 # function for converting kpc to arcsec and vice versa
-def convertskyangle(Configuration, angle, distance=-1., unit='arcsec', distance_unit='Mpc', physical=False):
+def convertskyangle(Configuration, angle, distance=-1., unit='arcsec', \
+        distance_unit='Mpc', physical=False):
     if distance == -1.:
         distance = Configuration['DISTANCE']
     print_log(f'''CONVERTSKYANGLE: Starting conversion from the following input.
@@ -1858,7 +1864,8 @@ get_fit_groups.__doc__ =f'''
  NOTE:
 '''
 
-def get_inclination_pa(Configuration, Image, center, cutoff = 0.,figure_name = 'test'):
+def get_inclination_pa(Configuration, Image, center, cutoff = 0.,\
+        figure_name = 'test'):
     map = copy.deepcopy(Image[0].data)
     for i in [0,1]:
         print_log(f'''GET_INCLINATION_PA: Doing iteration {i} in the estimates
@@ -2087,8 +2094,8 @@ get_inner_fix.__doc__ =f'''
     !!!!!!!!!!!!!This appears to currently not be working well.
 '''
 
-def get_kinematical_center(Configuration,map,angle,center= [0.,0] ):
-    if np.sum(center) == 0.:
+def get_kinematical_center(Configuration,map,angle,center = None ):
+    if center is None:
         center = [len(map[0,:])/2.,len(map[:,0])/2.]
     if angle > 180.:
         angle= angle-180.
@@ -2144,8 +2151,9 @@ get_kinematical_center.__doc__=f'''
 
 
 
-def get_profile(Configuration,map,angle,center= [0.,0.]):
-    if np.sum(center) == 0.:
+def get_profile(Configuration,map,angle,center = None):
+
+    if center is None:
         center = [len(map[0,:])/2.,len(map[:,0])/2.]
     x1,x2,y1,y2 = obtain_border_pix(Configuration,angle,center )
     linex,liney = np.linspace(x1,x2,1000), np.linspace(y1,y2,1000)
@@ -2350,11 +2358,11 @@ get_usage_statistics.__doc__ =f'''
 def get_vel_pa(Configuration,velocity_field,center= [0.,0.] ):
     print_log(f'''GET_VEL_PA: This is the center we use {center}
 ''',Configuration,case=['debug_start'])
-    # because python is stupid the ceneter should be reversed to match the map
-    center.reverse()
-    if np.sum(center) == 0.:
+    if center == None:
         center = [x/2. for x in velocity_field.shape]
-
+    else:
+         # because python is stupid the ceneter should be reversed to match the map
+        center.reverse()
     sigma = [3.,3.]
     sm_velocity_field = ndimage.gaussian_filter(velocity_field, sigma=(sigma[1], sigma[0]), order=0)
     while len(sm_velocity_field[~np.isnan(sm_velocity_field)]) < 10 and sigma[0] > 0.5:
@@ -2562,11 +2570,17 @@ linenumber.__doc__ =f'''
 
 #The functions load_tirifiic,load_template and get_from template were extremely similar
 #This replaces all with a single function
-def load_tirific(Configuration,def_input,Variables = ['BMIN','BMAJ','BPA','RMS',\
-            'DISTANCE','NUR','RADI','VROT','Z0', 'SBR', 'INCL','PA','XPOS','YPOS',\
-            'VSYS','SDIS','VROT_2',  'Z0_2','SBR_2','INCL_2','PA_2','XPOS_2',\
-            'YPOS_2','VSYS_2','SDIS_2','CONDISP','CFLUX','CFLUX_2'],\
-             array = False,ensure_rings =False ):
+def load_tirific(Configuration,def_input,Variables = None,array = False,\
+        ensure_rings = False ):
+    #Cause python is the dumbest and mutable objects in the FAT_defaults
+    # such as lists transfer
+    if Variables is None:
+        Variables = ['BMIN','BMAJ','BPA','RMS','DISTANCE','NUR','RADI',\
+                     'VROT','Z0', 'SBR', 'INCL','PA','XPOS','YPOS','VSYS',\
+                     'SDIS','VROT_2',  'Z0_2','SBR_2','INCL_2','PA_2','XPOS_2',\
+                     'YPOS_2','VSYS_2','SDIS_2','CONDISP','CFLUX','CFLUX_2']
+
+
     # if the input is a string we first load the template
     if isinstance(def_input,str):
         def_input = tirific_template(filename = def_input )
@@ -3008,8 +3022,9 @@ obtain_ratios.__doc__ = '''
  NOTE:
 '''
 
-def print_log(log_statement,Configuration,case=['main']):
-
+def print_log(log_statement,Configuration, case = None):
+    if case is None:
+        case=['main']
     if Configuration['DEBUG']:
         if 'debug_start' in case:
             debug = 'long'
@@ -3017,7 +3032,10 @@ def print_log(log_statement,Configuration,case=['main']):
             debug= 'short'
     else:
         debug = 'empty'
-    log_statement = f"{linenumber(debug=debug)}{log_statement}"
+    if Configuration['TIMING']:
+        log_statement = f"{linenumber(debug=debug)} {datetime.now()} {log_statement}"
+    else:
+        log_statement = f"{linenumber(debug=debug)}{log_statement}"
     print_statement = False
     if (Configuration['DEBUG'] and ('debug_start' in case or 'debug_add' in case))\
         or ('verbose' in case and (Configuration['VERBOSE_LOG'] or Configuration['DEBUG']))\
@@ -3064,7 +3082,10 @@ print_log.__doc__ =f'''
     This is useful for testing functions.
 '''
 
-def remove_inhomogeneities(Configuration,fits_map_in,inclination=30., pa = 90. , center = [0.,0.],WCS_center = True, iteration= 0 ):
+def remove_inhomogeneities(Configuration,fits_map_in,inclination=30., pa = 90.\
+        ,center = None, WCS_center = True, iteration= 0 ):
+    if center is None:
+        center = [0.,0.]
     fits_map = copy.deepcopy(fits_map_in)
     print_log(f'''REMOVE_INHOMOGENEITIES: These are the values we get as input
 {'':8s}Inclination = {inclination}
@@ -3253,7 +3274,8 @@ rotateImage.__doc__ =f'''
 '''
 
 
-def run_tirific(Configuration, current_run, stage = 'initial',fit_type = 'Undefined',deffile='Undefined'):
+def run_tirific(Configuration, current_run, stage = 'initial',\
+        fit_type = 'Undefined',deffile='Undefined'):
     print_log(f'''RUN_TIRIFIC: For the galaxy {Configuration['ID']} in directory {Configuration['SUB_DIR']} we are starting a new TiRiFiC.
 We are in in stage {stage} and fit_type {fit_type} and have done {Configuration['ITERATIONS']} loops
 ''',Configuration,case=['debug_start'])
@@ -3299,15 +3321,16 @@ We are in in stage {stage} and fit_type {fit_type} and have done {Configuration[
     counter = 0
 
     current_process= psu.Process(current_run.pid)
-
+    initialized = datetime.now()
     if Configuration['TIMING']:
         time.sleep(0.1)
         with open(f"{Configuration['LOG_DIRECTORY']}Usage_Statistics.txt",'a') as file:
-            file.write(f"# TIRIFIC: Initializing Tirific at stage = {fit_type} {datetime.now()} \n")
+            file.write(f"# TIRIFIC: Initializing Tirific at stage = {fit_type}, Loop = {Configuration['ITERATIONS']} {datetime.now()} \n")
             CPU,mem = get_usage_statistics(Configuration,current_process)
             file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Mb for TiRiFiC \n")
     else:
         time.sleep(0.1)
+
     if Configuration['VERBOSE_SCREEN']:
         print(f"\r{'':8s}RUN_TIRIFIC: 0 % Completed", end =" ",flush = True)
     triggered = False
@@ -3336,6 +3359,14 @@ We are in in stage {stage} and fit_type {fit_type} and have done {Configuration[
             break
         if tmp[0].strip() == 'Abort':
             break
+        if not triggered:
+            #Check that the initialization doesn't take to long
+            check = datetime.now()
+            diff = (check-initialized).total_seconds()
+            if diff > 600:
+                raise TirificOutputError(f'''10 minutes after initialization the fitting has still not started.
+We were running {deffile} and failed to find the output {output_fits} or {output_deffile}.
+''')
     if Configuration['VERBOSE_SCREEN']:
         print(f'\n')
     if Configuration['TIMING']:
@@ -3469,7 +3500,8 @@ set_boundaries.__doc__ =f'''
  NOTE:
 '''
 #Set the indivdual configuration such that the loop can run without the full catalogue
-def set_individual_configuration(current_galaxy_index,Full_Catalogue,Original_Configuration):
+def set_individual_configuration(current_galaxy_index,Full_Catalogue,\
+        Original_Configuration):
     Configuration = copy.deepcopy(Original_Configuration)
     Configuration['ID'] = Full_Catalogue['ID'][current_galaxy_index]
     if Full_Catalogue['DISTANCE'][current_galaxy_index] != -1.:
@@ -3611,9 +3643,13 @@ def setup_configuration(cfg):
                                         'BadCubeError','BadMaskError',\
                                         'BadCatalogueError'],
                'MAXIMUM_DIRECTORY_LENGTH': len('Directory Name'),
-               'PREP_END_TIME': 'Not completed',
-               'START_TIME':'Not completed',
-               'END_TIME':'Not completed',
+               'FULL_TIME': [datetime.now(),'Not completed'],
+               'INITIALIZATION_TIME': ['Not started','Not completed'],
+               'PREPARATION_TIME': ['Not started','Not completed'],
+               'SOFIA_TIME': ['Not started','Not completed'],
+               'INITIAL_GUESSES_TIME': ['Not started','Not completed'],
+               'FIT_TIME': ['Not started','Not completed'],
+               'TIRSHAKER_TIME': ['Not started','Not completed'],
                'OUTPUTLOG': None,
                'RUN_COUNTER': 0,
                'CENTRAL_CONVERGENCE_COUNTER': 1.,
@@ -3623,7 +3659,7 @@ def setup_configuration(cfg):
                'TIRIFIC_PID': 'Not Initialized', #Process ID of tirific that is running
                'FAT_PID': os.getpid(), #Process ID of FAT that is running
                'FAT_PSUPROCESS': 'cant copy',
-               'FINAL_COMMENT': "This fitting stopped with an unregistered exit.", 
+               'FINAL_COMMENT': "This fitting stopped with an unregistered exit.",
 
                'MAX_SIZE_IN_BEAMS': 30, # The galaxy is not allowed to extend beyond this number of beams in radius, set in check_source
                'MIN_SIZE_IN_BEAMS': 0., # Minimum allowed radius in number of beams of the galaxy, set in check_source
@@ -4007,7 +4043,8 @@ set_limits.__doc__ =f'''
 
  NOTE:
 '''
-def set_ring_size(Configuration,requested_ring_size = 0., size_in_beams = 0., check_set_rings = False):
+def set_ring_size(Configuration,requested_ring_size = 0., size_in_beams = 0., \
+        check_set_rings = False):
     double_size = False
     if size_in_beams == 0.:
         size_in_beams =  np.min(Configuration['SIZE_IN_BEAMS'])
