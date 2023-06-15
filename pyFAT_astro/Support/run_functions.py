@@ -442,26 +442,30 @@ def check_source(Configuration, Fits_Files):
     masked_data = Cube[0].data
     header = Cube[0].header
     Mask = fits.open(f"{Configuration['FITTING_DIR']}{Fits_Files['MASK']}",uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
-    masked_data[Mask[0].data < 0.5] = float('NaN')#Let's first check that this source has reasonable SNR
-#Check that the source is bright enough
 
-    Max_SNR = np.nanmax(masked_data)/Configuration['NOISE']
-    if Max_SNR < 2.5:
-        sf.print_log(f'''CHECK_SOURCE: The max SNR of the pixels in the mask is {Max_SNR}, that is not enough for a fit.
+    #The following should only be run if we ran sofia
+    if 'run_sofia' in Configuration['FITTING_STAGES']:
+        #Check that the source is bright enough
+        #masked_data[Mask[0].data < 0.5] = float('NaN')
+        data_values = np.sort(masked_data[Mask[0].data > 0.5])[::-1]
+        Max_SNR = data_values[int(len(data_values)*\
+            Configuration['SOURCE_MAX_FRACTION'])]/Configuration['NOISE']
+        if Max_SNR < Configuration['SOURCE_MAX_SNR']:
+            sf.print_log(f'''CHECK_SOURCE: The SNR of brightest {Configuration['SOURCE_MAX_FRACTION']*100}% of selected pixels does not always exceed {Configuration['SOURCE_MAX_SNR']}. Aborting.
 ''', Configuration,case= ['main','screen'])
-        raise BadSourceError(f"The max SNR of the pixels in the mask is {Max_SNR}. This is too faint.")
-    else:
-        sf.print_log(f'''CHECK_SOURCE: The Max SNR of the pixels in the mask is {Max_SNR}.
+            raise BadSourceError(f"The SNR of brightest {Configuration['SOURCE_MAX_FRACTION']*100.}% of selected pixels does not always exceed {Configuration['SOURCE_MAX_SNR']}. Aborting.")
+        else:
+            sf.print_log(f'''CHECK_SOURCE: The SNR of brightest {Configuration['SOURCE_MAX_FRACTION']*100.}% of selected pixels always exceeds {Configuration['SOURCE_MAX_SNR']}.
 ''', Configuration)
 
-    Mean_SNR = np.nanmean(masked_data[masked_data > 0.])/Configuration['NOISE']
-    del masked_data
-    if Mean_SNR < 0.75:
-        sf.print_log(f'''CHECK_SOURCE: The mean SNR of the pixels in the mask is {Mean_SNR}, that is not enough for a fit.
+        Mean_SNR = np.nanmean(masked_data[masked_data > 0.])/Configuration['NOISE']
+        del masked_data
+        if Mean_SNR < Configuration['SOURCE_MEAN_SNR']:
+            sf.print_log(f'''CHECK_SOURCE: The mean SNR of the pixels in the mask is {Mean_SNR}, that is not enough for a fit.
 ''', Configuration,case= ['main','screen'])
-        raise BadSourceError(f"The mean SNR of the pixels in the mask is {Mean_SNR}. This is too faint.")
-    else:
-        sf.print_log(f'''CHECK_SOURCE: The mean SNR of the pixels in the mask is {Mean_SNR}.
+            raise BadSourceError(f"The mean SNR of the pixels in the mask is {Mean_SNR}. This is too faint.")
+        else:
+            sf.print_log(f'''CHECK_SOURCE: The mean SNR of the pixels in the mask is {Mean_SNR}.
 ''', Configuration)
 
     with warnings.catch_warnings():
@@ -900,7 +904,7 @@ def fitting_osc(Configuration,Fits_Files,Tirific_Template,Initial_Parameters):
                            fit_type=Configuration['USED_FITTING'])
     sf.print_log(f'''FITTING_OSC: The initial def file is written and we will now start fitting.
 ''' ,Configuration)
-    
+
         # If we have no directory to put the output we create it
 
     while not Configuration['ACCEPTED'] and Configuration['ITERATIONS'] <  Configuration['MAX_ITERATIONS']:

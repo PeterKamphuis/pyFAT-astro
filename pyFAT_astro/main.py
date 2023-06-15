@@ -207,8 +207,11 @@ def main(argv):
             system_monitor = wf.full_system_tracking(Original_Configuration)
             fst = threading.Thread(target=system_monitor.start_monitoring)
             fst.start()
+
+            print(f"We are using {Original_Configuration['NCPU']} cpus for fitting and 1 for timing.")
+        else:
+            print(f"We are using {Original_Configuration['NCPU']} cpus.")
         #if start_galaxy not negative then it is catalogue ID
-        print(f"We are using {Original_Configuration['NCPU']} cpus.")
         if Original_Configuration['CATALOGUE_START_ID'] in ['-1','-1.']:
             Original_Configuration['CATALOGUE_START_ID'] = int(0)
         else:

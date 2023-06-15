@@ -2,7 +2,7 @@
 # This module contains a set of functions and classes that are used in several different Python scripts in the Database.
 from astropy.io import fits
 from astropy.wcs import WCS
-
+from shutil import copyfile
 from pyFAT_astro.Support.fat_errors import FunctionCallError,BadHeaderError,\
                                         BadCubeError,BadMaskError
 import pyFAT_astro.Support.support_functions as sf
@@ -12,6 +12,7 @@ import pyFAT_astro
 from scipy import ndimage
 import numpy as np
 import copy
+import shutil
 import warnings
 import os
 
@@ -19,6 +20,8 @@ import os
 def check_mask(Configuration,id,Fits_Files):
     sf.print_log(f'''CHECK_MASK: Checking the mask to contain only the correct source.
 ''',Configuration, case =['debug_start','verbose'])
+    if Configuration['DEBUG']:
+        copyfile(f"{Configuration['FITTING_DIR']}/{Fits_Files['MASK']}",f"{Configuration['FITTING_DIR']}/Sofia_Output/{Configuration['BASE_NAME']}_Original_Mask.fits")
     mask = fits.open(f"{Configuration['FITTING_DIR']}/{Fits_Files['MASK']}",uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
 
     if float(id) not in mask[0].data:

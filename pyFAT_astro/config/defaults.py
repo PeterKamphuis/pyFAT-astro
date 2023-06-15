@@ -103,6 +103,12 @@ class Advanced:
         default_factory=lambda: [[0., 0.], [0., 0.], [0., 0.]])
     sbr_input_boundary: List = field(
         default_factory=lambda: [[0., 0.], [0., 0.], [0., 0.]])
+    # The brightest pixels need to have a SNR above this value
+    source_max_snr: float = 2.5
+    # The fraction of pixels in the source that need to be above max_snr
+    source_max_fraction: float = 0.1
+    # The mean SNR required in the source
+    source_mean_snr: float = 0.75
 
     # Add the channel dependency, minimum inclination,
 
