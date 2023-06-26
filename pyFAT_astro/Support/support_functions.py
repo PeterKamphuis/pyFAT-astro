@@ -3321,6 +3321,7 @@ We are in in stage {stage} and fit_type {fit_type} and have done {Configuration[
     counter = 0
 
     current_process= psu.Process(current_run.pid)
+
     initialized = datetime.now()
     if Configuration['TIMING']:
         time.sleep(0.1)
@@ -3659,7 +3660,7 @@ def setup_configuration(cfg):
                'TIRIFIC_PID': 'Not Initialized', #Process ID of tirific that is running
                'FAT_PID': os.getpid(), #Process ID of FAT that is running
                'FAT_PSUPROCESS': 'cant copy',
-               'FINAL_COMMENT': "This fitting stopped with an unregistered exit.",
+               'FINAL_COMMENT': "This fitting stopped with an unregistered exit.", 
 
                'MAX_SIZE_IN_BEAMS': 30, # The galaxy is not allowed to extend beyond this number of beams in radius, set in check_source
                'MIN_SIZE_IN_BEAMS': 0., # Minimum allowed radius in number of beams of the galaxy, set in check_source

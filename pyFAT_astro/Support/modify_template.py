@@ -699,6 +699,10 @@ def check_for_ring_addition(Configuration,Tirific_Template,sbr,sbr_ring_limits )
 ''', Configuration,case= ['debug_add'])
                 add=True
 
+            else:
+                sf.print_log(f'''CHECK_FOR_RING_ADDITION: We did not find a gap so we were are adding.
+''', Configuration,case= ['debug_add'])
+                add=True
 
     if add:
         sf.print_log(f'''CHECK_FOR_RING_ADDITION:  We are adding a ring (new no ring = {new_rings+1.})
@@ -2042,6 +2046,7 @@ regularise_profile.__doc__ =f'''
     key = parameter to fix
 
  OPTIONAL INPUTS:
+
 
 
     no_apply = false
