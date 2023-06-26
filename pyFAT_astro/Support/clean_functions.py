@@ -600,7 +600,7 @@ def finish_galaxy(Configuration,current_run = 'Not initialized',\
         with timing_lock:
             with open(Configuration['MAIN_DIRECTORY']+'/Timing_Result.txt','a') as timing_result:
                timing_result.write(f'''The galaxy in directory {Configuration['FITTING_DIR']} has the following timing results.
-Inititalization from {Configuration['INITIALIZATION_TIME'][0]} to {Configuration['INITIALIZATION_TIME'][1]}
+Initialization from {Configuration['INITIALIZATION_TIME'][0]} to {Configuration['INITIALIZATION_TIME'][1]}
 Preparation time  from {Configuration['PREPARATION_TIME'][0]} to {Configuration['PREPARATION_TIME'][1]}
 Time to run Sofia from {Configuration['SOFIA_TIME'][0]} to {Configuration['SOFIA_TIME'][1]}
 Time to get Initial estimates {Configuration['INITIAL_GUESSES_TIME'][0]} to {Configuration['INITIAL_GUESSES_TIME'][1]}

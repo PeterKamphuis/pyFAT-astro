@@ -2,6 +2,7 @@
 # This module contains a set of functions and classes that are used in several different Python scripts in the Database.
 from astropy.io import fits
 from astropy.wcs import WCS
+from datetime import datetime
 from shutil import copyfile
 from pyFAT_astro.Support.fat_errors import FunctionCallError,BadHeaderError,\
                                         BadCubeError,BadMaskError
@@ -85,6 +86,7 @@ check_mask.__doc__ =f'''
 # Create a cube suitable for FAT
 def create_fat_cube(Configuration, Fits_Files,sofia_catalogue=False,\
         id='No default',name='No default'):
+    Configuration['PREPARATION_TIME'][0] = datetime.now()
     #First get the cubes
     if sofia_catalogue:
         Cube = fits.open(f"{Configuration['SOFIA_DIR']}{name}_{id}_cube.fits",\
@@ -115,6 +117,8 @@ def create_fat_cube(Configuration, Fits_Files,sofia_catalogue=False,\
 
     data = []
     hdr = []
+    Configuration['PREPARATION_TIME'][1] = datetime.now()
+
 create_fat_cube.__doc__ =f'''
  NAME:
     create_fat_cube
