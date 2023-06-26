@@ -692,17 +692,11 @@ def check_for_ring_addition(Configuration,Tirific_Template,sbr,sbr_ring_limits )
                 sf.print_log(f'''CHECK_FOR_RING_ADDITION: We found a change  of {PA_change/gap_size} in PA and {INCL_change/gap_size} in INCL.
 {'':8s} The gap is {gap_size} kpc
 ''', Configuration,case= ['debug_add'])
-
-
             else:
                 sf.print_log(f'''CHECK_FOR_RING_ADDITION: We did not find a gap so we were are adding.
 ''', Configuration,case= ['debug_add'])
                 add=True
 
-            else:
-                sf.print_log(f'''CHECK_FOR_RING_ADDITION: We did not find a gap so we were are adding.
-''', Configuration,case= ['debug_add'])
-                add=True
 
     if add:
         sf.print_log(f'''CHECK_FOR_RING_ADDITION:  We are adding a ring (new no ring = {new_rings+1.})

@@ -149,20 +149,6 @@ def main(argv):
             with open(f'{cfg.input.main_directory}/FAT_Inputs-Run_{datetime.now().strftime("%d-%m-%Y")}.yml','w') as default_write:
                 default_write.write(OmegaConf.to_yaml(cfg))
 
-        # The way we want to print our message we define as globals  such that we can access the settings everywhere
-        # That doesn't work with multiprocessing as every instance then becomes a new instance with the default settings
-
-
-        #Let's write and input example to the main directory
-        if cfg.output.debug:
-            with open(f'{cfg.input.main_directory}/FAT_Inputs-Run_{datetime.now().strftime("%d-%m-%Y")}.yml','w') as default_write:
-                default_write.write(OmegaConf.to_yaml(cfg))
-
-        #Let's write and input example to the main directory
-        if cfg.output.debug:
-            with open(f'{cfg.input.main_directory}/FAT_Inputs-Run_{datetime.now().strftime("%d-%m-%Y")}.yml','w') as default_write:
-                default_write.write(OmegaConf.to_yaml(cfg))
-
 
         #Transform all to a Configuration dictionary
         Original_Configuration = sf.setup_configuration(cfg)
