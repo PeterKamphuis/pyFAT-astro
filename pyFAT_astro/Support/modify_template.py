@@ -3209,6 +3209,7 @@ def set_new_size(Configuration,Tirific_Template, fit_type = 'Undefined',
     #This could lead to replacing a value smaller than the other side
     Tirific_Template['VARY'] = Tirific_Template['VARY'].replace(f"{old_rings}",f"{current_rings}")
     Tirific_Template['VARINDX'] = Tirific_Template['VARINDX'].replace(f"{old_rings-1}",f"{current_rings-1}")
+    Tirific_Template['VARINDX'] = Tirific_Template['VARINDX'].replace(f"{old_rings}",f"{current_rings}")
     Tirific_Template['NUR'] = f"{current_rings}"
     # if we cut we want to flatten things
     #if current_rings < old_rings:
