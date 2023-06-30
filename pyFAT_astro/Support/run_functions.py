@@ -450,6 +450,7 @@ def check_source(Configuration, Fits_Files):
         data_values = np.sort(masked_data[Mask[0].data > 0.5])[::-1]
         Max_SNR = data_values[int(len(data_values)*\
             Configuration['SOURCE_MAX_FRACTION'])]/Configuration['NOISE']
+        
         if Max_SNR < Configuration['SOURCE_MAX_SNR']:
             sf.print_log(f'''CHECK_SOURCE: The SNR of brightest {Configuration['SOURCE_MAX_FRACTION']*100}% of selected pixels does not always exceed {Configuration['SOURCE_MAX_SNR']}. Aborting.
 ''', Configuration,case= ['main','screen'])
@@ -457,7 +458,6 @@ def check_source(Configuration, Fits_Files):
         else:
             sf.print_log(f'''CHECK_SOURCE: The SNR of brightest {Configuration['SOURCE_MAX_FRACTION']*100.}% of selected pixels always exceeds {Configuration['SOURCE_MAX_SNR']}.
 ''', Configuration)
-
         Mean_SNR = np.nanmean(masked_data[masked_data > 0.])/Configuration['NOISE']
         del masked_data
         if Mean_SNR < Configuration['SOURCE_MEAN_SNR']:

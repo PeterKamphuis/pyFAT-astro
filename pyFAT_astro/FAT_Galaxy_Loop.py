@@ -29,8 +29,10 @@ def FAT_Galaxy_Loop(Configuration):
         # If you add any make sure that the fitstage  starts with 'Fit_'
         if Configuration['USED_FITTING']:
             # Process the found source in sofia to set up the proper fitting and make sure source can be fitted
+        
             Initial_Parameters = runf.check_source(
-                Configuration, Fits_Files)
+                    Configuration, Fits_Files)
+
             #sf.sofia_output_exists(Configuration,Fits_Files)
             sf.print_log(f'''FAT_GALAXY_LOOPS: The source is well defined and we will now setup the initial tirific file
 ''', Configuration)

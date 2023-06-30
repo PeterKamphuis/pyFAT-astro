@@ -106,7 +106,7 @@ class Advanced:
     # The brightest pixels need to have a SNR above this value
     source_max_snr: float = 2.5
     # The fraction of pixels in the source that need to be above max_snr
-    source_max_fraction: float = 0.1
+    source_max_fraction: float = 0.075
     # The mean SNR required in the source
     source_mean_snr: float = 0.75
 
