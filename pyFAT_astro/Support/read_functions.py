@@ -937,10 +937,12 @@ read_cube.__doc__ =f'''
 
 # function to read the sofia catalogue
 def sofia_catalogue(Configuration,Fits_Files, Variables = None ):
+    strip_npix= False
     if Variables is None:
         Variables =['id','x','x_min','x_max','y','y_min','y_max','z','z_min',\
                     'z_max','ra','dec','v_app','f_sum','kin_pa','w50',\
-                    'err_f_sum','err_x','err_y','err_z','rms']
+                    'err_f_sum','err_x','err_y','err_z','rms','n_pix']
+        strip_npix =True
     sf.print_log(f'''SOFIA_CATALOGUE: Reading the source from the catalogue.
 ''',Configuration,case= ['debug_start'])
     outlist = [[] for x in Variables]
@@ -1105,11 +1107,20 @@ In principle your cube is too small.
         # check that our mask has the selected source
     else:
         outlist = [x[0] for x in outlist]
-
-    check_mask(Configuration,outlist[Variables.index('id')],Fits_Files)
+    if 'n_pix' in Variables:
+        #If we have the amount of pixels in the mask we calculate a SNR in Jy/beam
+        SNR=outlist[Variables.index('f_sum')]*Configuration['BEAM_IN_PIXELS'][2]/\
+            (Configuration['CHANNEL_WIDTH']*float(outlist[Variables.index('n_pix')])*\
+            Configuration['NOISE'])
+    else:
+        #if we don't know the amount of pixels we just leave the mask unmodified
+        SNR = 5
+    check_mask(Configuration,outlist[Variables.index('id')],Fits_Files,SNR=SNR)
     sf.print_log(f'''SOFIA_CATALOGUE: we found these values:
 {chr(10).join([f'{"":8s}{x} = {y}' for x,y in zip(Variables,outlist)])}
 ''',Configuration,case= ['debug_add'])
+    if strip_npix:
+        outlist.pop(Variables.index('n_pix'))
     return outlist
 sofia_catalogue.__doc__ =f'''
  NAME:

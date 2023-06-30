@@ -18,16 +18,64 @@ import warnings
 import os
 
 #Check that the mask only contains the selected sources
-def check_mask(Configuration,id,Fits_Files):
+def check_mask(Configuration,id,Fits_Files,SNR= 5.):
     sf.print_log(f'''CHECK_MASK: Checking the mask to contain only the correct source.
+and to have decent signal noise
 ''',Configuration, case =['debug_start','verbose'])
     if Configuration['DEBUG']:
         copyfile(f"{Configuration['FITTING_DIR']}/{Fits_Files['MASK']}",f"{Configuration['FITTING_DIR']}/Sofia_Output/{Configuration['BASE_NAME']}_Original_Mask.fits")
     mask = fits.open(f"{Configuration['FITTING_DIR']}/{Fits_Files['MASK']}",uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
+    mask = check_mask_sources(Configuration,id,mask)
 
+    if SNR < 3.:
+        mask = smooth_mask(Configuration,mask)
+    fits.writeto(f"{Configuration['FITTING_DIR']}{Fits_Files['MASK']}",mask[0].data,\
+            mask[0].header, overwrite = True)
+    # to ensure compatible units and calculations with th models we make the maps ourselves
+    del mask[0].header['C*3']
+    chan_map = np.array(np.nansum(mask[0].data,axis=0),dtype =float)
+    fits.writeto(f"{Configuration['FITTING_DIR']}/Sofia_Output/{Configuration['BASE_NAME']}_chan.fits",\
+        chan_map,header=mask[0].header,overwrite = True)
+    mask.close()
+    if Configuration['SOFIA_RAN']:
+        make_moments(Configuration, Fits_Files,fit_type='Generic_Initialize',vel_unit = 'm/s')
+
+check_mask.__doc__ =f'''
+ NAME:
+    check_mask
+
+ PURPOSE:
+    Check that the mask only contains the source we want and if that source
+    has low SNR that it is smoothed with a beam
+
+ CATEGORY:
+    fits_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    id = the SoFiA ID of the source we are interested in
+    Fits_Files = Standard FAT dictionary with filenames
+    Tirific_Template = Standard FAT Tirific Template
+
+ OPTIONAL INPUTS:
+    fit_type = 'Undefined'
+
+ OUTPUTS:
+    moment maps and the channel map
+
+ OPTIONAL OUTPUTS:
+    a cleaned mask
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
+
+def check_mask_sources(Configuration,id,mask):
     if float(id) not in mask[0].data:
         sf.print_log(f'''CHECK_MASK: We cannot find the selected source in the mask. This will lead to errors. Aborting the fit.
-''',Configuration,case=['main','screen'])
+    ''',Configuration,case=['main','screen'])
         BadMaskError(f" We can not find the sofia source id in the mask.")
     else:
         data = copy.deepcopy(mask[0].data)
@@ -36,19 +84,15 @@ def check_mask(Configuration,id,Fits_Files):
         neg_index = np.where(diff < 0.)[0]
         if len(neg_index) != 0:
             sf.print_log(f'''CHECK_MASK: The initial mask had more than a single source. redoing the mask.
-''',Configuration, case = ['verbose'])
+    ''',Configuration, case = ['verbose'])
             mask[0].data = data
-            fits.writeto(f"{Configuration['FITTING_DIR']}{Fits_Files['MASK']}",mask[0].data,mask[0].header, overwrite = True)
-# to ensure compatible units and calculations with th models we make the maps ourselves
-    del mask[0].header['C*3']
+
+
     mask[0].data[mask[0].data> 0.5] = 1.
-    chan_map = np.array(np.nansum(mask[0].data,axis=0),dtype =float)
+
     mask[0].header['BITPIX'] = -32
-    fits.writeto(f"{Configuration['FITTING_DIR']}/Sofia_Output/{Configuration['BASE_NAME']}_chan.fits",chan_map,header=mask[0].header,overwrite = True)
-    mask.close()
-    if Configuration['SOFIA_RAN']:
-        make_moments(Configuration, Fits_Files,fit_type='Generic_Initialize',vel_unit = 'm/s')
-check_mask.__doc__ =f'''
+    return mask
+check_mask_sources.__doc__ =f'''
  NAME:
     check_mask
 
@@ -79,10 +123,6 @@ check_mask.__doc__ =f'''
 
  NOTE:
 '''
-
-
-
-
 # Create a cube suitable for FAT
 def create_fat_cube(Configuration, Fits_Files,sofia_catalogue=False,\
         id='No default',name='No default'):
@@ -964,6 +1004,46 @@ Regrid an array into a new shape through the ndimage module
 
  PROCEDURES CALLED:
     scipy.ndimage.map_coordinates, np.array, np.mgrid
+
+ NOTE:
+'''
+
+def smooth_mask(Configuration,mask):
+    sf.print_log(f'''SMOOTH_MASK: Starting smooth mask
+''', Configuration)
+
+    # First we smooth the mask
+    mask_data = np.array(mask[0].data,dtype=float)
+    mask_data = ndimage.gaussian_filter(mask_data,sigma=(0.,\
+        Configuration['BEAM_IN_PIXELS'][1] / np.sqrt(8 * np.log(2)),\
+        Configuration['BEAM_IN_PIXELS'][0] / np.sqrt(8 * np.log(2))),order=0)
+    mask_data[mask_data > 0.05] = 1.
+    mask_data[mask_data < 0.05] = 0.
+    mask[0].data=mask_data
+    return mask
+    #reaplly it to get the moments
+
+
+    # If we have a lot of pixels and stuff we need smooth more
+    #So we take the inverse of the initial factor with a standard of 0.75 minimum of 0.5 and a maximum of 1.25
+
+smooth_mask.__doc__ =f'''
+ NAME:
+    smooth_mask
+ PURPOSE:
+    smooth the mask with a beam
+ CATEGORY:
+    fits_functions
+
+ INPUTS:
+
+ OPTIONAL INPUTS:
+
+ OUTPUTS:
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
 
  NOTE:
 '''

@@ -398,8 +398,10 @@ def check_source(Configuration, Fits_Files):
     name,x,x_min,x_max,y,y_min,y_max,z,z_min,z_max,ra,dec,v_app,f_sum,kin_pa, \
         w50,err_f_sum, err_x,err_y,err_z,source_rms= rf.sofia_catalogue(Configuration,Fits_Files)
 
-    x_min,x_max,y_min,y_max,z_min,z_max = sf.convert_type([x_min,x_max,y_min,y_max,z_min,z_max], type = 'int')
-    x,y,z,ra,dec,v_app,f_sum,kin_pa,f_sum_err , err_x,err_y,err_z= sf.convert_type([x,y,z,ra,dec,v_app,f_sum,kin_pa,err_f_sum, err_x,err_y,err_z])
+    x_min,x_max,y_min,y_max,z_min,z_max = \
+        sf.convert_type([x_min,x_max,y_min,y_max,z_min,z_max], type = 'int')
+    x,y,z,ra,dec,v_app,f_sum,kin_pa,f_sum_err , err_x,err_y,err_z= \
+        sf.convert_type([x,y,z,ra,dec,v_app,f_sum,kin_pa,err_f_sum, err_x,err_y,err_z])
     #How does sofia 2 deal with the fully flagged channels?
     v_app = v_app/1000.
 
@@ -439,18 +441,17 @@ def check_source(Configuration, Fits_Files):
     Cube = fits.open(f"{Configuration['FITTING_DIR']}{Fits_Files['FITTING_CUBE']}",uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
 
     data = Cube[0].data
-    masked_data = Cube[0].data
     header = Cube[0].header
     Mask = fits.open(f"{Configuration['FITTING_DIR']}{Fits_Files['MASK']}",uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
 
     #The following should only be run if we ran sofia
     if 'run_sofia' in Configuration['FITTING_STAGES']:
         #Check that the source is bright enough
-        #masked_data[Mask[0].data < 0.5] = float('NaN')
-        data_values = np.sort(masked_data[Mask[0].data > 0.5])[::-1]
+
+        data_values = np.sort(data[Mask[0].data > 0.5])[::-1]
         Max_SNR = data_values[int(len(data_values)*\
             Configuration['SOURCE_MAX_FRACTION'])]/Configuration['NOISE']
-        
+
         if Max_SNR < Configuration['SOURCE_MAX_SNR']:
             sf.print_log(f'''CHECK_SOURCE: The SNR of brightest {Configuration['SOURCE_MAX_FRACTION']*100}% of selected pixels does not always exceed {Configuration['SOURCE_MAX_SNR']}. Aborting.
 ''', Configuration,case= ['main','screen'])
@@ -458,8 +459,8 @@ def check_source(Configuration, Fits_Files):
         else:
             sf.print_log(f'''CHECK_SOURCE: The SNR of brightest {Configuration['SOURCE_MAX_FRACTION']*100.}% of selected pixels always exceeds {Configuration['SOURCE_MAX_SNR']}.
 ''', Configuration)
-        Mean_SNR = np.nanmean(masked_data[masked_data > 0.])/Configuration['NOISE']
-        del masked_data
+        Mean_SNR = np.nanmean(data[Mask[0].data > 0.5])/Configuration['NOISE']
+
         if Mean_SNR < Configuration['SOURCE_MEAN_SNR']:
             sf.print_log(f'''CHECK_SOURCE: The mean SNR of the pixels in the mask is {Mean_SNR}, that is not enough for a fit.
 ''', Configuration,case= ['main','screen'])
