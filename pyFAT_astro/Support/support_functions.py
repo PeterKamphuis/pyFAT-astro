@@ -3195,7 +3195,7 @@ def rename_fit_products(Configuration,stage = 'initial', fit_type='Undefined'):
                 elif fit_type == Configuration['USED_FITTING'] and stage in ['final_os']:
                     Loopnr = f"Smoothed_1"
                 else:
-                    Loopnr = 'Output_before_'+stage
+                    Loopnr = 'Output_Before_'+stage
                 if os.path.exists(f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.{filetype}"):
                     target = get_system_string(f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}_{Loopnr}.{filetype}")
                     os.system(f"mv {source} {target}")
@@ -3660,7 +3660,7 @@ def setup_configuration(cfg):
                'TIRIFIC_PID': 'Not Initialized', #Process ID of tirific that is running
                'FAT_PID': os.getpid(), #Process ID of FAT that is running
                'FAT_PSUPROCESS': 'cant copy',
-               'FINAL_COMMENT': "This fitting stopped with an unregistered exit.", 
+               'FINAL_COMMENT': "This fitting stopped with an unregistered exit.",
 
                'MAX_SIZE_IN_BEAMS': 30, # The galaxy is not allowed to extend beyond this number of beams in radius, set in check_source
                'MIN_SIZE_IN_BEAMS': 0., # Minimum allowed radius in number of beams of the galaxy, set in check_source
@@ -3768,6 +3768,9 @@ Please pick one of the following {', '.join(possible_stages)}.
 
     if 'run_sofia' in Configuration['FITTING_STAGES'] and 'external_sofia' in Configuration['FITTING_STAGES']:
         raise InputError(f"You are both providing existing sofia input and ask for sofia to be ran. This won't work exiting.")
+    if 'fit_tirific_osc' in Configuration['FITTING_STAGES'] and \
+        Configuration['NUMBER_OF_DISKS'] > 2:
+        raise InputError(f"Fit_Tirific_OSC only allows for 2 or 1 disk. This won't work exiting.")
 
     #Check that the channel_dependency is acceptable
     while Configuration['CHANNEL_DEPENDENCY'].lower() not in ['sinusoidal','independent','hanning']:

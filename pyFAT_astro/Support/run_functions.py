@@ -39,6 +39,7 @@ def check_angle_convergence(Configuration,Tirific_Template,\
         fit_type = 'Undefined'):
     angles= {'PA': 20., 'INCL': 10.}
     angles_ok = True
+    boundaries_ok = True
     for key in angles:
         new_angle = sf.load_tirific(Configuration,\
             f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def",\
@@ -68,9 +69,9 @@ the maximum change is {float(Configuration['MIN_ERROR'][key][0])*float(angles[ke
 {'':8s} old boundaries =  {old_boun}
 {'':8s} new boundaries =  {new_boun}
 ''',Configuration,case= ['verbose'])
-            angles_ok = False
+            boundaries_ok = False
 
-    #And we chek that the angles are well behaved
+    #And we check that the angles are well behaved
     changed_angles = check_angles(Configuration,Tirific_Template)
     if changed_angles:
         sf.print_log(f'''CHECK_ANGLE_CONVERGENCE: The angles were modified in check_angles
@@ -79,7 +80,7 @@ the maximum change is {float(Configuration['MIN_ERROR'][key][0])*float(angles[ke
     else:
         sf.print_log(f'''CHECK_ANGLE_CONVERGENCE: The angles were unchanged in check_angles
 ''',Configuration,case= ['debug_add'])
-    return angles_ok
+    return angles_ok,boundaries_ok
 check_angle_convergence.__doc__ =f'''
  NAME:
     check_angle_convergence
@@ -974,8 +975,8 @@ def fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run, \
     if Configuration['DEBUG']:
         sf.write_config(
             f'{Configuration["LOG_DIRECTORY"]}CFG_Before_Smoothing.txt', Configuration)
-        wf.tirific(Configuration,Tirific_Template, name = 'Input_to_Smooth.def')
-        os.system(f'''mv {Configuration['FITTING_DIR']}/Input_to_Smoothed_Check.def {Configuration['LOG_DIRECTORY']}''')
+        wf.tirific(Configuration,Tirific_Template, name = 'Input_to_Smooth_Check.def')
+        os.system(f'''mv {Configuration['FITTING_DIR']}/Input_to_Smooth_Check.def {Configuration['LOG_DIRECTORY']}''')
 
     #if we have only a few rings we only smooth. else we fit a polynomial to the RC and smooth the SBR
     #smoothed_sbr = smooth_profile(Configuration,Tirific_Template,'SBR',hdr, min_error= np.max([float(Tirific_Template['CFLUX']),float(Tirific_Template['CFLUX_2'])]))
@@ -1040,12 +1041,12 @@ def fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run, \
 
     if Configuration['DEBUG']:
         source = sf.get_system_string(f"{Configuration['FITTING_DIR']}{fit_type}_In.def")
-        target = sf.get_system_string(f"{Configuration['LOG_DIRECTORY']}/{fit_type}_Last_Unsmoothed_Input.def")
+        target = sf.get_system_string(f"{Configuration['LOG_DIRECTORY']}/Last_Unsmoothed_Input.def")
         os.system(f"cp {source} {target}")
     wf.tirific(Configuration,Tirific_Template,name = f'{fit_type}_In.def')
     if Configuration['DEBUG']:
         source = sf.get_system_string(f"{Configuration['FITTING_DIR']}{fit_type}_In.def")
-        target = sf.get_system_string(f"{Configuration['LOG_DIRECTORY']}/{fit_type}_Smoothed_Input.def")
+        target = sf.get_system_string(f"{Configuration['LOG_DIRECTORY']}/Smoothed_Input.def")
         os.system(f"cp {source} {target}")
     try:
         accepted,current_run = sf.run_tirific(Configuration,current_run, stage = stage, fit_type=fit_type)
@@ -1062,7 +1063,7 @@ def fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run, \
         wf.tirific(Configuration,Tirific_Template,name = f'{fit_type}_In.def')
         if Configuration['DEBUG']:
             source = sf.get_system_string(f"{Configuration['FITTING_DIR']}{fit_type}_In.def")
-            target = sf.get_system_string(f"{Configuration['LOG_DIRECTORY']}/{fit_type}_Second_Smoothed_Input.def")
+            target = sf.get_system_string(f"{Configuration['LOG_DIRECTORY']}/Second_Smoothed_Input.def")
             os.system(f"cp {source} {target}")
         try:
             accepted,current_run = sf.run_tirific(Configuration,current_run, stage = 'final_os', fit_type=fit_type)
@@ -1206,9 +1207,10 @@ def one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run):
     #accepted_proj_vrot = check_vobs(Configuration,Tirific_Template, fit_type = fit_type)
     # Check whether the central INCL and PA are stable. But only if the center is accepted
     if accepted_central:
-        accepted_angle = check_angle_convergence(Configuration,Tirific_Template, fit_type = fit_type)
+        accepted_angle,accepted_boundary = check_angle_convergence(Configuration,Tirific_Template, fit_type = fit_type)
     else:
         accepted_angle = False
+        accepted_boundary = False
     #We only adapt the size if the other checks are ok
     if not all(Configuration['FIX_SIZE']) and accepted_central and accepted_angle:
         no_apply_size_change = False
@@ -1219,7 +1221,7 @@ def one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run):
         current_run = current_run,Fits_Files=Fits_Files)
     if all(Configuration['FIX_SIZE']):
         accepted_size = True
-    if accepted and accepted_size and accepted_central and accepted_angle: #and accepted_proj_vrot:
+    if accepted and accepted_size and accepted_central and accepted_angle and accepted_boundary: #and accepted_proj_vrot:
         Configuration['ACCEPTED'] = True
     else:
         Configuration['ACCEPTED'] = False
@@ -1233,8 +1235,12 @@ def one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run):
         if not accepted_central:
             sf.print_log(f'''ONE_STEP_CONVERGENCE: The center varied too much hence we do not accept and we smooth and retry.
 ''',Configuration)
-        elif not accepted_angle:
-            sf.print_log(f'''ONE_STEP_CONVERGENCE: The central disk PA or INCL have changed too much or the boundaries have been adapted.
+        elif not accepted_boundary or not accepted_angle:
+            if not accepted_boundary:
+                sf.print_log(f'''ONE_STEP_CONVERGENCE: The boundaries have been adapted.
+''',Configuration)
+            if not accepted_angle:
+                sf.print_log(f'''ONE_STEP_CONVERGENCE: The central disk PA or INCL have changed too much.
 ''',Configuration)
         elif not accepted_size:
             sf.print_log(f'''ONE_STEP_CONVERGENCE: FAT adjusted the rings. Refitting with new settings after smoothing them.

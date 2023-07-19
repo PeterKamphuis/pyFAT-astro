@@ -81,6 +81,7 @@ class Advanced:
     unreliable_inclination: float = 10.  # If the final inclination is below this the fit is considered unreliable
     shaker_iterations: int = 20
     multiprocessing: bool = True
+    number_of_disks: int = 2
     #We do not want to use too many cores per galaxy.
     per_galaxy_ncpu: int = 4
     catalogue_split_character: str = '|'

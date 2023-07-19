@@ -3802,7 +3802,7 @@ def update_disk_angles(Configuration,Tirific_Template):
     for ext in extension:
         PA = np.array(sf.load_tirific(Configuration,Tirific_Template,[f'PA{ext}']),dtype=float)
         inc = np.array(sf.load_tirific(Configuration,Tirific_Template,[f'INCL{ext}']),dtype=float)
-        sf.print_log(f'''UPDATE_DISK_ANGLES: abtained  this from the template
+        sf.print_log(f'''UPDATE_DISK_ANGLES: obtained  this from the template
 {'':8s} inc{ext} = {inc}
 {'':8s} PA{ext} = {PA}
 ''', Configuration,case= ['debug_start'])
