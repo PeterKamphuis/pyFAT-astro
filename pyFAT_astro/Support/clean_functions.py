@@ -475,7 +475,7 @@ def installation_check(Configuration):
 !!!! FAT ran through the fitting process but the !!!!!
 !!!! fitted values differ too much from their    !!!!!
 !!!! expectations. Please update SoFiA and other !!!!!
-!!!! dependencies. I f you have done so and this !!!!!
+!!!! dependencies. If you have done so and this !!!!!
 !!!! message remains, the check is likely out of !!!!!
 !!!! date. If you are unable to resolve the issue!!!!!
 !!!! please file a bug report at:                !!!!!

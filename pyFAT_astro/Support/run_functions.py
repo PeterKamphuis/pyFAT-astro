@@ -1179,6 +1179,7 @@ def one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run):
         accepted,current_run = sf.run_tirific(Configuration,current_run,\
             stage = stage, fit_type = fit_type)
     except TirificOutputError:
+        #exit()
         accepted,current_run = failed_fit(Configuration,Tirific_Template,\
             current_run, Fits_Files,stage=stage, fit_type=fit_type)
 

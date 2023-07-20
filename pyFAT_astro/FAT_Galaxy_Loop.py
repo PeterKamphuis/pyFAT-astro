@@ -29,7 +29,7 @@ def FAT_Galaxy_Loop(Configuration):
         # If you add any make sure that the fitstage  starts with 'Fit_'
         if Configuration['USED_FITTING']:
             # Process the found source in sofia to set up the proper fitting and make sure source can be fitted
-        
+
             Initial_Parameters = runf.check_source(
                     Configuration, Fits_Files)
 
@@ -42,7 +42,7 @@ def FAT_Galaxy_Loop(Configuration):
                     f'{Configuration["LOG_DIRECTORY"]}CFG_Before_Fitting.txt', Configuration)
         # then we want to read the template
         Tirific_Template = sf.tirific_template()
-
+        
         if 'fit_tirific_osc' in Configuration['FITTING_STAGES']:
             current_run = runf.fitting_osc(
                 Configuration, Fits_Files, Tirific_Template, Initial_Parameters)

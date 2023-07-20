@@ -690,6 +690,13 @@ Your header did not have a unit for the third axis, that is bad policy.
 ''',Configuration)
     except KeyError:
         pass
+    #The blank value only applies to integer value data
+    try:
+        if int(hdr['BITPIX']) != 16:
+            del hdr['BLANK']
+    except KeyError:
+        pass
+
     try:
         if abs(hdr['BMAJ']/hdr['CDELT1']) < 2:
             print_log( f'''CLEAN_HEADER: !!!!!!!!!!Your cube has less than two pixels per beam major axis.!!!!!!!!!!!!!!!!!
@@ -3344,16 +3351,16 @@ We are in in stage {stage} and fit_type {fit_type} and have done {Configuration[
                     if tmp[0] == 'L' and not triggered:
                         if tmp[1] == '1':
                             file.write(f"# TIRIFIC: Started the actual fitting {datetime.now()} \n")
-                            triggered = True
                     CPU,mem = get_usage_statistics(Configuration,current_process)
                     file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Mb for TiRiFiC \n")
         if tmp[0] == 'L':
+            if not triggered:
+                triggered = True
             if int(tmp[1]) != currentloop and Configuration['VERBOSE_SCREEN']:
                 print(f"\r{'':8s}RUN_TIRIFIC: {set_limits(float(tmp[1])-1.,0.,float(max_loop))/float(max_loop)*100.:.1f} % Completed", end =" ",flush = True)
             currentloop  = int(tmp[1])
             if max_loop == 0:
                 max_loop = int(tmp[2])
-
             Configuration['NO_POINTSOURCES'] = np.array([tmp[18],tmp[19]],dtype=float)
 
         if tmp[0].strip() == 'Finished':

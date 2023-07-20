@@ -105,7 +105,8 @@ def main(argv):
         inputconf = OmegaConf.from_cli(argv)
         cfg_input = OmegaConf.merge(cfg,inputconf)
         if cfg_input.print_examples:
-            no_cube = OmegaConf.masked_copy(cfg, ['input','output','fitting'])
+            no_cube = OmegaConf.masked_copy(cfg, ['ncpu','input','output',\
+                'fitting','advanced'])
             with open('FAT_defaults.yml','w') as default_write:
                 default_write.write(OmegaConf.to_yaml(no_cube))
             my_resources = import_pack_files('pyFAT_astro.config')

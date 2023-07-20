@@ -128,11 +128,11 @@ def check_edge_limits(xmin,xmax,ymin,ymax,zmin,zmax,Configuration ,\
 {'':8s} diff  = {diff}
 ''',Configuration, case=['debug_add'])
     if np.where(diff < vel_edge)[0].size:
-        sf.print_log(f"CHECK_EDGE_LIMIT: On the edge",Configuration,\
+        sf.print_log(f"CHECK_EDGE_LIMIT: On the edge. \n",Configuration,\
             case=['verbose'])
         return True
     else:
-        sf.print_log(f"CHECK_EDGE_LIMIT: Off the edge",Configuration,\
+        sf.print_log(f"CHECK_EDGE_LIMIT: Off the edge. \n",Configuration,\
             case=['verbose'])
         return False
 check_edge_limits.__doc__ =f'''

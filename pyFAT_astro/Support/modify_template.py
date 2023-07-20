@@ -2735,7 +2735,9 @@ def set_fitting_parameters(Configuration, Tirific_Template, \
                     inner = int(sf.set_limits(inner*fact,4,Configuration['NO_RINGS']/2.))
             # set the moderate value
             moderate = set_generic_moderate(Configuration,key)
-
+            #If we do a single disk then symmetric is always true
+            if Configuration['NUMBER_OF_DISKS'] == 1:
+                symmetric = True
 
             fitting_settings[key] =  set_generic_fitting(Configuration,key,\
                 stage = stage, basic_variation = initial_estimates[key][1],\
@@ -3127,6 +3129,7 @@ set_model_parameters.__doc__ =f'''
 #function to check that all parameters in template have the proper length.
 def set_new_size(Configuration,Tirific_Template, fit_type = 'Undefined',
                     current_run='Not Initialized', Variables = None):
+
     if Variables is None:
         Variables =['VROT','Z0', 'SBR', 'INCL','PA','XPOS','YPOS','VSYS','SDIS',\
             'VROT_2',  'Z0_2','SBR_2','INCL_2','PA_2','XPOS_2','YPOS_2','VSYS_2',\
@@ -3204,7 +3207,8 @@ def set_new_size(Configuration,Tirific_Template, fit_type = 'Undefined',
 ''',Configuration,case=['debug_add'])
 
     #Replace the old ring numbers in VARY and VARINDX
-    old_rings = sf.calc_rings(Configuration,size_in_beams = int(round(np.max([float(Configuration['OLD_SIZE'][-1][0]),float(Configuration['OLD_SIZE'][-1][1])]))), ring_size  = 0.)
+    #old_rings = sf.calc_rings(Configuration,size_in_beams = int(round(np.max([float(Configuration['OLD_SIZE'][-1][0]),float(Configuration['OLD_SIZE'][-1][1])]))), ring_size  = 0.)
+    old_rings = int(copy.deepcopy(Tirific_Template['NUR']))
     current_rings = sf.calc_rings(Configuration)
     #This could lead to replacing a value smaller than the other side
     Tirific_Template['VARY'] = Tirific_Template['VARY'].replace(f"{old_rings}",f"{current_rings}")
@@ -3271,6 +3275,7 @@ set_new_size.__doc__ =f'''
 
  NOTE:
 '''
+
 
 def set_overall_parameters(Configuration, Fits_Files,Tirific_Template,\
                 fit_type='Undefined', flux = None):
@@ -3458,11 +3463,14 @@ beamarea = {Configuration['BEAM_AREA']}, channelwidth = {Configuration['CHANNEL_
 
 
 
-        if np.mean(Configuration['SIZE_IN_BEAMS']) < max_size:
-            sbr_input['VARY'] =  np.array([f"SBR {x+1} SBR_2 {x+1}" for x in range(len(radii)-1,inner_ring-1,-1)],dtype=str)
+        if np.mean(Configuration['SIZE_IN_BEAMS']) < max_size or Configuration['NUMBER_OF_DISKS'] == 1:
+            sbr_input['VARY'] =  np.array([f"SBR {x+1} SBR_2 {x+1}" for x \
+                in range(len(radii)-1,inner_ring-1,-1)],dtype=str)
 
 
-            sbr_input['PARMAX'] = np.array([sf.set_limits(sbr_av_smoothed[x-1]*10.,np.mean(pmax[:,x]),1.) for x in range(len(radii)-1,inner_ring-1,-1)],dtype=float)
+            sbr_input['PARMAX'] = np.array([sf.set_limits(sbr_av_smoothed[x-1]\
+                *10.,np.mean(pmax[:,x]),1.) for x in range(len(radii)-1,\
+                    inner_ring-1,-1)],dtype=float)
             #if stage in ['initial','run_cc']:
             #    sbr_input['PARMIN'] = np.array([sbr_ring_limits[x]/2. if x <= (3./4.)*len(radii) else 0 for x in range(len(radii)-1,inner_ring-1,-1)])
             #elif stage in ['initialize_ec','run_ec']:
@@ -3491,11 +3499,18 @@ beamarea = {Configuration['BEAM_AREA']}, channelwidth = {Configuration['CHANNEL_
             sbr_input['DELEND'] = np.array([[sbr_ring_limits[x]/20.,sbr_ring_limits[x]/20.] for x in range(len(radii)-1,inner_ring-1,-1)],dtype=float).reshape((len(radii)-inner_ring)*2)
             sbr_input['MINDELTA'] = np.array([[sbr_ring_limits[x]/20.,sbr_ring_limits[x]/20.] for x in range(len(radii)-1,inner_ring-1,-1)],dtype=float).reshape((len(radii)-inner_ring)*2)
 
-        sbr_input['VARY'] = np.concatenate((sbr_input['VARY'],[f"SBR {' '.join([str(int(x)) for x in range(1,inner_ring+1)])} SBR_2 {' '.join([str(int(x)) for x in range(1,inner_ring+1)])}"]),axis=0)
+        sbr_input['VARY'] = np.concatenate((sbr_input['VARY'],\
+            [f"SBR {' '.join([str(int(x)) for x in range(1,inner_ring+1)])} SBR_2 {' '.join([str(int(x)) for x in range(1,inner_ring+1)])}"]\
+            ),axis=0)
         if limits_for_max:
-            sbr_input['PARMAX'] = np.concatenate((sbr_input['PARMAX'],[sf.set_limits(np.mean([sbr_smoothed_profile[0,2:4],sbr_smoothed_profile[1,2:4]])*4.,sbr_ring_limits[2],np.max(sbr_profile))]))
+            sbr_input['PARMAX'] = np.concatenate((sbr_input['PARMAX'],\
+                [sf.set_limits(np.mean([sbr_smoothed_profile[0,2:4],\
+                sbr_smoothed_profile[1,2:4]])*4.,sbr_ring_limits[2],\
+                np.max(sbr_profile))]))
         else:
-            sbr_input['PARMAX'] = np.concatenate((sbr_input['PARMAX'],[sf.set_limits(np.mean([sbr_smoothed_profile[0,2:4],sbr_smoothed_profile[1,2:4]])*4.,mean_signal*100,1.)]))
+            sbr_input['PARMAX'] = np.concatenate((sbr_input['PARMAX'],\
+                [sf.set_limits(np.mean([sbr_smoothed_profile[0,2:4],\
+                sbr_smoothed_profile[1,2:4]])*4.,mean_signal*100,1.)]))
 
         if Configuration['CENTRAL_CONVERGENCE']:
             sbr_input['PARMIN'] = np.concatenate((sbr_input['PARMIN'],[np.min(sbr_ring_limits)]))
@@ -3505,15 +3520,26 @@ beamarea = {Configuration['BEAM_AREA']}, channelwidth = {Configuration['CHANNEL_
         sbr_input['DELSTART'] = np.concatenate((sbr_input['DELSTART'],[1e-5]))
         sbr_input['DELEND'] = np.concatenate((sbr_input['DELEND'],[1e-6]))
         sbr_input['MINDELTA'] = np.concatenate((sbr_input['MINDELTA'],[2e-6]))
-    elif stage in ['after_cc','after_ec','after_os']:
+    elif stage in ['after_cc','after_ec','after_os'] :
         #Used in Fit_Smoothed_Check
-        sbr_input['VARY'] = [f"SBR 3:{Configuration['NO_RINGS']}, SBR_2 3:{Configuration['NO_RINGS']}"]
-        sbr_input['PARMAX'] = np.concatenate(([np.max(sbr_profile[0,2:])*3.],[np.max(sbr_profile[1,2:])*3.]))
-        sbr_input['PARMIN'] = np.concatenate(([0],[0]))
-        sbr_input['MODERATE'] = np.concatenate(([5],[5]))
-        sbr_input['DELSTART'] = np.concatenate(([1e-5],[1e-5]))
-        sbr_input['DELEND'] = np.concatenate(([1e-6],[1e-6]))
-        sbr_input['MINDELTA'] = np.concatenate(([2e-6],[2e-6]))
+        # Initialize the parameters
+        par_to_fill = ['PARMAX','PARMIN','MODERATE','DELSTART',\
+                'DELEND','MINDELTA']
+        value =       [np.max(sbr_profile[0,2:])*3., 0., 5. , 1e-5, 1e-6,2e-6]
+        # initialize
+        for var in par_to_fill:
+            sbr_input[var] = []
+
+        if Configuration['NUMBER_OF_DISKS'] == 2:
+            sbr_input['VARY'] = [f"SBR 3:{Configuration['NO_RINGS']}, SBR_2 3:{Configuration['NO_RINGS']}"]
+        else:
+            sbr_input['VARY'] = [f"SBR 3:{Configuration['NO_RINGS']} SBR_2 3:{Configuration['NO_RINGS']}"]
+
+        for i in range(Configuration['NUMBER_OF_DISKS']):
+            for i,var in enumerate(par_to_fill):
+                sbr_input[var].append(value[i])
+        for var in par_to_fill:
+            sbr_input[var] = np.array(sbr_input[var])
 
     return sbr_input
 set_sbr_fitting.__doc__ =f'''

@@ -272,6 +272,12 @@ Advanced Keywords
 
   Use multiprocessing
 
+**number_of_disks**
+
+  *int, optional, default = 2*
+
+  The number of disks used in the fitting procedure. Fit_Tirific_OSC always uses 2 disks but if this parameter is set to 1 then they will be kept exactly equal.
+
 **per_galaxy_ncpu**
 
   *int, optional, default = 4*
