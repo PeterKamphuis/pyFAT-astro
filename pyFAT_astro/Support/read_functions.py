@@ -167,6 +167,92 @@ check_edge_limits.__doc__ =f'''
 
  NOTE:
 '''
+def check_source_brightness(Configuration,Fits_Files,moment= False):
+
+    if not moment:
+        Cube = fits.open(f"{Configuration['FITTING_DIR']}{Fits_Files['FITTING_CUBE']}"\
+            ,uint = False, do_not_scale_image_data=True,ignore_blank = True,\
+             output_verify= 'ignore')
+        Mask = fits.open(f"{Configuration['FITTING_DIR']}{Fits_Files['MASK']}",\
+            uint = False, do_not_scale_image_data=True,ignore_blank = True, \
+            output_verify= 'ignore')
+        data = Cube[0].data[Mask[0].data > 0.5]
+        snr = np.sort(data/Configuration['NOISE'])[::-1]
+        checking= 'Cube'
+        Cube.close()
+        Mask.close()
+        case = ['debug_add']
+        fact = 1.
+    else:
+        Moment = fits.open(f"{Configuration['FITTING_DIR']}{Fits_Files['MOMENT0']}")
+    #model_mom0 = sf.remove_inhomogeneities(Configuration,model_mom0,inclination=float(current[1][0]), pa = float(current[2][0]), center = [current[3][0],current[4][0]])
+        Channels = fits.open(f"{Configuration['FITTING_DIR']}{Fits_Files['CHANNEL_MAP']}")
+        noisemap = np.sqrt(Channels[0].data)*Configuration['NOISE']*\
+            Configuration['CHANNEL_WIDTH']
+        data = Moment[0].data
+        snr= np.sort(Moment[0].data[Moment[0].data > 0]/\
+            noisemap[Moment[0].data > 0])[::-1]
+        checking= 'Moment 0 Map'
+        case = ['main','screen']
+        fact=2.
+    #The following should only be run if we ran sofia
+    Too_Faint = False
+    #Check that the source is bright enough
+    Max_SNR = snr[int(len(snr)*Configuration['SOURCE_MAX_FRACTION']*fact)]
+
+    if Max_SNR < Configuration['SOURCE_MAX_SNR']:
+        sf.print_log(f'''CHECK_SOURCE_BRIGHTNESS: The SNR of brightest {Configuration['SOURCE_MAX_FRACTION']*100.*fact}% of selected pixels does not always exceed {Configuration['SOURCE_MAX_SNR']} in the {checking}.
+At the cutoff the SNR = {Max_SNR}.
+''', Configuration,case = case)
+        Too_Faint = True
+            #raise BadSourceError(f"The SNR of brightest {Configuration['SOURCE_MAX_FRACTION']*100.}% of selected pixels does not always exceed {Configuration['SOURCE_MAX_SNR']}. Aborting.")
+    else:
+        sf.print_log(f'''CHECK_SOURCE_BRIGHTNESS: The SNR of brightest {Configuration['SOURCE_MAX_FRACTION']*100.*fact}% of selected pixels always exceeds {Configuration['SOURCE_MAX_SNR']} in the {checking}.
+At the cutoff the SNR = {Max_SNR}.
+''', Configuration)
+    Mean_SNR = np.nanmean(snr)
+    if Mean_SNR < Configuration['SOURCE_MEAN_SNR']:
+        sf.print_log(f'''CHECK_SOURCE_BRIGHTNESS: The mean SNR of the pixels in the mask is {Mean_SNR} in the {checking}.
+This too faint.
+''', Configuration,case= case)
+        Too_Faint = True
+            #raise BadSourceError(f"The mean SNR of the pixels in the mask is {Mean_SNR}. This is too faint.")
+    else:
+        sf.print_log(f'''CHECK_SOURCE_BRIGHTNESS: The mean SNR of the pixels in the mask is {Mean_SNR} in the {checking}.
+''', Configuration)
+
+    return Too_Faint,Max_SNR
+
+check_source_brightness.__doc__ =f'''
+ NAME:
+    check_source_brightness
+
+ PURPOSE:
+    Check the cube or the moment 0 map whether the source is bright enogh the process
+
+ CATEGORY:
+    read_functions
+
+ INPUTS:
+    Configuration = Fat Configuration
+    Fits_Files = The fits files used
+
+
+ OPTIONAL INPUTS:
+    moments  = False
+        flag to check the moment 0 map instead of the cube
+ OUTPUTS:
+    Boolean which is true if the source is too faint
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    abs, np.where, np.array, print_log,
+
+ NOTE:
+'''
+
+
 
 def extract_vrot(Configuration,map ,angle,center):
     sf.print_log(f'''EXTRACT_VROT: starting extraction of initial VROT.
@@ -936,7 +1022,7 @@ read_cube.__doc__ =f'''
 
 
 # function to read the sofia catalogue
-def sofia_catalogue(Configuration,Fits_Files, Variables = None ):
+def sofia_catalogue(Configuration,Fits_Files, Variables = None ,no_edge_limit=False):
     strip_npix= False
     if Variables is None:
         Variables =['id','x','x_min','x_max','y','y_min','y_max','z','z_min',\
@@ -999,7 +1085,7 @@ def sofia_catalogue(Configuration,Fits_Files, Variables = None ):
     if len(outlist[0]) > 1 and 'f_sum' in Variables:
         sf.print_log(f'''SOFIA_CATALOGUE: Multiple sources were found we will try to select the correct one.
 ''',Configuration,case= ['debug_add'])
-        if Configuration['SOFIA_RAN']:
+        if Configuration['SOFIA_RAN'] and not no_edge_limit:
             found = False
             beam_edge=2.
             if Configuration['VEL_SMOOTH_EXTENDED'] or Configuration['CHANNEL_DEPENDENCY'].lower() == 'hanning':
@@ -1095,7 +1181,7 @@ In principle your cube is too small.
 {'':8s}{many_sources[Variables.index('f_sum')]}
 ''',Configuration,case= ['debug_add'])
         else:
-            #If we did not run SoFia we simply assume we want to fit the brightest source in the cube
+            #If we did not run SoFia or have no_edge_limit we simply assume we want to fit the brightest source in the cube
             many_sources  = copy.deepcopy(outlist)
             fluxes = np.array(outlist[Variables.index('f_sum')],dtype =float)
         outlist = []

@@ -394,81 +394,82 @@ def check_source(Configuration, Fits_Files):
     sf.print_log(f'''CHECK_SOURCE: Starting.
 ''',Configuration,case= ['debug_start'])
     sf.update_statistic(Configuration, message= "Starting the check source run")
+    source_not_ok= True
+    no_edge_limit=False
+    while source_not_ok:
+        name,x,x_min,x_max,y,y_min,y_max,z,z_min,z_max,ra,dec,v_app,f_sum,kin_pa, \
+            w50,err_f_sum, err_x,err_y,err_z,source_rms= \
+            rf.sofia_catalogue(Configuration,Fits_Files,no_edge_limit=no_edge_limit)
+
+        x_min,x_max,y_min,y_max,z_min,z_max = \
+            sf.convert_type([x_min,x_max,y_min,y_max,z_min,z_max], type = 'int')
+        x,y,z,ra,dec,v_app,f_sum,kin_pa,f_sum_err , err_x,err_y,err_z= \
+            sf.convert_type([x,y,z,ra,dec,v_app,f_sum,kin_pa,err_f_sum, err_x,err_y,err_z])
+        #How does sofia 2 deal with the fully flagged channels?
+        v_app = v_app/1000.
 
 
-    name,x,x_min,x_max,y,y_min,y_max,z,z_min,z_max,ra,dec,v_app,f_sum,kin_pa, \
-        w50,err_f_sum, err_x,err_y,err_z,source_rms= rf.sofia_catalogue(Configuration,Fits_Files)
+        # Need to check for that here if NaNs are included
+        if f_sum < 0.:
+            sf.print_log(f'''CHECK_SOURCE: This galaxy has negative total flux. That will not work. Aborting.
+    ''',Configuration,case=['main','screen'])
+            raise BadSourceError('We found an initial negative total flux.')
+        sf.print_log(f'''CHECK_SOURCE:  From the input we get Distance = {Configuration['DISTANCE']}
+    ''',Configuration,case= ['debug_add'])
+        # If the provided distance  = -1 we assume a Hubble follow
+        if float(Configuration['DISTANCE']) == -1.:
+            Configuration['DISTANCE'] = v_app/H_0
+        if float(Configuration['DISTANCE']) < 0.5:
+            Configuration['DISTANCE'] = 0.5
+        sf.print_log(f'''CHECK_SOURCE: After the checks we get Distance = {Configuration['DISTANCE']}.
+    ''',Configuration,case= ['debug_add'])
+        if np.sum(Configuration['Z0_INPUT_BOUNDARY']) == 0.:
+            sf.set_boundaries(Configuration,'Z0',*sf.convertskyangle(Configuration,[0.05,1.0], physical = True),input=True)
 
-    x_min,x_max,y_min,y_max,z_min,z_max = \
-        sf.convert_type([x_min,x_max,y_min,y_max,z_min,z_max], type = 'int')
-    x,y,z,ra,dec,v_app,f_sum,kin_pa,f_sum_err , err_x,err_y,err_z= \
-        sf.convert_type([x,y,z,ra,dec,v_app,f_sum,kin_pa,err_f_sum, err_x,err_y,err_z])
-    #How does sofia 2 deal with the fully flagged channels?
-    v_app = v_app/1000.
+        #Check whether the cube is very large, if so cut it down, Not if we are using a Sofia_Catalogue
+        if not 'sofia_catalogue' in Configuration['FITTING_STAGES']:
+            galaxy_box = [[z_min,z_max],[y_min,y_max],[x_min,x_max]]
+            new_box = cut_cubes(Configuration, Fits_Files, galaxy_box)
 
+            #update our pixel values to match the new sizes
+            for i in range(len(new_box)):
+                shift = new_box[i,0]
+                if i == 0:
+                    z -= shift; z_min -= shift; z_max -= shift
+                elif i == 1:
+                    y -= shift; y_min -= shift; y_max -= shift
+                elif i == 2:
+                    x -= shift; x_min -= shift; x_max -= shift
 
-    # Need to check for that here if NaNs are included
-    if f_sum < 0.:
-        sf.print_log(f'''CHECK_SOURCE: This galaxy has negative total flux. That will not work. Aborting.
-''',Configuration,case=['main','screen'])
-        raise BadSourceError('We found an initial negative total flux.')
-    sf.print_log(f'''CHECK_SOURCE:  From the input we get Distance = {Configuration['DISTANCE']}
-''',Configuration,case= ['debug_add'])
-    # If the provided distance  = -1 we assume a Hubble follow
-    if float(Configuration['DISTANCE']) == -1.:
-        Configuration['DISTANCE'] = v_app/H_0
-    if float(Configuration['DISTANCE']) < 0.5:
-        Configuration['DISTANCE'] = 0.5
-    sf.print_log(f'''CHECK_SOURCE: After the checks we get Distance = {Configuration['DISTANCE']}.
-''',Configuration,case= ['debug_add'])
-    if np.sum(Configuration['Z0_INPUT_BOUNDARY']) == 0.:
-        sf.set_boundaries(Configuration,'Z0',*sf.convertskyangle(Configuration,[0.05,1.0], physical = True),input=True)
+        if 'run_sofia' in Configuration['FITTING_STAGES']:
+            too_faint,Max_SNR = rf.check_source_brightness(Configuration,Fits_Files)
+            if too_faint:
+                too_faint,Max_moment_SNR = rf.check_source_brightness(Configuration,Fits_Files,\
+                    moment=True)
+                if not too_faint and Configuration['SOFIA_THRESHOLD'] > 3:
+                    Configuration['SOFIA_THRESHOLD']=3
+                    sofia(Configuration, Fits_Files)
+                    no_edge_limit = True
+                elif too_faint:
+                    raise BadSourceError(f'The selected source was deemed to be too faint to process')
+                else:
+                    source_not_ok = False
+            else:
+                source_not_ok = False
+        else:
+            source_not_ok = False
 
-    #Check whether the cube is very large, if so cut it down, Not if we are using a Sofia_Catalogue
-    if not 'sofia_catalogue' in Configuration['FITTING_STAGES']:
-        galaxy_box = [[z_min,z_max],[y_min,y_max],[x_min,x_max]]
-        new_box = cut_cubes(Configuration, Fits_Files, galaxy_box)
-
-        #update our pixel values to match the new sizes
-        for i in range(len(new_box)):
-            shift = new_box[i,0]
-            if i == 0:
-                z -= shift; z_min -= shift; z_max -= shift
-            elif i == 1:
-                y -= shift; y_min -= shift; y_max -= shift
-            elif i == 2:
-                x -= shift; x_min -= shift; x_max -= shift
-
-    Cube = fits.open(f"{Configuration['FITTING_DIR']}{Fits_Files['FITTING_CUBE']}",uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
-
+    Cube = fits.open(f"{Configuration['FITTING_DIR']}{Fits_Files['FITTING_CUBE']}"\
+        ,uint = False, do_not_scale_image_data=True,ignore_blank = True,\
+         output_verify= 'ignore')
+    Mask = fits.open(f"{Configuration['FITTING_DIR']}{Fits_Files['MASK']}",\
+        uint = False, do_not_scale_image_data=True,ignore_blank = True, \
+        output_verify= 'ignore')
     data = Cube[0].data
     header = Cube[0].header
-    Mask = fits.open(f"{Configuration['FITTING_DIR']}{Fits_Files['MASK']}",uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
 
-    #The following should only be run if we ran sofia
-    if 'run_sofia' in Configuration['FITTING_STAGES']:
-        #Check that the source is bright enough
+    Mask.close()
 
-        data_values = np.sort(data[Mask[0].data > 0.5])[::-1]
-        Max_SNR = data_values[int(len(data_values)*\
-            Configuration['SOURCE_MAX_FRACTION'])]/Configuration['NOISE']
-
-        if Max_SNR < Configuration['SOURCE_MAX_SNR']:
-            sf.print_log(f'''CHECK_SOURCE: The SNR of brightest {Configuration['SOURCE_MAX_FRACTION']*100}% of selected pixels does not always exceed {Configuration['SOURCE_MAX_SNR']}. Aborting.
-''', Configuration,case= ['main','screen'])
-            raise BadSourceError(f"The SNR of brightest {Configuration['SOURCE_MAX_FRACTION']*100.}% of selected pixels does not always exceed {Configuration['SOURCE_MAX_SNR']}. Aborting.")
-        else:
-            sf.print_log(f'''CHECK_SOURCE: The SNR of brightest {Configuration['SOURCE_MAX_FRACTION']*100.}% of selected pixels always exceeds {Configuration['SOURCE_MAX_SNR']}.
-''', Configuration)
-        Mean_SNR = np.nanmean(data[Mask[0].data > 0.5])/Configuration['NOISE']
-
-        if Mean_SNR < Configuration['SOURCE_MEAN_SNR']:
-            sf.print_log(f'''CHECK_SOURCE: The mean SNR of the pixels in the mask is {Mean_SNR}, that is not enough for a fit.
-''', Configuration,case= ['main','screen'])
-            raise BadSourceError(f"The mean SNR of the pixels in the mask is {Mean_SNR}. This is too faint.")
-        else:
-            sf.print_log(f'''CHECK_SOURCE: The mean SNR of the pixels in the mask is {Mean_SNR}.
-''', Configuration)
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
@@ -582,7 +583,7 @@ Checking the central flux in a box with size of {Configuration['BEAM_IN_PIXELS']
 
 
     # The extent is fairly well determined and the maximum should be no more than +3 beams and a minimum no less than 4
-    # Swithcing here from doubled outer rings causes problems though
+    # Switching here from doubled outer rings causes problems though
     SNR_range=sf.set_limits(Max_SNR,1.9, 2.6)
 
     Configuration['MAX_SIZE_IN_BEAMS'] = sf.set_limits(np.max(Configuration['SIZE_IN_BEAMS'])*3.125/SNR_range+3.,1.,Configuration['MAX_SIZE_IN_BEAMS'])
@@ -1321,7 +1322,6 @@ def sofia(Configuration, Fits_Files):
     sofia_template = rf.sofia_template()
     sf.create_directory('Sofia_Output',Configuration['FITTING_DIR'])
     os.chdir(Configuration['FITTING_DIR'])
-    threshold = 5.
     counter = 3
     sofia_template['input.data'] = Fits_Files['FITTING_CUBE']
     spatial_kernels,velocity_kernels = construct_kernels(Configuration,sofia_template)
@@ -1329,7 +1329,7 @@ def sofia(Configuration, Fits_Files):
     sofia_ok = False
     while not sofia_ok:
         clean_before_sofia(Configuration)
-        sofia_template['scfind.threshold'] = str(threshold)
+        sofia_template['scfind.threshold'] = str(Configuration['SOFIA_THRESHOLD'])
         wf.sofia(sofia_template,'sofia_input.par')
         sf.print_log("RUN_SOFIA: Running SoFiA. \n",Configuration)
         # Check which sofia to start
@@ -1338,12 +1338,12 @@ def sofia(Configuration, Fits_Files):
         sf.print_log(sofia_run.decode("utf-8"), Configuration)
 
         if sfrun.returncode == 8:
-            if threshold > 3.:
-                log_statement = f'''RUN_SOFIA: We did not find a source at a threshold of {threshold}
+            if Configuration['SOFIA_THRESHOLD'] > 3.:
+                log_statement = f'''RUN_SOFIA: We did not find a source at a threshold of {Configuration['SOFIA_THRESHOLD']}
 {"":8s} RUN_SOFIA: Lowering the threshold and trying again."
 '''
                 sf.print_log(log_statement,Configuration)
-                threshold -= 2
+                Configuration['SOFIA_THRESHOLD'] -= 1
             else:
                 clean_after_sofia(Configuration)
                 log_statement = f'''RUN_SOFIA: We did not find a source above a threshold of {threshold}.

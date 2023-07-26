@@ -49,6 +49,6 @@ def report_branch():
     return result
 
 __version__ = report_version()
-__branch__ =report_branch()
+__branch__ = report_branch()
 
 #set_logger_values()

@@ -110,7 +110,7 @@ class Advanced:
     source_max_fraction: float = 0.075
     # The mean SNR required in the source
     source_mean_snr: float = 0.75
-
+    sofia_threshold: int = 5
     # Add the channel dependency, minimum inclination,
 
 
