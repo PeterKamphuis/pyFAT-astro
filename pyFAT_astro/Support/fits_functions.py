@@ -461,6 +461,9 @@ def extract_pv(Configuration,cube_in,angle,center= None,finalsize=None,convert=-
     TwoD_hdr['CTYPE1'] = 'OFFSET'
     TwoD_hdr['CUNIT1'] = 'ARCSEC'
     TwoD_hdr['HISTORY'] = f'EXTRACT_PV: PV diagram extracted with angle {angle} and center {center}'
+    TwoD_hdr['DRVAL1'] = f'{center[0]}+{center[1]}'
+    TwoD_hdr['DRVAL2'] = f'{center[2]}'
+
     # Then we change the cube and rteturn the PV construct
     cube[0].header = TwoD_hdr
     cube[0].data = PV

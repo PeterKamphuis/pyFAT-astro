@@ -1019,6 +1019,63 @@ read_cube.__doc__ =f'''
  NOTE:
 
 '''
+def check_parameters(Configuration,Variables,input_columns):
+     # check that we found all parameters
+    velocity ='v_app'
+    for value in Variables:
+        trig = False
+        if value.lower() in input_columns:
+            continue
+        elif value.lower() == 'v_app':
+            if 'v_rad' in input_columns:
+                Variables[Variables.index('v_app')]='v_rad'
+                velocity = 'v_rad'
+                continue
+            else:
+                trig = True    
+        else:
+            trig = True
+
+        if trig:
+            sf.print_log(f'''SOFIA_CATALOGUE: We cannot find the required column for {value} in the sofia catalogue.
+{"":8s}SOFIA_CATALOGUE: This can happen because a) you have tampered with the sofiainput.txt file in the Support directory,
+{"":8s}SOFIA_CATALOGUE: b) you are using an updated version of SoFiA2 where the names have changed and FAT is not yet updated.'
+{"":8s}SOFIA_CATALOGUE:    In this case please file a bug report at https://github.com/PeterKamphuis/FAT/issues/'
+{"":8s}SOFIA_CATALOGUE: c) You are using pre processed SoFiA output of your own and do not have all the output'
+{"":8s}SOFIA_CATALOGUE:    Required output is {','.join(Variables)})
+''',Configuration,case= ['main','screen'])
+            raise BadCatalogueError("SOFIA_CATALOGUE: The required columns could not be found in the sofia catalogue.")
+    return velocity    
+check_parameters.__doc__ =f'''
+ NAME:
+    check_parameters(Variables,input_columns)
+
+ PURPOSE:
+    check wether all  variables are in the sofia catalogue
+ 
+ CATEGORY:
+    read_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    Variable = Reguired variable
+    input_columns = found columns
+    
+
+ OPTIONAL INPUTS:
+
+
+
+ OUTPUTS:
+    velocity = the velocity found in the catalogue
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+
+'''
 
 
 # function to read the sofia catalogue
@@ -1046,18 +1103,8 @@ def sofia_catalogue(Configuration,Fits_Files, Variables = None ,no_edge_limit=Fa
                     for col in input_columns:
                         column_locations.append(line.find(col)+len(col))
                     # check that we found all parameters
-                    for value in Variables:
-                        if value.lower() in input_columns:
-                            continue
-                        else:
-                            sf.print_log(f'''SOFIA_CATALOGUE: We cannot find the required column for {value} in the sofia catalogue.
-{"":8s}SOFIA_CATALOGUE: This can happen because a) you have tampered with the sofiainput.txt file in the Support directory,
-{"":8s}SOFIA_CATALOGUE: b) you are using an updated version of SoFiA2 where the names have changed and FAT is not yet updated.'
-{"":8s}SOFIA_CATALOGUE:    In this case please file a bug report at https://github.com/PeterKamphuis/FAT/issues/'
-{"":8s}SOFIA_CATALOGUE: c) You are using pre processed SoFiA output of your own and do not have all the output'
-{"":8s}SOFIA_CATALOGUE:    Required output is {','.join(Variables)})
-''',Configuration,case= ['main','screen'])
-                            raise BadCatalogueError("SOFIA_CATALOGUE: The required columns could not be found in the sofia catalogue.")
+                    velocity = check_parameters(Configuration,Variables,input_columns) 
+                    
             else:
                 for col in Variables:
                     if input_columns.index(col) == 0:
@@ -1275,18 +1322,7 @@ def sofia_input_catalogue(Configuration):
                         column_locations.append(line.find(col)+len(col))
 
                     # check that we found all parameters
-                    for value in Variables:
-                        if value.lower() in input_columns:
-                            continue
-                        else:
-                            sf.print_log(f'''SOFIA_CATALOGUE: We cannot find the required column for {value} in the sofia catalogue.
-{"":8s}SOFIA_CATALOGUE: This can happen because a) you have tampered with the sofiainput.txt file in the Support directory,
-{"":8s}SOFIA_CATALOGUE: b) you are using an updated version of SoFiA2 where the names have changed and FAT is not yet updated.'
-{"":8s}SOFIA_CATALOGUE:    In this case please file a bug report at https://github.com/PeterKamphuis/FAT/issues/'
-{"":8s}SOFIA_CATALOGUE: c) You are using pre processed SoFiA output of your own and do not have all the output'
-{"":8s}SOFIA_CATALOGUE:    Required output is {','.join(Variables)})
-''',Configuration,case= ['main','screen'])
-                            raise BadCatalogueError("SOFIA_CATALOGUE: The required columns could not be found in the sofia catalogue.")
+                    velocity = check_parameters(Configuration,Variables,input_columns)                   
             else:
 
                 outlist = ['' for x in input_columns]
@@ -1333,7 +1369,7 @@ def sofia_input_catalogue(Configuration):
                         coordinate_frame = WCS(hdr)
                         x,y,z =coordinate_frame.wcs_world2pix(float(outlist[input_columns.index('ra')]),\
                                                           float(outlist[input_columns.index('dec')]), \
-                                                          float(outlist[input_columns.index('v_app')]), 1.)
+                                                          float(outlist[input_columns.index(velocity)]), 1.)
                     shift = [int(float(outlist[input_columns.index('x')]) - x), \
                             int(float(outlist[input_columns.index('y')]) - y),\
                             int(float(outlist[input_columns.index('z')]) - z)]

@@ -2121,6 +2121,9 @@ def regularise_warp(Configuration,Tirific_Template, min_error = None, \
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore",message="invalid value encountered in true_divide"\
                             ,category=RuntimeWarning)
+        warnings.filterwarnings("ignore",message="invalid value encountered in divide"\
+                            ,category=RuntimeWarning)
+        
         theta_factor = np.sqrt(theta_change**2/(theta_change**2+phi_change**2))\
                     *(theta_change)/abs(theta_change)
         theta_factor[np.where(np.array(theta_change) == 0.)] = 0.

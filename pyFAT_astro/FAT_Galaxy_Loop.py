@@ -42,7 +42,7 @@ def FAT_Galaxy_Loop(Configuration):
                     f'{Configuration["LOG_DIRECTORY"]}CFG_Before_Fitting.txt', Configuration)
         # then we want to read the template
         Tirific_Template = sf.tirific_template()
-        
+
         if 'fit_tirific_osc' in Configuration['FITTING_STAGES']:
             current_run = runf.fitting_osc(
                 Configuration, Fits_Files, Tirific_Template, Initial_Parameters)
@@ -204,6 +204,7 @@ Therefore we remove the Create_FAT_Cube stages from the loop.
     return Fits_Files
 
 def loop_sofia(Configuration,Fits_Files):
+     
     Configuration['SOFIA_TIME'][0] = datetime.now()
     #If we have Sofia Preprocessed Output request make sure it all exists
     if Configuration['DEBUG']:
@@ -326,7 +327,7 @@ def MP_Fitting_Loop(input,timing_lock,catalogue_lock):
             Configuration['OUTPUT_QUANTITY'] = 5
         else:
             Configuration['OUTPUT_QUANTITY'] = 'error'
-        registered_exception = e
+        registeredcreate_f_exception = e
         Configuration['FINAL_COMMENT'] = e
         Configuration['OUTPUT_QUANTITY'] = 'error'
         catalogue_line = cf.finish_galaxy(Configuration,

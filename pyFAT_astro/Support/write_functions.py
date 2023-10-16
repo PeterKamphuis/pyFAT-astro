@@ -345,6 +345,89 @@ class full_system_tracking:
         fig.savefig(self.plot_name)
         plt.close()
 
+def square_plot(ax):
+    xmin, xmax = ax.get_xlim()
+    ymin, ymax = ax.get_ylim()
+    if xmax > ymax:
+        diff = int(xmax-ymax)/2.
+        ax.set_ylim(ymin-diff,ymax+diff)
+        ymin, ymax = ax.get_ylim()
+    else:
+        diff = int(ymax-xmax)/2.
+        ax.set_xlim(xmin-diff,xmax+diff)
+        xmin, xmax = ax.get_xlim()
+square_plot.__doc__ =f'''
+ NAME:
+    square_plot
+
+ PURPOSE:
+    square the axes object
+        
+ CATEGORY:
+    write_functions
+
+ INPUTS:
+    ax = is the axes object to be squared
+        
+ OPTIONAL INPUTS:
+
+
+ OUTPUTS:
+    square axes
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+
+ NOTE:
+'''
+
+
+def beam_artist(ax,hdr,im_wcs):
+    xmin, xmax = ax.get_xlim()
+    ymin, ymax = ax.get_ylim()
+    ghxloc, ghyloc = im_wcs.wcs_pix2world(float(xmin+(xmax-xmin)/18.), float(ymin+(ymax-ymin)/18.), 1.)
+    localoc = [float(ghxloc),float(ghyloc) ]
+    widthb = hdr['BMIN']
+    heightb = hdr['BMAJ']
+    try:
+        angleb  = hdr['BPA']
+    except KeyError:
+        angleb = 0.
+    #either the location or the beam has to be transformed 
+    beam = Ellipse(xy=localoc, width=widthb, height=heightb, angle=angleb, transform=ax.get_transform('world'),
+           edgecolor='k', lw=1, facecolor='none', hatch='/////',zorder=15)
+    return beam
+
+beam_artist.__doc__ =f'''
+ NAME:
+    beam_artist
+
+ PURPOSE:
+    create a beam patch
+        
+ CATEGORY:
+    write_functions
+
+ INPUTS:
+    ax = is the axes object where the beam is intended to go
+    hdr = the image header
+    im_wcs = WCS frame of the image
+
+ OPTIONAL INPUTS:
+
+
+ OUTPUTS:
+    BEAM_ARTIST
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+
+ NOTE:
+'''
+
+
+    
+
 def make_overview_plot(Configuration,Fits_Files ):
     fit_type = Configuration['USED_FITTING']
     sf.print_log(f'''MAKE_OVERVIEW_PLOT: We are starting the overview plot.
@@ -362,6 +445,7 @@ def make_overview_plot(Configuration,Fits_Files ):
         moment2 = fits.open(f"{Configuration['FITTING_DIR']}{Fits_Files['MOMENT2']}")
         channels_map = fits.open(f"{Configuration['FITTING_DIR']}{Fits_Files['CHANNEL_MAP']}")
         im_wcs = WCS(moment0[0].header).celestial
+   
 
     # Open the model info
     sf.print_log(f'''MAKE_OVERVIEW_PLOT: Reading the variables from the final model
@@ -400,7 +484,7 @@ def make_overview_plot(Configuration,Fits_Files ):
 
 
     #Let's start plotting
-    ysize = 23.2
+    ysize = 23.2/2.
     xsize = 0.7*ysize
     Overview = plt.figure(2, figsize=(xsize, ysize), dpi=300, facecolor='w', edgecolor='k')
 
@@ -447,16 +531,17 @@ def make_overview_plot(Configuration,Fits_Files ):
 
 #-----------------------------------------------------------------Moment 0 ------------------------------------------------------
     ax_moment0 = Overview.add_subplot(gs[2:8,0:6], projection=im_wcs)
-    ax_moment0.set_label('Intensity Map')
+    #ax_moment0.set_label('Intensity Map')
     #Comp_ax1.set_facecolor('black')
     # we need contour levels and
     min_color = 0.
     max_color = np.nanmax(moment0[0].data)*0.8
-    moment0_plot = ax_moment0.imshow(moment0[0].data, origin='lower', alpha=1, vmin = min_color, vmax = max_color,cmap='hot_r' )
+    moment0_plot = ax_moment0.imshow(moment0[0].data, origin='lower', alpha=1,\
+        vmin = min_color, vmax = max_color,cmap='hot_r',transform=ax_moment0.get_transform(im_wcs) )
     moment0_plot.set_label('Intensity Map')
-    plt.ylabel('DEC (J2000)')
+    plt.ylabel('DEC')
     #Stupid python suddenly finds its own labels
-    plt.xlabel('RA J2000')
+    plt.xlabel('RA')
 
     median_noise_in_map = np.sqrt(np.nanmedian(channels_map[0].data[channels_map[0].data > 0.]))*Configuration['NOISE']*Configuration['CHANNEL_WIDTH']
     mindism0 = median_noise_in_map
@@ -491,27 +576,25 @@ def make_overview_plot(Configuration,Fits_Files ):
                levels=momlevel, colors='white',linewidths=1.2*size_factor , zorder =7)
     ax_moment0.contour(moment0_mod[0].data, transform=ax_moment0.get_transform(im_wcs),
               levels=momlevel, colors='r',zorder=8, linewidths=0.9*size_factor)
-    xmin, xmax = ax_moment0.get_xlim()
-    ymin, ymax = ax_moment0.get_ylim()
-    if xmax > ymax:
-        diff = int(xmax-ymax)/2.
-        ax_moment0.set_ylim(ymin-diff,ymax+diff)
-        ymin, ymax = ax_moment0.get_ylim()
-    else:
-        diff = int(ymax-xmax)/2.
-        ax_moment0.set_xlim(xmin-diff,xmax+diff)
-        xmin, xmax = ax_moment0.get_xlim()
-    ghxloc, ghyloc = im_wcs.wcs_pix2world(float(xmin+(xmax-xmin)/18.), float(ymin+(ymax-ymin)/18.), 1.)
-    localoc = [float(ghxloc),float(ghyloc) ]
-    widthb = moment0[0].header['BMIN']
-    heightb = moment0[0].header['BMAJ']
-    try:
-        angleb  = moment0[0].header['BPA']
-    except KeyError:
-        angleb = 0.
-    beam = Ellipse(xy=localoc, width=widthb, height=heightb, angle=angleb, transform=ax_moment0.get_transform('fk4'),
-           edgecolor='k', lw=1, facecolor='none', hatch='/////',zorder=15)
+  
+    square_plot(ax_moment0)
+    ax_moment0.grid()    
+    beam = beam_artist(ax_moment0,moment0[0].header,im_wcs)
     ax_moment0.add_patch(beam)
+    #center_x,center_y = im_wcs.wcs_world2pix(FAT_Model[Vars_to_plot.index('XPOS'),0],\
+    #                    FAT_Model[Vars_to_plot.index('YPOS'),0], 1.)
+
+    center_x = float(FAT_Model[Vars_to_plot.index('XPOS'),0])
+    center_y = float(FAT_Model[Vars_to_plot.index('YPOS'),0])
+    print(f'Print this is the center we use {center_x}, {center_y}')
+    ax_moment0.text(center_x,center_y,'X', size= 5.,va='center',ha='center', \
+                    color='white',zorder=17, transform=ax_moment0.get_transform('world'))
+    #ax_moment0.text(center_x,center_y,'X', size= 7.,va='center',ha='center', \
+     #               color='black',zorder=16, transform=ax_moment0.get_transform('world'))
+
+
+    #                ,transform = ax_moment0.transAxes,zorder=7)
+    #
     # colorbar
     divider = make_axes_locatable(ax_moment0)
     cax = divider.append_axes("top", size="5%", pad=0.05, axes_class=maxes.Axes)
@@ -566,9 +649,9 @@ def make_overview_plot(Configuration,Fits_Files ):
     min_color= FAT_Model[Vars_to_plot.index('VSYS'),0]-velocity_width
 
     moment1_plot = ax_moment1.imshow(moment1[0].data, cmap='rainbow', origin='lower', alpha=1, vmin = min_color, vmax = max_color )
-    plt.ylabel('DEC (J2000)')
+    plt.ylabel('DEC')
     #Stupid python suddenly finds its own labels
-    plt.xlabel('RA J2000')
+    plt.xlabel('RA')
 
     # contours
     velocity_step=sf.set_limits(int((int(max_color-min_color)*0.9)/20.),1.,30.)
@@ -582,27 +665,11 @@ def make_overview_plot(Configuration,Fits_Files ):
                levels=momlevel, colors='white',linewidths=1.2*size_factor , zorder =7)
     #ax_moment1.contour(moment1_mod[0].data, transform=ax_moment1.get_transform(im_wcs),
     #          levels=momlevel, colors='r',zorder=8, linewidths=0.9)
-    xmin, xmax = ax_moment1.get_xlim()
-    ymin, ymax = ax_moment1.get_ylim()
-    if xmax > ymax:
-        diff = int(xmax-ymax)/2.
-        ax_moment1.set_ylim(ymin-diff,ymax+diff)
-        ymin, ymax = ax_moment1.get_ylim()
-        xmin, xmax = ax_moment1.get_xlim()
-    else:
-        diff = int(ymax-xmax)/2.
-        ax_moment1.set_xlim(xmin-diff,xmax+diff)
-    ghxloc, ghyloc = im_wcs.wcs_pix2world(float(xmin+(xmax-xmin)/18.), float(ymin+(ymax-ymin)/18.), 1.)
-    localoc = [float(ghxloc),float(ghyloc) ]
-    widthb = moment1[0].header['BMIN']
-    heightb = moment1[0].header['BMAJ']
-    try:
-        angleb  = moment1[0].header['BPA']
-    except KeyError:
-        angleb = 0.
-    beam = Ellipse(xy=localoc, width=widthb, height=heightb, angle=angleb, transform=ax_moment1.get_transform('fk4'),
-           edgecolor='k', lw=1, facecolor='none', hatch='/////',zorder=15)
+   
+    square_plot(ax_moment1)
+    beam = beam_artist(ax_moment1,moment1[0].header,im_wcs)
     ax_moment1.add_patch(beam)
+    ax_moment1.grid()
     # colorbar
     divider = make_axes_locatable(ax_moment1)
     cax = divider.append_axes("top", size="5%", pad=0.05, axes_class=maxes.Axes)
@@ -633,9 +700,9 @@ def make_overview_plot(Configuration,Fits_Files ):
     min_color= 0.
 
     moment2_plot = ax_moment2.imshow(moment2[0].data, cmap='rainbow' ,origin='lower', alpha=1, vmin = min_color, vmax = max_color )
-    plt.ylabel('DEC (J2000)')
+    plt.ylabel('DEC')
     #Stupid python suddenly finds its own labels
-    plt.xlabel('RA J2000')
+    plt.xlabel('RA')
 
     # contours
 
@@ -648,30 +715,11 @@ def make_overview_plot(Configuration,Fits_Files ):
     ax_moment2.contour(moment2_mod[0].data, transform=ax_moment2.get_transform(im_wcs),
                levels=momlevel, colors='white',linewidths=1.2*size_factor , zorder =7)
 
-    xmin, xmax = ax_moment2.get_xlim()
-    ymin, ymax = ax_moment2.get_ylim()
-    if xmax > ymax:
-        diff = int(xmax-ymax)/2.
-        ax_moment2.set_ylim(ymin-diff,ymax+diff)
-        ymin, ymax = ax_moment2.get_ylim()
-    else:
-        diff = int(ymax-xmax)/2.
-        ax_moment2.set_xlim(xmin-diff,xmax+diff)
-        xmin, xmax = ax_moment2.get_xlim()
-
-    ghxloc, ghyloc = im_wcs.wcs_pix2world(float(xmin+(xmax-xmin)/18.), float(ymin+(ymax-ymin)/18.), 1.)
-    localoc = [float(ghxloc),float(ghyloc) ]
-    widthb = moment2[0].header['BMIN']
-    heightb = moment2[0].header['BMAJ']
-    try:
-        angleb  = moment2[0].header['BPA']
-    except KeyError:
-        angleb = 0.
-
-    beam = Ellipse(xy=localoc, width=widthb, height=heightb, angle=angleb, transform = ax_moment2.get_transform('fk4'),
-           edgecolor='k', lw=1, facecolor='none', hatch='/////',zorder=15)
+   
+    square_plot(ax_moment2)
+    beam = beam_artist(ax_moment2,moment2[0].header,im_wcs)
     ax_moment2.add_patch(beam)
-
+    ax_moment2.grid()
 
     # colorbar
     divider = make_axes_locatable(ax_moment2)
@@ -705,90 +753,23 @@ def make_overview_plot(Configuration,Fits_Files ):
 
     extract_angle = np.mean(FAT_Model[Vars_to_plot.index('PA'),0:round(len(FAT_Model[Vars_to_plot.index('PA'),:])/2.)])
     PV = extract_pv(Configuration,cube,extract_angle, \
-                    center = [float(FAT_Model[Vars_to_plot.index('XPOS'),0]),float(FAT_Model[Vars_to_plot.index('YPOS'),0]),float(FAT_Model[Vars_to_plot.index('VSYS'),0]*1000.)], \
-                    convert=1000.)
+                    center = [float(FAT_Model[Vars_to_plot.index('XPOS'),0]),\
+                        float(FAT_Model[Vars_to_plot.index('YPOS'),0]),\
+                        float(FAT_Model[Vars_to_plot.index('VSYS'),0]*1000.)], \
+                        convert=1000.)
     if not os.path.exists(f"{Configuration['FITTING_DIR']}/Finalmodel/{Configuration['BASE_NAME']}_final_xv.fits"):
         fits.writeto(f"{Configuration['FITTING_DIR']}/Finalmodel/{Configuration['BASE_NAME']}_final_xv.fits",PV[0].data,PV[0].header)
     PV_model = extract_pv(Configuration,cube_mod,extract_angle, \
-                    center = [float(FAT_Model[Vars_to_plot.index('XPOS'),0]),float(FAT_Model[Vars_to_plot.index('YPOS'),0]),float(FAT_Model[Vars_to_plot.index('VSYS'),0]*1000.)], \
+                    center = [float(FAT_Model[Vars_to_plot.index('XPOS'),0]),\
+                    float(FAT_Model[Vars_to_plot.index('YPOS'),0]),\
+                    float(FAT_Model[Vars_to_plot.index('VSYS'),0]*1000.)], \
                     convert=1000.)
     if not os.path.exists(f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel_xv.fits"):
         fits.writeto(f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel_xv.fits",PV_model[0].data,PV_model[0].header)
-    ratio=PV[0].header['NAXIS2']/PV[0].header['NAXIS1']
-    # Then we want to plot our PV-Diagram
-    '''
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        #As astropy is the dumbest piece of software ever invented and it cannot separate stray keywords from extra dimensions
-        # we need to specify we want the first two axes.
-        xv_proj = WCS(PV[0].header,naxis=[0,1])
-        xv_model_proj = WCS(PV_model[0].header,naxis=[0,1])
-    # As astropy is really a dumb piece of shit using a WCS messes up the the axes modifications
-    #ax_PV = Overview.add_subplot(gs[2:8,8:14], projection=xv_proj)
-    '''
-    ax_PV = Overview.add_subplot(gs[2:8,8:14])
-    #Comp_ax2.set_title('PV-Diagram')
 
-    maxint= np.nanmax(PV[0].data)*0.85
-    minint= np.nanmin(PV[0].data)/3.
-
-
-    PV_plot = ax_PV.imshow(PV[0].data,  cmap='hot_r', origin='lower', alpha=1, vmin=minint, vmax=maxint,aspect='auto')
-
-    xaxis = [PV[0].header['CRVAL1'] + (i - PV[0].header['CRPIX1'] + 1) * (PV[0].header['CDELT1']) for i in
-             range(PV[0].header['NAXIS1'])]
-    yaxis = [PV[0].header['CRVAL2'] + (i - PV[0].header['CRPIX2'] + 1) * (PV[0].header['CDELT2']) for i in
-             range(PV[0].header['NAXIS2'])]
-    #something is going wrong here, Fixed as usual astropy was fucking thing up
-    ax_PV.set_xticks(range(len(xaxis))[0:-1:int(len(xaxis) / 5)])
-    ax_PV.set_yticks(range(len(yaxis))[0:-1:int(len(yaxis) / 5)])
-    ax_PV.set_xticklabels(['{:10.1f}'.format(i) for i in xaxis[0:-1:int(len(xaxis) / 5)]])
-    ax_PV.set_yticklabels(['{:10.1f}'.format(i) for i in yaxis[0:-1:int(len(yaxis) / 5)]])
-
-    #Add some contours
-    neg_cont = np.array([-3,-1.5],dtype=float)*Configuration['NOISE']
-    if  np.nanmax(PV[0].data) * 0.95 < 96*Configuration['NOISE']:
-        pos_cont =  np.array([1.5,3.,6,12,24,48,96],dtype=float)*Configuration['NOISE']
-    else:
-        pos_cont =  np.array([0,1,2,3,4,5,6,7],dtype=float)*(np.nanmax(PV[0].data) * 0.95-3.*Configuration['NOISE'])/7. +3.*Configuration['NOISE']
-    pos_cont = np.array([x for x in pos_cont if x <= np.nanmax(PV[0].data) * 0.95],dtype=float)
-    sf.print_log(f'''MAKE_OVERVIEW_PLOT: postive {pos_cont}, negative {neg_cont}, noise {Configuration['NOISE']}
-''',Configuration,case=['debug_add'] )
-    if pos_cont.size == 0:
-        pos_cont = 0.5 * np.nanmax(PV[0].data) * 0.95
-
-    #ax_PV.contour(PV[0].data, levels=pos_cont, colors='k',transform=ax_PV.get_transform(xv_proj))
-    #ax_PV.contour(PV[0].data, levels=neg_cont, colors='grey',linestyles='--',transform=ax_PV.get_transform(xv_proj))
-    #ax_PV.contour(PV_model[0].data, levels=pos_cont, colors='b',transform=ax_PV.get_transform(xv_model_proj),linewidths=1.)
-    ax_PV.contour(PV[0].data, levels=pos_cont,linewidths=1.*size_factor, colors='k')
-    ax_PV.contour(PV[0].data, levels=neg_cont,linewidths=1.*size_factor, colors='grey',linestyles='--')
-    ax_PV.contour(PV_model[0].data, levels=pos_cont, colors='b',linewidths=1.*size_factor)
-
-    momlevel = np.hstack((neg_cont,pos_cont))
-    column_levels = ', '.join(["{:.1f}".format(x*1000.) for x in momlevel])
-    if len(momlevel) < 4:
-        info_string = f"The contours are at {column_levels} mJy/beam"
-    else:
-        info_string = f"The contours are at {', '.join(['{:.1f}'.format(x*1000.) for x in momlevel[0:4]])}"
-        counter = 5
-        while counter < len(momlevel):
-            info_string = info_string+f"\n {', '.join(['{:.1f}'.format(x*1000.) for x in momlevel[counter:counter+7]])}"
-            counter += 7
-        info_string = info_string+" mJy/beam."
-
-    divider = make_axes_locatable(ax_PV)
-    cax = divider.append_axes("top", size="5%", pad=0.05, axes_class=maxes.Axes)
-    cbar = plt.colorbar(PV_plot, cax=cax, orientation='horizontal')
-    cax.xaxis.set_ticks_position('top')
-    cbar.set_ticks([minint, maxint])
-    cbar.ax.set_title(f"{PV[0].header['BUNIT']}", y= 0.2*size_factor**2)
-
-    ax_PV.text(-0.1,-0.2,info_string, va='top',ha='left', color='black',transform = ax_PV.transAxes,
-          bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7)
-
-    #cf.plot_fits(filename, Comp_ax2, cmap='hot_r', aspect=ratio, cbar ='horizontal')
-    ax_PV.set_xlabel("Offset (arcsec)")
-    ax_PV.set_ylabel("Velocity (km s$^{-1}$)")
+    ax_PV = plot_PV(Configuration,image=PV, model = PV_model, figure = Overview, \
+        location = gs[2:8,8:14],size_factor = size_factor,
+        tirific_model = f"{Configuration['FITTING_DIR']}Finalmodel/Finalmodel.def")
     PV.close()
     PV_model.close()
 
@@ -832,14 +813,15 @@ def make_overview_plot(Configuration,Fits_Files ):
                             Overview,'VROT',Input_Model = Input_Model,initial_extent= sof_basic_extent[0], \
                             initial = sof_basic_maxrot[0],Extra_Model = Extra_Model)
     ymin =np.min([FAT_Model[Vars_to_plot.index('VROT'),1:],FAT_Model[Vars_to_plot.index('VROT_2'),1:]])
+    ymax =np.max([FAT_Model[Vars_to_plot.index('VROT'),1:],FAT_Model[Vars_to_plot.index('VROT_2'),1:]])
+
     if len(Extra_Model) > 0:
         ymin2 =np.min([Extra_Model[Vars_to_plot.index('VROT'),1:],Extra_Model[Vars_to_plot.index('VROT_2'),1:]])
         ymax2 =np.max([Extra_Model[Vars_to_plot.index('VROT'),1:],Extra_Model[Vars_to_plot.index('VROT_2'),1:]])
     else:
         ymin2 = ymin
         ymax2 = ymax
-    ymax =np.max([FAT_Model[Vars_to_plot.index('VROT'),1:],FAT_Model[Vars_to_plot.index('VROT_2'),1:]])
-
+  
     if len(Input_Model) > 0:
         ymin3 =np.min([Input_Model[Vars_to_plot.index('VROT'),1:],Input_Model[Vars_to_plot.index('VROT_2'),1:]])
         ymax3 =np.max([Input_Model[Vars_to_plot.index('VROT'),1:],Input_Model[Vars_to_plot.index('VROT_2'),1:]])
@@ -998,7 +980,7 @@ def make_overview_plot(Configuration,Fits_Files ):
     sec_ax.set_xlim(sf.convertskyangle(Configuration,arcmin),sf.convertskyangle(Configuration,arcmax))
     sec_ax.figure.canvas.draw()
 
-
+#
 #----------------------------------------------Distance vs VSYS -----------------------------------------
     ax_VSYS = Overview.add_subplot(gs[2:6,16:20])
     plt.xlabel('Sys. Vel. (km s$^{-1}$)',**labelfont)
@@ -1053,6 +1035,8 @@ def make_overview_plot(Configuration,Fits_Files ):
     cube_mod.close()
     cube.close()
     channels_map.close()
+
+    #
     plt.savefig(f"{Configuration['FITTING_DIR']}Overview.png", bbox_inches='tight')
     #plt.savefig(f"Overview_Test.png", bbox_inches='tight')
     plt.close()
@@ -1196,6 +1180,165 @@ plot_parameters.__doc__ =f'''
      NOTE:
 '''
 
+def plot_PV(Configuration,image=None, model = None, figure = None, \
+    location = [0.1,0.1,0.8,0.8], tirific_model=None, size_factor = 1.):
+    if image == None:
+        print('plot_PV will not work witout an image.')
+        return 'Empty'
+    else:
+        try:
+            hdr = image[0].header
+            data = image[0].data
+        except:
+            hdr = image.header
+            data = image.data
+
+    ratio=hdr['NAXIS2']/hdr['NAXIS1']
+    # Then we want to plot our PV-Diagram
+    if figure == None:
+        figure = plt.figure(2, figsize=(8, 8), dpi=300, facecolor='w', edgecolor='k')
+
+    ax = figure.add_subplot(location)
+    #Comp_ax2.set_title('PV-Diagram')
+
+    maxint= np.nanmax(data)*0.85
+    minint= np.nanmin(data)/3.
+    PV_plot = ax.imshow(data,  cmap='hot_r', origin='lower', alpha=1, \
+                            vmin=minint, vmax=maxint,aspect='auto')
+    xaxis = [hdr['CRVAL1'] + (i - hdr['CRPIX1'] + 1) \
+        * (hdr['CDELT1']) for i in range(hdr['NAXIS1'])]
+    yaxis = [hdr['CRVAL2'] + (i - hdr['CRPIX2'] + 1) * (hdr['CDELT2']) for i in
+         range(hdr['NAXIS2'])]
+    #something is going wrong here, Fixed as usual astropy was fucking thing up
+    step = int(abs((xaxis[-1]-xaxis[0])/7))
+    ticks = np.array([-3*step,-2*step,-1*step,0.,step,2*step,3*step],dtype=float)+hdr['CRVAL1']
+    pix_ticks =(ticks - hdr['CRVAL1'])/hdr['CDELT1']+(hdr['CRPIX1']-1)
+    ax.set_xticks(pix_ticks)
+    ax.set_xticklabels([f'{int(i):d}' for i in ticks],size=5,ha='center')
+    ax.set_yticks(range(len(yaxis))[0:-1:int(len(yaxis) / 5)])
+    ax.set_yticklabels(['{:.1f}'.format(i) for i in yaxis[0:-1:int(len(yaxis) / 5)]])
+    ax.grid()
+   
+    #Add some contours
+    neg_cont = np.array([-3,-1.5],dtype=float)*Configuration['NOISE']
+    if  np.nanmax(data) * 0.95 < 96*Configuration['NOISE']:
+        pos_cont =  np.array([1.5,3.,6,12,24,48,96],dtype=float)*Configuration['NOISE']
+    else:
+        pos_cont =  np.array([0,1,2,3,4,5,6,7],dtype=float)*(np.nanmax(data) * 0.95-3.*Configuration['NOISE'])/7. +3.*Configuration['NOISE']
+    pos_cont = np.array([x for x in pos_cont if x <= np.nanmax(data) * 0.95],dtype=float)
+    sf.print_log(f'''PV_PLOT: postive {pos_cont}, negative {neg_cont}, noise {Configuration['NOISE']}
+''',Configuration,case=['debug_add'] )
+    if pos_cont.size == 0:
+        pos_cont = 0.5 * np.nanmax(data) * 0.95
+
+#ax_PV.contour(PV[0].data, levels=pos_cont, colors='k',transform=ax_PV.get_transform(xv_proj))
+#ax_PV.contour(PV[0].data, levels=neg_cont, colors='grey',linestyles='--',transform=ax_PV.get_transform(xv_proj))
+#ax_PV.contour(PV_model[0].data, levels=pos_cont, colors='b',transform=ax_PV.get_transform(xv_model_proj),linewidths=1.)
+    ax.contour(data, levels=pos_cont,linewidths=1.*size_factor, colors='k')
+    ax.contour(data, levels=neg_cont,linewidths=1.*size_factor, colors='grey',linestyles='--')
+    if model != None:
+        try:
+            model_data = model[0].data
+        except:
+            model_data = model.data
+        ax.contour(model_data, levels=pos_cont, colors='b',linewidths=1.*size_factor)
+
+    momlevel = np.hstack((neg_cont,pos_cont))
+    column_levels = ', '.join(["{:.1f}".format(x*1000.) for x in momlevel])
+    if len(momlevel) < 4:
+        info_string = f"The contours are at {column_levels} mJy/beam"
+    else:
+        info_string = f"The contours are at {', '.join(['{:.1f}'.format(x*1000.) for x in momlevel[0:4]])}"
+        counter = 5
+        while counter < len(momlevel):
+            info_string = info_string+f"\n {', '.join(['{:.1f}'.format(x*1000.) for x in momlevel[counter:counter+7]])}"
+            counter += 7
+    info_string = info_string+" mJy/beam."
+
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("top", size="5%", pad=0.05, axes_class=maxes.Axes)
+    cbar = plt.colorbar(PV_plot, cax=cax, orientation='horizontal')
+    cax.xaxis.set_ticks_position('top')
+    cbar.set_ticks([minint, maxint])
+    cbar.ax.set_title(f"{hdr['BUNIT']}", y= 0.2*size_factor**2)
+
+    ax.text(-0.1,-0.2,info_string, va='top',ha='left', color='black',transform = ax.transAxes,
+          bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7)
+    if tirific_model != None:
+        parameters = sf.load_tirific(Configuration,tirific_model,\
+            Variables= ['RADI','VROT','VROT_2','INCL','INCL_2','VSYS','VSYS_2']\
+                ,array=True )
+        if np.sum(parameters[2]) == 0.:
+            parameters[2] =   parameters[1]
+            parameters[4] =   parameters[3]
+            parameters[6] =   parameters[5]
+        if 'DRVAL1' in hdr:
+            center = [float(x) for x in hdr['DRVAL1'].split('+')]
+            model_center = [float(x[0]) for x in sf.load_tirific(Configuration,tirific_model,\
+            Variables= ['XPOS','XPOS_2','YPOS','YPOS'],array=True ) ]
+        if 'DRVAL2' in hdr:
+            vsys = float(hdr['DRVAL2'])
+            model_vsys = [float(x[0]) for x in sf.load_tirific(Configuration,tirific_model,\
+            Variables= ['VSYS','VSYS_2'],array=True ) ]
+
+    
+     
+                            
+        plotrc  = np.array([-1.*x*np.sin(np.radians(y))+parameters[5][0] for x,y \
+            in zip(parameters[1],parameters[3])],dtype=float)
+        plotrc2  = np.array([x*np.sin(np.radians(y))+parameters[6][0] for x,y in\
+            zip(parameters[2],parameters[4])],dtype=float)
+        # As python is a piece of shit that only does things half we need to convert to pixels
+
+        plotrc= (plotrc - hdr['CRVAL2'])/hdr['CDELT2']+(hdr['CRPIX2']-1)
+        radius = (-1.*parameters[0]-hdr['CRVAL1'])/hdr['CDELT1']+(hdr['CRPIX1']-1)
+        plotrc2= (plotrc2 - hdr['CRVAL2'])/hdr['CDELT2']+(hdr['CRPIX2']-1)
+        radius2 = (parameters[0]-hdr['CRVAL1'])/hdr['CDELT1']+(hdr['CRPIX1']-1)
+        ax.plot(radius,plotrc,'o',c='r')
+        ax.plot(radius2,plotrc2,'o',c='r')
+    #cf.plot_fits(filename, Comp_ax2, cmap='hot_r', aspect=ratio, cbar ='horizontal')
+    ax.set_xlabel("Offset (arcsec)")
+    ax.set_ylabel("Velocity (km s$^{-1}$)")
+    return ax
+    
+
+
+plot_PV.__doc__ =f'''
+     NAME:
+        plot_PV
+
+     PURPOSE:
+        Plot the PV with th RC overlaid.
+
+     CATEGORY:
+        write_functions
+
+     INPUTS:
+        Configuration = Standard FAT configuration
+        image = fits object of the PV
+
+     OPTIONAL INPUTS:
+        model = fits object of model to overplot
+        figure = figure to plot the ax in if not defined it will be an 8 x 8 figure \
+        location = [0.1,0.1,0.8,0.8]
+            location of the ax
+        tirific_model=None
+            Model to obtain the RC from
+        size_factor = 1.
+            scaling factor for text and line widths
+
+
+
+     OUTPUTS:
+        ax object from matplot lib
+
+     OPTIONAL OUTPUTS:
+
+     PROCEDURES CALLED:
+        Unspecified
+
+     NOTE:
+'''
 
 
 def plot_usage_stats(Configuration ):

@@ -16,6 +16,7 @@ requirements = [
     'future-fstrings',
     'psutil',
     'importlib_resources>=3.3.0',
+    'importlib_metadata',
 ]
 
 PACKAGE_NAME = 'pyFAT_astro'

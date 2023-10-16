@@ -4,7 +4,8 @@ import pyFAT_astro
 from pyFAT_astro.Support.fat_errors import SupportRunError,SmallSourceError,\
                                               FileNotFoundError,TirificKillError,\
                                               InputError,ProgramError,DefFileError,\
-                                              BadHeaderError,FittingError,TirificOutputError
+                                              BadHeaderError,FittingError,TirificOutputError,\
+                                              SofiaMissingError
 
 from pyFAT_astro import Templates as templates
 from collections import OrderedDict #used in Proper_Dictionary
@@ -226,6 +227,8 @@ def complex_am_invert(Configuration,Theta_in,Phi_in):
             with warnings.catch_warnings():
                 warnings.filterwarnings("ignore",message="divide by zero encountered in true_divide"\
                                     ,category=RuntimeWarning)
+                warnings.filterwarnings("ignore",message="divide by zero encountered in divide"\
+                                    ,category=RuntimeWarning)
                 for i in range(len(Theta)):
                     Inclination_plane[:,i]= 90-np.arctan(1./(np.cos(Theta[i])*np.tan(Phi[:])))*(360./(2*np.pi))
             Inclination_plane[np.where(Inclination_plane > 90.)] = 180 - Inclination_plane[np.where(Inclination_plane > 90.)]
@@ -248,6 +251,8 @@ def complex_am_invert(Configuration,Theta_in,Phi_in):
             PA_plane =   np.zeros((len(Theta),len(Phi)))
             with warnings.catch_warnings():
                 warnings.filterwarnings("ignore",message="divide by zero encountered in true_divide"\
+                                    ,category=RuntimeWarning)
+                warnings.filterwarnings("ignore",message="divide by zero encountered in divide"\
                                     ,category=RuntimeWarning)
                 for i in range(len(Theta)):
                     PA_plane[:,i] = abs(np.arctan(np.sin(Theta[i])*np.tan(Phi[:]))*(360./(2*np.pi)))
@@ -371,8 +376,12 @@ Inclination = {inclination}
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore",message="invalid value encountered in true_divide"\
                                 ,category=RuntimeWarning)
+            #pYthon being really incredibly dumb again as changed the run time warning 
+            warnings.filterwarnings("ignore",message="invalid value encountered in divide"\
+                                ,category=RuntimeWarning)
             theta_factor = np.sqrt(theta_change**2/(theta_change**2+phi_change**2))\
                         *(theta_change)/abs(theta_change)
+            
             theta_factor[np.where(np.array(theta_change) == 0.)] = 0.
             phi_factor = np.sqrt(phi_change**2/(theta_change**2+phi_change**2))*(phi_change)/abs(phi_change)
             phi_factor[np.where(np.array(phi_change) == 0.)] = 0.
@@ -586,15 +595,36 @@ Your header did not have a unit for the third axis, that is bad policy.
             print_log('CLEAN_HEADER: FREQUENCY IS NOT A SUPPORTED VELOCITY AXIS.', Configuration, case=['main','screen'])
             raise BadHeaderError('The Cube has frequency as a velocity axis this is not supported')
 
-        vel_types = ['VELO-HEL','VELO-LSR','VELO', 'VELOCITY']
+        #vel_types = ['VELO-HEL','VELO-LSR','VELO', 'VELOCITY','VOPT','VRAD']
+        vel_types = ['VELO','VOPT','VRAD']
         if hdr['CTYPE3'].upper() not in vel_types:
             if hdr['CTYPE3'].split('-')[0].upper() in ['RA','DEC']:
                 print_log(f'''CLEAN_HEADER: Your zaxis is a spatial axis not a velocity axis.
 {"":8s}CLEAN_HEADER: Please arrange your cube logically
 ''',Configuration,case= ['main','screen'])
                 raise BadHeaderError("The Cube's third axis is not a velocity axis")
+            if hdr['CTYPE3'].split('-')[0].upper() == 'VELO':
+                frame = hdr['CTYPE3'].split('-')[1].upper()
+                hdr['CTYPE3'] = 'VELO'
+                if frame in ['LSR','LSRK']:
+                    hdr['SPECSYS3']='LSRK'
+                elif frame in ['HEL','HELO']:
+                    hdr['SPECSYS3']='HELIOCEN'
+            else:
+                print_log(f'''CLEAN_HEADER: Your velocity projection is not standard (CTYPE3 = {hdr["CTYPE3"]}). 
+Please note that FAT can only deal with velocity cubes, not frequency.
+''',Configuration, case=['main','screen'])
+                raise BadHeaderError(f'The Cube has a non-standard velocity projection (CTYPE3 = {hdr["CTYPE3"]})')
+        #Tirific will only run with VELO so if VRAD of VOPT then we need to run with VELO and fix it in the end
+        Configuration['HDR_VELOCITY'] = hdr['CTYPE3']
+        if  hdr['CTYPE3'].upper() in ['VRAD','VOPT']:
             hdr['CTYPE3'] = 'VELO'
-            print_log(f'''CLEAN_HEADER: Your velocity projection is not standard. The keyword is changed to VELO (relativistic definition). This might be dangerous.
+
+        if 'SPECSYS3' not in hdr:
+            if 'SPECSYS' in hdr:
+                hdr['SPECSYS3'] = hdr['SPECSYS']
+            else:
+                print_log(f'''CLEAN_HEADER: There is no reference frame defined in your header. This is ok for FAT but WCS might complain.
 ''',Configuration)
 
         if hdr['CUNIT3'].lower() == 'km/s':
@@ -603,6 +633,7 @@ Your header did not have a unit for the third axis, that is bad policy.
             hdr['CUNIT3'] = 'm/s'
             hdr['CDELT3'] = hdr['CDELT3']*1000.
             hdr['CRVAL3'] = hdr['CRVAL3']*1000.
+
         #because astropy is truly stupid
 
         if hdr['CUNIT3'] == 'M/S':
@@ -1272,7 +1303,7 @@ deproject.__doc__ =f'''
 def ensure_list(variable):
     '''Make sure that variable is a list'''
     if not isinstance(variable,list):
-        if not isiterable(list1):
+        if not isiterable(variable):
             variable=[variable]
         else:
             variable=[x for x in variable]
@@ -3690,6 +3721,7 @@ def setup_configuration(cfg):
                'BEAM_IN_PIXELS': [0.,0.,0.], #FWHM BMAJ, BMIN in pixels and total number of pixels in beam area, set in read_cube in read_functions
                'BEAM': [0.,0.,0.], #  FWHM BMAJ, BMIN in arcsec and BPA, set in main
                'BEAM_AREA': 0., #BEAM_AREA in arcsec set in main
+               'HDR_VELOCITY': 'VELO', #Track the velocity frame as tirific will only run with VELO
                'NAXES': [0.,0.,0.], #  Size of the cube in pixels x,y,z arranged like sane people not python, set in main
                'MAX_ERROR': {}, #The maximum allowed errors for the parameters, set in main derived from cube
                'MIN_ERROR': {}, #The minumum allowed errors for the parameters, initially set in check_source but can be modified through out INCL,PA,SDSIS,Z0 errors change when the parameters is fixed or release

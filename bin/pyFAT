@@ -1,7 +1,15 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import pyFAT_astro.main as main
+
+
+
+import warnings
+#Some issue in pip no longer using pkg_resources
+with warnings.catch_warnings():
+    warnings.filterwarnings("ignore",message="pkg_resources is deprecated"\
+                                    ,category=DeprecationWarning)
+    import pyFAT_astro.main as main
 import sys
 #from viztracer import VizTracer
 

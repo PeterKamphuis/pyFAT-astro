@@ -1,12 +1,13 @@
 # -*- coding: future_fstrings -*-
 # This module contains a set of functions and classes that are used in several different Python scripts in the Database.
 
-import pyFAT_astro
+
 import os,signal,sys
 import numpy as np
 import traceback
-from datetime import datetime
 
+from datetime import datetime
+from astropy.io import fits
 from pyFAT_astro.Support.fits_functions import make_moments
 from pyFAT_astro.Support.modify_template import get_error
 from pyFAT_astro.Support.write_functions import make_overview_plot,plot_usage_stats,tirific
@@ -526,6 +527,24 @@ def finish_galaxy(Configuration,current_run = 'Not initialized',\
 
     #make sure we are not leaving stuff
     sf.finish_current_run(Configuration,current_run)
+    # And place the correct velocity frame
+    if Configuration['HDR_VELOCITY'] != 'VELO':
+        sf.print_log(f'''
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+{"":8s}Your velocity frame is not suitable for Tirific it is CTYPE3 = {Configuration['HDR_VELOCITY']} and should be VELO, FELO or FRQ 
+{"":8s}IF you want to continue to fit with tirific please the cube marked _used , we have kept the correct conversion in the FAT cube
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+''',Configuration, case = ['main','screen'])
+        source = f'{Configuration["FITTING_DIR"]}/{Fits_Files["FITTING_CUBE"]}'
+        stripped_file_name = os.path.splitext(Fits_Files["FITTING_CUBE"])[0]
+        target = f'{Configuration["FITTING_DIR"]}/{stripped_file_name}_used.fits'
+        os.system(f'''cp {source} {target}''')
+        cube = fits.open(source)
+        cube[0].header['CTYPE3'] = Configuration['HDR_VELOCITY']
+        fits.writeto(source,cube[0].data,cube[0].header,overwrite=True )
+
+
+
     # We need to check if the final output is legit
     if Configuration['USED_FITTING'] == 'Fit_Tirific_OSC':
         check_legitimacy_osc(Configuration)
