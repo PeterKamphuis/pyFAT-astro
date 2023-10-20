@@ -1923,11 +1923,11 @@ def get_inclination_pa(Configuration, Image, center, cutoff = 0.,\
         if max_index.size > 1:
             max_index =int(max_index[0])
         min_index = np.where(ratios == np.nanmin(ratios))[0]
-
         if min_index.size > 1:
             min_index =int(min_index[0])
-        max_index = set_limits(max_index,2,177)
-        min_index = set_limits(min_index,2,177)
+        #From here we know it is 1 value so lets set it to an integer    
+        max_index = set_limits(int(max_index),2,177)
+        min_index = set_limits(int(min_index),2,177)
 
         if min_index > 135 and max_index < 45:
             min_index=min_index-90

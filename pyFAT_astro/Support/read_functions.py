@@ -2,7 +2,7 @@
 # This module contains a set of functions and classes that are used in FAT to read input files
 
 from pyFAT_astro.Support.fits_functions import check_mask,create_fat_cube
-from pyFAT_astro.Support.fat_errors import BadCatalogueError, NoConfigFile, \
+from pyFAT_astro.Support.fat_errors import BadCatalogueError, InputError, \
     BadSourceError
 from pyFAT_astro.Support.modify_template import fix_sbr
 import pyFAT_astro.Support.support_functions as sf
@@ -1338,7 +1338,7 @@ def sofia_input_catalogue(Configuration):
                     sf.create_directory(f"{Configuration['MAIN_DIRECTORY']}{basename}_FAT_cubelets/{basename}_{outlist[input_columns.index('id')]}",f"{Configuration['MAIN_DIRECTORY']}")
 
                 if 'create_fat_cube' in Configuration['FITTING_STAGES']:
-                    create_fat_cube(Configuration, Fits_Files,sofia_catalogue=True,name=basename,id = outlist[input_columns.index('id')])
+                    create_fat_cube(Configuration,sofia_catalogue=True,name=basename,id = outlist[input_columns.index('id')])
                 else:
                     Cube = fits.open(f"{Configuration['SOFIA_DIR']}{basename}_{outlist[input_columns.index('id')]}_cube.fits",uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
                     data = Cube[0].data

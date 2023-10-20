@@ -21,7 +21,7 @@ from omegaconf import OmegaConf
 from pyFAT_astro.FAT_Galaxy_Loop import FAT_Galaxy_Loop,MP_initialize_sofia,\
                                         MP_Fitting_Loop
 from pyFAT_astro.config.defaults import defaults
-from pyFAT_astro.Support.fat_errors import ProgramError
+from pyFAT_astro.Support.fat_errors import ProgramError,BadCatalogueError
 from pyFAT_astro.Support.write_functions import reorder_output_catalogue
 
 def warn_with_traceback(message, category, filename, lineno, file=None, line=None):
@@ -216,7 +216,7 @@ def main(argv):
             Original_Configuration['CATALOGUE_END_ID'] = int(np.where(Original_Configuration['CATALOGUE_END_ID'] == np.array(Full_Catalogue['ID'],dtype=str))[0][0])+1
         # start the main fitting loop
         if float(Original_Configuration['CATALOGUE_START_ID']) > float(Original_Configuration['CATALOGUE_END_ID']):
-            raise CatalogError(f''' Your starting galaxy (Line nr = {Original_Configuration['CATALOGUE_START_ID']}) is listed after your ending galaxy (Line nr = {Original_Configuration['CATALOGUE_END_ID']}), maybe you have double catalogue ids?''')
+            raise BadCatalogueError(f''' Your starting galaxy (Line nr = {Original_Configuration['CATALOGUE_START_ID']}) is listed after your ending galaxy (Line nr = {Original_Configuration['CATALOGUE_END_ID']}), maybe you have double catalogue ids?''')
             sys.exit(1)
 
         if Original_Configuration['MULTIPROCESSING']:

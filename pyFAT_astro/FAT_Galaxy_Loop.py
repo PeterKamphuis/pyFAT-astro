@@ -196,7 +196,7 @@ Therefore we remove the Create_FAT_Cube stages from the loop.
 
     # Let's see if our base cube exists, Note that cleanup removes it if we want to start from the original dir so no need to check start_point
     if not os.path.exists(f"{Configuration['FITTING_DIR']}{Fits_Files['FITTING_CUBE']}"):
-        ff.create_fat_cube(Configuration, Fits_Files)
+        ff.create_fat_cube(Configuration, Fits_Files = Fits_Files)
     # Get a bunch of info from the cube
     rf.read_cube(
         Configuration, Fits_Files['FITTING_CUBE'])
@@ -327,7 +327,7 @@ def MP_Fitting_Loop(input,timing_lock,catalogue_lock):
             Configuration['OUTPUT_QUANTITY'] = 5
         else:
             Configuration['OUTPUT_QUANTITY'] = 'error'
-        registeredcreate_f_exception = e
+        registered_exception = e
         Configuration['FINAL_COMMENT'] = e
         Configuration['OUTPUT_QUANTITY'] = 'error'
         catalogue_line = cf.finish_galaxy(Configuration,

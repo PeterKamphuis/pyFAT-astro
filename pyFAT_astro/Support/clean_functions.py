@@ -8,7 +8,7 @@ import traceback
 
 from datetime import datetime
 from astropy.io import fits
-from pyFAT_astro.Support.fits_functions import make_moments
+from make_moments.functions import moments
 from pyFAT_astro.Support.modify_template import get_error
 from pyFAT_astro.Support.write_functions import make_overview_plot,plot_usage_stats,tirific
 from pyFAT_astro.Support.fat_errors import SofiaMissingError
@@ -279,6 +279,7 @@ def cleanup(Configuration,Fits_Files):
                             os.unlink(f'{Configuration["FITTING_DIR"]}{dir}/{dir}{fe}')
                         except FileNotFoundError:
                             pass
+
                     elif dir == Configuration['USED_FITTING'] and fe in ['.def']:
                         target = sf.get_system_string(f"{Configuration['FITTING_DIR']}{dir}/{dir}*{fe}")
                         os.system(f'rm -f {target}')
@@ -291,6 +292,11 @@ def cleanup(Configuration,Fits_Files):
                 for mom in moments:
                     try:
                         os.remove(f'{Configuration["FITTING_DIR"]}{dir}/{dir}_{mom}.fits')
+                    except FileNotFoundError:
+                        pass
+                if dir == 'Finalmodel':
+                    try:
+                        os.remove(f'{Configuration["FITTING_DIR"]}{dir}/{Configuration["BASE_NAME"]}_final_xv.fits')
                     except FileNotFoundError:
                         pass
 
@@ -531,7 +537,7 @@ def finish_galaxy(Configuration,current_run = 'Not initialized',\
     if Configuration['HDR_VELOCITY'] != 'VELO':
         sf.print_log(f'''
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-{"":8s}Your velocity frame is not suitable for Tirific it is CTYPE3 = {Configuration['HDR_VELOCITY']} and should be VELO, FELO or FRQ 
+{"":8s}Your velocity frame is not suitable for Tirific it is CTYPE3 = {Configuration['HDR_VELOCITY']} and should be VELO, FELO or FREQ 
 {"":8s}IF you want to continue to fit with tirific please the cube marked _used , we have kept the correct conversion in the FAT cube
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ''',Configuration, case = ['main','screen'])
@@ -606,7 +612,14 @@ def finish_galaxy(Configuration,current_run = 'Not initialized',\
 
                 # We need to produce a FinalModel Directory with moment maps and an XV-Diagram of the model.
                 if Fits_Files and os.path.exists(f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel.fits"):
-                    make_moments(Configuration,Fits_Files,fit_type = 'Generic_Final',vel_unit = 'm/s')
+                    # we do not mask the model as it is also important where the model extends and there is no data.  
+                    messages = moments(filename =  f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel.fits",\
+                            overwrite = True, velocity_unit= 'm/s',\
+                            debug = Configuration['DEBUG'], log=True, level = 0.25*Configuration['NOISE'],\
+                            output_directory = f"{Configuration['FITTING_DIR']}/Finalmodel/",\
+                            output_name = 'Finalmodel')
+                    sf.print_log(messages,Configuration,case=['verbose'])
+                    #make_moments(Configuration,Fits_Files,fit_type = 'Generic_Final',vel_unit = 'm/s')
                     make_overview_plot(Configuration,Fits_Files)
 
 

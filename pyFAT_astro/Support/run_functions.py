@@ -4,11 +4,11 @@
 
 
 from pyFAT_astro.Support.clean_functions import clean_before_sofia,clean_after_sofia
-from pyFAT_astro.Support.fits_functions import cut_cubes,extract_pv,make_moments
-
+from pyFAT_astro.Support.fits_functions import cut_cubes
+from make_moments.functions import extract_pv,moments
 from pyFAT_astro.Support.modify_template import write_new_to_template,\
     smooth_profile,set_cflux,fix_sbr,regularise_profile,set_fitting_parameters,\
-    check_size,no_declining_vrot,set_errors,get_warp_slope,check_angles,write_center,\
+    check_size,set_errors,get_warp_slope,check_angles,write_center,\
     set_boundary_limits,regularise_warp,set_new_size
 from pyFAT_astro.Support.constants import H_0
 from pyFAT_astro.Support.fat_errors import FaintSourceError,BadConfigurationError,\
@@ -298,10 +298,16 @@ def check_inclination(Configuration,Tirific_Template,Fits_Files, \
         wf.tirific(Configuration,Check_Template,name = f'{tmp_stage}_In.def')
 
         accepted,incl_run = sf.run_tirific(Configuration,incl_run, stage = 'incl_check', fit_type=tmp_stage)
-
-        make_moments(Configuration,Fits_Files,fit_type=tmp_stage,\
-                     moments = [0], \
-                     overwrite = True, vel_unit = 'm/s')
+        messages = moments(filename = f"{Configuration['FITTING_DIR']}{tmp_stage}/{tmp_stage}.fits",\
+                            mask = f"{Configuration['FITTING_DIR']}/{Fits_Files['MASK']}", moments = [0],\
+                            overwrite = True, velocity_unit= 'm/s',\
+                            debug = Configuration['DEBUG'], log=True,\
+                            output_directory =  f"{Configuration['FITTING_DIR']}{tmp_stage}",\
+                            output_name = tmp_stage)
+        sf.print_log(messages,Configuration,case=['verbose'])
+        #make_moments(Configuration,Fits_Files,fit_type=tmp_stage,\
+        #             moments = [0], \
+        #             overwrite = True, vel_unit = 'm/s')
         #make_moments(filename = f"{Configuration['FITTING_DIR']}{tmp_stage}/{tmp_stage}.fits", basename = 'tmp_incl', directory = f"{Configuration['FITTING_DIR']}{tmp_stage}/",\
         #             moments = [0],level = 3.*Configuration['NOISE'], \
         #             overwrite = True, log= Configuration, vel_unit = 'm/s')
@@ -629,11 +635,22 @@ Checking the central flux in a box with size of {Configuration['BEAM_IN_PIXELS']
 
 
     # extract a PV-Diagram
+    messages = extract_pv(cube = Cube,\
+                overwrite = False,PA=pa[0],center=[ra,dec,v_app*1000.], convert = 1000.,\
+                log = True,silent = True,\
+                finalsize = [int(round(Configuration['SIZE_IN_BEAMS'][0]*Configuration['BEAM'][0]/np.mean([abs(header['CDELT1']),abs(header['CDELT2'])])*1.25+header['NAXIS1']*0.2)),
+                                    int(round(z_max-z_min)+10.)],   
+                output_directory = f"{Configuration['FITTING_DIR']}Sofia_Output",\
+                output_name =f"{Configuration['SOFIA_BASENAME']}_sofia_xv.fits")
+    sf.print_log(messages,Configuration,case=["verbose"])
+    #PV = fits.open(f"{Configuration['FITTING_DIR']}/Sofia_Output/{Configuration['SOFIA_BASENAME']}_sofia_xv.fits")
+    '''
     if not os.path.exists(f"{Configuration['FITTING_DIR']}/Sofia_Output/{Configuration['SOFIA_BASENAME']}_sofia_xv.fits"):
         PV =extract_pv(Configuration,Cube, pa[0], center=[ra,dec,v_app*1000.], convert = 1000.,
                        finalsize = [int(round(Configuration['SIZE_IN_BEAMS'][0]*Configuration['BEAM'][0]/np.mean([abs(header['CDELT1']),abs(header['CDELT2'])])*1.25+header['NAXIS1']*0.2)),
                                     int(round(z_max-z_min)+10.)])
         fits.writeto(f"{Configuration['FITTING_DIR']}/Sofia_Output/{Configuration['BASE_NAME']}_sofia_xv.fits",PV[0].data,PV[0].header)
+    '''
     Cube.close()
     Initial_Parameters = {}
     Initial_Parameters['XPOS'] = [ra,sf.set_limits(abs(err_x*header['CDELT1']),0.1/3600.*Configuration['BEAM'][0],3./3600.*Configuration['BEAM'][0] )]
@@ -1346,7 +1363,7 @@ def sofia(Configuration, Fits_Files):
                 Configuration['SOFIA_THRESHOLD'] -= 1
             else:
                 clean_after_sofia(Configuration)
-                log_statement = f'''RUN_SOFIA: We did not find a source above a threshold of {threshold}.
+                log_statement = f'''RUN_SOFIA: We did not find a source above a threshold of {Configuration['SOFIA_THRESHOLD']}.
 {"":8s}RUN_SOFIA: We cannot lower the threshold lower as the risk of fitting noise becomes too high.
 {"":8s}Continuing to the next galaxy.
 '''
@@ -1403,14 +1420,18 @@ def tirshaker_call(Configuration):
 
     final_FAT_file= f"{Configuration['FITTING_DIR']}{Configuration['USED_FITTING']}/{Configuration['USED_FITTING']}.def"
 
-    Tirific_Template = sf.tirific_template(filename = final_FAT_file \
-                    )
+    Tirific_Template = sf.tirific_template(filename = final_FAT_file)
     #Change the name and run only 2 LOOPS
     Tirific_Template['RESTARTNAME']= f"restart_Error_Shaker.txt"
     Tirific_Template['INSET'] = f"../{Tirific_Template['INSET']}"
     Tirific_Template['TIRDEF']= f"Error_Shaker_Out.def"
     Tirific_Template['LOOPS'] = '1'
-
+     #Some parameters are stripped by tirific so to make sure they are always there we add theif not present
+    if 'GR_CONT' not in Tirific_Template:
+        Tirific_Template['GR_CONT']=' '
+    if 'RESTARTID' not in Tirific_Template:
+        Tirific_Template.insert('GR_CONT','RESTARTID','0')
+    
     outfilename = 'Error_Shaker.def'
     outfileprefix = 'Error_Shaker'
 

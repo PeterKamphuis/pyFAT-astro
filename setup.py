@@ -15,6 +15,7 @@ requirements = [
     'matplotlib',
     'future-fstrings',
     'psutil',
+    'make-moments>=1.0.0'
     'importlib_resources>=3.3.0',
     'importlib_metadata',
 ]

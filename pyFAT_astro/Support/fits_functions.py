@@ -4,9 +4,9 @@ from astropy.io import fits
 from astropy.wcs import WCS
 from datetime import datetime
 from shutil import copyfile
-from pyFAT_astro.Support.fat_errors import FunctionCallError,BadHeaderError,\
-                                        BadCubeError,BadMaskError
+from pyFAT_astro.Support.fat_errors import FunctionCallError,BadCubeError,BadMaskError
 import pyFAT_astro.Support.support_functions as sf
+from make_moments.functions import moments
 
 #from pyFAT_astro.Support.read_functions import obtain_border_pix
 import pyFAT_astro
@@ -38,7 +38,18 @@ and to have decent signal noise
         chan_map,header=mask[0].header,overwrite = True)
     mask.close()
     if Configuration['SOFIA_RAN']:
-        make_moments(Configuration, Fits_Files,fit_type='Generic_Initialize',vel_unit = 'm/s')
+        sf.print_log('CHECK_MASK: Creating Sofia Moments',Configuration,case=['verbose'])
+        messages = moments(filename =  f"{Configuration['FITTING_DIR']}{Fits_Files['FITTING_CUBE']}",\
+                        mask =  f"{Configuration['FITTING_DIR']}/{Fits_Files['MASK']}",\
+                        overwrite = True, velocity_unit= 'm/s',\
+                        debug = Configuration['DEBUG'], log=True,\
+                        output_directory =   f"{Configuration['FITTING_DIR']}/Sofia_Output",\
+                        output_name = f"{Configuration['BASE_NAME']}")
+        sf.print_log(messages,Configuration,case=['verbose'])
+        
+    
+    #moments()
+        #make_moments(Configuration, Fits_Files,fit_type='Generic_Initialize',vel_unit = 'm/s')
 
 check_mask.__doc__ =f'''
  NAME:
@@ -124,7 +135,7 @@ check_mask_sources.__doc__ =f'''
  NOTE:
 '''
 # Create a cube suitable for FAT
-def create_fat_cube(Configuration, Fits_Files,sofia_catalogue=False,\
+def create_fat_cube(Configuration, Fits_Files = None,sofia_catalogue=False,\
         id='No default',name='No default'):
     Configuration['PREPARATION_TIME'][0] = datetime.now()
     #First get the cubes
@@ -332,171 +343,6 @@ cutout_cube.__doc__ =f'''
 
  OUTPUTS:
     the cut cube is written to disk.
-
- OPTIONAL OUTPUTS:
-
- PROCEDURES CALLED:
-    Unspecified
-
- NOTE:
-'''
-
-# Extract a PV-Diagrams
-def extract_pv(Configuration,cube_in,angle,center= None,finalsize=None,convert=-1):
-    if center is None:
-        center=[-1,-1,-1]
-    if finalsize is None:
-        finalsize=[-1,-1]
-    sf.print_log(f'''EXTRACT_PV: We are the extraction of a PV-Diagram
-{'':8s} PA = {angle}
-{'':8s} center = {center}
-{'':8s} finalsize = {finalsize}
-{'':8s} convert = {convert}
-''', Configuration, case = ['debug_start'])
-
-
-    cube = copy.deepcopy(cube_in)
-    hdr = copy.deepcopy(cube[0].header)
-    TwoD_hdr= copy.deepcopy(cube[0].header)
-    data = copy.deepcopy(cube[0].data)
-    #Because astro py is even dumber than Python
-    try:
-        if hdr['CUNIT3'].lower() == 'km/s':
-            hdr['CUNIT3'] = 'm/s'
-            hdr['CDELT3'] = hdr['CDELT3']*1000.
-            hdr['CRVAL3'] = hdr['CRVAL3']*1000.
-        elif hdr['CUNIT3'].lower() == 'm/s':
-            hdr['CUNIT3'] = 'm/s'
-    except KeyError:
-        hdr['CUNIT3'] = 'm/s'
-    if center[0] == -1:
-        center = [hdr['CRVAL1'],hdr['CRVAL2'],hdr['CRVAL3']]
-        xcenter,ycenter,zcenter = hdr['CRPIX1'],hdr['CRPIX2'],hdr['CRPIX3']
-    else:
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            coordinate_frame = WCS(hdr)
-        xcenter,ycenter,zcenter = coordinate_frame.wcs_world2pix(center[0], center[1], center[2], 1.)
-
-    nz, ny, nx = data.shape
-    if finalsize[0] != -1:
-        if finalsize[1] >nz:
-            finalsize[1] = nz
-        if finalsize[0] > nx:
-            finalsize[0] = nx
-    # if the center is not set assume the crval values
-
-    sf.print_log(f'''EXTRACT_PV: The shape of the output
-{'':8s} nz = {nz}
-{'':8s} ny = {ny}
-{'':8s} nx = {nx}
-''', Configuration,case=['verbose'])
-    x1,x2,y1,y2 = sf.obtain_border_pix(Configuration,angle,[xcenter,ycenter])
-    linex,liney,linez = np.linspace(x1,x2,nx), np.linspace(y1,y2,nx), np.linspace(0,nz-1,nz)
-    #This only works when ny == nx hence nx is used in liney
-    new_coordinates = np.array([(z,y,x)
-                        for z in linez
-                        for y,x in zip(liney,linex)
-                        ],dtype=float).transpose().reshape((-1,nz,nx))
-    #spatial_resolution = abs((abs(x2-x1)/nx)*np.sin(np.radians(angle)))+abs(abs(y2-y1)/ny*np.cos(np.radians(angle)))
-    PV = ndimage.map_coordinates(data, new_coordinates,order=1)
-    if hdr['CDELT1'] < 0:
-        PV = PV[:,::-1]
-
-    if finalsize[0] == -1:
-        # then lets update the header
-        # As python is stupid making a simple copy will mean that these changes are still applied to hudulist
-        TwoD_hdr['NAXIS2'] = nz
-        TwoD_hdr['NAXIS1'] = nx
-
-        TwoD_hdr['CRPIX2'] = hdr['CRPIX3']
-        TwoD_hdr['CRPIX1'] = xcenter+1
-    else:
-        zstart = sf.set_limits(int(zcenter-finalsize[1]/2.),0,int(nz))
-        zend = sf.set_limits(int(zcenter+finalsize[1]/2.),0,int(nz))
-        xstart = sf.set_limits(int(xcenter-finalsize[0]/2.),0,int(nx))
-        xend = sf.set_limits(int(xcenter+finalsize[0]/2.),0,int(nx))
-
-        PV =  PV[zstart:zend, xstart:xend]
-        TwoD_hdr['NAXIS2'] = int(finalsize[1])
-        TwoD_hdr['NAXIS1'] = int(finalsize[0])
-        TwoD_hdr['CRPIX2'] = hdr['CRPIX3']-int(nz/2.-finalsize[1]/2.)
-        TwoD_hdr['CRPIX1'] = int(finalsize[0]/2.)+1
-
-    if convert !=-1:
-        TwoD_hdr['CRVAL2'] = hdr['CRVAL3']/convert
-        TwoD_hdr['CDELT2'] = hdr['CDELT3']/convert
-    else:
-        TwoD_hdr['CRVAL2'] = hdr['CRVAL3']
-        TwoD_hdr['CDELT2'] = hdr['CDELT3']
-    TwoD_hdr['CTYPE2'] = hdr['CTYPE3']
-    try:
-        if hdr['CUNIT3'].lower() == 'm/s' and convert == 1000. :
-            TwoD_hdr['CDELT2'] = hdr['CDELT3']/1000.
-            TwoD_hdr['CRVAL2'] = hdr['CRVAL3']/1000.
-            TwoD_hdr['CUNIT2'] = 'km/s'
-            del (TwoD_hdr['CUNIT3'])
-        elif  convert != -1:
-            del (TwoD_hdr['CUNIT3'])
-            try:
-                del (TwoD_hdr['CUNIT2'])
-            except KeyError:
-                pass
-        else:
-            TwoD_hdr['CUNIT2'] = hdr['CUNIT3']
-            del (TwoD_hdr['CUNIT3'])
-    except KeyError:
-        sf.print_log(f'''EXTRACT_PV: We could not find units in the header for the 3rd axis.
-''', Configuration)
-    del (TwoD_hdr['CRPIX3'])
-    del (TwoD_hdr['CRVAL3'])
-    del (TwoD_hdr['CDELT3'])
-    del (TwoD_hdr['CTYPE3'])
-    del (TwoD_hdr['NAXIS3'])
-    TwoD_hdr['NAXIS'] = 2
-    TwoD_hdr['CRVAL1'] = 0.
-    #Because we used nx in the linspace for liney we also use it here
-    TwoD_hdr['CDELT1'] = np.sqrt(((x2-x1)*abs(hdr['CDELT1'])/nx)**2+((y2-y1)*abs(hdr['CDELT2'])/nx)**2)*3600.
-
-    TwoD_hdr['CTYPE1'] = 'OFFSET'
-    TwoD_hdr['CUNIT1'] = 'ARCSEC'
-    TwoD_hdr['HISTORY'] = f'EXTRACT_PV: PV diagram extracted with angle {angle} and center {center}'
-    TwoD_hdr['DRVAL1'] = f'{center[0]}+{center[1]}'
-    TwoD_hdr['DRVAL2'] = f'{center[2]}'
-
-    # Then we change the cube and rteturn the PV construct
-    cube[0].header = TwoD_hdr
-    cube[0].data = PV
-
-    return cube
-extract_pv.__doc__ = '''
- NAME:
-    extract_pv
-
- PURPOSE:
-    extract a PV diagram from a cube object. Angle is the PA and center the central location. The profile is extracted over the full length of the cube and afterwards cut back to the finalsize.
-
- CATEGORY:
-     fits_functions
-
- INPUTS:
-    Configuration = Standard FAT Configuration
-    cube_in = is a fits cube object
-    angle = Pa of the slice
-
- OPTIONAL INPUTS:
-    center = [-1,-1,-1]
-    the central location of the slice in WCS map_coordinates [RA,DEC,VSYS], default is the CRVAL values in the header
-
-    finalsize = [-1,-1,-1]
-    final size of the PV-diagram in pixels, default is no cutting
-
-    convert=-1
-    conversion factor for velocity axis, default no conversion
-
- KEYWORD PARAMETERS:
-
- OUTPUTS:
 
  OPTIONAL OUTPUTS:
 
@@ -743,157 +589,6 @@ optimized_cube.__doc__ =f'''
 
  OUTPUTS:
     An optimized cube is created and written to disk.
-
- OPTIONAL OUTPUTS:
-
- PROCEDURES CALLED:
-    Unspecified
-
- NOTE:
-'''
-
-def make_moments(Configuration,Fits_Files,fit_type = 'Undefined',
-                 moments = None,overwrite = False, level=None,
-                  vel_unit= None):
-    if moments is None:
-        moments = [0,1,2]
-    sf.print_log(f'''MAKE_MOMENTS: We are starting to create the moment maps.
-''',Configuration, case = ['debug_start'])
-    if fit_type == 'Generic_Initialize':
-        filename = f"{Configuration['FITTING_DIR']}{Fits_Files['FITTING_CUBE']}"
-        basename = f"{Configuration['BASE_NAME']}"
-        directory = f"{Configuration['FITTING_DIR']}/Sofia_Output/"
-        mask_cube = f"{Configuration['FITTING_DIR']}/{Fits_Files['MASK']}"
-    elif fit_type == 'Generic_Final':
-        filename = f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel.fits"
-        basename = 'Finalmodel'
-        directory = f"{Configuration['FITTING_DIR']}/Finalmodel/"
-        mask_cube = f"{Configuration['FITTING_DIR']}/{Fits_Files['MASK']}"
-    else:
-        filename = f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.fits"
-        basename = fit_type
-        directory = f"{Configuration['FITTING_DIR']}{fit_type}"
-        if not level:
-            mask_cube = f"{Configuration['FITTING_DIR']}/{Fits_Files['MASK']}"
-
-    cube = fits.open(filename)
-    if vel_unit:
-        cube[0].header['CUNIT3'] = vel_unit
-    if mask_cube:
-        mask = fits.open(mask_cube)
-        with np.errstate(invalid='ignore', divide='ignore'):
-            cube[0].data[mask[0].data < 0.5] = float('NaN')
-        mask.close()
-    else:
-        if not level:
-            level = 3.*np.mean([np.nanstd(cube[0].data[0:2,:,:]),np.nanstd(cube[0].data[-3:-1,:,:])])
-        with np.errstate(invalid='ignore', divide='ignore'):
-            cube[0].data[cube[0].data < level] = float('NaN')
-    try:
-        if cube[0].header['CUNIT3'].lower().strip() == 'm/s':
-            sf.print_log(f"MAKE_MOMENTS: We convert your m/s to km/s. \n", Configuration, case=['verbose'])
-            cube[0].header['CUNIT3'] = 'km/s'
-            cube[0].header['CDELT3'] = cube[0].header['CDELT3']/1000.
-            cube[0].header['CRVAL3'] = cube[0].header['CRVAL3']/1000.
-        elif cube[0].header['CUNIT3'].lower().strip() == 'km/s':
-            pass
-        else:
-            sf.print_log(f"MAKE_MOMENTS: Your Velocity unit {cube[0].header['CUNIT3']} is weird. Your units could be off", Configuration)
-    except KeyError:
-        sf.print_log(f"MAKE_MOMENTS: Your CUNIT3 is missing, that is bad practice. We'll add a blank one but we're not guessing the value", Configuration)
-        cube[0].header['CUNIT3'] = 'Unknown'
-    #Make a 2D header to use
-    hdr2D = copy.deepcopy(cube[0].header)
-    hdr2D.remove('NAXIS3')
-    hdr2D['NAXIS'] = 2
-    # removing the third axis means we cannot correct for varying platescale, Sofia does so this is and issue so let's not do this
-    hdr2D.remove('CDELT3')
-    hdr2D.remove('CTYPE3')
-    hdr2D.remove('CUNIT3')
-    hdr2D.remove('CRPIX3')
-    hdr2D.remove('CRVAL3')
-
-    # we need a moment 0 for the moment 2 as well
-    if 0 in moments:
-        hdr2D['BUNIT'] = f"{cube[0].header['BUNIT']}*{cube[0].header['CUNIT3']}"
-        moment0 = np.nansum(cube[0].data, axis=0) * cube[0].header['CDELT3']
-        moment0[np.invert(np.isfinite(moment0))] = float('NaN')
-        try:
-            hdr2D['DATAMAX'] = np.nanmax(moment0)
-            hdr2D['DATAMIN'] = np.nanmin(moment0)
-            fits.writeto(f"{directory}/{basename}_mom0.fits",moment0,hdr2D,overwrite = overwrite)
-        except ValueError:
-            sf.print_log(f"MAKE_MOMENTS: Your Moment 0 has bad data and we could not write the moment 0 fits file", Configuration)
-
-
-
-    if 1 in moments or 2 in moments:
-        zaxis = cube[0].header['CRVAL3'] + (np.arange(cube[0].header['NAXIS3'])+1 \
-              - cube[0].header['CRPIX3']) * cube[0].header['CDELT3']
-        c=np.transpose(np.resize(zaxis,[cube[0].header['NAXIS1'],cube[0].header['NAXIS2'],len(zaxis)]),(2,1,0))
-        hdr2D['BUNIT'] = f"{cube[0].header['CUNIT3']}"
-        # Remember Python is stupid so z,y,x
-        with np.errstate(invalid='ignore', divide='ignore'):
-            moment1 = np.nansum(cube[0].data*c, axis=0)/ np.nansum(cube[0].data, axis=0)
-        moment1[np.invert(np.isfinite(moment1))] = float('NaN')
-        try:
-            hdr2D['DATAMAX'] = np.nanmax(moment1)
-            hdr2D['DATAMIN'] = np.nanmin(moment1)
-            if 1 in moments:
-                fits.writeto(f"{directory}/{basename}_mom1.fits",moment1,hdr2D,\
-                    overwrite = overwrite)
-
-        except ValueError:
-            sf.print_log(f"MAKE_MOMENTS: Your Moment 1 has bad data and we could not write the moment 0 fits file", Configuration)
-
-        if 2 in moments:
-            d = c - np.resize(moment1,[len(zaxis),cube[0].header['NAXIS2'],cube[0].header['NAXIS1']])
-            with np.errstate(invalid='ignore', divide='ignore'):
-                moment2 = np.sqrt(np.nansum(cube[0].data*d**2, axis=0)/ np.nansum(cube[0].data, axis=0))
-            moment2[np.invert(np.isfinite(moment1))] = float('NaN')
-            try:
-                hdr2D['DATAMAX'] = np.nanmax(moment2)
-                hdr2D['DATAMIN'] = np.nanmin(moment2)
-                fits.writeto(f"{directory}/{basename}_mom2.fits",\
-                    moment2,hdr2D,overwrite = overwrite)
-
-            except ValueError:
-                sf.print_log(f"MAKE_MOMENTS: Your Moment 1 has bad data and we could not write the moment 0 fits file", Configuration)
-
-    cube.close()
-
-make_moments.__doc__ =f'''
- NAME:
-    make_moments
-
- PURPOSE:
-    Make the moment maps
-
- CATEGORY:
-    fits_functions
-
- INPUTS:
-    Configuration = Standard FAT configuration
-    Fits_Files = Standard FAT dictionary with filenames
-
-
- OPTIONAL INPUTS:
-    fit_type = 'Undefined'
-    type of ftting
-
-    moments = [0,1,2]
-    moment maps to create
-
-    overwrite = False
-    overwrite existing maps
-
-    level=None
-    cutoff level to use, if set the mask will not be used
-
-    vel_unit= none
-    velocity unit of the input cube
-
- OUTPUTS:
 
  OPTIONAL OUTPUTS:
 

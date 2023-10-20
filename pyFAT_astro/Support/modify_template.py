@@ -722,7 +722,7 @@ def fit_arc(Configuration,radii,sm_profile,error, function_to_fit,key ):
     est_mean = np.mean(sm_profile)
 
     if not error.any():
-        error = np.full(len(y),1.)
+        error = np.full(len(sm_profile),1.)
         absolute_sigma = False
     else:
         absolute_sigma = True

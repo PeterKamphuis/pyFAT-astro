@@ -4,7 +4,8 @@
 
 from pyFAT_astro.Support.modify_template import set_model_parameters, set_overall_parameters,\
                                 set_fitting_parameters,get_warp_slope, update_disk_angles
-from pyFAT_astro.Support.fits_functions import extract_pv
+from make_moments.functions import extract_pv                                
+#from pyFAT_astro.Support.fits_functions import extract_pv
 from pyFAT_astro.Support.read_functions import load_basicinfo
 from pyFAT_astro.Support.fat_errors import ProgramError
 import pyFAT_astro.Support.support_functions as sf
@@ -586,7 +587,7 @@ def make_overview_plot(Configuration,Fits_Files ):
 
     center_x = float(FAT_Model[Vars_to_plot.index('XPOS'),0])
     center_y = float(FAT_Model[Vars_to_plot.index('YPOS'),0])
-    print(f'Print this is the center we use {center_x}, {center_y}')
+   
     ax_moment0.text(center_x,center_y,'X', size= 5.,va='center',ha='center', \
                     color='white',zorder=17, transform=ax_moment0.get_transform('world'))
     #ax_moment0.text(center_x,center_y,'X', size= 7.,va='center',ha='center', \
@@ -752,20 +753,29 @@ def make_overview_plot(Configuration,Fits_Files ):
 #__________________------------------------------------------------------------PV Diagram
 
     extract_angle = np.mean(FAT_Model[Vars_to_plot.index('PA'),0:round(len(FAT_Model[Vars_to_plot.index('PA'),:])/2.)])
-    PV = extract_pv(Configuration,cube,extract_angle, \
-                    center = [float(FAT_Model[Vars_to_plot.index('XPOS'),0]),\
+
+    messages = extract_pv(cube = cube,\
+                overwrite = False,PA=extract_angle,\
+                center=  [float(FAT_Model[Vars_to_plot.index('XPOS'),0]),\
                         float(FAT_Model[Vars_to_plot.index('YPOS'),0]),\
-                        float(FAT_Model[Vars_to_plot.index('VSYS'),0]*1000.)], \
-                        convert=1000.)
-    if not os.path.exists(f"{Configuration['FITTING_DIR']}/Finalmodel/{Configuration['BASE_NAME']}_final_xv.fits"):
-        fits.writeto(f"{Configuration['FITTING_DIR']}/Finalmodel/{Configuration['BASE_NAME']}_final_xv.fits",PV[0].data,PV[0].header)
-    PV_model = extract_pv(Configuration,cube_mod,extract_angle, \
-                    center = [float(FAT_Model[Vars_to_plot.index('XPOS'),0]),\
-                    float(FAT_Model[Vars_to_plot.index('YPOS'),0]),\
-                    float(FAT_Model[Vars_to_plot.index('VSYS'),0]*1000.)], \
-                    convert=1000.)
-    if not os.path.exists(f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel_xv.fits"):
-        fits.writeto(f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel_xv.fits",PV_model[0].data,PV_model[0].header)
+                        float(FAT_Model[Vars_to_plot.index('VSYS'),0]*1000.)],\
+                convert= 1000.,log = True,silent = True,\
+                output_directory = f"{Configuration['FITTING_DIR']}Finalmodel",\
+                output_name =f"{Configuration['BASE_NAME']}_final_xv.fits")
+    sf.print_log(messages,Configuration,case=["verbose"])
+    PV = fits.open(f"{Configuration['FITTING_DIR']}/Finalmodel/{Configuration['BASE_NAME']}_final_xv.fits")
+   
+    messages = extract_pv(cube = cube_mod,\
+                overwrite = False,PA=extract_angle,\
+                center=  [float(FAT_Model[Vars_to_plot.index('XPOS'),0]),\
+                        float(FAT_Model[Vars_to_plot.index('YPOS'),0]),\
+                        float(FAT_Model[Vars_to_plot.index('VSYS'),0]*1000.)],\
+                convert= 1000.,log = True,silent = True,\
+                output_directory = f"{Configuration['FITTING_DIR']}/Finalmodel/",\
+                output_name =f"Finalmodel_xv.fits")
+    sf.print_log(messages,Configuration,case=["verbose"])
+    PV_model = fits.open(f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel_xv.fits")
+
 
     ax_PV = plot_PV(Configuration,image=PV, model = PV_model, figure = Overview, \
         location = gs[2:8,8:14],size_factor = size_factor,
