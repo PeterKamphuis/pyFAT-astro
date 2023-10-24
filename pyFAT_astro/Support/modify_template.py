@@ -2515,10 +2515,14 @@ def set_fitting_parameters(Configuration, Tirific_Template, \
     fitting_keys = ['VARY','VARINDX','MODERATE','DELEND','DELSTART','MINDELTA','PARMAX','PARMIN']
 
     if 'INCL' not in initial_estimates:
-        profile = np.array([np.mean([x,y]) for x,y in \
-                    zip(sf.load_tirific(Configuration,Tirific_Template, ['INCL']),\
-                    sf.load_tirific(Configuration,Tirific_Template, [f"INCL_2"]) )],dtype=float)
-        diff = abs(np.max(profile)-np.min(profile))/10.
+        try:
+            profile = np.array([np.mean([x,y]) for x,y in \
+                zip(sf.load_tirific(Configuration,Tirific_Template, ['INCL']),\
+                sf.load_tirific(Configuration,Tirific_Template, [f"INCL_2"]) )],dtype=float)  
+            diff = abs(np.max(profile)-np.min(profile))/10.
+        except ValueError:
+            profile = sf.load_tirific(Configuration,Tirific_Template, ['INCL'],array=True)
+            diff = abs(np.max(profile)-np.min(profile))/10.
         initial_estimates['INCL'] = [profile[0],sf.set_limits(diff,1.,5.)/np.sin(np.radians(profile[0]))]
 
     if parameters_to_adjust[0] == 'NO_ADJUSTMENT':

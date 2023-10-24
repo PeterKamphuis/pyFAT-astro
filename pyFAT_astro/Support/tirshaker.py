@@ -66,6 +66,7 @@ def tirshaker(Configuration, Tirific_Template, outfilename = 'test_out.def', \
 
     allnumbers_out = []
 #Make sure some settings are blank
+   
     Tirific_Template['OUTSET'] = ''
     Tirific_Template['PROGRESSLOG'] = ''
     Tirific_Template['TEXTLOG'] = ''
@@ -93,7 +94,7 @@ def tirshaker(Configuration, Tirific_Template, outfilename = 'test_out.def', \
         *** Tirshaker iteration {i:02d} ***
         ******************************
         ******************************
-''',Configuration)
+''',Configuration, case = ['screen'])
 
     #fortestin
     #    break
@@ -137,7 +138,9 @@ def tirshaker(Configuration, Tirific_Template, outfilename = 'test_out.def', \
         #Current_Template['TIRDEF'] = defname
 
         write_tirific(Configuration,Current_Template, name =f'Error_Shaker/{fit_type}_In.def' )
-        accepted,current_run = sf.run_tirific(Configuration, current_run, stage = 'shaker',fit_type = fit_type)
+        accepted,current_run = sf.run_tirific(Configuration, current_run, \
+                                stage = 'shaker',fit_type = fit_type,\
+                                max_ini_time= int(300*(int(Tirific_Template['INIMODE'])+1)))
         #os.system('tirific deffile= '+inname)
 
         # Read the values of the parameters requested
@@ -150,7 +153,7 @@ def tirshaker(Configuration, Tirific_Template, outfilename = 'test_out.def', \
                 numbers.append([float(x) for x in \
                     sf.load_tirific(Configuration,\
                         f"{Configuration['FITTING_DIR']}Error_Shaker/Error_Shaker_Out.def",\
-                        Variables = [parameter_groups[j][k]],array=True)[0]])
+                        Variables = [parameter_groups[j][k]],array=True)])
                 if parameter_groups[j][k] == 'CONDISP':
                     pass
                 else:
@@ -206,7 +209,7 @@ def tirshaker(Configuration, Tirific_Template, outfilename = 'test_out.def', \
                     median = np.median(np.array(allparamsturned[j][k][l]))
 #                    mad = stats.median_absolute_deviation(np.array(allparamsturned[j][k][l]))
                     # Careful! This involves a scaling by 1.4826 by default as the default scale = 1.4826
-                    madsigma = stats.median_absolute_deviation(np.array(allparamsturned[j][k][l]))
+                    madsigma = stats.median_abs_deviation(np.array(allparamsturned[j][k][l]))
                     average = np.average(np.array(allparamsturned[j][k][l]))
                     # Wow, np.std is the standard deviation using N and not N-1 in the denominator. So one has to use
                     std = np.sqrt(float(len(allparamsturned[j][k][l]))/float(len(allparamsturned[j][k][l])-1))*np.std(np.array(allparamsturned[j][k][l]))

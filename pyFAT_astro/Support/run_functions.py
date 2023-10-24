@@ -297,7 +297,9 @@ def check_inclination(Configuration,Tirific_Template,Fits_Files, \
             Check_Template[key]= f"{' '.join([f'{x:{format}}' for x in vrot])}"
         wf.tirific(Configuration,Check_Template,name = f'{tmp_stage}_In.def')
 
-        accepted,incl_run = sf.run_tirific(Configuration,incl_run, stage = 'incl_check', fit_type=tmp_stage)
+        accepted,incl_run = sf.run_tirific(Configuration,incl_run, stage = 'incl_check',\
+                                fit_type=tmp_stage,\
+                                max_ini_time= int(300*(int(Check_Template['INIMODE'])+1)))
         messages = moments(filename = f"{Configuration['FITTING_DIR']}{tmp_stage}/{tmp_stage}.fits",\
                             mask = f"{Configuration['FITTING_DIR']}/{Fits_Files['MASK']}", moments = [0],\
                             overwrite = True, velocity_unit= 'm/s',\
@@ -885,7 +887,8 @@ we try once more else we break off the fitting. As this sometimes happens due to
             f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}_Iteration_{Configuration['ITERATIONS']}.def",
             full_name=True)
     wf.tirific(Configuration,Tirific_Template,name = f'{fit_type}_In.def')
-    accepted,current_run = sf.run_tirific(Configuration,current_run,stage = stage, fit_type = fit_type)
+    accepted,current_run = sf.run_tirific(Configuration,current_run,stage = stage, fit_type = fit_type,\
+                                max_ini_time= int(300*(int(Tirific_Template['INIMODE'])+1)))
     return accepted,current_run
 
 failed_fit.__doc__ =f'''
@@ -1067,7 +1070,8 @@ def fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run, \
         target = sf.get_system_string(f"{Configuration['LOG_DIRECTORY']}/Smoothed_Input.def")
         os.system(f"cp {source} {target}")
     try:
-        accepted,current_run = sf.run_tirific(Configuration,current_run, stage = stage, fit_type=fit_type)
+        accepted,current_run = sf.run_tirific(Configuration,current_run, stage = stage, fit_type=fit_type,\
+                                max_ini_time= int(300*(int(Tirific_Template['INIMODE'])+1)))
     except TirificOutputError:
         accepted,current_run = failed_fit(Configuration,Tirific_Template,current_run,\
             Fits_Files, stage=stage, fit_type=fit_type)
@@ -1084,7 +1088,8 @@ def fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run, \
             target = sf.get_system_string(f"{Configuration['LOG_DIRECTORY']}/Second_Smoothed_Input.def")
             os.system(f"cp {source} {target}")
         try:
-            accepted,current_run = sf.run_tirific(Configuration,current_run, stage = 'final_os', fit_type=fit_type)
+            accepted,current_run = sf.run_tirific(Configuration,current_run, stage = 'final_os', fit_type=fit_type,\
+                                max_ini_time= int(300*(int(Tirific_Template['INIMODE'])+1)))
         except TirificOutputError:
             accepted,current_run = failed_fit(Configuration,Tirific_Template,\
                 current_run,Fits_Files, stage='final_os', fit_type=fit_type)
@@ -1145,7 +1150,8 @@ def make_full_resolution(Configuration,Tirific_Template,Fits_Files,\
     sf.finish_current_run(Configuration,current_run)
     try:
         accepted,current_run = sf.run_tirific(Configuration,'Not zed', \
-            stage = 'full_res', fit_type=fit_type)
+            stage = 'full_res', fit_type=fit_type,\
+            max_ini_time= int(300*(int(Tirific_Template['INIMODE'])+1)))
     except TirificOutputError:
         accepted,current_run = failed_fit(Configuration,Tirific_Template,\
             'Not Zed', Fits_Files,stage='full_res', fit_type=fit_type)
@@ -1195,7 +1201,8 @@ def one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run):
     #First we run tirific
     try:
         accepted,current_run = sf.run_tirific(Configuration,current_run,\
-            stage = stage, fit_type = fit_type)
+            stage = stage, fit_type = fit_type,\
+            max_ini_time= int(300*(int(Tirific_Template['INIMODE'])+1)))
     except TirificOutputError:
         #exit()
         accepted,current_run = failed_fit(Configuration,Tirific_Template,\
@@ -1408,7 +1415,7 @@ sofia.__doc__ =f'''
 '''
 
 
-def tirshaker_call(Configuration):
+def tirshaker_call(Configuration,Fits_Files):
     # First we make a directory to keep all contained
     sf.update_statistic(Configuration, message= "Starting the Tirshaker call run")
     if not os.path.isdir(f"{Configuration['FITTING_DIR']}/Error_Shaker/"):
@@ -1416,14 +1423,17 @@ def tirshaker_call(Configuration):
 
 
     # Then we open the final file
-    filename = f"{Configuration['FITTING_DIR']}Error_Shaker/Error_Shaker_In.def"
-
+    #filename = f"{Configuration['FITTING_DIR']}Error_Shaker/Error_Shaker_In.def"
+   
     final_FAT_file= f"{Configuration['FITTING_DIR']}{Configuration['USED_FITTING']}/{Configuration['USED_FITTING']}.def"
-
     Tirific_Template = sf.tirific_template(filename = final_FAT_file)
     #Change the name and run only 2 LOOPS
     Tirific_Template['RESTARTNAME']= f"restart_Error_Shaker.txt"
-    Tirific_Template['INSET'] = f"../{Tirific_Template['INSET']}"
+    if Configuration['OPTIMIZED']:
+        Tirific_Template['INSET'] = f"../{Fits_Files['OPTIMIZED_CUBE']}"
+    else:
+        Tirific_Template['INSET'] = f"../{Fits_Files['FITTING_CUBE']}"
+   
     Tirific_Template['TIRDEF']= f"Error_Shaker_Out.def"
     Tirific_Template['LOOPS'] = '1'
      #Some parameters are stripped by tirific so to make sure they are always there we add theif not present
@@ -1439,6 +1449,7 @@ def tirshaker_call(Configuration):
     #Configuration['NO_RINGS'] = int(Tirific_Template['NUR'])
     #Configuration['RING_SIZE'] = 1.
     #Configuration['SIZE_IN_BEAMS'] = Configuration['NO_RINGS']-2
+    
     set_fitting_parameters(Configuration, Tirific_Template,stage = 'run_os')
 
     #Write it back to the file
@@ -1463,8 +1474,10 @@ def tirshaker_call(Configuration):
                  variation_type = variation_type, iterations = iterations,
                  random_seed = random_seed, mode = 'mad')
     os.chdir(f"{Configuration['START_DIRECTORY']}")
+   
+    out_name = f"{Configuration['USED_FITTING']}/{Configuration['USED_FITTING']}.def"
 
-    wf.tirific(Configuration,Tirific_Template,name=f"{Configuration['USED_FITTING']}/{Configuration['USED_FITTING']}.def")
+    wf.tirific(Configuration,Tirific_Template,name= out_name)
 
 tirshaker_call.__doc__ =f'''
  NAME:

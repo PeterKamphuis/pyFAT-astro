@@ -49,7 +49,10 @@ class Proper_Dictionary(OrderedDict):
     def __setitem__(self, key, value):
         if key not in self:
             # If it is a new item we only allow it if it is not Configuration or Original_Cube or if we are in setup_configuration
-            function,variable,empty = traceback.format_stack()[-2].split('\n')
+            try:
+                function,variable,empty = traceback.format_stack()[-2].split('\n')
+            except ValueError: 
+                function,variable = traceback.format_stack()[-2].split('\n')
             function = function.split()[-1].strip()
             variable = variable.split('[')[0].strip()
             if variable == 'Original_Configuration' or variable == 'Configuration':
@@ -2315,15 +2318,20 @@ get_system_string.__doc__=f'''
 
  NOTE:
 '''
-def get_tirific_output_names(Configuration,work_dir,deffile):
+def get_tirific_output_names(Configuration,work_dir,deffile,shaker=False):
     print_log(f'''GET_TIRIFIC_OUTPUT_NAMES: Starting the extraction of the output names in {deffile} tot be ran in {work_dir})
 ''',Configuration,case=['debug_start'])
 
     fitsfile,deffile = load_tirific(Configuration,f'{work_dir}/{deffile}' ,\
         Variables=['OUTSET','TIRDEF'])
-    output_fits = f'{work_dir}/{fitsfile[0]}'
     output_deffile = f'{work_dir}/{deffile[0]}'
+    #Tirshakerdoes not produce the fits outset
+    if not shaker:   
+        output_fits = f'{work_dir}/{fitsfile[0]}'
+    else:
+        output_fits = f'{work_dir}/{deffile[0]}'
     return output_fits,output_deffile
+    
 get_tirific_output_names.__doc__=f'''
  NAME:
     get_tirific_output_names
@@ -3313,8 +3321,8 @@ rotateImage.__doc__ =f'''
 
 
 def run_tirific(Configuration, current_run, stage = 'initial',\
-        fit_type = 'Undefined',deffile='Undefined'):
-    print_log(f'''RUN_TIRIFIC: For the galaxy {Configuration['ID']} in directory {Configuration['SUB_DIR']} we are starting a new TiRiFiC.
+        fit_type = 'Undefined',deffile='Undefined',max_ini_time = 600):
+    print_log(f'''RUN_TIRIFIC: For the galaxy {Configuration['ID']} in directory {Configuration['SUB_DIR']} we are starting a RUN_TIRIFIC.
 We are in in stage {stage} and fit_type {fit_type} and have done {Configuration['ITERATIONS']} loops
 ''',Configuration,case=['debug_start'])
     if deffile == 'Undefined':
@@ -3330,11 +3338,14 @@ We are in in stage {stage} and fit_type {fit_type} and have done {Configuration[
     if fit_type == 'Error_Shaker':
         work_dir = os.getcwd()
         restart_file = f"restart_Error_Shaker.txt"
+        shaker = True
     else:
         restart_file = f"{Configuration['LOG_DIRECTORY']}restart_{fit_type}.txt"
         work_dir = Configuration['FITTING_DIR']
+        shaker = False
     #Get the output fits file and def file defined in workdir+ deffile
-    output_fits,output_deffile = get_tirific_output_names(Configuration,work_dir,deffile )
+    output_fits,output_deffile = get_tirific_output_names(Configuration,work_dir,deffile\
+                                ,shaker=shaker )
     # Then if already running change restart file
     if Configuration['TIRIFIC_RUNNING']:
         print_log(f'''RUN_TIRIFIC: We are using an initialized tirific in {Configuration['FITTING_DIR']} with the file {deffile}
@@ -3343,7 +3354,7 @@ We are in in stage {stage} and fit_type {fit_type} and have done {Configuration[
         with open(restart_file,'a') as file:
             file.write("Restarting from previous run \n")
     else:
-        print_log(f'''RUN_TIRIFIC: We are starting a new TiRiFiC in {Configuration['FITTING_DIR']} with the file {deffile}
+        print_log(f'''RUN_TIRIFIC: We are inizializing a new TiRiFiC in {Configuration['FITTING_DIR']} with the file {deffile}
 ''',Configuration)
         with open(restart_file,'w') as file:
             file.write("Initialized a new run \n")
@@ -3402,8 +3413,12 @@ We are in in stage {stage} and fit_type {fit_type} and have done {Configuration[
             #Check that the initialization doesn't take to long
             check = datetime.now()
             diff = (check-initialized).total_seconds()
-            if diff > 600:
-                raise TirificOutputError(f'''10 minutes after initialization the fitting has still not started.
+            if diff > max_ini_time:
+                print_log(f'''RUN_TIRIFIC: After {diff/60.} min we could not find the expected output from the tirific run. 
+running in the directory = {work_dir} 
+and the file deffile = {deffile}                         
+''',Configuration,case=['main','screen'])
+                raise TirificOutputError(f'''{diff/60.} minutes after initialization the fitting has still not started.
 We were running {deffile} and failed to find the output {output_fits} or {output_deffile}.
 ''')
     if Configuration['VERBOSE_SCREEN']:
@@ -3427,7 +3442,7 @@ We were running {deffile} and failed to find the output {output_fits} or {output
                 print(f"\r Waiting for {output_fits}. \n", end = "", flush = True)
                 print_log(f'''RUN_TIRIFIC: we have waited {0.3*wait_counter} seconds for the output of tirific but it is not there yet.
 ''',Configuration)
-        if not  os.path.exists(output_fits) \
+        if not os.path.exists(output_fits) \
             or not  os.path.exists(output_deffile):
             print_log(f'''RUN_TIRIFIC: After 30 seconds we could not find the expected output from the tirific run. We are raising an error for this galaxy.
 ''',Configuration,case=['main','screen'])
@@ -3461,6 +3476,10 @@ run_tirific.__doc__ =f'''
 
     stage = 'initial'
     stage of the fitting process
+
+    max_ini_time = 600
+    maximum time it can take for tirific to initialize 
+    Higher ini times take longer
 
  OUTPUTS:
 
@@ -3598,9 +3617,10 @@ def setup_configuration(cfg):
         cfg.fitting.fixed_parameters=['INCL','PA','SDIS']
         cfg.advanced.max_iterations= 1
         cfg.advanced.loops= 1
+        cfg.advanced.shaker_iterations = 2
         cfg.input.main_directory= f'{cfg.input.main_directory}/FAT_Installation_Check/'
         cfg.output.output_quantity = 0
-        cfg.fitting.fitting_stages = ['Create_FAT_Cube','Run_Sofia','Fit_Tirific_OSC']
+        cfg.fitting.fitting_stages = ['Create_FAT_Cube','Run_Sofia','Fit_Tirific_OSC','Tirshaker']
         cfg.cube_name = 'NGC_2903.fits'
         test_files = ['NGC_2903.fits','ModelInput.def']
         if not os.path.isdir(cfg.input.main_directory):
@@ -4337,6 +4357,7 @@ def tirific_template(filename = ''):
             counter += 1
         else:
             result[key] = str(line.split('=')[1].strip())
+   
     return result
 tirific_template.__doc__ ='''
  NAME:

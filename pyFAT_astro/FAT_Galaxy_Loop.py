@@ -63,7 +63,7 @@ def FAT_Galaxy_Loop(Configuration):
         if Configuration['OUTPUT_QUANTITY'] != 5:
             if 'tirshaker' in Configuration['FITTING_STAGES']:
                 runf.tirshaker_call(
-                    Configuration)
+                    Configuration,Fits_Files)
 
             Configuration['FINAL_COMMENT'] = 'The fit has converged succesfully'
 
@@ -303,7 +303,7 @@ def MP_Fitting_Loop(input,timing_lock,catalogue_lock):
         if Configuration['OUTPUT_QUANTITY'] != 5:
             if 'tirshaker' in Configuration['FITTING_STAGES']:
                 runf.tirshaker_call(
-                    Configuration)
+                    Configuration,Fits_Files)
 
             Configuration['FINAL_COMMENT'] = 'The fit has converged succesfully'
 

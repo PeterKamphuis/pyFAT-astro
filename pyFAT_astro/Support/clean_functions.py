@@ -573,7 +573,7 @@ def finish_galaxy(Configuration,current_run = 'Not initialized',\
         sf.print_log(log_statement,Configuration, case = ['main','screen'])
         sf.print_log(error_message,Configuration, case = ['main','screen'])
 
-        if exiting:
+        if exiting != None:
             with open(Configuration['OUTPUTLOG'],'a') as log_file:
                 traceback.print_exception(type(exiting),exiting,exiting.__traceback__,file=log_file)
             traceback.print_exception(type(exiting),exiting,exiting.__traceback__)
@@ -582,7 +582,7 @@ def finish_galaxy(Configuration,current_run = 'Not initialized',\
             Configuration['FINAL_COMMENT'] = f"The code crashed while fitting this galaxy please check it's log."
             Configuration['OUTPUT_QUANTITY'] = 5
         else:
-            if exiting:
+            if exiting != None:
                 sys.exit(1)
             else:
                 Configuration['ACCEPTED'] = False
@@ -604,7 +604,7 @@ def finish_galaxy(Configuration,current_run = 'Not initialized',\
         if any([True if 'fit_' in x else False for x in Configuration['FITTING_STAGES']]):
             if not 'Fit_Make_Your_Own' in  Configuration['USED_FITTING']:
                 sf.create_directory('Finalmodel',Configuration['FITTING_DIR'])
-                if 'tirshaker' not in Configuration['FITTING_STAGES'] and not Configuration['INSTALLATION_CHECK']:
+                if 'tirshaker' not in Configuration['FITTING_STAGES']:
                     transfer_errors(Configuration,fit_type=Configuration['USED_FITTING'])
                 linkname = f"../{Configuration['USED_FITTING']}/{Configuration['USED_FITTING']}"
                 os.symlink(f"{linkname}.fits",f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel.fits")
@@ -717,9 +717,7 @@ def transfer_errors(Configuration,fit_type='Undefined'):
         Tirific_Template.insert(parameter,f"# {parameter}_ERR",f"{' '.join([f'{x:{format}}' for x in errors[0]])}")
         Tirific_Template.insert(f"{parameter}_2",f"# {parameter}_2_ERR",f"{' '.join([f'{x:{format}}' for x in errors[1]])}")
 
-    Tirific_Template['GR_CONT']=' '
-    Tirific_Template.insert('GR_CONT','RESTARTID','0')
-    Tirific_Template.insert('MINDELTA','DISTANCE',Configuration['DISTANCE'])
+
     # write back to the File
     tirific(Configuration,Tirific_Template, name = f"{fit_type}/{fit_type}.def")
 
