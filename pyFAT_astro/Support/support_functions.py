@@ -1775,7 +1775,7 @@ def get_fit_groups(Configuration,Tirific_Template):
     variation_type = []
     variation = []
     radii,cut_off_limits = sbr_limits(Configuration,Tirific_Template )
-    sbr_standard = np.mean(cut_off_limits) * 5.
+    sbr_standard = np.mean(cut_off_limits) * 5. 
     paramater_standard_variation = {'PA': [10.,'a'],
                                    'INCL': [10.,'a'],
                                    'VROT': [Configuration['CHANNEL_WIDTH']*3.,'a'],

@@ -1468,16 +1468,18 @@ def tirshaker_call(Configuration,Fits_Files):
     iterations = Configuration['SHAKER_ITERATIONS']
     random_seed = 2
     os.chdir(f"{Configuration['FITTING_DIR']}/Error_Shaker/")
-    tirshaker(Configuration,Tirific_Template, outfilename = outfilename,\
+    Tirific_Template_Out  = tirshaker(Configuration,Tirific_Template, outfilename = outfilename,\
                 outfileprefix = outfileprefix, parameter_groups = parameter_groups, \
                 rings = rings, block = block, variation = variation,\
                  variation_type = variation_type, iterations = iterations,
                  random_seed = random_seed, mode = 'mad')
+    
     os.chdir(f"{Configuration['START_DIRECTORY']}")
    
-    out_name = f"{Configuration['USED_FITTING']}/{Configuration['USED_FITTING']}.def"
-
-    wf.tirific(Configuration,Tirific_Template,name= out_name)
+    out_name = f"{Configuration['FITTING_DIR']}/{Configuration['USED_FITTING']}/{Configuration['USED_FITTING']}.def"
+    os.rename(out_name,f"{Configuration['FITTING_DIR']}/{Configuration['USED_FITTING']}/{Configuration['USED_FITTING']}_Original_Errors.def")
+ 
+    wf.tirific(Configuration,Tirific_Template_Out,name= out_name,full_name=True)
 
 tirshaker_call.__doc__ =f'''
  NAME:

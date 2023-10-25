@@ -2,33 +2,23 @@
 """
 Bootstrap errors in tirific, Written by G.I.G Josza.
 """
-import matplotlib.ticker as ticker
-import sys
-import io
+
 import random
 import copy
-import os
 import numpy as np
-from astropy.io import fits
-import matplotlib.pyplot as plt
-import matplotlib as mpl
-import astropy.units as u
-import astropy.constants as c
-import scipy.special as spec
 from scipy.optimize import least_squares
-from matplotlib import colors as mplcolors
 from scipy import stats
 
 from pyFAT_astro.Support.write_functions import tirific as write_tirific
 import pyFAT_astro.Support.support_functions as sf
-import pyFAT_astro
 from datetime import datetime
 #
 #tirshaker
-def tirshaker(Configuration, Tirific_Template, outfilename = 'test_out.def', \
+def tirshaker(Configuration, Tirific_Template_In, outfilename = 'test_out.def', \
               outfileprefix = 'tirsh_', parameter_groups = None, rings = None,\
               block = None, variation = None, variation_type = None, iterations = 0, \
               random_seed = 0, mode = 'mad',fit_type='Error_Shaker'):
+    Tirific_Template= copy.deepcopy(Tirific_Template_In)
     Configuration['TIRSHAKER_TIME'][0] = datetime.now()
     if parameter_groups is None:
         parameter_groups = []
@@ -95,25 +85,6 @@ def tirshaker(Configuration, Tirific_Template, outfilename = 'test_out.def', \
         ******************************
         ******************************
 ''',Configuration, case = ['screen'])
-
-    #fortestin
-    #    break
-
-        # Find a name for a logfile and an output.def file
-        #inname = 'blatirshin'
-        #while os.path.exists(inname):
-        #    inname = 'blatirshin_'+''.join(random.choice('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWxyz') for i in range(6))
-
-        #logname = 'blatirshlog'
-        #while os.path.exists(logname):
-        #    logname = 'blatirshlog_'+''.join(random.choice('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWxyz') for i in range(6))
-
-        #defname = 'blatirshdef'
-        #while os.path.exists(defname):
-        #    defname = 'blatirshdef_'+''.join(random.choice('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWxyz') for i in range(6))
-
-        # Now random-generate the replacement for the numbers
-
         for j in range(len(parameter_groups)):
             if block[j]:
                 variations = [variation[j]*random.uniform(-1.,1.)]*len(rings[j])
@@ -131,18 +102,11 @@ def tirshaker(Configuration, Tirific_Template, outfilename = 'test_out.def', \
                         current_list[rings[j][l]-1] = current_list[rings[j][l]-1]*(1.+variations[l])
                 format = sf.set_format(parameter_groups[j][k])
                 Current_Template[parameter_groups[j][k]] = ' '.join([f'{x:{format}}' for x in current_list])
-
-
-
-        #Current_Template['LOGNAME'] = logname
-        #Current_Template['TIRDEF'] = defname
-
         write_tirific(Configuration,Current_Template, name =f'Error_Shaker/{fit_type}_In.def' )
         accepted,current_run = sf.run_tirific(Configuration, current_run, \
                                 stage = 'shaker',fit_type = fit_type,\
                                 max_ini_time= int(300*(int(Tirific_Template['INIMODE'])+1)))
-        #os.system('tirific deffile= '+inname)
-
+     
         # Read the values of the parameters requested
 
         allnumbers_out_part = []
@@ -163,14 +127,7 @@ def tirshaker(Configuration, Tirific_Template, outfilename = 'test_out.def', \
             allnumbers_out_part.append(numbers)
         allnumbers_out.append(allnumbers_out_part)
 
-        # Now remove the files
-        #os.remove(inname)
-        #os.remove(logname)
-        #os.remove(defname)
-
-    #allnumbers_out = [[[[8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0], [36.0, 37.0, 38.0, 39.0, 40.0, 41.0, 42.0]], [[2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0], [22.0, 23.0, 24.0, 25.0, 26.0, 27.0, 28.0]], [[1e-05, 1e-05, 1e-05, 1e-05, 1e-05, 1e-05, 1e-05], [1e-05, 1e-05, 1e-05, 1e-05, 1e-05, 1e-05, 1e-05]]],
-    #                 [[[9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0], [36.0, 37.0, 38.0, 39.0, 40.0, 41.0, 42.0]], [[2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0], [22.0, 23.0, 24.0, 25.0, 26.0, 27.0, 28.0]], [[1e-05, 1e-05, 1e-05, 1e-05, 1e-05, 1e-05, 1e-05], [1e-05, 1e-05, 1e-05, 1e-05, 1e-05, 1e-05, 1e-05]]]]
-
+    
     # Turn around the array, this could probably have been done above, but well...
     allparamsturned = []
     for j in range(len(allnumbers_in)):
@@ -196,16 +153,7 @@ def tirshaker(Configuration, Tirific_Template, outfilename = 'test_out.def', \
             for l in range(len(allnumbers_in[j][k])):
                 # Attempt to use mad statistics for this
                 if mode == 'mad':
-#                    allparamsturned[j][k][l] = [1,2,3,1,2,3,1,2,3,1,2,3]
-#                    meani = 0
-#                    for ki in allparamsturned[j][k][l]:
-#                        meani += float(ki)
-#                    meani = meani/float(len(allparamsturned[j][k][l]))
-#                    stdi = 0
-#                    for ki in allparamsturned[j][k][l]:
-#                        stdi += (meani-float(ki))*(meani-float(ki))
-#                    stdi = np.sqrt(stdi/(len(allparamsturned[j][k][l])-1))
-#                    print('{}+-{}'.format(meani, stdi))
+
                     median = np.median(np.array(allparamsturned[j][k][l]))
 #                    mad = stats.median_absolute_deviation(np.array(allparamsturned[j][k][l]))
                     # Careful! This involves a scaling by 1.4826 by default as the default scale = 1.4826
@@ -245,6 +193,7 @@ def tirshaker(Configuration, Tirific_Template, outfilename = 'test_out.def', \
     write_tirific(Configuration,Tirific_Template, name =f'Error_Shaker/{outfilename}' )
     Configuration['TIRIFIC_RUNNING'] = original_running
     Configuration['TIRSHAKER_TIME'][1] = datetime.now() 
+    return Tirific_Template
 
 tirshaker.__doc__ =f'''
  NAME:
