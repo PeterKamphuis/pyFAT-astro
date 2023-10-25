@@ -231,3 +231,4 @@ __pycache__
 .virtualenv*/
 #workspace
 pyFAT-astro.code-workspace
+pyFAT_astro.code-workspace
