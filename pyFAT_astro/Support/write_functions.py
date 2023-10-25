@@ -1668,6 +1668,8 @@ def tirific(Configuration,Tirific_Template, name = 'tirific.def',\
     try:
         Tirific_Template['RESTARTID'] = str(int(Tirific_Template['RESTARTID'])+1)
     except ValueError:
+        Tirific_Template['RESTARTID'] = 0 
+    except KeyError:
         Tirific_Template['RESTARTID'] = 0
     if full_name:
         file_name = name
