@@ -449,24 +449,22 @@ def check_source(Configuration, Fits_Files):
                 elif i == 2:
                     x -= shift; x_min -= shift; x_max -= shift
 
-        if 'run_sofia' in Configuration['FITTING_STAGES']:
-            too_faint,Max_SNR = rf.check_source_brightness(Configuration,Fits_Files)
-            if too_faint:
-                too_faint,Max_moment_SNR = rf.check_source_brightness(Configuration,Fits_Files,\
-                    moment=True)
-                if not too_faint and Configuration['SOFIA_THRESHOLD'] > 3:
-                    Configuration['SOFIA_THRESHOLD']=3
-                    sofia(Configuration, Fits_Files)
-                    no_edge_limit = True
-                elif too_faint:
-                    raise BadSourceError(f'The selected source was deemed to be too faint to process')
-                else:
-                    source_not_ok = False
+       
+        too_faint,Max_SNR = rf.check_source_brightness(Configuration,Fits_Files)
+        if too_faint and 'run_sofia' in Configuration['FITTING_STAGES']:
+            too_faint,Max_moment_SNR = rf.check_source_brightness(Configuration,Fits_Files,\
+                moment=True)
+            if not too_faint and Configuration['SOFIA_THRESHOLD'] > 3:
+                Configuration['SOFIA_THRESHOLD']=3
+                sofia(Configuration, Fits_Files)
+                no_edge_limit = True
+            elif too_faint:
+                raise BadSourceError(f'The selected source was deemed to be too faint to process')
             else:
                 source_not_ok = False
         else:
             source_not_ok = False
-
+     
     Cube = fits.open(f"{Configuration['FITTING_DIR']}{Fits_Files['FITTING_CUBE']}"\
         ,uint = False, do_not_scale_image_data=True,ignore_blank = True,\
          output_verify= 'ignore')
