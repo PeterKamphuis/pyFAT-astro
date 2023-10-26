@@ -111,6 +111,8 @@ class Advanced:
     # The mean SNR required in the source
     source_mean_snr: float = 0.75
     sofia_threshold: int = 5
+    #option to bypass all initial checks on the intial sofia source and simply force the TRM fitting
+    force_fit: bool = False
     # Add the channel dependency, minimum inclination,
 
 

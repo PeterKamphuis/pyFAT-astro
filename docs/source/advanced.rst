@@ -361,6 +361,12 @@ Advanced Keywords
   *int, optional, default=5*
 
   Threshold used in the sofia source finding. This can help to have FAT select the right source. It does not affect the fitting.
+**force_fit**
+
+  *bool, optional, default=False*
+
+  Bypass all initial checks on the source and force pyFAT to fit a TRM regardless of the size of the source.
+  !!!!!!!!!!!!Not fully functional yet!!!!!!!!!!!!!!!
 
 
 

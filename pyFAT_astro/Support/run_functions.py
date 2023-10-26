@@ -449,12 +449,12 @@ def check_source(Configuration, Fits_Files):
                 elif i == 2:
                     x -= shift; x_min -= shift; x_max -= shift
 
-       
+        #We use Max_SNR later on so it always has to be defined
         too_faint,Max_SNR = rf.check_source_brightness(Configuration,Fits_Files)
-        if too_faint and 'run_sofia' in Configuration['FITTING_STAGES']:
+        if too_faint and not Configuration['FORCE_FIT']:
             too_faint,Max_moment_SNR = rf.check_source_brightness(Configuration,Fits_Files,\
                 moment=True)
-            if not too_faint and Configuration['SOFIA_THRESHOLD'] > 3:
+            if not too_faint and Configuration['SOFIA_THRESHOLD'] > 3 and  'run_sofia' in Configuration['FITTING_STAGES']:
                 Configuration['SOFIA_THRESHOLD']=3
                 sofia(Configuration, Fits_Files)
                 no_edge_limit = True
