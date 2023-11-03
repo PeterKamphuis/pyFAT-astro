@@ -1347,7 +1347,7 @@ def find_program(name,search):
             run.stderr.close()
             os.kill(run.pid, signal.SIGKILL)
             found = True
-        except FileNotFoundError:
+        except OSError:
             name = input(f'''You have indicated to use {name} for using {search} but it cannot be found.
 Please provide the correct name : ''')
     return name

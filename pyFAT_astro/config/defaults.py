@@ -42,7 +42,7 @@ class Input:
     channel_dependency: str = 'independent'
     catalogue: Optional[str] = None
     tirific: str = "tirific"  # Command to call tirific
-    sofia2: str = "sofia2"  # Command to call sofia 2
+    sofia2: str = "sofia"  # Command to call sofia 2
     sofia_basename: Optional[str] = None
     # Directory of the existing Sofia output. Only used if the input catalogue is sofia or pre-processed sofia is somewhere
     sofia_dir: Optional[str] = None
@@ -111,6 +111,8 @@ class Advanced:
     # The mean SNR required in the source
     source_mean_snr: float = 0.75
     sofia_threshold: int = 5
+    #option to bypass all initial checks on the intial sofia source and simply force the TRM fitting
+    force_fit: bool = False
     # Add the channel dependency, minimum inclination,
 
 
