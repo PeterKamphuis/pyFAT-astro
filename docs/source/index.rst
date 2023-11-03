@@ -16,4 +16,4 @@ Contents
   Catalogue Setup  <catalogue.rst>
   The Different Stages <stage.rst>
   Advanced Settings <advanced.rst>
-  Copyright <copyright.rst>
+  Copyright <../../LICENSE>
