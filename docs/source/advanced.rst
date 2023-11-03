@@ -1,5 +1,5 @@
 Setting your fit preferences through a yaml file.
-=================================
+=================================================
 
 Introduction
 -------------
@@ -81,7 +81,7 @@ Output Keywords
 
 **new_output**:
 
-  *bool, optional, default = True *
+  *bool, optional, default = True*
 
   Create all output anew. Set this to false in case you are looking for a final catalogue and the fitting got interrupted.
 
@@ -188,10 +188,11 @@ Fitting Keywords
 
 **fixed_parameters**:
 
- *List, optional, default = ['Z0','XPOS','YPOS','VSYS']
+ *List, optional, default = ['Z0','XPOS','YPOS','VSYS']*
 
  A list of the parameters that should stay fixed with radius, i.e. all rings fitted as a single value, in the fitting. The rotation curve (VROT) can not be fixed at the moment. If the surface brightness is fixed it is fitted with a Gaussian after every iterations.
  XPOS, YPOS, and VSYS are always fitted as singular.
+
 **opt_pixel_beam**:
 
   *int, optional, default=4*
@@ -361,6 +362,7 @@ Advanced Keywords
   *int, optional, default=5*
 
   Threshold used in the sofia source finding. This can help to have FAT select the right source. It does not affect the fitting.
+
 **force_fit**
 
   *bool, optional, default=False*
