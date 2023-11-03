@@ -1,4 +1,4 @@
-#The Configuration File
+The Configuration File
 =======================
 
 Introduction
