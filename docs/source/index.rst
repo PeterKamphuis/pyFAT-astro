@@ -8,9 +8,7 @@ Welcome to pyFAT's documentation!
 Contents
 --------
 .. toctree::
-
-
-
+.. mdinclude:: ../../README.md
   Introduction, Installation & Easy use <../../README.md>
   The Configuration File <configuration.rst>
   Catalogue Setup  <catalogue.rst>
