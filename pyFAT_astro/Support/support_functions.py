@@ -591,7 +591,7 @@ def clean_header(Configuration,hdr_in,two_dim=False,mask_file=False):
             print_log(f'''CLEAN_HEADER:
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 Your header did not have a unit for the third axis, that is bad policy.
-{"":8s} We have set it to {hdr['CUNIT3']}. Please ensure that is correct.'
+{"":8s} We have set it to {hdr['CUNIT3']}. Please ensure that this is correct.'
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ''',Configuration)
         if hdr['CUNIT3'].upper() == 'HZ' or hdr['CTYPE3'].upper() == 'FREQ':
