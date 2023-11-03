@@ -2,7 +2,7 @@ Setting your fit preferences through a yaml file.
 =================================
 
 Introduction
---------
+-------------
 
 In comparision to FAT pyFAT delivers much more control over the fitting procedure. This is made possible by the new modular setup and the use of omegaconf for the input and default settings.
 In this page we explain how the fitting in FAT can be adapted by providing a yaml input parameters for pyFAT. An example file with all the settings can be printed by runnning 'pyFAT print_examples=True' after installing pyFAT-astro. This command prints both an example yaml file and an example catalogue input file with the names FAT_defaults.yml and FAT_Input_Catalogue.txt, respectively
@@ -12,7 +12,7 @@ The is divided  in four different sections and has 4 independent keywords. All k
 All these options can also be called directly from the command line when calling pyFAT. For example the number of cores can easily be adapted by calling 'pyFAT fitting.ncpu=5'. In the case of a list the option has to be bracketed in apostrophes, i.e. 'pyFAT "fitting.fitting_stages=[Create_FAT_Cube,Run_Sofia]"'.
 
 Input Keywords
---------
+--------------
 *Specified with input:*
 
 **main_directory**:
@@ -58,7 +58,7 @@ Input Keywords
   Directory of the existing Sofia output. This will only be used if the input catalogue is a sofia catalogue or pre-processed sofia products are sepecified.
 
 Output Keywords
---------
+---------------
 *Specified with output:*
 
 **log_directory**:
@@ -147,7 +147,7 @@ Output Keywords
   Write all log messages to the screen. If set to False screen messages will be minimal, i.e. only start, finish and termination messages in case verbose_log = False. When verbose_log = True important messages go to screen as well.
 
 Fitting Keywords
---------
+----------------
  *Specified with fitting:*
 
 **catalogue_start_id**:
@@ -208,7 +208,7 @@ Fitting Keywords
 
 
 Advanced Keywords
---------
+-----------------
 *Specified with advanced:*
 
 **start_directory**:
@@ -371,7 +371,7 @@ Advanced Keywords
 
 
 Individual Keywords
- --------
+-------------------
 *No specifier*
 
 **ncpu**:
