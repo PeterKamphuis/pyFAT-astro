@@ -11,7 +11,7 @@ Contents
 
 
 
-  Introduction, Installation & Easy use <README.rst>
+  Introduction, Installation & Easy use <../../README.md>
   The Configuration File <configuration.rst>
   Catalogue Setup  <catalogue.rst>
   The Different Stages <stage.rst>
