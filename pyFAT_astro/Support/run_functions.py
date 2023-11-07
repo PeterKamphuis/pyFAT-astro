@@ -15,13 +15,20 @@ from pyFAT_astro.Support.fat_errors import FaintSourceError,BadConfigurationErro
                                               InclinationRunError,SofiaRunError,\
                                               BadSourceError,TirificOutputError,ProgramError
 from pyFAT_astro.Support.tirshaker import tirshaker
-
+from pyFAT_astro import Templates as templates
+from omegaconf import OmegaConf
 from astropy.wcs import WCS
 from astropy.io import fits
 import pyFAT_astro.Support.read_functions as rf
 import pyFAT_astro.Support.support_functions as sf
 import pyFAT_astro.Support.write_functions as wf
 import pyFAT_astro
+
+try:
+    from importlib.resources import open_text as pack_open_txt
+except ImportError:
+    # Try backported to PY<37 `importlib_resources`.
+    from importlib_resources import open_text as pack_open_txt
 
 import os
 import sys
@@ -1412,56 +1419,70 @@ sofia.__doc__ =f'''
  NOTE:
 '''
 
+def set_trm_template(Configuration):
+    directory = f'{Configuration["FITTING_DIR"]}/Error_Shaker/'
+    with pack_open_txt(templates, 'TRM_errors_FAT.yml') as tmp:
+            template = tmp.readlines()
+    with open(f'{directory}/FAT_conf.yml','w') as file:
+        for line in template:
+            file.write(line)
+   
+    trm_template = OmegaConf.load(f'{directory}/FAT_conf.yml')
+    parameters = [x for x in Configuration['MIN_ERROR']]
+    for parameter in parameters:
+        setattr(trm_template.min_errors,parameter,float(Configuration['MIN_ERROR'][parameter][0]))
+    if Configuration['INSTALLATION_CHECK']:
+        trm_template.tirshaker.iterations=2
+        trm_template.tirshaker.individual_loops=2
 
+    trm_template.tirshaker.deffile_in = 'Error_Shaker/Error_Shaker_FAT_Start.def'
+    trm_template.general.directory = f'{Configuration["FITTING_DIR"]}'
+   
+    with open(f'{directory}/FAT_conf.yml','w') as default_write:
+        default_write.write(OmegaConf.to_yaml(trm_template))
+
+    
 def tirshaker_call(Configuration,Fits_Files):
     # First we make a directory to keep all contained
     sf.update_statistic(Configuration, message= "Starting the Tirshaker call run")
+
+    from TRM_errors.main import main as errors_main
+
+   
     if not os.path.isdir(f"{Configuration['FITTING_DIR']}/Error_Shaker/"):
         os.mkdir(f"{Configuration['FITTING_DIR']}/Error_Shaker/")
 
-
     # Then we open the final file
     #filename = f"{Configuration['FITTING_DIR']}Error_Shaker/Error_Shaker_In.def"
-   
+    #Preaper the fat fitting file
     final_FAT_file= f"{Configuration['FITTING_DIR']}{Configuration['USED_FITTING']}/{Configuration['USED_FITTING']}.def"
     Tirific_Template = sf.tirific_template(filename = final_FAT_file)
     #Change the name and run only 2 LOOPS
-    Tirific_Template['RESTARTNAME']= f"restart_Error_Shaker.txt"
     if Configuration['OPTIMIZED']:
-        Tirific_Template['INSET'] = f"../{Fits_Files['OPTIMIZED_CUBE']}"
+        Tirific_Template['INSET'] = f"{Fits_Files['OPTIMIZED_CUBE']}"
     else:
-        Tirific_Template['INSET'] = f"../{Fits_Files['FITTING_CUBE']}"
-   
-    Tirific_Template['TIRDEF']= f"Error_Shaker_Out.def"
-    Tirific_Template['LOOPS'] = '1'
-     #Some parameters are stripped by tirific so to make sure they are always there we add theif not present
-    if 'GR_CONT' not in Tirific_Template:
-        Tirific_Template['GR_CONT']=' '
-    if 'RESTARTID' not in Tirific_Template:
-        Tirific_Template.insert('GR_CONT','RESTARTID','0')
-    
-    outfilename = 'Error_Shaker.def'
-    outfileprefix = 'Error_Shaker'
-
-    #This we need to remove from the actual run
-    #Configuration['NO_RINGS'] = int(Tirific_Template['NUR'])
-    #Configuration['RING_SIZE'] = 1.
-    #Configuration['SIZE_IN_BEAMS'] = Configuration['NO_RINGS']-2
+        Tirific_Template['INSET'] = f"{Fits_Files['FITTING_CUBE']}"
     
     set_fitting_parameters(Configuration, Tirific_Template,stage = 'run_os')
 
     #Write it back to the file
-    wf.tirific(Configuration,Tirific_Template, name =f"Error_Shaker/Error_Shaker_In.def" )
+    wf.tirific(Configuration,Tirific_Template, name =f"Error_Shaker/Error_Shaker_FAT_Start.def" )
+    #setup a yaml file for TRM_errors
+    set_trm_template(Configuration)
+   
 
+    errors_main([f'configuration_file={Configuration["FITTING_DIR"]}/Error_Shaker/FAT_conf.yml'])
+    
+    '''
     #Determine the error block from the last fit settings.
     parameter_groups,rings,block,variation,variation_type = sf.get_fit_groups(Configuration,Tirific_Template)
-    sf.print_log(f'''TIRSHAKER_CALL: We are shaking with the following parameters:
+    sf.print_log(f''TIRSHAKER_CALL: We are shaking with the following parameters:
 {'':8s}groups = {parameter_groups}
 {'':8s}rings = {rings}
 {'':8s}block = {block}
 {'':8s}variation = {variation}
 {'':8s}variation_type = {variation_type}
-''',Configuration,case= ['debug_add'])
+'',Configuration,case= ['debug_add'])
 
     iterations = Configuration['SHAKER_ITERATIONS']
     random_seed = 2
@@ -1473,12 +1494,11 @@ def tirshaker_call(Configuration,Fits_Files):
                  random_seed = random_seed, mode = 'mad')
     
     os.chdir(f"{Configuration['START_DIRECTORY']}")
-   
+    '''
     out_name = f"{Configuration['FITTING_DIR']}/{Configuration['USED_FITTING']}/{Configuration['USED_FITTING']}.def"
     os.rename(out_name,f"{Configuration['FITTING_DIR']}/{Configuration['USED_FITTING']}/{Configuration['USED_FITTING']}_Original_Errors.def")
- 
-    wf.tirific(Configuration,Tirific_Template_Out,name= out_name,full_name=True)
-
+    os.rename(f"{Configuration['FITTING_DIR']}/Error_Shaker/Shaken_Errors.def",out_name)
+  
 tirshaker_call.__doc__ =f'''
  NAME:
     tirshaker
