@@ -1354,7 +1354,7 @@ def set_trm_template(Configuration):
         setattr(trm_template.min_errors,parameter,float(Configuration['MIN_ERROR'][parameter][0]))
     if Configuration['INSTALLATION_CHECK']:
         trm_template.tirshaker.iterations=2
-        trm_template.tirshaker.individual_loops=2
+        trm_template.tirshaker.individual_loops=1
 
     trm_template.tirshaker.deffile_in = 'Error_Shaker/Error_Shaker_FAT_Start.def'
     trm_template.general.directory = f'{Configuration["FITTING_DIR"]}'
