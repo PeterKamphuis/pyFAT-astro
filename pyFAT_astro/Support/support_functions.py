@@ -3618,7 +3618,8 @@ def setup_configuration(cfg):
         cfg.advanced.shaker_iterations = 2
         cfg.input.main_directory= f'{cfg.input.main_directory}/FAT_Installation_Check/'
         cfg.output.output_quantity = 0
-        cfg.fitting.fitting_stages = ['Create_FAT_Cube','Run_Sofia','Fit_Tirific_OSC','Tirshaker']
+        #cfg.fitting.fitting_stages = ['Create_FAT_Cube','Run_Sofia','Fit_Tirific_OSC','Tirshaker']
+        cfg.fitting.fitting_stages = ['Create_FAT_Cube','Run_Sofia','Fit_Tirific_OSC']
         cfg.cube_name = 'NGC_2903.fits'
         cfg.output.debug = False
         cfg.output.timing = True
