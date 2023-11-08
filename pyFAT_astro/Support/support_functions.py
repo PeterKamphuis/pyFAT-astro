@@ -1,6 +1,6 @@
 # -*- coding: future_fstrings -*-
 # This module contains a set of functions and classes that are used in several different Python scripts in the Database.
-import pyFAT_astro
+
 from pyFAT_astro.Support.fat_errors import SupportRunError,SmallSourceError,\
                                               FileNotFoundError,TirificKillError,\
                                               InputError,ProgramError,DefFileError,\
@@ -9,14 +9,14 @@ from pyFAT_astro.Support.fat_errors import SupportRunError,SmallSourceError,\
 
 from pyFAT_astro import Templates as templates
 from collections import OrderedDict #used in Proper_Dictionary
-from inspect import getframeinfo,stack
+from inspect import stack
 from numpy.linalg import LinAlgError
 from scipy.optimize import curve_fit, OptimizeWarning
 from scipy import ndimage
 from scipy.signal import savgol_filter
 from astropy.wcs import WCS
 from astropy.io import fits
-from dataclasses import  asdict
+
 try:
     from importlib.resources import files as import_pack_files
 except ImportError:
@@ -30,8 +30,6 @@ except ImportError:
     from importlib_resources import open_text as pack_open_txt
 import matplotlib.pyplot as plt
 import os
-import sys
-import inspect
 import psutil as psu
 import signal
 import time
@@ -3622,6 +3620,8 @@ def setup_configuration(cfg):
         cfg.output.output_quantity = 0
         cfg.fitting.fitting_stages = ['Create_FAT_Cube','Run_Sofia','Fit_Tirific_OSC','Tirshaker']
         cfg.cube_name = 'NGC_2903.fits'
+        cfg.output.debug = False
+        cfg.output.timing = True
         test_files = ['NGC_2903.fits','ModelInput.def']
         if not os.path.isdir(cfg.input.main_directory):
             os.mkdir(cfg.input.main_directory)

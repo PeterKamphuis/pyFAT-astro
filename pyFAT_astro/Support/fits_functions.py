@@ -9,11 +9,9 @@ import pyFAT_astro.Support.support_functions as sf
 from make_moments.functions import moments
 
 #from pyFAT_astro.Support.read_functions import obtain_border_pix
-import pyFAT_astro
 from scipy import ndimage
 import numpy as np
 import copy
-import shutil
 import warnings
 import os
 

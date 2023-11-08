@@ -6,8 +6,6 @@ from pyFAT_astro.Support.fat_errors import BadCatalogueError, InputError, \
     BadSourceError
 from pyFAT_astro.Support.modify_template import fix_sbr
 import pyFAT_astro.Support.support_functions as sf
-import pyFAT_astro
-
 
 from astropy.io import fits
 from astropy.wcs import WCS
@@ -22,7 +20,6 @@ with warnings.catch_warnings():
     from matplotlib.patches import Ellipse
     import matplotlib.axes as maxes
 import os
-import time
 import copy
 import numpy as np
 try:
@@ -31,9 +28,6 @@ except ImportError:
     # Try backported to PY<37 `importlib_resources`.
     from importlib_resources import open_text as pack_open_txt
 
-
-import shutil
-import traceback
 
 
 from pyFAT_astro import Templates as templates

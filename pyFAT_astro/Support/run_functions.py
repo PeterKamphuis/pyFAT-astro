@@ -12,9 +12,7 @@ from pyFAT_astro.Support.modify_template import write_new_to_template,\
     set_boundary_limits,regularise_warp,set_new_size
 from pyFAT_astro.Support.constants import H_0
 from pyFAT_astro.Support.fat_errors import FaintSourceError,BadConfigurationError,\
-                                              InclinationRunError,SofiaRunError,\
-                                              BadSourceError,TirificOutputError,ProgramError
-from pyFAT_astro.Support.tirshaker import tirshaker
+                                        SofiaRunError,BadSourceError,TirificOutputError
 from pyFAT_astro import Templates as templates
 from omegaconf import OmegaConf
 from astropy.wcs import WCS
@@ -22,7 +20,6 @@ from astropy.io import fits
 import pyFAT_astro.Support.read_functions as rf
 import pyFAT_astro.Support.support_functions as sf
 import pyFAT_astro.Support.write_functions as wf
-import pyFAT_astro
 
 try:
     from importlib.resources import open_text as pack_open_txt
@@ -1343,6 +1340,54 @@ one_step_converge.__doc__ =f'''
  NOTE: This routine sets the Configuration['ACCEPTED']
 '''
 
+def set_trm_template(Configuration):
+    directory = f'{Configuration["FITTING_DIR"]}/Error_Shaker/'
+    with pack_open_txt(templates, 'TRM_errors_FAT.yml') as tmp:
+            template = tmp.readlines()
+    with open(f'{directory}/FAT_conf.yml','w') as file:
+        for line in template:
+            file.write(line)
+   
+    trm_template = OmegaConf.load(f'{directory}/FAT_conf.yml')
+    parameters = [x for x in Configuration['MIN_ERROR']]
+    for parameter in parameters:
+        setattr(trm_template.min_errors,parameter,float(Configuration['MIN_ERROR'][parameter][0]))
+    if Configuration['INSTALLATION_CHECK']:
+        trm_template.tirshaker.iterations=2
+        trm_template.tirshaker.individual_loops=2
+
+    trm_template.tirshaker.deffile_in = 'Error_Shaker/Error_Shaker_FAT_Start.def'
+    trm_template.general.directory = f'{Configuration["FITTING_DIR"]}'
+    trm_template.general.verbose = False 
+    with open(f'{directory}/FAT_conf.yml','w') as default_write:
+        default_write.write(OmegaConf.to_yaml(trm_template))
+set_trm_template.__doc__ =f'''
+ NAME:
+    set_trm_template
+
+ PURPOSE:
+    Set the proper paraemters for running TRM_errors   
+ 
+ CATEGORY:
+    run_functions
+
+ INPUTS:
+    Configuration
+
+ OPTIONAL INPUTS:
+
+
+
+ OUTPUTS:
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
+
 def sofia(Configuration, Fits_Files):
     sf.print_log(f'''RUN_SOFIA: starting sofia run from the template.
 ''',Configuration,case= ['debug_start'])
@@ -1419,28 +1464,6 @@ sofia.__doc__ =f'''
  NOTE:
 '''
 
-def set_trm_template(Configuration):
-    directory = f'{Configuration["FITTING_DIR"]}/Error_Shaker/'
-    with pack_open_txt(templates, 'TRM_errors_FAT.yml') as tmp:
-            template = tmp.readlines()
-    with open(f'{directory}/FAT_conf.yml','w') as file:
-        for line in template:
-            file.write(line)
-   
-    trm_template = OmegaConf.load(f'{directory}/FAT_conf.yml')
-    parameters = [x for x in Configuration['MIN_ERROR']]
-    for parameter in parameters:
-        setattr(trm_template.min_errors,parameter,float(Configuration['MIN_ERROR'][parameter][0]))
-    if Configuration['INSTALLATION_CHECK']:
-        trm_template.tirshaker.iterations=2
-        trm_template.tirshaker.individual_loops=2
-
-    trm_template.tirshaker.deffile_in = 'Error_Shaker/Error_Shaker_FAT_Start.def'
-    trm_template.general.directory = f'{Configuration["FITTING_DIR"]}'
-   
-    with open(f'{directory}/FAT_conf.yml','w') as default_write:
-        default_write.write(OmegaConf.to_yaml(trm_template))
-
     
 def tirshaker_call(Configuration,Fits_Files):
     # First we make a directory to keep all contained
@@ -1472,29 +1495,7 @@ def tirshaker_call(Configuration,Fits_Files):
    
 
     errors_main([f'configuration_file={Configuration["FITTING_DIR"]}/Error_Shaker/FAT_conf.yml'])
-    
-    '''
-    #Determine the error block from the last fit settings.
-    parameter_groups,rings,block,variation,variation_type = sf.get_fit_groups(Configuration,Tirific_Template)
-    sf.print_log(f''TIRSHAKER_CALL: We are shaking with the following parameters:
-{'':8s}groups = {parameter_groups}
-{'':8s}rings = {rings}
-{'':8s}block = {block}
-{'':8s}variation = {variation}
-{'':8s}variation_type = {variation_type}
-'',Configuration,case= ['debug_add'])
 
-    iterations = Configuration['SHAKER_ITERATIONS']
-    random_seed = 2
-    os.chdir(f"{Configuration['FITTING_DIR']}/Error_Shaker/")
-    Tirific_Template_Out  = tirshaker(Configuration,Tirific_Template, outfilename = outfilename,\
-                outfileprefix = outfileprefix, parameter_groups = parameter_groups, \
-                rings = rings, block = block, variation = variation,\
-                 variation_type = variation_type, iterations = iterations,
-                 random_seed = random_seed, mode = 'mad')
-    
-    os.chdir(f"{Configuration['START_DIRECTORY']}")
-    '''
     out_name = f"{Configuration['FITTING_DIR']}/{Configuration['USED_FITTING']}/{Configuration['USED_FITTING']}.def"
     os.rename(out_name,f"{Configuration['FITTING_DIR']}/{Configuration['USED_FITTING']}/{Configuration['USED_FITTING']}_Original_Errors.def")
     os.rename(f"{Configuration['FITTING_DIR']}/Error_Shaker/Shaken_Errors.def",out_name)

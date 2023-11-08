@@ -1,7 +1,6 @@
 # -*- coding: future_fstrings -*-
 # This module contains the main loop over the fitting per galaxy
 
-import copy
 import os
 import pyFAT_astro
 import warnings

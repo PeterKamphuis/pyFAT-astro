@@ -1,5 +1,4 @@
 # -*- coding: future_fstrings -*-
-import pyFAT_astro
 #Define some errors
 class BadCatalogueError(Exception):
     pass

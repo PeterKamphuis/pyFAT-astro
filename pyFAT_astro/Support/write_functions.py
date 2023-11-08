@@ -9,8 +9,6 @@ from make_moments.functions import extract_pv
 from pyFAT_astro.Support.read_functions import load_basicinfo
 from pyFAT_astro.Support.fat_errors import ProgramError
 import pyFAT_astro.Support.support_functions as sf
-import pyFAT_astro
-
 
 import copy
 import numpy as np

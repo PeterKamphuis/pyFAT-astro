@@ -1,7 +1,6 @@
 # -*- coding: future_fstrings -*-
 
 # This is the python version of FAT
-import copy
 import numpy as np
 import os
 import psutil

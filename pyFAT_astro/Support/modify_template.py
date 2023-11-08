@@ -8,14 +8,12 @@ import copy
 from pyFAT_astro.Support.fat_errors import InitializeError,CfluxError,\
     FunctionCallError,BadConfigurationError,FittingError,FaintSourceError
 import pyFAT_astro.Support.support_functions as sf
-import pyFAT_astro
 
 import numpy as np
-import os
 import warnings
 from scipy.optimize import curve_fit, OptimizeWarning
 from scipy.signal import savgol_filter
-from scipy.interpolate import CubicSpline,Akima1DInterpolator
+from scipy.interpolate import CubicSpline
 
 
 

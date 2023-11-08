@@ -2,7 +2,7 @@
 # This module contains a set of functions and classes that are used in several different Python scripts in the Database.
 
 
-import os,signal,sys
+import os,sys
 import numpy as np
 import traceback
 
@@ -11,9 +11,8 @@ from astropy.io import fits
 from make_moments.functions import moments
 from pyFAT_astro.Support.modify_template import get_error
 from pyFAT_astro.Support.write_functions import make_overview_plot,plot_usage_stats,tirific
-from pyFAT_astro.Support.fat_errors import SofiaMissingError
 import pyFAT_astro.Support.support_functions as sf
-import pyFAT_astro
+
 
 class DummyLock():
     def __enter__(self):
