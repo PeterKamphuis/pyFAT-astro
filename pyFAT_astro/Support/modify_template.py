@@ -2217,7 +2217,7 @@ def regularise_warp(Configuration,Tirific_Template, min_error = None, \
             Tirific_Template.insert(key,f"# {key}_ERR",f"{' '.join([f'{x:{format}}' for x in error[2*i,:int(Configuration['NO_RINGS'])]])}")
             Tirific_Template.insert(f"{key}_2",f"# {key}_2_ERR",f"{' '.join([f'{x:{format}}' for x in error[2*i+1,:int(Configuration['NO_RINGS'])]])}")
 
-            sf.print_log(f'''REGULARISE_PROFILE: This has gone to the template.
+            sf.print_log(f'''REGULARISE_WARP: This has gone to the template.
 {'':8s}{key} = {Tirific_Template[key]}
 {'':8s}{key}_2 ={Tirific_Template[f"{key}_2"]}
 {'':8s}# {key}_ERR ={Tirific_Template[f"# {key}_ERR"]}
@@ -3613,7 +3613,7 @@ def set_vrot_fitting(Configuration, stage = 'initial', rotation = None):
     #if there is not values in the center we connect the inner ring to the next ring
     forvarindex = ''
     if Configuration['NO_RINGS'] > 5:
-        if Configuration['EXCLUDE_CENTRAL'] or rotation[0] > 150.:
+        if Configuration['EXCLUDE_CENTRAL']: # Let's remove this for now as from ESO 92_G021 and serveral masssive tests it seems a bad idea or rotation[0] > 150.:
             forvarindex = 'VROT 2 VROT_2 2 '
         if Configuration['OUTER_SLOPE_START'] == NUR:
             if Configuration['NO_RINGS'] > 5:

@@ -3,7 +3,7 @@
 
 
 
-from pyFAT_astro.Support.clean_functions import clean_before_sofia,clean_after_sofia
+from pyFAT_astro.Support.clean_functions import clean_before_sofia,clean_after_sofia,transfer_errors
 from pyFAT_astro.Support.fits_functions import cut_cubes
 from make_moments.functions import extract_pv,moments
 from pyFAT_astro.Support.modify_template import write_new_to_template,\
@@ -17,6 +17,8 @@ from pyFAT_astro import Templates as templates
 from omegaconf import OmegaConf
 from astropy.wcs import WCS
 from astropy.io import fits
+from shutil import copyfile
+
 import pyFAT_astro.Support.read_functions as rf
 import pyFAT_astro.Support.support_functions as sf
 import pyFAT_astro.Support.write_functions as wf
@@ -956,6 +958,10 @@ def fitting_osc(Configuration,Fits_Files,Tirific_Template,Initial_Parameters):
     elif Configuration['INSTALLATION_CHECK']:
         sf.print_log(f'''FITTING_OSC: The Installation_check has run a fit successfully.
 ''',Configuration)
+        fit_type = Configuration['USED_FITTING']
+        source = sf.get_system_string(f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def")
+        target = sf.get_system_string(f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}_Iteration_1.def")
+        copyfile(source, target )
     else:
         Configuration['FINAL_COMMENT'] = 'We could not converge on the extent or centre of the galaxy'
         Configuration['OUTPUT_QUANTITY'] = 5
@@ -1354,11 +1360,14 @@ def set_trm_template(Configuration):
         setattr(trm_template.min_errors,parameter,float(Configuration['MIN_ERROR'][parameter][0]))
     if Configuration['INSTALLATION_CHECK']:
         trm_template.tirshaker.iterations=2
-        trm_template.tirshaker.individual_loops=1
+        trm_template.tirshaker.inimode = 0
+        trm_template.tirshaker.individual_loops=1 
+        trm_template.general.verbose = True
+
 
     trm_template.tirshaker.deffile_in = 'Error_Shaker/Error_Shaker_FAT_Start.def'
     trm_template.general.directory = f'{Configuration["FITTING_DIR"]}'
-    trm_template.general.verbose = False 
+
     with open(f'{directory}/FAT_conf.yml','w') as default_write:
         default_write.write(OmegaConf.to_yaml(trm_template))
 set_trm_template.__doc__ =f'''
@@ -1497,6 +1506,8 @@ def tirshaker_call(Configuration,Fits_Files):
     errors_main([f'configuration_file={Configuration["FITTING_DIR"]}/Error_Shaker/FAT_conf.yml'])
 
     out_name = f"{Configuration['FITTING_DIR']}/{Configuration['USED_FITTING']}/{Configuration['USED_FITTING']}.def"
+    #before copying we should transfer the errors
+    transfer_errors(Configuration,fit_type=Configuration['USED_FITTING'])
     os.rename(out_name,f"{Configuration['FITTING_DIR']}/{Configuration['USED_FITTING']}/{Configuration['USED_FITTING']}_Original_Errors.def")
     os.rename(f"{Configuration['FITTING_DIR']}/Error_Shaker/Shaken_Errors.def",out_name)
   

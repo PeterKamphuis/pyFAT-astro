@@ -4,6 +4,8 @@ general:
   ncpu: -1
   directory: '-'
   multiprocessing: false
+  calc_mode: 'fat'
+  verbose: False
 tirshaker:
   enable: true
   deffile_in: Finalmodel.def
