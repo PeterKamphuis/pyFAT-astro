@@ -864,57 +864,67 @@ def fit_polynomial(Configuration,radii,profile,sm_profile,error, key, \
     sf.print_log(f'''FIT_POLYNOMIAL: For {key} we start at {start_order} because we have {len(radii)} rings of which {fixed} are fixed
 {'':8s} this gves us a maximum order of {max_order}
 ''',Configuration,case = ['debug_add'])
+    found = False
+    while not found:
+        reduced_chi = []
+        order = range(start_order,max_order+1)
 
-    reduced_chi = []
-    order = range(start_order,max_order+1)
+        sf.print_log(f'''FIT_POLYNOMIAL: We will fit the following radii.
+    {'':8s}{radii[st_fit:]}
+    {'':8s} and the following profile:
+    {'':8s}{profile[st_fit:]}
+    {'':8s} weights = {1./error[st_fit:]}
+    ''',Configuration,case = ['debug_add'])
 
-    sf.print_log(f'''FIT_POLYNOMIAL: We will fit the following radii.
-{'':8s}{radii[st_fit:]}
-{'':8s} and the following profile:
-{'':8s}{profile[st_fit:]}
-{'':8s} weights = {1./error[st_fit:]}
-''',Configuration,case = ['debug_add'])
+        #make sure there are no 0. in the errors
+        zero_locations = np.where(error[st_fit:] == 0.)[0]
+        if zero_locations.size > 0.:
+            error[zero_locations+st_fit] = 1./np.nanmax(1./error)
 
-    #make sure there are no 0. in the errors
-    zero_locations = np.where(error[st_fit:] == 0.)[0]
-    if zero_locations.size > 0.:
-        error[zero_locations+st_fit] = 1./np.nanmax(1./error)
+        for ord in order:
+            fit_prof = np.poly1d(np.polyfit(radii[st_fit:],profile[st_fit:],ord,w=1./error[st_fit:]))
 
-    for ord in order:
-        fit_prof = np.poly1d(np.polyfit(radii[st_fit:],profile[st_fit:],ord,w=1./error[st_fit:]))
+            if st_fit > 0.:
+                fit_profile = np.concatenate(([sm_profile[0]],[e for e in fit_prof(radii[st_fit:])]))
+            else:
+                fit_profile = fit_prof(radii)
+            #fit_profile = fit_prof(radii)
 
-        if st_fit > 0.:
-            fit_profile = np.concatenate(([sm_profile[0]],[e for e in fit_prof(radii[st_fit:])]))
-        else:
-            fit_profile = fit_prof(radii)
-        #fit_profile = fit_prof(radii)
+            if key != 'SBR':
+                fit_profile = fix_profile(Configuration, key, fit_profile, Tirific_Template,inner_fix=inner_fix, singular = True,only_inner =only_inner)
+            else:
+                for i in range(len(fit_profile)-5,len(fit_profile)):
+                    if fit_profile[i-1] < fit_profile[i]:
+                        fit_profile[i]=fit_profile[i-1]*0.9
+            red_chi = np.sum((profile[st_fit:]-fit_profile[st_fit:])**2/error[st_fit:])/(len(radii[st_fit:])-ord)
+            #We penailze profiles that go outside the boundaries
 
-        if key != 'SBR':
-            fit_profile = fix_profile(Configuration, key, fit_profile, Tirific_Template,inner_fix=inner_fix, singular = True,only_inner =only_inner)
-        else:
-            for i in range(len(fit_profile)-5,len(fit_profile)):
-                if fit_profile[i-1] < fit_profile[i]:
-                    fit_profile[i]=fit_profile[i-1]*0.9
-        red_chi = np.sum((profile[st_fit:]-fit_profile[st_fit:])**2/error[st_fit:])/(len(radii[st_fit:])-ord)
-        #We penailze profiles that go outside the boundaries
-
-        if np.sum(np.absolute(np.array(boundary_limits,dtype=float))) != 0.:
-                diff = np.sum(np.array([abs(x-sf.set_limits(x,\
-                                                  boundary_limits[0],\
-                                                  boundary_limits[1])) \
-                                        for x in  fit_profile[st_fit:]],dtype = float))
-                if diff > 1.:
-                    red_chi = red_chi*(diff)
-
-        reduced_chi.append(red_chi)
+            if np.sum(np.absolute(np.array(boundary_limits,dtype=float))) != 0.:
+                    diff = np.sum(np.array([abs(x-sf.set_limits(x,\
+                                                    boundary_limits[0],\
+                                                    boundary_limits[1])) \
+                                            for x in  fit_profile[st_fit:]],dtype = float))
+                    if diff > 1.:
+                        red_chi = red_chi*(diff)
+            if red_chi < 1.:
+                red_chi = float('NaN')
+            reduced_chi.append(red_chi)
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore",message="All-NaN axis encountered"\
+                            ,category=RuntimeWarning)
+            if not np.isnan(np.nanmin(reduced_chi)):
+                found = True
+            else:
+                error = error/2.
+            
         #if key in ['VROT'] and Configuration['NO_RINGS'] < 2.5*max_order:
         #    reduced_chi[-1] = reduced_chi[-1]*(ord/Configuration['NO_RINGS'])**2.5
     sf.print_log(f'''FIT_POLYNOMIAL: We have fitted these:
 {'':8s} order = {[x for x in order]}
-{'':8s} reducuced chi = {reduced_chi}
+{'':8s} reduced chi = {reduced_chi}
 ''',Configuration,case = ['debug_add'])
     reduced_chi = np.array(reduced_chi,dtype = float)
-    final_order = order[np.where(np.min(reduced_chi ) == reduced_chi )[0][0]]
+    final_order = order[np.where(np.nanmin(reduced_chi ) == reduced_chi )[0][0]]
 
     sf.print_log(f'''FIT_POLYNOMIAL: We have regularised {key} with a polynomial of order {final_order}.
 ''',Configuration,case=['verbose'])

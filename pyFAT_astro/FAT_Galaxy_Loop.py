@@ -79,6 +79,8 @@ def FAT_Galaxy_Loop(Configuration):
             if Configuration['INSTALLATION_CHECK']:
                 cf.installation_check(
                     Configuration)
+        sf.print_log(f'''FAT_GALAXY_LOOP: This galaxy has succesfully ran through all parts of the fitting
+''', Configuration)
     except Exception as e:
         if e.__class__.__name__ in Configuration['STOP_INDIVIDUAL_ERRORS']:
             Configuration['OUTPUT_QUANTITY'] = 5
@@ -321,6 +323,8 @@ def MP_Fitting_Loop(input,timing_lock,catalogue_lock):
             if Configuration['INSTALLATION_CHECK']:
                 cf.installation_check(
                     Configuration)
+        sf.print_log(f'''FAT_GALAXY_LOOP: This galaxy has succesfully ran through all parts of the fitting
+''', Configuration)
     except Exception as e:
         if e.__class__.__name__ in Configuration['STOP_INDIVIDUAL_ERRORS']:
             Configuration['OUTPUT_QUANTITY'] = 5
