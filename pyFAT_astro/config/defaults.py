@@ -118,7 +118,11 @@ class Advanced:
 
 @dataclass
 class defaults:
-    ncpu: int = len(psutil.Process().cpu_affinity())
+    try:
+        ncpu: int = len(psutil.Process().cpu_affinity())
+    except AttributeError:
+        ncpu: int = psutil.cpu_count()
+
     print_examples: bool = False
     installation_check: bool = False
     cube_name: Optional[str] = None

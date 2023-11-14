@@ -141,8 +141,12 @@ def main(argv):
             print(help_message)
             sys.exit()
         # if we set more cpus than available we limit to the available cpus
-        if cfg.ncpu > len(psutil.Process().cpu_affinity()):
-            cfg.ncpu  = len(psutil.Process().cpu_affinity())
+        try:
+            if cfg.ncpu > len(psutil.Process().cpu_affinity()):
+                cfg.ncpu  = len(psutil.Process().cpu_affinity())
+        except AttributeError:
+            if cfg.ncpu > psutil.cpu_count():
+                cfg.ncpu  = psutil.cpu_count()
 
         #Let's write and input example to the main directory
         if cfg.output.debug:
