@@ -256,7 +256,7 @@ def MP_initialize_sofia(Configuration,timing_lock,catalogue_lock):
                           timing_lock=timing_lock, catalogue_lock = catalogue_lock,
                           exiting=registered_exception)
 
-    Configuration['FAT_PSUPROCESS'] = None
+   
     sofia_output = {'Succes': succes, 'Configuration': Configuration,
                       'catalogue_line': catalogue_line, 'Fits_Files':Fits_Files,
                       'Size': Configuration['SIZE_IN_BEAMS'],
@@ -264,6 +264,7 @@ def MP_initialize_sofia(Configuration,timing_lock,catalogue_lock):
     
     sf.update_statistic(
             Configuration, message="Pause until start Fitting Loop")  
+    Configuration['FAT_PSUPROCESS'] = None
     return sofia_output
 
 
