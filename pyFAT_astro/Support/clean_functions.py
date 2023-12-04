@@ -537,7 +537,7 @@ def finish_galaxy(Configuration,current_run = 'Not initialized',\
         sf.print_log(f'''
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 {"":8s}Your velocity frame is not suitable for Tirific it is CTYPE3 = {Configuration['HDR_VELOCITY']} and should be VELO, FELO or FREQ 
-{"":8s}IF you want to continue to fit with tirific please the cube marked _used , we have kept the correct conversion in the FAT cube
+{"":8s}If you want to continue to fit with tirific please use the cube marked _used , we have kept the correct conversion in the FAT cube
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ''',Configuration, case = ['main','screen'])
         source = f'{Configuration["FITTING_DIR"]}/{Fits_Files["FITTING_CUBE"]}'
@@ -688,6 +688,13 @@ finish_galaxy.__doc__ =f'''
  NOTE: This function should always be followed by a continue statement
 '''
 
+def mod_vrot_incl_err(profile,errors,incl,incl_errors):
+    '''Error up and down have to be exactly the same'''
+    vobs_up = np.sin(np.radians(incl+incl_errors))*\
+                (profile+errors)
+    errors = vobs_up/np.sin(np.radians(incl))-profile
+    return errors
+
 def transfer_errors(Configuration,fit_type='Undefined'):
     sf.print_log(f'''TRANSFER_ERROR: Start.
 ''',Configuration, case = ['debug_start'])
@@ -695,6 +702,8 @@ def transfer_errors(Configuration,fit_type='Undefined'):
     Tirific_Template = sf.tirific_template(filename = f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def")
     variables = ['INCL','PA','VROT','SDIS','SBR','VSYS','XPOS','YPOS','Z0']
     weights = sf.get_ring_weights(Configuration,Tirific_Template)
+    incl_error = None
+    incl = None
     for parameter in variables:
         sf.print_log(f'''TRANSFER_ERROR: Creating errors for {parameter}.
 ''',Configuration, case = ['debug_add'])
@@ -712,6 +721,12 @@ def transfer_errors(Configuration,fit_type='Undefined'):
         errors = get_error(Configuration,sm_profile,profile,parameter,\
             min_error=Configuration['MIN_ERROR'][parameter],\
             apply_max_error = apply_max,weights = weights)
+        if parameter == 'VROT':
+            errors = mod_vrot_incl_err(profile,errors,incl,incl_error)   
+        if parameter == 'INCL':
+            incl_error=errors
+            incl = profile
+
         format = sf.set_format(parameter)
         Tirific_Template.insert(parameter,f"# {parameter}_ERR",f"{' '.join([f'{x:{format}}' for x in errors[0]])}")
         Tirific_Template.insert(f"{parameter}_2",f"# {parameter}_2_ERR",f"{' '.join([f'{x:{format}}' for x in errors[1]])}")
