@@ -1347,25 +1347,16 @@ plot_PV.__doc__ =f'''
 
      NOTE:
 '''
-
-
-def plot_usage_stats(Configuration ):
-    with open(f"{Configuration['LOG_DIRECTORY']}Usage_Statistics.txt") as file:
-        lines = file.readlines()
-
+def read_statistics(Configuration):
     labels = {'FAT': {'label':[], 'Time':[]}, 'Tirific':{'label':[], 'Time':[]}}
     loads = {'FAT':{'CPU':[],'MEM':[],'Time':[]},'Tirific':{'CPU':[],'MEM':[],'Time': []}}
-    try:
-        mpl_fm.fontManager.addfont(Configuration['FONT_FILE'])
-        font_name = mpl_fm.FontProperties(fname=Configuration['FONT_FILE']).get_name()
-    except FileNotFoundError:
-        font_name = 'DejaVu Sans'
-    labelfont = {'family': font_name,
-             'weight': 'normal',
-             'size': 4}
+    with open(f"{Configuration['LOG_DIRECTORY']}Usage_Statistics.txt") as file:
+        lines = file.readlines()
     current_stage = 'Not_Found'
-    current_module = 'Unknown'
+    #current_module = 'Unknown'
     startdate = 0
+    maxCPU = 0.
+    maxMEM= 0.
     for line in lines:
         line = line.strip()
         tmp = line.split(' ')
@@ -1377,6 +1368,7 @@ def plot_usage_stats(Configuration ):
             startdate = date
         diff = date - startdate
         time = diff.total_seconds()/60.
+    
         if line[0] == '#':
             if tmp[1] == 'TIRIFIC:':
 
@@ -1392,145 +1384,90 @@ def plot_usage_stats(Configuration ):
                 elif tmp[2].lower() == 'started':
                     labels['Tirific']['label'].append(f'Started {current_stage}')
                     labels['Tirific']['Time'].append(time)
+            elif tmp[1] == 'MP_FITTING_LOOP:':
+                labels['Tirific']['label'].append(f'Started {tmp[1]}')
+                labels['Tirific']['Time'].append(time)
             else:
-                labels['FAT']['label'].append(f'Starting {tmp[1]}')
-                labels['FAT']['Time'].append(time)
+                if tmp[2].lower() == 'pause':
+                    labels['FAT']['label'].append(f'Pausing FAT')
+                    labels['FAT']['Time'].append(time)
+                else:
+                    labels['FAT']['label'].append(f'Starting {tmp[1]}')
+                    labels['FAT']['Time'].append(time)
         else:
             if tmp[-1].lower() == 'tirific':
                 loads['Tirific']['Time'].append(time)
                 loads['Tirific']['CPU'].append(tmp[4])
+               
                 loads['Tirific']['MEM'].append(tmp[8])
             else:
                 loads['FAT']['Time'].append(time)
                 loads['FAT']['CPU'].append(tmp[4])
                 loads['FAT']['MEM'].append(tmp[8])
+            if float(tmp[4]) > maxCPU:
+                    maxCPU = float(tmp[4])
+            if float(tmp[8]) > maxMEM:
+                    maxMEM = float(tmp[8])
+    return loads,labels,maxCPU,maxMEM
 
+def plot_usage_stats(Configuration ):
+    with open(f"{Configuration['LOG_DIRECTORY']}Usage_Statistics.txt") as file:
+        lines = file.readlines()
+
+    
+    try:
+        mpl_fm.fontManager.addfont(Configuration['FONT_FILE'])
+        font_name = mpl_fm.FontProperties(fname=Configuration['FONT_FILE']).get_name()
+    except FileNotFoundError:
+        font_name = 'DejaVu Sans'
+    labelfont = {'family': font_name,
+             'weight': 'normal',
+             'size': 4}
+    loads,labels,maxCPU, maxMEM = read_statistics(Configuration)
+   
     # Below thanks to P. Serra
     # Make single-PID figures and total figure
     #print(loads['Tirific']['Time'],loads['FAT']['Time'])
     if len(loads['Tirific']['Time']) > 0.:
-        combined_time =  np.sort(np.array(loads['Tirific']['Time']+loads['FAT']['Time'],dtype=float))
-
-        combined_loads ={'Tirific':{'CPU':np.interp(combined_time,np.array(loads['Tirific']['Time'],dtype=float),np.array(loads['Tirific']['CPU'],dtype=float)),\
-                                    'MEM':np.interp(combined_time,np.array(loads['Tirific']['Time'],dtype=float),np.array(loads['Tirific']['MEM'],dtype=float))},\
-                        'FAT':{'CPU':np.interp(combined_time,np.array(loads['FAT']['Time'],dtype=float),np.array(loads['FAT']['CPU'],dtype=float)),\
-                                                    'MEM':np.interp(combined_time,np.array(loads['FAT']['Time'],dtype=float),np.array(loads['FAT']['MEM'],dtype=float))}
-
-        }
-        comb_list= labels['Tirific']['Time']+labels['FAT']['Time']
-        comb_label = labels['Tirific']['label']+labels['FAT']['label']
-
-        labels_times=np.array([x for x, _ in sorted(zip(comb_list, comb_label))],dtype=float)
-        labels_comb = [x for _, x in sorted(zip(comb_list, comb_label))]
-
-        fig, ax1 = plt.subplots(figsize = (8,6))
+        combined_time, combined_loads, labels_times, labels_comb = \
+                create_plot_stats(Configuration,loads,labels)
+          
+        if Configuration['MULTIPROCESSING']:
+            fig, ax = plt.subplots(1,2,sharey=True,figsize = (8,6))
+            ax[0].spines['right'].set_visible(False)
+            ax[1].spines['left'].set_visible(False)
+            ax[0].yaxis.tick_left()
+            ax[0].tick_params(labelright='off')
+            ax[1].yaxis.tick_right()
+          
+           
+            
+        else:
+            fig, ax = plt.subplots(figsize = (8,6))
+           
+            ax = [ax]
         fig.subplots_adjust(left = 0.1, right = 0.9, bottom = 0.3, top = 0.7)
-
-
-        ax1.plot(combined_time,combined_loads['Tirific']['MEM'],'b-',lw=0.5)
-        ax1.plot(combined_time,combined_loads['FAT']['MEM'],'b--',lw=0.5)
-        ax1.set_ylim(0,np.max([combined_loads['Tirific']['MEM'],combined_loads['FAT']['MEM']]) \
-                      +np.max([combined_loads['Tirific']['MEM'],combined_loads['FAT']['MEM']])/10.)
-        ax1.set_ylabel('RAM (Mb) ', color='b')
-        ax1.tick_params(axis='y', labelcolor='b')
-        ax1.set_xlabel('time (min)', color='k',zorder=5)
-        ax2 = ax1.twinx()
-        ax2.plot(combined_time,combined_loads['Tirific']['CPU'],'r-',lw=0.5)
-        ax2.plot(combined_time,combined_loads['FAT']['CPU'],'r--',lw=0.5)
-        #ax2.plot(combined_time,combined_loads['FAT']['CPU'],'r--',lw=0.5)
-        ax2.set_ylabel('CPUs (%)',color='r')
-        ax2miny,ax2maxy = ax2.get_ylim()
-        ax2.tick_params(axis='y', labelcolor='r')
-        last_label = -100
-        label_sep = combined_time[-1]/30.
-        color, linest = '0.5', '--'
-        labelfont = {'family': font_name,
-                 'weight': 'normal',
-                 'size': 6.5}
-        prev_label = ''
-
-        last_label_top = 0.
-        last_label_bottom = 0.
-        #for label,time in zip(labels['Tirific']['label'],labels['Tirific']['Time']):
-        for label,time in zip(labels_comb,labels_times):
-
-            if label in labels['Tirific']['label']:
-                offset = 20.
-                xoffset = 0.05
-                vertical_start = ax2maxy
-                va= 'bottom'
-                ha= 'left'
-                color = 'k'
-                linest = '-'
-            else:
-                offset=-50
-                xoffset = 0.025
-                vertical_start = ax2miny
-                va= 'top'
-                ha='right'
-                color = '0.5'
-                linest = '--'
-
-
-            if (prev_label == 'Initializing tmp_incl_check' or prev_label == 'Ended tmp_incl_check'):
-                if (label != 'Initializing tmp_incl_check' and label != 'Ended tmp_incl_check') or \
-                        time == labels_times[-1]    :
-
-                    if time != labels_times[-1]:
-                        ax2.axvline(x=prev_time, linestyle=linest, color=color, linewidth=0.05)
-                        if label in labels['Tirific']['label']:
-                            last_label = last_label_top = max(prev_time,last_label_top+label_sep)
-                        else:
-                            last_label = last_label_bottom = max(prev_time,last_label_bottom+label_sep)
-                        ax2.text(last_label,vertical_start+offset,prev_label, va=va,ha=ha,rotation= 60, color='black',
-                              bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7,fontdict = labelfont)
-                        ax2.plot([prev_time,last_label+xoffset],[vertical_start,vertical_start+offset],linest,color=color,linewidth=0.05,clip_on=False)
-                    ax2.axvline(x=time, linestyle=linest, color=color, linewidth=0.05)
-                    if label in labels['Tirific']['label']:
-                        last_label = last_label_top = max(time,last_label_top+label_sep)
-                    else:
-                        last_label = last_label_bottom = max(time,last_label_bottom+label_sep)
-                    ax2.text(last_label,vertical_start+offset,label, va=va,ha=ha,rotation= 60, color='black',
-                          bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7,fontdict = labelfont)
-                    ax2.plot([time,last_label+xoffset],[vertical_start,vertical_start+offset],linest,color=color,linewidth=0.05,clip_on=False)
-                else:
-                    prev_time = time
-            elif (prev_label == 'Initializing Error_Shaker' or prev_label == 'Ended Error_Shaker' or prev_label == 'Started Error_Shaker'):
-                if (label != 'Initializing Error_Shaker' and label != 'Ended Error_Shaker' and  label != 'Started Error_Shaker') or \
-                        time == labels_times[-1]:
-
-                    #ax2.axvline(x=prev_time, linestyle=linest, color=color, linewidth=0.05)
-                    #last_label = max(prev_time,last_label+label_sep)
-                    #ax2.text(last_label,ax2maxy+20.,prev_label, va='bottom',ha='left',rotation= 60, color='black',
-                    #      bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7,fontdict = labelfont)
-                    #ax2.plot([prev_time,last_label+0.1],[ax2maxy,ax2maxy+20.],linest,color=color,linewidth=0.05,clip_on=False)
-                    ax2.axvline(x=time, linestyle=linest, color=color, linewidth=0.05)
-                    if label in labels['Tirific']['label']:
-                        last_label = last_label_top = max(time,last_label_top+label_sep)
-                    else:
-                        last_label = last_label_bottom = max(time,last_label_bottom+label_sep)
-                    ax2.text(last_label,vertical_start+offset,label, va=va,ha=ha,rotation= 60, color='black',
-                          bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7,fontdict = labelfont)
-                    ax2.plot([time,last_label+xoffset],[vertical_start,vertical_start+offset],linest,color=color,linewidth=0.05,clip_on=False)
-                else:
-                    prev_label = label
-                    prev_time = time
-            else:
-                ax2.axvline(x=time, linestyle=linest, color=color, linewidth=0.05)
-                if label in labels['Tirific']['label']:
-                    last_label = last_label_top = max(time,last_label_top+label_sep)
-                else:
-                    last_label = last_label_bottom= max(time,last_label_bottom+label_sep)
-                ax2.text(last_label,vertical_start+offset,label,va=va,ha=ha,rotation= 60, color='black',
-                      bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7,fontdict = labelfont)
-                #This should be the line to the label
-                ax2.plot([time,last_label+xoffset],[vertical_start,vertical_start+offset],linest,color=color,linewidth=0.05,clip_on=False)
-            prev_label = label
-
-
-
-        #This is beyond stupid again, but hey it is python so needed to make things work.
-        ax2.set_ylim([ax2miny,ax2maxy])
+        left_bottom = 0.1
+        tot_time = 0.
+        for timeone in combined_time:
+            tot_time += timeone[-1]-timeone[0]
+        normalize = tot_time/0.8
+        lengths = [np.max([(x[-1]-x[0])/normalize,0.15]) for x in combined_time]
+        lengths = np.array(lengths,dtype=float) * 0.8/np.sum(lengths) 
+        print(lengths)
+        for i,axplot in enumerate(ax):
+            normalize = (labels_times[i][-1]-labels_times[i][0])/lengths[i]
+            ax_MEM,ax_CPU = plot_individual_ax(Configuration,axplot,combined_time[i],combined_loads[i])
+            ax_MEM,ax_CPU,left_bottom = set_proper_edges(Configuration, i, ax, ax_MEM, ax_CPU,lengths[i],left_bottom,normalize,maxMEM*1.05)
+            ax_CPU.set_ylim(0.,maxCPU*1.05)
+            ax_MEM.set_ylim(0.,maxMEM*1.05)
+            ax_MEM.set_xlim(combined_time[i][0],combined_time[i][-1])
+            ax_CPU.set_xlim(combined_time[i][0],combined_time[i][-1])
+                
+            ax_CPU = set_timing_labels(Configuration,ax_CPU, labels_times[i],labels_comb[i],labels,labelfont,normalize)
+        #fig.text('time (min)', color='k',zorder=5)
+        fig.text(0.5,0.25,'time (min)', va='center',ha='center',rotation= 0, color='black',
+                          bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7)
         fig.savefig(f"{Configuration['LOG_DIRECTORY']}ram_cpu.pdf")
         plt.close()
 
@@ -1560,6 +1497,204 @@ plot_usage_stats.__doc__ =f'''
 
  NOTE:
 '''
+
+def set_proper_edges(Configuration,i,ax,ax_MEM,ax_CPU,length,left_bottom,normalize,maxMEM):
+    if i+1 == len(ax):
+        print(f'Test')
+        if i > 0:
+            ax_MEM.spines['left'].set_visible(False) 
+            ax_MEM.tick_params(axis='y', length = 0)    
+        ax_CPU.spines['left'].set_visible(False)
+        ax_CPU.set_ylabel('CPUs (%)',color='r')
+        ax_CPU.tick_params(axis='y', labelcolor='r')
+    else:
+        ax_CPU.spines['right'].set_visible(False)
+        ax_CPU.axis('off')    
+        #ax_CPU.tick_params(labelright='off')
+        #ax_CPU.yaxis.tick_left()
+        ax_MEM.set_position([0.1,0.3,0.3,0.4])
+        ax_CPU.set_position([0.1,0.3,0.3,0.4])
+        
+        ax_CPU.tick_params(labelleft='off')
+        ax_MEM.set_ylabel('RAM (Mb) ', color='b')
+        ax_MEM.tick_params(axis='y', labelcolor='b')
+        pass
+    ax_MEM.set_position([left_bottom,0.3,length,0.4])
+    ax_CPU.set_position([left_bottom,0.3,length,0.4])
+    left_bottom += length+0.01  
+
+    d =0.025
+    dx = d/(6*length)
+    print(f'This is us {d} {dx}')
+  
+    kwargs = dict(transform=ax_MEM.transAxes, color='k', clip_on=False)
+    if i != 0:
+        ax_MEM.plot((-dx, dx), (1-d, 1+d), **kwargs)
+        ax_MEM.plot((-dx, dx), (-d, +d), **kwargs)
+    
+    if i+1 != len(ax):
+        ax_MEM.plot((1-dx, 1+dx), (-d, +d), **kwargs)
+        ax_MEM.plot((1-dx, 1+dx), (1-d, 1+d), **kwargs)   
+    return ax_MEM,ax_CPU,left_bottom
+
+
+def create_plot_stats(Configuration,loads,labels):
+    combined_time =  np.sort(np.array(loads['Tirific']['Time']+loads['FAT']['Time'],dtype=float))
+
+    combined_loads ={'Tirific':{'CPU':np.interp(combined_time,np.array(loads['Tirific']['Time'],dtype=float),np.array(loads['Tirific']['CPU'],dtype=float)),\
+                                'MEM':np.interp(combined_time,np.array(loads['Tirific']['Time'],dtype=float),np.array(loads['Tirific']['MEM'],dtype=float))},\
+                    'FAT':{'CPU':np.interp(combined_time,np.array(loads['FAT']['Time'],dtype=float),np.array(loads['FAT']['CPU'],dtype=float)),\
+                                                'MEM':np.interp(combined_time,np.array(loads['FAT']['Time'],dtype=float),np.array(loads['FAT']['MEM'],dtype=float))}
+
+    }
+    comb_list= labels['Tirific']['Time']+labels['FAT']['Time']
+    comb_label = labels['Tirific']['label']+labels['FAT']['label']
+
+    labels_times=np.array([x for x, _ in sorted(zip(comb_list, comb_label))],dtype=float)
+    labels_comb = np.array([x for _, x in sorted(zip(comb_list, comb_label))],dtype=str)
+    if Configuration['MULTIPROCESSING']:
+        non_split_ct = copy.deepcopy(combined_time)
+        combined_time =[[],[]]
+        non_split_cl = copy.deepcopy(combined_loads)
+        combined_loads = [[],[]]
+        non_split_lt = copy.deepcopy(labels_times)
+        labels_times =[[],[]]
+        non_split_lc = copy.deepcopy(labels_comb)
+        labels_comb =[[],[]]
+        split_time_lab = non_split_lt[np.where(non_split_lc == 'Pausing FAT')[0]] 
+        split_time = non_split_lt[np.where(non_split_lc == 'Pausing FAT')[0]+1] 
+     
+        for i in  [0,1]:
+            if i == 0:
+                indxs = np.where(non_split_ct <= split_time)[0]
+                indxslab =  np.where(non_split_lt <= split_time_lab)[0]
+              
+            else:
+                indxs = np.where(non_split_ct > split_time)[0]  
+                indxslab =  np.where(non_split_lt > split_time_lab)[0]
+          
+            combined_time[i] = non_split_ct[indxs]
+            labels_comb[i] = non_split_lc[indxslab]
+            labels_times[i] = non_split_lt[indxslab ]
+            combined_loads[i] = {'Tirific':{'CPU': non_split_cl['Tirific']['CPU'][indxs],\
+                                            'MEM': non_split_cl['Tirific']['MEM'][indxs] },\
+                                'FAT': {'CPU': non_split_cl['FAT']['CPU'][indxs],\
+                                        'MEM': non_split_cl['FAT']['MEM'][indxs] }}
+           
+    else:
+        combined_time = [combined_time ]
+        combined_loads = [combined_loads]
+        labels_times = [labels_times]
+        labels_comb = [labels_comb ]
+
+    return combined_time, combined_loads, labels_times, labels_comb
+def set_timing_labels(Configuration,ax, labels_times,labels_comb,labels,labelfont,normalize):
+    labelfont['size'] = 6
+    miny, maxy = ax.get_ylim()
+    last_label = -100
+
+    label_sep = 0.015*normalize
+    #label_sep = 0.001
+    color, linest = '0.5', '--'
+   
+    prev_label = ''
+
+    last_label_top = -100.
+    last_label_bottom = -100.
+        #for label,time in zip(labels['Tirific']['label'],labels['Tirific']['Time']):
+    for label,time in zip(labels_comb,labels_times):
+        if label in labels['Tirific']['label']:
+            offset = 20.
+            xoffset = 0.005*normalize
+            vertical_start = maxy
+            va= 'bottom'
+            ha= 'left'
+            color = 'k'
+            linest = '-'
+        else:
+            offset=-50
+            xoffset = -0.005*normalize
+            vertical_start = miny
+            va= 'top'
+            ha='right'
+            color = '0.5'
+            linest = '--'
+
+
+        if (prev_label == 'Initializing tmp_incl_check' or prev_label == 'Ended tmp_incl_check'):
+            if (label != 'Initializing tmp_incl_check' and label != 'Ended tmp_incl_check') or \
+                    time == labels_times[-1]    :
+
+                if time != labels_times[-1]:
+                    ax.axvline(x=prev_time, linestyle=linest, color=color, linewidth=0.05)
+                    if label in labels['Tirific']['label']:
+                        last_label = last_label_top = max(prev_time,last_label_top+label_sep)
+                    else:
+                        last_label = last_label_bottom = max(prev_time,last_label_bottom+label_sep)
+                    ax.text(last_label,vertical_start+offset,prev_label, va=va,ha=ha,rotation= 60, color='black',
+                            bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7,fontdict = labelfont)
+                    ax.plot([prev_time,last_label+xoffset],[vertical_start,vertical_start+offset],linest,color=color,linewidth=0.05,clip_on=False)
+                ax.axvline(x=time, linestyle=linest, color=color, linewidth=0.05)
+                if label in labels['Tirific']['label']:
+                    last_label = last_label_top = max(time,last_label_top+label_sep)
+                else:
+                    last_label = last_label_bottom = max(time,last_label_bottom+label_sep)
+                ax.text(last_label,vertical_start+offset,label, va=va,ha=ha,rotation= 60, color='black',
+                        bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7,fontdict = labelfont)
+                ax.plot([time,last_label+xoffset],[vertical_start,vertical_start+offset],linest,color=color,linewidth=0.05,clip_on=False)
+            else:
+                prev_time = time
+        elif (prev_label == 'Initializing Error_Shaker' or prev_label == 'Ended Error_Shaker' or prev_label == 'Started Error_Shaker'):
+            if (label != 'Initializing Error_Shaker' and label != 'Ended Error_Shaker' and  label != 'Started Error_Shaker') or \
+                    time == labels_times[-1]:
+
+                    #ax2.axvline(x=prev_time, linestyle=linest, color=color, linewidth=0.05)
+                    #last_label = max(prev_time,last_label+label_sep)
+                    #ax2.text(last_label,ax2maxy+20.,prev_label, va='bottom',ha='left',rotation= 60, color='black',
+                    #      bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7,fontdict = labelfont)
+                    #ax2.plot([prev_time,last_label+0.1],[ax2maxy,ax2maxy+20.],linest,color=color,linewidth=0.05,clip_on=False)
+                ax.axvline(x=time, linestyle=linest, color=color, linewidth=0.05)
+                if label in labels['Tirific']['label']:
+                    last_label = last_label_top = max(time,last_label_top+label_sep)
+                else:
+                    last_label = last_label_bottom = max(time,last_label_bottom+label_sep)
+                ax.text(last_label,vertical_start+offset,label, va=va,ha=ha,rotation= 60, color='black',
+                          bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7,fontdict = labelfont)
+                ax.plot([time,last_label+xoffset],[vertical_start,vertical_start+offset],linest,color=color,linewidth=0.05,clip_on=False)
+            else:
+                prev_label = label
+                prev_time = time
+        else:
+            ax.axvline(x=time, linestyle=linest, color=color, linewidth=0.05)
+          
+            if label in labels['Tirific']['label']:
+                last_label = last_label_top = max(time,last_label_top+label_sep)
+            else:
+                last_label = last_label_bottom= max(time,last_label_bottom+label_sep)
+           
+            #exit()
+            ax.text(last_label,vertical_start+offset,label,va=va,ha=ha,rotation= 60, color='black',
+                      bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7,fontdict = labelfont)
+                #This should be the line to the label
+            ax.plot([time,last_label+xoffset],[vertical_start,vertical_start+offset],linest,color=color,linewidth=0.05,clip_on=False)
+        prev_label = label
+
+    ax.set_ylim(miny,maxy)    
+    return ax
+       
+
+def plot_individual_ax(Configuration,ax,combined_time,combined_loads):
+    ax.plot(combined_time,combined_loads['Tirific']['MEM'],'b-',lw=0.5)
+    ax.plot(combined_time,combined_loads['FAT']['MEM'],'b--',lw=0.5)
+    ax.set_ylim(0,np.max([combined_loads['Tirific']['MEM'],combined_loads['FAT']['MEM']]) \
+                      +np.max([combined_loads['Tirific']['MEM'],combined_loads['FAT']['MEM']])/10.)
+   
+   
+    ax2 = ax.twinx()
+    ax2.plot(combined_time,combined_loads['Tirific']['CPU'],'r-',lw=0.5)
+    ax2.plot(combined_time,combined_loads['FAT']['CPU'],'r--',lw=0.5)
+    return ax,ax2
+
 
 def reorder_output_catalogue(Configuration,Full_Catalogue):
     #Read in the output catalogue

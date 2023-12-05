@@ -263,7 +263,7 @@ def MP_initialize_sofia(Configuration,timing_lock,catalogue_lock):
                       'Initial_Parameters': Initial_Parameters}
     
     sf.update_statistic(
-            Configuration, message="Pause until start Fitting Loop")  
+            Configuration, message="Pause at")  
     Configuration['FAT_PSUPROCESS'] = None
     return sofia_output
 
@@ -275,7 +275,7 @@ def MP_Fitting_Loop(input,timing_lock,catalogue_lock):
         Configuration['FAT_PSUPROCESS'] = psu.Process(
             Configuration['FAT_PID'])
         sf.update_statistic(
-            Configuration, message="Start Fitting Loop")  
+            Configuration, message="Start fitting loop")  
         Initial_Parameters = input['Initial_Parameters']
         Fits_Files = input['Fits_Files']
         registered_exception = None
