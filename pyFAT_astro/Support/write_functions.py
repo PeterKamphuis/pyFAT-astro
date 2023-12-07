@@ -159,6 +159,44 @@ basicinfo.__doc__ =f'''
  NOTE:
 '''
 
+def extract_date(string):
+    tmp = string.split(' ')
+    tmp2 = tmp[0].split('-')
+    if len(tmp2) == 3:
+        try:
+            date =  datetime.strptime(f"{tmp[0]} {tmp[1]}", '%Y-%m-%d %H:%M:%S.%f')
+        except ValueError:
+            date =  datetime.strptime(f"{tmp[0]} {tmp[1]}", '%Y-%m-%d %H:%M:%S')
+    else:
+        raise ProgramError("There is no date in the provided string.")
+    return date
+extract_date.__doc__ =f'''
+ NAME:
+    extract_date
+
+ PURPOSE:
+    convert a string into a date object
+
+ CATEGORY:
+    write_functions
+
+ INPUTS:
+    string = string
+
+ OPTIONAL INPUTS:
+
+
+ OUTPUTS:
+    date = the date object
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
+
 # Function to write the first def file for a galaxy
 def initialize_def_file(Configuration, Fits_Files,Tirific_Template,\
         Initial_Parameters = None, fit_type = 'Undefined' ):
@@ -245,7 +283,6 @@ initialize_def_file.__doc__ =f'''
 
  NOTE:
 '''
-
 
 class full_system_tracking:
     def __init__(self,Configuration):
@@ -344,43 +381,6 @@ class full_system_tracking:
         fig.savefig(self.plot_name)
         plt.close()
 
-def square_plot(ax):
-    xmin, xmax = ax.get_xlim()
-    ymin, ymax = ax.get_ylim()
-    if xmax > ymax:
-        diff = int(xmax-ymax)/2.
-        ax.set_ylim(ymin-diff,ymax+diff)
-        ymin, ymax = ax.get_ylim()
-    else:
-        diff = int(ymax-xmax)/2.
-        ax.set_xlim(xmin-diff,xmax+diff)
-        xmin, xmax = ax.get_xlim()
-square_plot.__doc__ =f'''
- NAME:
-    square_plot
-
- PURPOSE:
-    square the axes object
-        
- CATEGORY:
-    write_functions
-
- INPUTS:
-    ax = is the axes object to be squared
-        
- OPTIONAL INPUTS:
-
-
- OUTPUTS:
-    square axes
- OPTIONAL OUTPUTS:
-
- PROCEDURES CALLED:
-
- NOTE:
-'''
-
-
 def beam_artist(ax,hdr,im_wcs):
     xmin, xmax = ax.get_xlim()
     ymin, ymax = ax.get_ylim()
@@ -424,8 +424,88 @@ beam_artist.__doc__ =f'''
  NOTE:
 '''
 
+def create_plot_stats(Configuration,loads,labels):
+    combined_time =  np.sort(np.array(loads['Tirific']['Time']+loads['FAT']['Time'],dtype=float))
 
-    
+    combined_loads ={'Tirific':{'CPU':np.interp(combined_time,np.array(loads['Tirific']['Time'],dtype=float),np.array(loads['Tirific']['CPU'],dtype=float)),\
+                                'MEM':np.interp(combined_time,np.array(loads['Tirific']['Time'],dtype=float),np.array(loads['Tirific']['MEM'],dtype=float))},\
+                    'FAT':{'CPU':np.interp(combined_time,np.array(loads['FAT']['Time'],dtype=float),np.array(loads['FAT']['CPU'],dtype=float)),\
+                                                'MEM':np.interp(combined_time,np.array(loads['FAT']['Time'],dtype=float),np.array(loads['FAT']['MEM'],dtype=float))}
+
+    }
+    comb_list= labels['Tirific']['Time']+labels['FAT']['Time']
+    comb_label = labels['Tirific']['label']+labels['FAT']['label']
+
+    labels_times=np.array([x for x, _ in sorted(zip(comb_list, comb_label))],dtype=float)
+    labels_comb = np.array([x for _, x in sorted(zip(comb_list, comb_label))],dtype=str)
+    if Configuration['MULTIPROCESSING']:
+        non_split_ct = copy.deepcopy(combined_time)
+        combined_time =[[],[]]
+        non_split_cl = copy.deepcopy(combined_loads)
+        combined_loads = [[],[]]
+        non_split_lt = copy.deepcopy(labels_times)
+        labels_times =[[],[]]
+        non_split_lc = copy.deepcopy(labels_comb)
+        labels_comb =[[],[]]
+        split_time_lab = non_split_lt[np.where(non_split_lc == 'Pausing FAT')[0]] 
+        split_time = non_split_lt[np.where(non_split_lc == 'Pausing FAT')[0]+1] 
+     
+        for i in  [0,1]:
+            if i == 0:
+                indxs = np.where(non_split_ct <= split_time)[0]
+                indxslab =  np.where(non_split_lt <= split_time_lab)[0]
+              
+            else:
+                indxs = np.where(non_split_ct > split_time)[0]  
+                indxslab =  np.where(non_split_lt > split_time_lab)[0]
+          
+            combined_time[i] = non_split_ct[indxs]
+            labels_comb[i] = non_split_lc[indxslab]
+            labels_times[i] = non_split_lt[indxslab ]
+            combined_loads[i] = {'Tirific':{'CPU': non_split_cl['Tirific']['CPU'][indxs],\
+                                            'MEM': non_split_cl['Tirific']['MEM'][indxs] },\
+                                'FAT': {'CPU': non_split_cl['FAT']['CPU'][indxs],\
+                                        'MEM': non_split_cl['FAT']['MEM'][indxs] }}
+           
+    else:
+        combined_time = [combined_time ]
+        combined_loads = [combined_loads]
+        labels_times = [labels_times]
+        labels_comb = [labels_comb ]
+
+    return combined_time, combined_loads, labels_times, labels_comb
+
+create_plot_stats.__doc__ =f'''
+ NAME:
+    create_plot_stats(
+
+ PURPOSE:
+    create the lists and dictionaries that are required to plot a single frame in the usage plot
+    from the over loads and times dictionaries
+        
+ CATEGORY:
+    write_functions
+
+ INPUTS:
+    Configuration = is the standard FAT configuration
+    loads = is the overall loads dictionary
+    labels = the overall labels
+
+
+ OPTIONAL INPUTS:
+
+
+ OUTPUTS:
+    combined_time = list with all times for individual axis object
+    combined_loads = dictionary with all loads  for individual axis object
+    labels_times = list with all label times  for individual axis object
+    labels_comb = liast with all labels  for individual axis object
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+
+ NOTE:
+'''
 
 def make_overview_plot(Configuration,Fits_Files ):
     fit_type = Configuration['USED_FITTING']
@@ -530,8 +610,6 @@ def make_overview_plot(Configuration,Fits_Files ):
 
 #-----------------------------------------------------------------Moment 0 ------------------------------------------------------
     ax_moment0 = Overview.add_subplot(gs[2:8,0:6], projection=im_wcs)
-    #ax_moment0.set_label('Intensity Map')
-    #Comp_ax1.set_facecolor('black')
     # we need contour levels and
     min_color = 0.
     max_color = np.nanmax(moment0[0].data)*0.8
@@ -1308,9 +1386,6 @@ def plot_PV(Configuration,image=None, model = None, figure = None, \
     ax.set_xlabel("Offset (arcsec)")
     ax.set_ylabel("Velocity (km s$^{-1}$)")
     return ax
-    
-
-
 plot_PV.__doc__ =f'''
      NAME:
         plot_PV
@@ -1347,68 +1422,49 @@ plot_PV.__doc__ =f'''
 
      NOTE:
 '''
-def read_statistics(Configuration):
-    labels = {'FAT': {'label':[], 'Time':[]}, 'Tirific':{'label':[], 'Time':[]}}
-    loads = {'FAT':{'CPU':[],'MEM':[],'Time':[]},'Tirific':{'CPU':[],'MEM':[],'Time': []}}
-    with open(f"{Configuration['LOG_DIRECTORY']}Usage_Statistics.txt") as file:
-        lines = file.readlines()
-    current_stage = 'Not_Found'
-    #current_module = 'Unknown'
-    startdate = 0
-    maxCPU = 0.
-    maxMEM= 0.
-    for line in lines:
-        line = line.strip()
-        tmp = line.split(' ')
-        if line[0] == '#':
-            date = extract_date(f"{tmp[-2]} {tmp[-1]}")
-        else:
-            date = extract_date(f"{tmp[0]} {tmp[1]}")
-        if startdate == 0:
-            startdate = date
-        diff = date - startdate
-        time = diff.total_seconds()/60.
-    
-        if line[0] == '#':
-            if tmp[1] == 'TIRIFIC:':
 
-                if tmp[2].lower() == 'initializing':
-                    tmp2 = line.split('=')[1].split()
-                    current_stage = tmp2[0].strip()
-                    labels['Tirific']['label'].append(f'Initializing {current_stage}')
-                    labels['Tirific']['Time'].append(time)
-                elif tmp[2].lower() == 'finished':
-                    labels['Tirific']['label'].append(f'Ended {current_stage}')
-                    labels['Tirific']['Time'].append(time)
-                    #current_stage = 'No Tirific'
-                elif tmp[2].lower() == 'started':
-                    labels['Tirific']['label'].append(f'Started {current_stage}')
-                    labels['Tirific']['Time'].append(time)
-            elif tmp[1] == 'MP_FITTING_LOOP:':
-                labels['Tirific']['label'].append(f'Started {tmp[1]}')
-                labels['Tirific']['Time'].append(time)
-            else:
-                if tmp[2].lower() == 'pause':
-                    labels['FAT']['label'].append(f'Pausing FAT')
-                    labels['FAT']['Time'].append(time)
-                else:
-                    labels['FAT']['label'].append(f'Starting {tmp[1]}')
-                    labels['FAT']['Time'].append(time)
-        else:
-            if tmp[-1].lower() == 'tirific':
-                loads['Tirific']['Time'].append(time)
-                loads['Tirific']['CPU'].append(tmp[4])
-               
-                loads['Tirific']['MEM'].append(tmp[8])
-            else:
-                loads['FAT']['Time'].append(time)
-                loads['FAT']['CPU'].append(tmp[4])
-                loads['FAT']['MEM'].append(tmp[8])
-            if float(tmp[4]) > maxCPU:
-                    maxCPU = float(tmp[4])
-            if float(tmp[8]) > maxMEM:
-                    maxMEM = float(tmp[8])
-    return loads,labels,maxCPU,maxMEM
+def plot_individual_ax(Configuration,ax,combined_time,combined_loads):
+    ax.plot(combined_time,combined_loads['Tirific']['MEM'],'b-',lw=0.5)
+    ax.plot(combined_time,combined_loads['FAT']['MEM'],'b--',lw=0.5)
+    ax.set_ylim(0,np.max([combined_loads['Tirific']['MEM'],combined_loads['FAT']['MEM']]) \
+                      +np.max([combined_loads['Tirific']['MEM'],combined_loads['FAT']['MEM']])/10.)
+   
+   
+    ax2 = ax.twinx()
+    ax2.plot(combined_time,combined_loads['Tirific']['CPU'],'r-',lw=0.5)
+    ax2.plot(combined_time,combined_loads['FAT']['CPU'],'r--',lw=0.5)
+    return ax,ax2
+plot_individual_ax.__doc__ =f'''
+     NAME:
+        plot_individual_ax
+
+     PURPOSE:
+        setup a double plot with 2 axes 
+
+     CATEGORY:
+        write_functions
+
+     INPUTS:
+        Configuration = Standard FAT configuration
+        ax = the axis object to hold the double plot
+        combined_time = list containing the x axis
+        combined_load = dictionary that that contains the Memory (blue) and CPU (red) loads split
+                         according to tirific (solid line)  and FAT (dashed line)
+
+     OPTIONAL INPUTS:
+
+
+     OUTPUTS:
+        ax = axis object with the memory plot
+        ax2 = axis object with the CPU plot
+
+     OPTIONAL OUTPUTS:
+
+     PROCEDURES CALLED:
+        Unspecified
+
+     NOTE:
+'''
 
 def plot_usage_stats(Configuration ):
     with open(f"{Configuration['LOG_DIRECTORY']}Usage_Statistics.txt") as file:
@@ -1454,18 +1510,17 @@ def plot_usage_stats(Configuration ):
         normalize = tot_time/0.8
         lengths = [np.max([(x[-1]-x[0])/normalize,0.15]) for x in combined_time]
         lengths = np.array(lengths,dtype=float) * 0.8/np.sum(lengths) 
-        print(lengths)
         for i,axplot in enumerate(ax):
             normalize = (labels_times[i][-1]-labels_times[i][0])/lengths[i]
             ax_MEM,ax_CPU = plot_individual_ax(Configuration,axplot,combined_time[i],combined_loads[i])
-            ax_MEM,ax_CPU,left_bottom = set_proper_edges(Configuration, i, ax, ax_MEM, ax_CPU,lengths[i],left_bottom,normalize,maxMEM*1.05)
+            ax_MEM,ax_CPU,left_bottom = set_proper_edges(Configuration, i, ax, ax_MEM,\
+                                         ax_CPU,lengths[i],left_bottom)
             ax_CPU.set_ylim(0.,maxCPU*1.05)
             ax_MEM.set_ylim(0.,maxMEM*1.05)
             ax_MEM.set_xlim(combined_time[i][0],combined_time[i][-1])
             ax_CPU.set_xlim(combined_time[i][0],combined_time[i][-1])
                 
             ax_CPU = set_timing_labels(Configuration,ax_CPU, labels_times[i],labels_comb[i],labels,labelfont,normalize)
-        #fig.text('time (min)', color='k',zorder=5)
         fig.text(0.5,0.25,'time (min)', va='center',ha='center',rotation= 0, color='black',
                           bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7)
         fig.savefig(f"{Configuration['LOG_DIRECTORY']}ram_cpu.pdf")
@@ -1498,9 +1553,161 @@ plot_usage_stats.__doc__ =f'''
  NOTE:
 '''
 
-def set_proper_edges(Configuration,i,ax,ax_MEM,ax_CPU,length,left_bottom,normalize,maxMEM):
+def read_statistics(Configuration):
+    labels = {'FAT': {'label':[], 'Time':[]}, 'Tirific':{'label':[], 'Time':[]}}
+    loads = {'FAT':{'CPU':[],'MEM':[],'Time':[]},'Tirific':{'CPU':[],'MEM':[],'Time': []}}
+    with open(f"{Configuration['LOG_DIRECTORY']}Usage_Statistics.txt") as file:
+        lines = file.readlines()
+    current_stage = 'Not_Found'
+    #current_module = 'Unknown'
+    startdate = 0
+    maxCPU = 0.
+    maxMEM= 0.
+    paused_time = 0.
+    gap_time= 0.
+    for line in lines:
+        line = line.strip()
+        tmp = line.split(' ')
+        if line[0] == '#':
+            date = extract_date(f"{tmp[-2]} {tmp[-1]}")
+        else:
+            date = extract_date(f"{tmp[0]} {tmp[1]}")
+        if startdate == 0:
+            startdate = date
+        diff = date - startdate
+        time = diff.total_seconds()/60.-gap_time
+    
+        if line[0] == '#':
+            if tmp[1] == 'TIRIFIC:':
+
+                if tmp[2].lower() == 'initializing':
+                    tmp2 = line.split('=')[1].split()
+                    current_stage = tmp2[0].strip()
+                    labels['Tirific']['label'].append(f'Initializing {current_stage}')
+                    labels['Tirific']['Time'].append(time)
+                elif tmp[2].lower() == 'finished':
+                    labels['Tirific']['label'].append(f'Ended {current_stage}')
+                    labels['Tirific']['Time'].append(time)
+                    #current_stage = 'No Tirific'
+                elif tmp[2].lower() == 'started':
+                    labels['Tirific']['label'].append(f'Started {current_stage}')
+                    labels['Tirific']['Time'].append(time)
+            elif tmp[1] == 'MP_FITTING_LOOP:':
+                labels['Tirific']['label'].append(f'Started {tmp[1]}')  
+                if Configuration['MULTIPROCESSING']:
+                    gap_time = time-paused_time
+                labels['Tirific']['Time'].append(time-gap_time)
+            else:
+                if tmp[2].lower() == 'pause':
+                    labels['FAT']['label'].append(f'Pausing FAT')
+                    labels['FAT']['Time'].append(time)
+                    if Configuration['MULTIPROCESSING']:
+                        '''If we are pausing due to splitting sofia and fit we subtract the pause time'''
+                        paused_time = time
+                else:
+                    labels['FAT']['label'].append(f'Starting {tmp[1]}')
+                    labels['FAT']['Time'].append(time)
+        else:
+            if tmp[-1].lower() == 'tirific':
+                loads['Tirific']['Time'].append(time)
+                loads['Tirific']['CPU'].append(tmp[4])
+               
+                loads['Tirific']['MEM'].append(tmp[8])
+            else:
+                loads['FAT']['Time'].append(time)
+                loads['FAT']['CPU'].append(tmp[4])
+                loads['FAT']['MEM'].append(tmp[8])
+            if float(tmp[4]) > maxCPU:
+                    maxCPU = float(tmp[4])
+            if float(tmp[8]) > maxMEM:
+                    maxMEM = float(tmp[8])
+    return loads,labels,maxCPU,maxMEM
+read_statistics.__doc__ =f'''
+ NAME:
+    read_statistics
+
+ PURPOSE:
+    Read the file Usage_Statistics.txt in the FAT log directory and transform the input into two 
+    dictionaries. In Multiprocessing the pool time is subtracted
+  
+
+ CATEGORY:
+    write_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    
+
+ OPTIONAL INPUTS:
+
+
+ OUTPUTS:
+    loads = dictionary with the times and Memory and CPU loads, split in system and tirific
+    labels = labels indicating specifics of what was happening at times
+    maxCPU = the max CPU load encountered
+    maxMEM = the maximum memory load encountered
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
+
+def reorder_output_catalogue(Configuration,Full_Catalogue):
+    #Read in the output catalogue
+    with open(Configuration['OUTPUT_CATALOGUE']) as file:
+        lines = file.readlines()
+    #Determine column sizes
+    header = lines[0]
+    output = lines[1:]
+    #IDs cannot have spaces
+    outputIDs = []
+    for line in output:
+        outputIDs.append(line.split()[0].strip())
+    #Sort based on the inpu IDs
+    with open(Configuration['OUTPUT_CATALOGUE'],'w') as file:
+        file.write(header)
+        for galaxy in Full_Catalogue['DIRECTORYNAME']:
+            try:
+                index_no = np.where(galaxy == \
+                    np.array(outputIDs))[0][0]
+                file.write(output[index_no])
+            except IndexError:
+                pass
+
+reorder_output_catalogue.__doc__ =f'''
+ NAME:
+    reorder_output_catalogue
+
+ PURPOSE:
+    When running in multiprocessing mode the output catalogue can be
+    in a different order as the input. This function makes sure the are sorted
+
+ CATEGORY:
+    write_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    Full_Catalogue = Full input catalogue
+
+ OPTIONAL INPUTS:
+
+
+ OUTPUTS:
+    reorder output catalogue
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
+
+def set_proper_edges(Configuration,i,ax,ax_MEM,ax_CPU,length,left_bottom):
     if i+1 == len(ax):
-        print(f'Test')
         if i > 0:
             ax_MEM.spines['left'].set_visible(False) 
             ax_MEM.tick_params(axis='y', length = 0)    
@@ -1508,25 +1715,18 @@ def set_proper_edges(Configuration,i,ax,ax_MEM,ax_CPU,length,left_bottom,normali
         ax_CPU.set_ylabel('CPUs (%)',color='r')
         ax_CPU.tick_params(axis='y', labelcolor='r')
     else:
+        '''This currently only works with a single break'''
         ax_CPU.spines['right'].set_visible(False)
         ax_CPU.axis('off')    
-        #ax_CPU.tick_params(labelright='off')
-        #ax_CPU.yaxis.tick_left()
-        ax_MEM.set_position([0.1,0.3,0.3,0.4])
-        ax_CPU.set_position([0.1,0.3,0.3,0.4])
-        
         ax_CPU.tick_params(labelleft='off')
         ax_MEM.set_ylabel('RAM (Mb) ', color='b')
         ax_MEM.tick_params(axis='y', labelcolor='b')
-        pass
     ax_MEM.set_position([left_bottom,0.3,length,0.4])
     ax_CPU.set_position([left_bottom,0.3,length,0.4])
     left_bottom += length+0.01  
 
     d =0.025
     dx = d/(6*length)
-    print(f'This is us {d} {dx}')
-  
     kwargs = dict(transform=ax_MEM.transAxes, color='k', clip_on=False)
     if i != 0:
         ax_MEM.plot((-dx, dx), (1-d, 1+d), **kwargs)
@@ -1536,58 +1736,41 @@ def set_proper_edges(Configuration,i,ax,ax_MEM,ax_CPU,length,left_bottom,normali
         ax_MEM.plot((1-dx, 1+dx), (-d, +d), **kwargs)
         ax_MEM.plot((1-dx, 1+dx), (1-d, 1+d), **kwargs)   
     return ax_MEM,ax_CPU,left_bottom
+set_proper_edges.__doc__ =f'''
+ NAME:
+    set_proper_edges
+
+ PURPOSE:
+    Set the proper edges form the timing plot  
+ 
+ CATEGORY:
+    write_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    i = index of current ax
+    ax = all axes
+    ax_MEM = the memory axis
+    ax_CPU = the CPU axis
+    length = size of the plot in fig coordinate
+    left_bottom = location of the right side of the plot in fig coordinate
+
+ OPTIONAL INPUTS:
 
 
-def create_plot_stats(Configuration,loads,labels):
-    combined_time =  np.sort(np.array(loads['Tirific']['Time']+loads['FAT']['Time'],dtype=float))
+ OUTPUTS:
+    ax_MEM = updated memory axis object
+    ax_CPU = updated CPU axis object
+    left_bottom = right hand side for next axis object
 
-    combined_loads ={'Tirific':{'CPU':np.interp(combined_time,np.array(loads['Tirific']['Time'],dtype=float),np.array(loads['Tirific']['CPU'],dtype=float)),\
-                                'MEM':np.interp(combined_time,np.array(loads['Tirific']['Time'],dtype=float),np.array(loads['Tirific']['MEM'],dtype=float))},\
-                    'FAT':{'CPU':np.interp(combined_time,np.array(loads['FAT']['Time'],dtype=float),np.array(loads['FAT']['CPU'],dtype=float)),\
-                                                'MEM':np.interp(combined_time,np.array(loads['FAT']['Time'],dtype=float),np.array(loads['FAT']['MEM'],dtype=float))}
+ OPTIONAL OUTPUTS:
 
-    }
-    comb_list= labels['Tirific']['Time']+labels['FAT']['Time']
-    comb_label = labels['Tirific']['label']+labels['FAT']['label']
+ PROCEDURES CALLED:
+    Unspecified
 
-    labels_times=np.array([x for x, _ in sorted(zip(comb_list, comb_label))],dtype=float)
-    labels_comb = np.array([x for _, x in sorted(zip(comb_list, comb_label))],dtype=str)
-    if Configuration['MULTIPROCESSING']:
-        non_split_ct = copy.deepcopy(combined_time)
-        combined_time =[[],[]]
-        non_split_cl = copy.deepcopy(combined_loads)
-        combined_loads = [[],[]]
-        non_split_lt = copy.deepcopy(labels_times)
-        labels_times =[[],[]]
-        non_split_lc = copy.deepcopy(labels_comb)
-        labels_comb =[[],[]]
-        split_time_lab = non_split_lt[np.where(non_split_lc == 'Pausing FAT')[0]] 
-        split_time = non_split_lt[np.where(non_split_lc == 'Pausing FAT')[0]+1] 
-     
-        for i in  [0,1]:
-            if i == 0:
-                indxs = np.where(non_split_ct <= split_time)[0]
-                indxslab =  np.where(non_split_lt <= split_time_lab)[0]
-              
-            else:
-                indxs = np.where(non_split_ct > split_time)[0]  
-                indxslab =  np.where(non_split_lt > split_time_lab)[0]
-          
-            combined_time[i] = non_split_ct[indxs]
-            labels_comb[i] = non_split_lc[indxslab]
-            labels_times[i] = non_split_lt[indxslab ]
-            combined_loads[i] = {'Tirific':{'CPU': non_split_cl['Tirific']['CPU'][indxs],\
-                                            'MEM': non_split_cl['Tirific']['MEM'][indxs] },\
-                                'FAT': {'CPU': non_split_cl['FAT']['CPU'][indxs],\
-                                        'MEM': non_split_cl['FAT']['MEM'][indxs] }}
-           
-    else:
-        combined_time = [combined_time ]
-        combined_loads = [combined_loads]
-        labels_times = [labels_times]
-        labels_comb = [labels_comb ]
+ NOTE:
+'''
 
-    return combined_time, combined_loads, labels_times, labels_comb
 def set_timing_labels(Configuration,ax, labels_times,labels_comb,labels,labelfont,normalize):
     labelfont['size'] = 6
     miny, maxy = ax.get_ylim()
@@ -1681,86 +1864,39 @@ def set_timing_labels(Configuration,ax, labels_times,labels_comb,labels,labelfon
 
     ax.set_ylim(miny,maxy)    
     return ax
-       
 
-def plot_individual_ax(Configuration,ax,combined_time,combined_loads):
-    ax.plot(combined_time,combined_loads['Tirific']['MEM'],'b-',lw=0.5)
-    ax.plot(combined_time,combined_loads['FAT']['MEM'],'b--',lw=0.5)
-    ax.set_ylim(0,np.max([combined_loads['Tirific']['MEM'],combined_loads['FAT']['MEM']]) \
-                      +np.max([combined_loads['Tirific']['MEM'],combined_loads['FAT']['MEM']])/10.)
-   
-   
-    ax2 = ax.twinx()
-    ax2.plot(combined_time,combined_loads['Tirific']['CPU'],'r-',lw=0.5)
-    ax2.plot(combined_time,combined_loads['FAT']['CPU'],'r--',lw=0.5)
-    return ax,ax2
+set_timing_labels.__doc__ =f'''
+NAME:
+set_timing_labels
 
+PURPOSE:
+Set the timing labels for the various accournces
 
-def reorder_output_catalogue(Configuration,Full_Catalogue):
-    #Read in the output catalogue
-    with open(Configuration['OUTPUT_CATALOGUE']) as file:
-        lines = file.readlines()
-    #Determine column sizes
-    header = lines[0]
-    output = lines[1:]
-    #IDs cannot have spaces
-    outputIDs = []
-    for line in output:
-        outputIDs.append(line.split()[0].strip())
-    #Sort based on the inpu IDs
-    with open(Configuration['OUTPUT_CATALOGUE'],'w') as file:
-        file.write(header)
-        for galaxy in Full_Catalogue['DIRECTORYNAME']:
-            try:
-                index_no = np.where(galaxy == \
-                    np.array(outputIDs))[0][0]
-                file.write(output[index_no])
-            except IndexError:
-                pass
+CATEGORY:
+write_functions
+
+INPUTS:
+Configuration = Standard FAT configuration
+ax = the axis object to attach the labels to
+labels_times = list of label times
+labels_comb = list of labels
+labels = dictionary with all labels split into upper and lower 
+labelfont = label font settings
+normalize = conversion factor from image coordinate to plot
+
+OPTIONAL INPUTS:
 
 
+OUTPUTS:
+ax = label axis object
 
+OPTIONAL OUTPUTS:
 
-reorder_output_catalogue.__doc__ =f'''
- NAME:
-    reorder_output_catalogue
+PROCEDURES CALLED:
+Unspecified
 
- PURPOSE:
-    When running in multiprocessing mode the output catalogue can be
-    in a different order as the input. This function makes sure the are sorted
-
- CATEGORY:
-    write_functions
-
- INPUTS:
-    Configuration = Standard FAT configuration
-    Full_Catalogue = Full input catalogue
-
- OPTIONAL INPUTS:
-
-
- OUTPUTS:
-    reorder output catalogue
-
- OPTIONAL OUTPUTS:
-
- PROCEDURES CALLED:
-    Unspecified
-
- NOTE:
+NOTE:
 '''
-
-def extract_date(string):
-    tmp = string.split(' ')
-    tmp2 = tmp[0].split('-')
-    if len(tmp2) == 3:
-        try:
-            date =  datetime.strptime(f"{tmp[0]} {tmp[1]}", '%Y-%m-%d %H:%M:%S.%f')
-        except ValueError:
-            date =  datetime.strptime(f"{tmp[0]} {tmp[1]}", '%Y-%m-%d %H:%M:%S')
-    else:
-        raise ProgramError("There is no date in the provided string.")
-    return date
 
 def sofia(template,name):
     with open(name,'w') as file:
@@ -1771,25 +1907,61 @@ def sofia(template,name):
                 file.write(f"{key} = {template[key]}\n")
 
 sofia.__doc__ =f'''
+NAME:
+sofia
+PURPOSE:
+write a sofia2 dictionary into file
+CATEGORY:
+write_functions
+
+INPUTS:
+template = sofia template
+name = name of the file to write to
+
+OPTIONAL INPUTS:
+
+OUTPUTS:
+
+OPTIONAL OUTPUTS:
+
+PROCEDURES CALLED:
+Unspecified
+
+NOTE:
+'''
+
+def square_plot(ax):
+    xmin, xmax = ax.get_xlim()
+    ymin, ymax = ax.get_ylim()
+    if xmax > ymax:
+        diff = int(xmax-ymax)/2.
+        ax.set_ylim(ymin-diff,ymax+diff)
+        ymin, ymax = ax.get_ylim()
+    else:
+        diff = int(ymax-xmax)/2.
+        ax.set_xlim(xmin-diff,xmax+diff)
+        xmin, xmax = ax.get_xlim()
+square_plot.__doc__ =f'''
  NAME:
-    sofia
+    square_plot
+
  PURPOSE:
-    write a sofia2 dictionary into file
+    square the axes object
+        
  CATEGORY:
     write_functions
 
  INPUTS:
-    template = sofia template
-    name = name of the file to write to
-
+    ax = is the axes object to be squared
+        
  OPTIONAL INPUTS:
 
- OUTPUTS:
 
+ OUTPUTS:
+    square axes
  OPTIONAL OUTPUTS:
 
  PROCEDURES CALLED:
-    Unspecified
 
  NOTE:
 '''

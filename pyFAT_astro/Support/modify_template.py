@@ -896,7 +896,7 @@ def fit_polynomial(Configuration,radii,profile,sm_profile,error, key, \
                 for i in range(len(fit_profile)-5,len(fit_profile)):
                     if fit_profile[i-1] < fit_profile[i]:
                         fit_profile[i]=fit_profile[i-1]*0.9
-            red_chi = np.sum((profile[st_fit:]-fit_profile[st_fit:])**2/error[st_fit:])/(len(radii[st_fit:])-ord)
+            red_chi = np.sum((profile[st_fit:]-fit_profile[st_fit:])**2/error[st_fit:]**2)/(len(radii[st_fit:])-ord)
             #We penailze profiles that go outside the boundaries
 
             if np.sum(np.absolute(np.array(boundary_limits,dtype=float))) != 0.:
