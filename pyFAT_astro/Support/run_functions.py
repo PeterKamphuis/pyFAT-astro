@@ -1245,16 +1245,20 @@ def one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run):
     else:
         accepted_angle = False
         accepted_boundary = False
-    #We only adapt the size if the other checks are ok
-    if not all(Configuration['FIX_SIZE']) and accepted_central and accepted_angle:
-        no_apply_size_change = False
-    else:
-        no_apply_size_change = True
-    accepted_size = check_size(Configuration,Tirific_Template, \
-        no_apply = no_apply_size_change, fit_type = fit_type, stage = stage, \
-        current_run = current_run,Fits_Files=Fits_Files)
+   
+
     if all(Configuration['FIX_SIZE']):
         accepted_size = True
+    else:
+         #We only adapt the size if the other checks are ok
+        if accepted_central and accepted_angle:
+            no_apply_size_change = False
+        else:
+            no_apply_size_change = True
+        accepted_size = check_size(Configuration,Tirific_Template, \
+            no_apply = no_apply_size_change, fit_type = fit_type, stage = stage, \
+            current_run = current_run,Fits_Files=Fits_Files)
+   
     if accepted and accepted_size and accepted_central and accepted_angle and accepted_boundary: #and accepted_proj_vrot:
         Configuration['ACCEPTED'] = True
     else:
@@ -1504,6 +1508,7 @@ def tirshaker_call(Configuration,Fits_Files):
    
 
     errors_main([f'configuration_file={Configuration["FITTING_DIR"]}/Error_Shaker/FAT_conf.yml'])
+    sf.update_statistic(Configuration, message= "After the Tirshaker call run")
 
     out_name = f"{Configuration['FITTING_DIR']}/{Configuration['USED_FITTING']}/{Configuration['USED_FITTING']}.def"
     #before copying we should transfer the errors

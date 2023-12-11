@@ -1719,6 +1719,7 @@ def set_proper_edges(Configuration,i,ax,ax_MEM,ax_CPU,length,left_bottom):
         ax_CPU.spines['right'].set_visible(False)
         ax_CPU.axis('off')    
         ax_CPU.tick_params(labelleft='off')
+    if i == 0:
         ax_MEM.set_ylabel('RAM (Mb) ', color='b')
         ax_MEM.tick_params(axis='y', labelcolor='b')
     ax_MEM.set_position([left_bottom,0.3,length,0.4])

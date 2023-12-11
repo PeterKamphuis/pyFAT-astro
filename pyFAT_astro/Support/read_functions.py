@@ -177,6 +177,7 @@ def check_source_brightness(Configuration,Fits_Files,moment= False):
         Mask.close()
         case = ['debug_add']
         fact = 1.
+        fact_mean = 1.
     else:
         Moment = fits.open(f"{Configuration['FITTING_DIR']}{Fits_Files['MOMENT0']}")
     #model_mom0 = sf.remove_inhomogeneities(Configuration,model_mom0,inclination=float(current[1][0]), pa = float(current[2][0]), center = [current[3][0],current[4][0]])
@@ -189,6 +190,7 @@ def check_source_brightness(Configuration,Fits_Files,moment= False):
         checking= 'Moment 0 Map'
         case = ['main','screen']
         fact=2.
+        fact_mean =  3./Configuration['SOURCE_MEAN_SNR']
     #The following should only be run if we ran sofia
     Too_Faint = False
     #Check that the source is bright enough
@@ -205,7 +207,7 @@ At the cutoff the SNR = {Max_SNR}.
 At the cutoff the SNR = {Max_SNR}.
 ''', Configuration)
     Mean_SNR = np.nanmean(snr)
-    if Mean_SNR < Configuration['SOURCE_MEAN_SNR']:
+    if Mean_SNR < Configuration['SOURCE_MEAN_SNR']*fact_mean:
         sf.print_log(f'''CHECK_SOURCE_BRIGHTNESS: The mean SNR of the pixels in the mask is {Mean_SNR} in the {checking}.
 This too faint.
 ''', Configuration,case= case)

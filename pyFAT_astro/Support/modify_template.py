@@ -20,23 +20,23 @@ from scipy.interpolate import CubicSpline
 def apply_new_size(Configuration, new_size ):
     ''' Check whether we want to apply our new size '''
     # we want to have at least a quarter beam difference to apply the size.
-
-    difference = [abs(Configuration['SIZE_IN_BEAMS'][x]-new_size[x]) for x in [0,1]]
-
-
-    if all([(x < Configuration['RING_SIZE']/2.) for x in difference]):
-        sf.print_log(f'''APPLY_NEW_SIZE: The new sizes equal those of the previous fit. Not changing
-''', Configuration,case=['verbose'])
-        return False
-    sf.print_log(f'''APPLY_NEW_SIZE: The new sizes differ from those of the previous fit.
-''', Configuration,case=['verbose'])
+    apply_size = [True,True]
+   
     for i in [0,1]:
-        for sizes in Configuration['OLD_SIZE'][:-1]:
-            if abs(sizes[i] - new_size[i]) < Configuration['RING_SIZE']/2.:
-                sf.print_log(f'''APPLY_NEW_SIZE: The side {i} has been fitted before fixing it.
+        if Configuration['FIX_SIZE'][i]:
+            apply_size[i] = False
+        elif abs(Configuration['SIZE_IN_BEAMS'][i]-new_size[i]) < \
+            Configuration['RING_SIZE']/2.:
+            apply_size[i] = False
+            sf.print_log(f'''APPLY_NEW_SIZE: The size on side {i} is equal to that of the previous fit. Not changing
+''', Configuration,case=['verbose'])    
+        else: 
+            for sizes in Configuration['OLD_SIZE'][:-1]:
+                if abs(sizes[i] - new_size[i]) < Configuration['RING_SIZE']/2.:
+                    sf.print_log(f'''APPLY_NEW_SIZE: The side {i} has been fitted before, fixing it to the new size.
 ''', Configuration,case=['verbose'])
-                Configuration['FIX_SIZE'][i] = True
-    return True
+                    Configuration['FIX_SIZE'][i] = True        
+    return apply_size
 apply_new_size.__doc__ =f'''
  NAME:
     apply new size
@@ -164,7 +164,8 @@ def calc_new_size(Configuration,Tirific_Template,radii,sbr_in,sbr_ring_limits ):
             try:
                 vals = sf.fit_gaussian(Configuration,radii,sm_sbr[i,:],errors=sbr_ring_limits[i,:])
                 extend_radii = np.linspace(0.,Configuration['MAX_SIZE_IN_BEAMS']*Configuration['BEAM'][0],1000)
-                Gauss_diff = sf.gaussian_function(extend_radii,*vals)-sbr_ring_limits[i,-1]
+                Gauss_profile = sf.gaussian_function(extend_radii,*vals)
+                Gauss_diff = Gauss_profile-sbr_ring_limits[i,-1]
                 this_size=sf.set_limits(extend_radii[np.where(Gauss_diff < 0.)[0][0]]/Configuration['BEAM'][0]+0.5, Configuration['MIN_SIZE_IN_BEAMS'], Configuration['MAX_SIZE_IN_BEAMS'])
             except FittingError:
                 #If we cannot fit a gaussian we extend by a beam
@@ -545,15 +546,18 @@ def check_size(Configuration,Tirific_Template, fit_type = 'Undefined', \
     if not no_apply:
         apply_size = apply_new_size(Configuration,size_in_beams)
     else:
-        apply_size = False
+        apply_size = [False,False]
     sf.print_log(f'''CHECK_SIZE: These have been fitted before {Configuration['OLD_SIZE']}
 {'':8s} This is new_size {size_in_beams}, This is what currently is in {Configuration['SIZE_IN_BEAMS']}
-''',Configuration,case= ['debug_add'])
-    if apply_size:
-        Configuration['OLD_SIZE'].append(list(copy.deepcopy(Configuration['SIZE_IN_BEAMS'])))
-        for i in [0,1]:
-            if not Configuration['FIX_SIZE'][i]:
-                Configuration['SIZE_IN_BEAMS'][i] = copy.deepcopy(size_in_beams[i])
+''',Configuration,case= ['debug_add']) 
+    trig = False
+    tmp_old_size=list(copy.deepcopy(Configuration['SIZE_IN_BEAMS']))
+    for i in [0,1]:
+        if apply_size[i]:
+            trig = True
+            Configuration['SIZE_IN_BEAMS'][i] = copy.deepcopy(size_in_beams[i])         
+    if trig:
+        Configuration['OLD_SIZE'].append(tmp_old_size)
         ring_size, number_of_rings = sf.set_ring_size(Configuration)
         sf.print_log(f'''CHECK_SIZE: Applied the size of {Configuration['SIZE_IN_BEAMS']}, ring size {ring_size} resulting in {number_of_rings} rings
 ''',Configuration,case=['verbose'])
@@ -578,7 +582,7 @@ def check_size(Configuration,Tirific_Template, fit_type = 'Undefined', \
 {'':8s}The RC is deemed unrliable from ring {Configuration['RC_UNRELIABLE']} on.
 ''',Configuration,case= ['debug_add'])
 
-    if apply_size:
+    if any(apply_size):
         # Do not move this from here else other routines such as sbr_limits are messed up
         set_new_size(Configuration,Tirific_Template,fit_type= fit_type\
             ,current_run = current_run)
