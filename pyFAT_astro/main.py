@@ -61,9 +61,7 @@ def main(argv):
         where configuration_file specifies a yaml file with specific settings
         such as the catalog.
 
-        For fitting global screen
-    screen = False
-    global debuga single galaxy use pyFAT in this way:
+        For fitting use pyFAT in this way:
 
             pyFAT cube_name=Input_Cube.fits
 
