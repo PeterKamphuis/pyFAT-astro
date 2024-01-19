@@ -1,6 +1,7 @@
 # -*- coding: future_fstrings -*-
 # This module contains the main loop over the fitting per galaxy
 
+import copy
 import os
 import pyFAT_astro
 import warnings
@@ -40,11 +41,11 @@ def FAT_Galaxy_Loop(Configuration):
                 sf.write_config(
                     f'{Configuration["LOG_DIRECTORY"]}CFG_Before_Fitting.txt', Configuration)
         # then we want to read the template
-        Tirific_Template = sf.tirific_template()
+      
 
-        if 'fit_tirific_osc' in Configuration['FITTING_STAGES']:
-            current_run = runf.fitting_osc(
-                Configuration, Fits_Files, Tirific_Template, Initial_Parameters)
+        if 'fit_tirific_osc' in Configuration['FITTING_STAGES']: 
+            current_run,Tirific_Template = runf.fitting_osc(
+                Configuration, Fits_Files,  Initial_Parameters)
         elif 'fit_make_your_own' in Configuration['FITTING_STAGES']:
             sf.print_log(f'''FAT_GALAXY_LOOPS: If you add any fitting routine make sure that the fit stage  starts with Fit_
 ''',Configuration)
@@ -148,6 +149,7 @@ Therefore we remove the Create_FAT_Cube stages from the loop.
     else:
         fat_ext = '_FAT'
     stripped_file_name = os.path.splitext(Configuration['INPUT_CUBE'])[0]
+
     Fits_Files['FITTING_CUBE'] = f"{stripped_file_name}{fat_ext}.fits"
     Fits_Files['OPTIMIZED_CUBE'] = f"{stripped_file_name}{fat_ext}_opt.fits"
     Fits_Files['MOMENT0'] = f"Sofia_Output/{Configuration['BASE_NAME']}_mom0.fits"
@@ -155,6 +157,7 @@ Therefore we remove the Create_FAT_Cube stages from the loop.
     Fits_Files['MOMENT2'] = f"Sofia_Output/{Configuration['BASE_NAME']}_mom2.fits"
     Fits_Files['MASK'] = f"Sofia_Output/{Configuration['BASE_NAME']}_mask.fits"
     Fits_Files['CHANNEL_MAP'] = f"Sofia_Output/{Configuration['BASE_NAME']}_chan.fits"
+    Fits_Files['TIR_RUN_CUBE'] = copy.deepcopy(Fits_Files['FITTING_CUBE'])
     if 'create_fat_cube' in Configuration['FITTING_STAGES']:
         if not os.path.exists(f"{Configuration['FITTING_DIR']}/{Fits_Files['ORIGINAL_CUBE']}"):
             raise BadCatalogueError(
@@ -280,18 +283,16 @@ def MP_Fitting_Loop(input,timing_lock,catalogue_lock):
         Fits_Files = input['Fits_Files']
         registered_exception = None
         current_run = 'Not Initialized'
-        # then we want to read the template
-        Tirific_Template = sf.tirific_template()
-
+       
             # If you add any make sure that the fitstage  starts with 'Fit_'
 
         if Configuration['DEBUG']:
             sf.write_config(
                 f'{Configuration["LOG_DIRECTORY"]}CFG_Before_Fitting.txt', Configuration)
 
-        if 'fit_tirific_osc' in Configuration['FITTING_STAGES']:
-            current_run = runf.fitting_osc(
-                Configuration, Fits_Files, Tirific_Template, Initial_Parameters)
+        if 'fit_tirific_osc' in Configuration['FITTING_STAGES']:   
+            current_run,Tirific_Template = runf.fitting_osc(
+                Configuration, Fits_Files, Initial_Parameters)
         elif 'fit_make_your_own' in Configuration['FITTING_STAGES']:
             sf.print_log(f'''FAT_GALAXY_LOOPS: If you add any fitting routine make sure that the fit stage  starts with Fit_
 ''',Configuration)

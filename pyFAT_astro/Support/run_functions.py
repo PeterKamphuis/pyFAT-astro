@@ -259,7 +259,7 @@ def check_inclination(Configuration,Tirific_Template,Fits_Files, \
     #write_new_to_template(Configuration, f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def", Check_Template)
     Check_Template['LOOPS'] = '0'
     Check_Template['INIMODE'] = '0'
-    Check_Template['INSET'] = f"{Fits_Files['FITTING_CUBE']}"
+    Check_Template['INSET'] = f"{Fits_Files['TIR_RUN_CUBE']}"
     current_cwd = os.getcwd()
     short_log = Configuration['LOG_DIRECTORY'].replace(Configuration['FITTING_DIR'],'')
     Check_Template['RESTARTNAME'] = f"{short_log}restart_{tmp_stage}.txt"
@@ -643,7 +643,7 @@ Checking the central flux in a box with size of {Configuration['BEAM_IN_PIXELS']
     # extract a PV-Diagram
     messages = extract_pv(cube = Cube,\
                 overwrite = False,PA=pa[0],center=[ra,dec,v_app*1000.], convert = 1000.,\
-                log = True,silent = True,\
+                log = True,silent = True,velocity_type = Configuration['HDR_VELOCITY'],\
                 finalsize = [int(round(Configuration['SIZE_IN_BEAMS'][0]*Configuration['BEAM'][0]/np.mean([abs(header['CDELT1']),abs(header['CDELT2'])])*1.25+header['NAXIS1']*0.2)),
                                     int(round(z_max-z_min)+10.)],   
                 output_directory = f"{Configuration['FITTING_DIR']}Sofia_Output",\
@@ -922,7 +922,12 @@ failed_fit.__doc__ =f'''
 
  NOTE:
 '''
-def fitting_osc(Configuration,Fits_Files,Tirific_Template,Initial_Parameters):
+def fitting_osc(Configuration,Fits_Files,Initial_Parameters):
+    # First we want to read the template
+    Tirific_Template = sf.tirific_template()
+    # if the CTYPE3 is not 'VELO' we want to make a copy of the fitting cube that is used in tirific
+    if Configuration['HDR_VELOCITY'] != 'VELO':
+        Fits_Files = wf.create_tirific_run_cube(Configuration,Fits_Files)
     current_run = 'Not Initialized'
     Configuration['FIT_TIME'][0] = datetime.now()
     sf.create_directory(Configuration['USED_FITTING'],Configuration['FITTING_DIR'])
@@ -966,7 +971,7 @@ def fitting_osc(Configuration,Fits_Files,Tirific_Template,Initial_Parameters):
         Configuration['FINAL_COMMENT'] = 'We could not converge on the extent or centre of the galaxy'
         Configuration['OUTPUT_QUANTITY'] = 5
     Configuration['FIT_TIME'][1] = datetime.now()
-    return current_run
+    return current_run,Tirific_Template
 fitting_osc.__doc__ =f'''
  NAME:
     fitting_osc
@@ -1045,7 +1050,7 @@ def fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run, \
 
         Tirific_Template['LOOPS'] = 1.
         if Configuration['OPTIMIZED']:
-            Tirific_Template['INSET'] = f"{Fits_Files['FITTING_CUBE']}"
+            Tirific_Template['INSET'] = f"{Fits_Files['TIR_RUN_CUBE']}"
             Tirific_Template['INIMODE'] = "0"
             sf.finish_current_run(Configuration,current_run)
     else:
@@ -1145,7 +1150,7 @@ def make_full_resolution(Configuration,Tirific_Template,Fits_Files,\
     sf.print_log(f'''MAKE_FULL_RESOLUTION: creating full resolution for stage {fit_type}.
 ''',Configuration,case= ['main','debug_start'])
     write_new_to_template(Configuration, f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def", Tirific_Template)
-    Tirific_Template['INSET'] = f"{Fits_Files['FITTING_CUBE']}"
+    Tirific_Template['INSET'] = f"{Fits_Files['TIR_RUN_CUBE']}"
     Tirific_Template['VARY'] = f" VROT 1:3"
     Tirific_Template['VARINDX'] = f" "
     Tirific_Template['LOOPS'] = "0"
@@ -1497,7 +1502,7 @@ def tirshaker_call(Configuration,Fits_Files):
     if Configuration['OPTIMIZED']:
         Tirific_Template['INSET'] = f"{Fits_Files['OPTIMIZED_CUBE']}"
     else:
-        Tirific_Template['INSET'] = f"{Fits_Files['FITTING_CUBE']}"
+        Tirific_Template['INSET'] = f"{Fits_Files['TIR_RUN_CUBE']}"
     
     set_fitting_parameters(Configuration, Tirific_Template,stage = 'run_os')
 

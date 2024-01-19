@@ -537,16 +537,10 @@ def finish_galaxy(Configuration,current_run = 'Not initialized',\
         sf.print_log(f'''
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 {"":8s}Your velocity frame is not suitable for Tirific it is CTYPE3 = {Configuration['HDR_VELOCITY']} and should be VELO, FELO or FREQ 
-{"":8s}If you want to continue to fit with tirific please use the cube marked _used , we have kept the correct conversion in the FAT cube
+{"":8s}If you want to continue to fit with tirific please use the cube marked _tirific , we have kept the correct conversion in the FAT cube
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ''',Configuration, case = ['main','screen'])
-        source = f'{Configuration["FITTING_DIR"]}/{Fits_Files["FITTING_CUBE"]}'
-        stripped_file_name = os.path.splitext(Fits_Files["FITTING_CUBE"])[0]
-        target = f'{Configuration["FITTING_DIR"]}/{stripped_file_name}_used.fits'
-        os.system(f'''cp {source} {target}''')
-        cube = fits.open(source)
-        cube[0].header['CTYPE3'] = Configuration['HDR_VELOCITY']
-        fits.writeto(source,cube[0].data,cube[0].header,overwrite=True )
+        
 
 
 

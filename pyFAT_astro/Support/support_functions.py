@@ -573,7 +573,7 @@ def clean_header(Configuration,hdr_in,two_dim=False,mask_file=False):
     hdr = copy.deepcopy(hdr_in)
     print_log(f'''CLEAN_HEADER: Starting to clean the header.
 ''',Configuration,case= ['debug_start'])
-    keywords = ['CDELT','CUNIT','CRPIX','CRVAL','CTYPE']
+    keywords = ['CDELT','CUNIT','CRPIX','CRVAL','CTYPE','CROTA']
     for key in keywords:
         try:
             del hdr[f'{key}4']
@@ -619,7 +619,11 @@ Please note that FAT can only deal with velocity cubes, not frequency.
         #Tirific will only run with VELO so if VRAD of VOPT then we need to run with VELO and fix it in the end
         Configuration['HDR_VELOCITY'] = hdr['CTYPE3']
         if  hdr['CTYPE3'].upper() in ['VRAD','VOPT']:
-            hdr['CTYPE3'] = 'VELO'
+            print_log(f'''CLEAN_HEADER: you are use a velocity type of {hdr['CTYPE3'].upper()} however tirific takes issue with this.
+As such we are replacing it with VELO before every tirific run. 
+!!!!!!!!!!!! ---- We are not converting anything so your fitting and all products are are of type {hdr['CTYPE3'].upper()}-------!!!!!!!!                                              
+''',Configuration)
+            #hdr['CTYPE3'] = 'VELO'
 
         if 'SPECSYS3' not in hdr:
             if 'SPECSYS' in hdr:
@@ -671,12 +675,12 @@ Please note that FAT can only deal with velocity cubes, not frequency.
                 for line in hdr['HISTORY']:
                     tmp = [x.strip().upper() for x in line.split()]
                     if 'BMAJ=' in tmp:
-                        hdr['BMAJ'] = tmp[tmp.index('BMAJ=') + 1]
+                        hdr['BMAJ'] = float(tmp[tmp.index('BMAJ=') + 1])
                         found = True
                     if 'BMIN=' in tmp:
-                        hdr['BMIN'] = tmp[tmp.index('BMIN=') + 1]
+                        hdr['BMIN'] = float(tmp[tmp.index('BMIN=') + 1])
                     if 'BPA=' in tmp:
-                        hdr['BPA'] = tmp[tmp.index('BPA=') + 1]
+                        hdr['BPA'] = float(tmp[tmp.index('BPA=') + 1])
                     if found:
                         break
             if not found:
@@ -3447,7 +3451,11 @@ We were running {deffile} and failed to find the output {output_fits} or {output
             raise TirificOutputError(f'''The tirific subprocess did not produce the correct output, most likely it crashed.
 We were running {deffile} and failed to find the output {output_fits} or {output_deffile}.
 ''')
-
+    #If we are running tirific with an incorrect velocity type we should addapt the velocity type of the output
+    if Configuration['HDR_VELOCITY'] != 'VELO':
+        cube = fits.open(output_fits)
+        cube[0].header['CTYPE3'] = Configuration['HDR_VELOCITY']
+        fits.writeto(output_fits,cube[0].data,cube[0].header,overwrite=True)
     if currentloop != max_loop:
         return 1,current_run
     else:
@@ -3743,6 +3751,7 @@ def setup_configuration(cfg):
                'BEAM': [0.,0.,0.], #  FWHM BMAJ, BMIN in arcsec and BPA, set in main
                'BEAM_AREA': 0., #BEAM_AREA in arcsec set in main
                'HDR_VELOCITY': 'VELO', #Track the velocity frame as tirific will only run with VELO
+               'TIR_RUN_CUBE': None, # if the type of velocity axis is not VELO we need to run on a cube with that key word adjusted.
                'NAXES': [0.,0.,0.], #  Size of the cube in pixels x,y,z arranged like sane people not python, set in main
                'MAX_ERROR': {}, #The maximum allowed errors for the parameters, set in main derived from cube
                'MIN_ERROR': {}, #The minumum allowed errors for the parameters, initially set in check_source but can be modified through out INCL,PA,SDSIS,Z0 errors change when the parameters is fixed or release

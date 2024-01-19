@@ -159,6 +159,23 @@ basicinfo.__doc__ =f'''
  NOTE:
 '''
 
+def create_tirific_run_cube(Configuration,Fits_Files):
+    # if we have an optimized size cube this is only used in the run and we need t o change the ctyp 
+    if Configuration['OPTIMIZED']:
+        optimized_cube = f'{Configuration["FITTING_DIR"]}/{Fits_Files["OPTIMIZED_CUBE"]}'
+        cube = fits.open(optimized_cube)
+        cube[0].header['CTYPE3'] = 'VELO'
+        fits.writeto(optimized_cube,cube[0].data,cube[0].header,overwrite=True)
+    source = f'{Configuration["FITTING_DIR"]}/{Fits_Files["FITTING_CUBE"]}'
+    stripped_file_name = os.path.splitext(Fits_Files["FITTING_CUBE"])[0]
+    target = f'{Configuration["FITTING_DIR"]}/{stripped_file_name}_tirific.fits'
+    os.system(f'''cp {source} {target}''')
+    cube = fits.open(target)
+    cube[0].header['CTYPE3'] = 'VELO'
+    fits.writeto(target,cube[0].data,cube[0].header,overwrite=True)
+    Fits_Files['TIR_RUN_CUBE'] = target    
+    return Fits_Files
+
 def extract_date(string):
     tmp = string.split(' ')
     tmp2 = tmp[0].split('-')
