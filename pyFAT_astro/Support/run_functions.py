@@ -642,7 +642,7 @@ Checking the central flux in a box with size of {Configuration['BEAM_IN_PIXELS']
 
     # extract a PV-Diagram
     messages = extract_pv(cube = Cube,\
-                overwrite = False,PA=pa[0],center=[ra,dec,v_app*1000.], convert = 1000.,\
+                overwrite = False,PA=pa[0],center=[ra,dec,v_app*1000.], map_velocity_unit ='km/s',\
                 log = True,silent = True,velocity_type = Configuration['HDR_VELOCITY'],\
                 finalsize = [int(round(Configuration['SIZE_IN_BEAMS'][0]*Configuration['BEAM'][0]/np.mean([abs(header['CDELT1']),abs(header['CDELT2'])])*1.25+header['NAXIS1']*0.2)),
                                     int(round(z_max-z_min)+10.)],   

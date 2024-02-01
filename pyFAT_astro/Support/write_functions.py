@@ -852,7 +852,7 @@ def make_overview_plot(Configuration,Fits_Files ):
                 center=  [float(FAT_Model[Vars_to_plot.index('XPOS'),0]),\
                         float(FAT_Model[Vars_to_plot.index('YPOS'),0]),\
                         float(FAT_Model[Vars_to_plot.index('VSYS'),0]*1000.)],\
-                convert= 1000.,log = True,silent = True,\
+                map_velocity_unit= 'km/s',log = True,silent = True,\
                 output_directory = f"{Configuration['FITTING_DIR']}Finalmodel",\
                 output_name =f"{Configuration['BASE_NAME']}_final_xv.fits")
     sf.print_log(messages,Configuration,case=["verbose"])
@@ -863,7 +863,7 @@ def make_overview_plot(Configuration,Fits_Files ):
                 center=  [float(FAT_Model[Vars_to_plot.index('XPOS'),0]),\
                         float(FAT_Model[Vars_to_plot.index('YPOS'),0]),\
                         float(FAT_Model[Vars_to_plot.index('VSYS'),0]*1000.)],\
-                convert= 1000.,log = True,silent = True,\
+                map_velocity_unit= 'km/s',log = True,silent = True,\
                 output_directory = f"{Configuration['FITTING_DIR']}/Finalmodel/",\
                 output_name =f"Finalmodel_xv.fits")
     sf.print_log(messages,Configuration,case=["verbose"])
