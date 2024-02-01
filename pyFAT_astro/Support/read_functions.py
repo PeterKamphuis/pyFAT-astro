@@ -255,7 +255,9 @@ def extract_vrot(Configuration,map ,angle,center):
 {'':8s} PA= {angle}
 {'':8s} center= {center}
 ''',Configuration, case=['debug_start'])
+   
     maj_profile,maj_axis,maj_resolution = sf.get_profile(Configuration,map,angle,center=center)
+   
     # We should base extracting the RC on where the profile is negative and positive to avoid mistakes in the ceneter coming through
     neg_index = np.where(maj_profile < 0.)[0]
     pos_index = np.where(maj_profile > 0.)[0]
@@ -599,6 +601,7 @@ def guess_orientation(Configuration,Fits_Files, vsys = -1 ,center = None, \
                 #map[3*minimum_noise_in_map > noise_map] = 0.
         # From these estimates we also get an initial SBR
         maj_profile,maj_axis,maj_resolution = sf.get_profile(Configuration,map, pa[0],center)
+     
         # let's get an intensity weighted center for the extracted profile.
 
         center_of_profile = np.sum(maj_profile*maj_axis)/np.sum(maj_profile)

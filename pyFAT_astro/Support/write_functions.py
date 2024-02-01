@@ -398,7 +398,7 @@ class full_system_tracking:
         fig.savefig(self.plot_name)
         plt.close()
 
-def beam_artist(ax,hdr,im_wcs):
+def ist(ax,hdr,im_wcs):
     xmin, xmax = ax.get_xlim()
     ymin, ymax = ax.get_ylim()
     ghxloc, ghyloc = im_wcs.wcs_pix2world(float(xmin+(xmax-xmin)/18.), float(ymin+(ymax-ymin)/18.), 1.)
@@ -414,9 +414,9 @@ def beam_artist(ax,hdr,im_wcs):
            edgecolor='k', lw=1, facecolor='none', hatch='/////',zorder=15)
     return beam
 
-beam_artist.__doc__ =f'''
+ist.__doc__ =f'''
  NAME:
-    beam_artist
+    ist
 
  PURPOSE:
     create a beam patch
@@ -433,7 +433,7 @@ beam_artist.__doc__ =f'''
 
 
  OUTPUTS:
-    BEAM_ARTIST
+    IST
  OPTIONAL OUTPUTS:
 
  PROCEDURES CALLED:
@@ -673,7 +673,7 @@ def make_overview_plot(Configuration,Fits_Files ):
   
     square_plot(ax_moment0)
     ax_moment0.grid()    
-    beam = beam_artist(ax_moment0,moment0[0].header,im_wcs)
+    beam = ist(ax_moment0,moment0[0].header,im_wcs)
     ax_moment0.add_patch(beam)
     #center_x,center_y = im_wcs.wcs_world2pix(FAT_Model[Vars_to_plot.index('XPOS'),0],\
     #                    FAT_Model[Vars_to_plot.index('YPOS'),0], 1.)
@@ -761,7 +761,7 @@ def make_overview_plot(Configuration,Fits_Files ):
     #          levels=momlevel, colors='r',zorder=8, linewidths=0.9)
    
     square_plot(ax_moment1)
-    beam = beam_artist(ax_moment1,moment1[0].header,im_wcs)
+    beam = ist(ax_moment1,moment1[0].header,im_wcs)
     ax_moment1.add_patch(beam)
     ax_moment1.grid()
     # colorbar
@@ -811,7 +811,7 @@ def make_overview_plot(Configuration,Fits_Files ):
 
    
     square_plot(ax_moment2)
-    beam = beam_artist(ax_moment2,moment2[0].header,im_wcs)
+    beam = ist(ax_moment2,moment2[0].header,im_wcs)
     ax_moment2.add_patch(beam)
     ax_moment2.grid()
 

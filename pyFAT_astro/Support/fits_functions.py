@@ -39,7 +39,7 @@ and to have decent signal noise
         sf.print_log('CHECK_MASK: Creating Sofia Moments',Configuration,case=['verbose'])
         messages = moments(filename =  f"{Configuration['FITTING_DIR']}{Fits_Files['FITTING_CUBE']}",\
                         mask =  f"{Configuration['FITTING_DIR']}/{Fits_Files['MASK']}",\
-                        overwrite = True, velocity_unit= 'm/s',\
+                        overwrite = True, map_velocity_unit= 'km/s',\
                         debug = Configuration['DEBUG'], log=True,\
                         output_directory =   f"{Configuration['FITTING_DIR']}/Sofia_Output",\
                         output_name = f"{Configuration['BASE_NAME']}")

@@ -3302,7 +3302,7 @@ def set_overall_parameters(Configuration, Fits_Files,Tirific_Template,\
     if Configuration['OPTIMIZED']:
         Tirific_Template['INSET'] = f"{Fits_Files['OPTIMIZED_CUBE']}"
     else:
-        Tirific_Template['INSET'] = f"{Fits_Files['FITTING_CUBE']}"
+        Tirific_Template['INSET'] = f"{Fits_Files['TIR_RUN_CUBE']}"
 
     if Configuration['NO_RINGS'] < 20:
         Tirific_Template['INIMODE'] = '1'

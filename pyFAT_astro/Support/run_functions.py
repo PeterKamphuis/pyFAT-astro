@@ -308,7 +308,7 @@ def check_inclination(Configuration,Tirific_Template,Fits_Files, \
                                 max_ini_time= int(300*(int(Check_Template['INIMODE'])+1)))
         messages = moments(filename = f"{Configuration['FITTING_DIR']}{tmp_stage}/{tmp_stage}.fits",\
                             mask = f"{Configuration['FITTING_DIR']}/{Fits_Files['MASK']}", moments = [0],\
-                            overwrite = True, velocity_unit= 'm/s',\
+                            overwrite = True, map_velocity_unit= 'km/s',\
                             debug = Configuration['DEBUG'], log=True,\
                             output_directory =  f"{Configuration['FITTING_DIR']}{tmp_stage}",\
                             output_name = tmp_stage)

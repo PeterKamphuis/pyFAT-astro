@@ -607,7 +607,7 @@ def finish_galaxy(Configuration,current_run = 'Not initialized',\
                 if Fits_Files and os.path.exists(f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel.fits"):
                     # we do not mask the model as it is also important where the model extends and there is no data.  
                     messages = moments(filename =  f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel.fits",\
-                            overwrite = True, velocity_unit= 'm/s',\
+                            overwrite = True, map_velocity_unit= 'km/s',\
                             debug = Configuration['DEBUG'], log=True, level = 0.25*Configuration['NOISE'],\
                             output_directory = f"{Configuration['FITTING_DIR']}/Finalmodel/",\
                             output_name = 'Finalmodel')
