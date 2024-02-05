@@ -863,6 +863,7 @@ def make_overview_plot(Configuration,Fits_Files ):
                 center=  [float(FAT_Model[Vars_to_plot.index('XPOS'),0]),\
                         float(FAT_Model[Vars_to_plot.index('YPOS'),0]),\
                         float(FAT_Model[Vars_to_plot.index('VSYS'),0]*1000.)],\
+                cube_velocity_unit='m/s',\
                 map_velocity_unit= 'km/s',log = True,silent = True,\
                 output_directory = f"{Configuration['FITTING_DIR']}/Finalmodel/",\
                 output_name =f"Finalmodel_xv.fits")

@@ -357,7 +357,7 @@ def check_angular_momentum_vector(Configuration,radius_in,pa_in,inclination_in,\
     #phi is dependent on theta but the max change should be the same
     max_shift = np.arctan(np.tan(Configuration['MAX_CHANGE']['INCL']*(np.pi/180.))\
                     *np.tan(Configuration['MAX_CHANGE']['PA']*(np.pi/180.)))
-    print_log(f'''CHECK_ANGULAR_MOMENTUM_VECTOR: The maximum allowed shift = {max_shift}.
+    print_log(f'''CHECK_ANGULAR_MOMENTUM_VECTOR: The maximum allowed shift  = {max_shift}.
 ''',Configuration,case= ['debug_start'])
     succes = False
     counter = 0.
@@ -394,9 +394,10 @@ Inclination = {inclination}
         change_angle = np.sqrt(theta_change**2+phi_change**2)
         change_angle[in_zero] =0.
         new_change_angle = max_profile_change(Configuration,radkpc,change_angle,'ARBITRARY',\
-            slope = Configuration['WARP_SLOPE'][side],max_change=max_shift, kpc_radius=True )
+            slope = Configuration['WARP_SLOPE'][side],max_change=max_shift, kpc_radius=True, quadrant=quadrant )
 
-
+        #for i in range(len(new_change_angle)):
+        #        print(f'new_ch = {new_change_angle[i]}, phi_factor = {phi_factor[i]}, theta_factor = {theta_factor[i]} ')
         new_theta_change = new_change_angle*theta_factor
         new_phi_change = new_change_angle*phi_factor
         new_theta = theta_zero+new_theta_change
@@ -422,6 +423,8 @@ phi {new_phi_change}, theta {new_theta_change}, angle {new_change_angle}
 
             pa,inclination = calculate_am_vector(Configuration,new_theta,new_phi,\
                                 multiple=quadrant,invert=True )
+            #for i in range(len(pa)):
+            #    print(f'PA = {pa[i]}, inclination = {inclination[i]}, quadrant = {quadrant[i]} ')
             print_log(f'''CHECK_ANGULAR_MOMENTUM_VECTOR: new PA and inclination
 PA = {pa}
 Inclination = {inclination}
@@ -432,6 +435,7 @@ Inclination = {inclination}
                 succes = True
         else:
             succes = True
+        #exit()
 
     print_log(f'''CHECK_ANGULAR_MOMENTUM_VECTOR: Before checking we have modified = {modified}
 ''',Configuration,case= ['debug_add'])
@@ -2827,13 +2831,14 @@ make_tiltogram.__doc__ =f'''
 
 
 def max_profile_change(Configuration,radius,profile,key,max_change=None,\
-                        slope = None, kpc_radius=False):
+                        slope = None, kpc_radius=False , quadrant = None):
     if not kpc_radius:
         radkpc = convertskyangle(Configuration,radius)
     else:
         radkpc = copy.deepcopy(radius)
     new_profile = copy.deepcopy(profile)
-    sm_profile = savgol_filter(profile, 3, 1)
+  
+    sm_profile = savgol_filter(new_profile, 3, 1)
     if key == 'ARBITRARY' and not max_change:
         raise InputError('For arbitrary checks you have to set the max_change.')
     if key != 'ARBITRARY':
@@ -2841,6 +2846,11 @@ def max_profile_change(Configuration,radius,profile,key,max_change=None,\
     diff_rad =  [float(y-x) for x,y in zip(radkpc,radkpc[1:])]
     diff_profile = [float(y-x) for x,y in zip(profile,profile[1:])]
     diff_sm_profile = [float(y-x) for x,y in zip(sm_profile,sm_profile[1:])]
+    if quadrant is None:
+        diff_q = np.zeros(len(diff_profile))
+    else:
+        diff_q = [float(y-x) for x,y in zip(quadrant,quadrant[1:])]
+
     print_log(f'''MAX_CHANGE_PROFILE: The profile {key} starts with.
 {'':8s} {key} = {new_profile} and max change = {max_change}
 {'':8s} smoothed {key}  = {sm_profile}
@@ -2849,22 +2859,40 @@ def max_profile_change(Configuration,radius,profile,key,max_change=None,\
 {'':8s} slope = {slope}
 {'':8s} diff/kpc = {[x/y for x,y in zip(diff_profile,diff_rad)]}
 ''', Configuration,case=['debug_start'])
-
+    #print(f''' For the PA and the inlcination we get a max shift per ring
+    #PA = {[Configuration['MAX_CHANGE']['PA']*y for x,y in zip(diff_profile,diff_rad)]}   
+    #INCL =  {[Configuration['MAX_CHANGE']['INCL']*y for x,y in zip(diff_profile,diff_rad)]}            
+    #          ''')
+    #    exit()
     for i,diff in enumerate(diff_profile):
-        if abs(diff)/diff_rad[i] > max_change:
+        if abs(diff)/diff_rad[i] > max_change and diff_q[i] == 0.:
+            print_log(f'''MAX_CHANGE_PROFILE: for ring {i} with {new_profile[i+1]} we find the difference {diff/diff_rad[i]}
+''', Configuration,case=['debug_add'])
             #if it is the last point we simply limit it
             if i == len(diff_profile)-1:
-                new_profile[i+1] = profile[i]+ diff/abs(diff)*(max_change*0.5*diff_rad[i])
+                new_profile[i+1] = new_profile[i]+ diff/abs(diff)*(max_change*0.5*diff_rad[i])
+                #print_log(f'''MAX_CHANGE_PROFILE: This is the last ring putting {new_profile[i+1] }.
+#''', Configuration,case=['debug_add'])
             elif i+1 == slope:
                 # if we have the start of the slope on the max_change then put it to value of the previous ring
                 new_profile[i+1] = new_profile[i]
-            elif diff_sm_profile[i]/diff_rad[i] < max_change*0.5:
+                print_log(f'''MAX_CHANGE_PROFILE: This is the start of the slope putting {new_profile[i+1] }.
+''', Configuration,case=['debug_add'])
+            elif abs(diff_sm_profile[i])/diff_rad[i] < max_change*0.5:
                 new_profile[i+1] = sm_profile[i+1]
+                print_log(f'''MAX_CHANGE_PROFILE: The smoothed profile is acceptable using {new_profile[i+1] }.
+''', Configuration,case=['debug_add'])
+                sm_profile = savgol_filter(new_profile, 3, 1)
+                diff_sm_profile = [float(y-x) for x,y in zip(sm_profile,sm_profile[1:])]
             elif diff_profile[i+1] == 0:
-                new_profile[i+1] = profile[i]+ diff/abs(diff)*(max_change*0.9*diff_rad[i])
+                new_profile[i+1] = profile[i]+ diff/abs(diff)*(max_change*0.9*diff_rad[i]) 
+                print_log(f'''MAX_CHANGE_PROFILE: The next ring is the same using {new_profile[i+1] }.
+''', Configuration,case=['debug_add'])
                 #If the change does not reverse we simply limit
             elif diff/abs(diff) == diff_profile[i+1]/abs(diff_profile[i+1]):
-                new_profile[i+1] = profile[i]+ diff/abs(diff)*(max_change*0.9*diff_rad[i])
+                new_profile[i+1] = new_profile[i]+ diff/abs(diff)*(max_change*0.9*diff_rad[i])
+                print_log(f'''MAX_CHANGE_PROFILE: We are simply applying the maximum change using {new_profile[i+1] }.
+''', Configuration,case=['debug_add'])
             else:
                 if abs(diff) > abs(diff_profile[i+1]):
                     gapped_diff = radkpc[i+2] - radkpc[i]
@@ -2872,9 +2900,11 @@ def max_profile_change(Configuration,radius,profile,key,max_change=None,\
                         new_profile[i+1] = np.mean([new_profile[i],new_profile[i+2]])
                     else:
                         new_profile[i+1] = new_profile[i]
+                    print_log(f'''MAX_CHANGE_PROFILE: Bridged the gap using {new_profile[i+1] }.
+''', Configuration,case=['debug_add'])
                 else:
 
-                    new_profile[i+1] = profile[i]+ diff/abs(diff)*(max_change*0.9*diff_rad[i])
+                    new_profile[i+1] = new_profile[i]+ diff/abs(diff)*(max_change*0.9*diff_rad[i])
 
             if i < len(diff_profile)-1:
                 diff_profile[i+1] = float(new_profile[i+2]-new_profile[i+1])
@@ -2882,6 +2912,10 @@ def max_profile_change(Configuration,radius,profile,key,max_change=None,\
     print_log(f'''MAX_CHANGE_PROFILE: The returned profile is:
 {'':8s}{key} = {new_profile}
 ''', Configuration,case=['debug_add'])
+    #for i,diff in enumerate([float(y-x) for x,y in zip(new_profile,new_profile[1:])]):
+    #    print(f'The change {diff} allowed {max_change*diff_rad[i]}')
+    #
+    #exit()
     return new_profile
 max_profile_change.__doc__ =f'''
  NAME:
@@ -2912,6 +2946,7 @@ max_profile_change.__doc__ =f'''
     Unspecified
 
  NOTE:
+    Currently this function is only applied to the angular momentum vector
 
 '''
 

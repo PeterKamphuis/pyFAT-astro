@@ -428,8 +428,8 @@ def check_source(Configuration, Fits_Files):
             sf.print_log(f'''CHECK_SOURCE: This galaxy has negative total flux. That will not work. Aborting.
     ''',Configuration,case=['main','screen'])
             raise BadSourceError('We found an initial negative total flux.')
-        sf.print_log(f'''CHECK_SOURCE:  From the input we get Distance = {Configuration['DISTANCE']}
-    ''',Configuration,case= ['debug_add'])
+        sf.print_log(f'''CHECK_SOURCE:  From the input we get Distance = {Configuration['DISTANCE']} Mpc.
+    ''',Configuration,case= ['main','screen'])
         # If the provided distance  = -1 we assume a Hubble follow
         if float(Configuration['DISTANCE']) == -1.:
             Configuration['DISTANCE'] = v_app/H_0
