@@ -538,8 +538,8 @@ def check_size(Configuration,Tirific_Template, fit_type = 'Undefined', \
 {'':8s}limits = {sbr_ring_limits}
 {'':8s}No. Rings  = {Configuration['NO_RINGS']}
 ''',Configuration,case= ['debug_add'])
-    #sbr_ring_limits = 1.25*np.array([sbr_ring_limits,sbr_ring_limits])
-    sbr_ring_limits = np.array([sbr_ring_limits,sbr_ring_limits],dtype=float)
+    sbr_ring_limits = 1.1*np.array([sbr_ring_limits,sbr_ring_limits])
+    #sbr_ring_limits = np.array([sbr_ring_limits,sbr_ring_limits],dtype=float)
 
     #This part has to change in something new
     size_in_beams = calc_new_size(Configuration,Tirific_Template,radii,sbr,sbr_ring_limits)
@@ -818,7 +818,7 @@ def fit_polynomial(Configuration,radii,profile,sm_profile,error, key, \
         fixed =sf.set_limits(len(radii)-np.min(Configuration['LAST_RELIABLE_RINGS']),1,len(radii))
         error[np.min(Configuration['LAST_RELIABLE_RINGS']):] = Configuration['CHANNEL_WIDTH']
         error[0] = Configuration['CHANNEL_WIDTH']
-        error[1] = error[1]*3.
+        #error[1] = error[1]*3.
     else:
         fixed = 1
 
@@ -869,6 +869,7 @@ def fit_polynomial(Configuration,radii,profile,sm_profile,error, key, \
 {'':8s} this gves us a maximum order of {max_order}
 ''',Configuration,case = ['debug_add'])
     found = False
+    count = 0
     while not found:
         reduced_chi = []
         order = range(start_order,max_order+1)
@@ -878,6 +879,7 @@ def fit_polynomial(Configuration,radii,profile,sm_profile,error, key, \
     {'':8s} and the following profile:
     {'':8s}{profile[st_fit:]}
     {'':8s} weights = {1./error[st_fit:]}
+    {'':8s} we are doing this for the {count} times.
     ''',Configuration,case = ['debug_add'])
 
         #make sure there are no 0. in the errors
@@ -900,15 +902,21 @@ def fit_polynomial(Configuration,radii,profile,sm_profile,error, key, \
                 for i in range(len(fit_profile)-5,len(fit_profile)):
                     if fit_profile[i-1] < fit_profile[i]:
                         fit_profile[i]=fit_profile[i-1]*0.9
+            
             red_chi = np.sum((profile[st_fit:]-fit_profile[st_fit:])**2/error[st_fit:]**2)/(len(radii[st_fit:])-ord)
             #We penailze profiles that go outside the boundaries
-
+            sf.print_log(f'''FIT_POLYNOMIAL: From the final profile we get chi**2{red_chi}
+{'':8s} VROT = {', '.join([str(x) for x in fit_profile[st_fit:]])}
+''',Configuration,case = ['debug_add'])
             if np.sum(np.absolute(np.array(boundary_limits,dtype=float))) != 0.:
                     diff = np.sum(np.array([abs(x-sf.set_limits(x,\
                                                     boundary_limits[0],\
-                                                    boundary_limits[1])) \
+                                                    boundary_limits[1]))/abs(x) \
                                             for x in  fit_profile[st_fit:]],dtype = float))
                     if diff > 1.:
+                        sf.print_log(f'''FIT_POLYNOMIAL: because of crossing {boundary_limits}
+{'':8s} we penalize the orginal chi**2 {red_chi} of order {ord} with {diff}
+''',Configuration,case = ['debug_add'])
                         red_chi = red_chi*(diff)
             if red_chi < 1.:
                 red_chi = float('NaN')
@@ -920,6 +928,7 @@ def fit_polynomial(Configuration,radii,profile,sm_profile,error, key, \
                 found = True
             else:
                 error = error/2.
+                count += 1
             
         #if key in ['VROT'] and Configuration['NO_RINGS'] < 2.5*max_order:
         #    reduced_chi[-1] = reduced_chi[-1]*(ord/Configuration['NO_RINGS'])**2.5
@@ -1961,10 +1970,9 @@ def regularise_profile(Configuration,Tirific_Template, key,min_error= None, \
     if key == 'VROT':
         no_declining_vrot(Configuration, Tirific_Template)
     profile = np.array(sf.load_tirific(Configuration,Tirific_Template, [key,f"{key}_2"]),dtype=float)
-    diff = np.sum(profile[0]-profile[1])#Check that we have two profiles
+    diff = abs(np.sum(profile[0]-profile[1]))#Check that we have two profiles
 
-    if diff <1e-8:
-        diff =0.
+    
 
     #First if we have an RC we flatten the curve
     sf.print_log(f'''REGULARISE_PROFILE: profile of {key} before regularistion
@@ -1980,8 +1988,8 @@ def regularise_profile(Configuration,Tirific_Template, key,min_error= None, \
 
 
     if key in ['SDIS','VROT']:
-        diff = False
-    if diff:
+        diff = 0.
+    if diff > 1e-8:
         sf.print_log(f'''REGULARISE_PROFILE: Treating both sides independently.
 ''',Configuration,case=['debug_add'])
         sides = [0,1]
@@ -2004,7 +2012,7 @@ def regularise_profile(Configuration,Tirific_Template, key,min_error= None, \
                                          boundary_limits= Configuration[f"{key}_CURRENT_BOUNDARY"][i+1])
         profile[i] = fit_profile
 
-    if not diff:
+    if diff < 1e-8:
         profile[1] = profile[0]
 
     original = np.array(sf.load_tirific(Configuration,Tirific_Template, [key,f"{key}_2"]),dtype=float)
@@ -2081,11 +2089,16 @@ def regularise_warp(Configuration,Tirific_Template, min_error = None, \
     min_error=np.array(min_error,dtype=float)
     weights = sf.get_ring_weights(Configuration,Tirific_Template)
     profile = np.array(sf.load_tirific(Configuration,Tirific_Template, [f"PA",f"PA_2",f"INCL",f"INCL_2"]),dtype=float)
-    diff = np.sum(profile[0]-profile[1])+np.sum(profile[2]-profile[3])  #Check that we have two profiles
-    if diff <1e-8:
-        diff = False
+    diff = abs(np.sum(profile[0]-profile[1]))+abs(np.sum(profile[2]-profile[3]))  #Check that we have two profiles
+    if diff < 1e-8:
+        sf.print_log(f'''REGULARISE_WARP: Found symmetric profiles.
+''',Configuration,case=['debug_add'])
+        sides = [0]  
     else:
-        diff = True
+        sf.print_log(f'''REGULARISE_WARP: Treating both sides independently.
+''',Configuration,case=['debug_add'])
+        sides = [0,1]
+        
 
     sf.print_log(f'''REGULARISE_WARP: profile of the warp before regularistion
 {'':8s}PA = {profile[0]}
@@ -2161,14 +2174,7 @@ def regularise_warp(Configuration,Tirific_Template, min_error = None, \
     error_theta_factor = get_error(Configuration,theta_factor,sm_theta_factor,'ARBITRARY',min_error=0.005,weights = weights)
     error_phi_factor = get_error(Configuration,phi_factor,sm_phi_factor,'ARBITRARY',min_error=0.005,weights = weights)
 
-    if diff:
-        sf.print_log(f'''REGULARISE_WARP: Treating both sides independently.
-''',Configuration,case=['debug_add'])
-        sides = [0,1]
-    else:
-        sf.print_log(f'''REGULARISE_WARP: Found symmetric profiles.
-''',Configuration,case=['debug_add'])
-        sides = [0]
+ 
 
     radii =sf.set_rings(Configuration)
     for i in sides:
@@ -2209,7 +2215,7 @@ def regularise_warp(Configuration,Tirific_Template, min_error = None, \
         profile[i+2]=inclination
 
 
-    if not diff:
+    if np.sum(sides) == 0.:
         profile[1] = profile[0]
         profile[3] = profile[2]
     #exit()

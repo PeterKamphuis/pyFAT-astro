@@ -423,6 +423,9 @@ phi {new_phi_change}, theta {new_theta_change}, angle {new_change_angle}
 
             pa,inclination = calculate_am_vector(Configuration,new_theta,new_phi,\
                                 multiple=quadrant,invert=True )
+            # Because when the quadrant changes the PA and inclination are not checked against maximum variations 
+            # Hence this stille needs to be done
+            pa,inclination = check_quadrant_change(Configuration,pa,inclination,quadrant)
             #for i in range(len(pa)):
             #    print(f'PA = {pa[i]}, inclination = {inclination[i]}, quadrant = {quadrant[i]} ')
             print_log(f'''CHECK_ANGULAR_MOMENTUM_VECTOR: new PA and inclination
@@ -476,11 +479,53 @@ check_angular_momentum_vector.__doc__ =f'''
  PROCEDURES CALLED:
     Unspecified
 
- NOTE:
+ NOTE: PA and inclination are singular sides
 '''
 
+def check_quadrant_change(Configuration,pa,inclination,quadrant):
+    diff_quadrant = [x -quadrant[0] for x in quadrant]
+    if np.sum(diff_quadrant) != 0.:
+        for i,x in enumerate(diff_quadrant):
+            if x != 0. and (1 < i <len(diff_quadrant)-1):
+                pa[i] = np.mean([pa[i-1],pa[i+1]]) 
+                inclination[i] = np.mean([inclination[i-1],inclination[i+1]])
+            elif i == len(diff_quadrant)-1:
+                pa[i] = pa[i-1]
+                inclination[i] = inclination[i-1]
+            else:
+                pass
+    return pa,inclination
+check_angular_momentum_vector.__doc__ =f'''
+ NAME:
+    check_angular_momentum_vector
 
+ PURPOSE:
+    Check the output warp by ensuring that the pa and inclination vary smoothly at the rings where the 
+    angular momentum is switching quadrants
 
+ CATEGORY:
+    support_functions
+
+ INPUTS:
+    Configuration = Standard Original FAT configuration
+    pa = PA of the model
+    inclination = inclination of the model
+    quadrants = the array that specifies the quadrants into which the am vector belongs
+
+ OPTIONAL INPUTS:
+   
+ OUTPUTS:
+    pa_new = the modfied PA
+    incl_new= the modified incl
+   
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE: PA and inclination are singular sides
+'''             
+        
 def check_sofia(Configuration,Fits_Files):
     files =['_mask.fits','_mom0.fits','_mom1.fits','_chan.fits','_mom2.fits','_cat.txt']
     for file in files:

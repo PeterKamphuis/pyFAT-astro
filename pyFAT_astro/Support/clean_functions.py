@@ -701,9 +701,9 @@ def transfer_errors(Configuration,fit_type='Undefined'):
     for parameter in variables:
         sf.print_log(f'''TRANSFER_ERROR: Creating errors for {parameter}.
 ''',Configuration, case = ['debug_add'])
-        profile = sf.load_tirific(Configuration,Tirific_Template,\
+        reg_profile = sf.load_tirific(Configuration,Tirific_Template,\
             [parameter,f"{parameter}_2"],array=True)
-        sm_profile = sf.load_tirific(Configuration,\
+        profile = sf.load_tirific(Configuration,\
             f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}_Iteration_{Configuration['ITERATIONS']}.def",\
             Variables=[parameter,f"{parameter}_2"],array=True)
             #it is possible that the last iteration of the fitted smooth check
@@ -712,14 +712,14 @@ def transfer_errors(Configuration,fit_type='Undefined'):
             apply_max= False
         else:
             apply_max = True
-        errors = get_error(Configuration,sm_profile,profile,parameter,\
+        errors = get_error(Configuration,profile,reg_profile,parameter,\
             min_error=Configuration['MIN_ERROR'][parameter],\
             apply_max_error = apply_max,weights = weights)
         if parameter == 'VROT':
-            errors = mod_vrot_incl_err(profile,errors,incl,incl_error)   
+            errors = mod_vrot_incl_err(reg_profile,errors,incl,incl_error)   
         if parameter == 'INCL':
             incl_error=errors
-            incl = profile
+            incl = reg_profile
 
         format = sf.set_format(parameter)
         Tirific_Template.insert(parameter,f"# {parameter}_ERR",f"{' '.join([f'{x:{format}}' for x in errors[0]])}")

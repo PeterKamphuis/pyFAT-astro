@@ -309,7 +309,7 @@ def check_inclination(Configuration,Tirific_Template,Fits_Files, \
         messages = moments(filename = f"{Configuration['FITTING_DIR']}{tmp_stage}/{tmp_stage}.fits",\
                             mask = f"{Configuration['FITTING_DIR']}/{Fits_Files['MASK']}", moments = [0],\
                             overwrite = True, map_velocity_unit= 'km/s',\
-                            debug = Configuration['DEBUG'], log=True,\
+                            debug = Configuration['DEBUG'], log=True,cube_velocity_unit='m/s',\
                             output_directory =  f"{Configuration['FITTING_DIR']}{tmp_stage}",\
                             output_name = tmp_stage)
         sf.print_log(messages,Configuration,case=['verbose'])
@@ -1029,7 +1029,7 @@ def fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run, \
                 pars_to_smooth.append(parameter)
             min_error.append(Configuration['MIN_ERROR'][parameter])
         warp_triggered = False
-        for key,min_err in zip(pars_to_smooth,min_error):
+        for key in pars_to_smooth:
                 if key in ['PA','INCL']:
                     if not warp_triggered:
                         smoothed = regularise_warp(Configuration,Tirific_Template,\
@@ -1043,7 +1043,7 @@ def fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run, \
                 if key == 'VROT':
                     smoothed_vrot=copy.deepcopy(smoothed)
 
-        for key,min_err in zip(not_to_smooth,fixed_errors):
+        for key in not_to_smooth:
             set_errors(Configuration,Tirific_Template,key,min_error = Configuration['MIN_ERROR'][parameter])
     #
     if stage == 'after_cc':
