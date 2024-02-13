@@ -1825,7 +1825,7 @@ def get_fit_groups(Configuration,Tirific_Template):
     groups = Tirific_Template['VARY'].split(',')
     variation_type = []
     variation = []
-    radii,cut_off_limits = sbr_limits(Configuration,Tirific_Template )
+    cut_off_limits = sbr_limits(Configuration,Tirific_Template )
     sbr_standard = np.mean(cut_off_limits) * 5. 
     paramater_standard_variation = {'PA': [10.,'a'],
                                    'INCL': [10.,'a'],
@@ -2293,7 +2293,7 @@ def get_ring_weights(Configuration,Tirific_Template):
     print_log(f'''GET_RING_WEIGTHS: retrieve this sbr.
 {'':8s} sbr = {sbr}
 ''',Configuration,case=['debug_add'])
-    radii,cut_off_limits = sbr_limits(Configuration,Tirific_Template )
+    cut_off_limits = sbr_limits(Configuration,Tirific_Template )
     print_log(f'''GET_RING_WEIGTHS: retrieved these cut_off_limits.
 {'':8s} col = {cut_off_limits}
 ''',Configuration,case=['debug_add'])
@@ -2809,9 +2809,7 @@ def make_tiltogram(Configuration,Tirific_Template):
 ''',Configuration,case=['debug_start'])
     pa_incl = load_tirific(Configuration,Tirific_Template,\
             Variables=['PA','PA_2','INCL','INCL_2'],array=True)
-    sbr = load_tirific(Configuration,Tirific_Template,Variables=["SBR",f"SBR_2"]\
-            ,array=True)
-    radii,cut_off_limits = sbr_limits(Configuration,Tirific_Template )
+
     add = [[],[]]
     Theta = [[],[]]
     phi = [[],[]]
@@ -3982,8 +3980,11 @@ setup_configuration.__doc__ =f'''
 
 
 def sbr_limits(Configuration, Tirific_Template ):
-    radii = set_rings(Configuration )
-    print_log(f'''SBR_LIMITS: Got {len(radii)} radii
+    radii = load_tirific(Configuration,Tirific_Template,Variables=['RADI'],array=True)
+    if len(radii) == 0.:
+        radii = set_rings(Configuration)
+        Tirific_Template['RADI']= ' '.join([str(x) for x in radii])
+    print_log(f'''SBR_LIMITS: Got {len(radii)} 
 ''',Configuration, case=['debug_start'])
     level = Configuration['NOISE']*1000
     noise_in_column = columndensity(Configuration,level,systemic = \
@@ -4019,7 +4020,7 @@ def sbr_limits(Configuration, Tirific_Template ):
 {'':8s}{radii}
 {'':8s}{sbr_ring_limits}
 ''',Configuration,case=['debug_add'])
-    return radii,sbr_ring_limits
+    return sbr_ring_limits
 
 sbr_limits.__doc__ =f'''
  NAME:
@@ -4126,8 +4127,8 @@ def set_limit_modifier(Configuration,Tirific_Template):
     #Scale the limits with the deviation away from 0.2 kpc as this is more or less the unmodified scale height
 
     modifier_list=[set_limits(x*(1.125-0.625*y)*set_limits(((Configuration['RING_SIZE']*Configuration['BEAM'][0])/45.)**0.25,0.75,1.25),0.5,3.) for x,y in zip(modifier_list,Z0_kpc)]
-
-    Configuration['LIMIT_MODIFIER'] = np.array(modifier_list,dtype=float)
+    #The 1.1 is emprically determined and might need modification. Lets put it in advanced configuration
+    Configuration['LIMIT_MODIFIER'] = np.array(modifier_list,dtype=float)*Configuration['LIMIT_MODIFIER_FACTOR']
     print_log(f'''SET_LIMIT_MODIFIER: Based on a Z0 in kpc {Z0_kpc}
 {'':8s} and Inclination = {Inclination}
 {'':8s} We updated the LIMIT_MODIFIER to {Configuration['LIMIT_MODIFIER']}.

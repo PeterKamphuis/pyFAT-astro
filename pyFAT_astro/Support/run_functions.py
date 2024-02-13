@@ -9,7 +9,7 @@ from make_moments.functions import extract_pv,moments
 from pyFAT_astro.Support.modify_template import write_new_to_template,\
     smooth_profile,set_cflux,fix_sbr,regularise_profile,set_fitting_parameters,\
     check_size,set_errors,get_warp_slope,check_angles,write_center,\
-    set_boundary_limits,regularise_warp,set_new_size
+    set_boundary_limits,regularise_warp,set_new_size,cut_low_rings
 from pyFAT_astro.Support.constants import H_0
 from pyFAT_astro.Support.fat_errors import FaintSourceError,BadConfigurationError,\
                                         SofiaRunError,BadSourceError,TirificOutputError
@@ -1073,6 +1073,7 @@ def fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run, \
         set_fitting_parameters(Configuration, Tirific_Template,stage = stage,\
                           initial_estimates = parameters,parameters_to_adjust = parameters_to_adjust)
 
+    
     if Configuration['DEBUG']:
         source = sf.get_system_string(f"{Configuration['FITTING_DIR']}{fit_type}_In.def")
         target = sf.get_system_string(f"{Configuration['LOG_DIRECTORY']}/Last_Unsmoothed_Input.def")
@@ -1088,8 +1089,10 @@ def fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run, \
     except TirificOutputError:
         accepted,current_run = failed_fit(Configuration,Tirific_Template,current_run,\
             Fits_Files, stage=stage, fit_type=fit_type)
-
+    if Configuration['NO_RINGS'] > 5.:
+        Tirific_Template = cut_low_rings(Configuration, Tirific_Template,Fits_Files,fit_type=fit_type,current_run=current_run)
     write_new_to_template(Configuration, f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def", Tirific_Template)
+
     if Configuration['NO_RINGS'] > 5.:
         smoothed_vrot = regularise_profile(Configuration,Tirific_Template,'VROT',min_error = Configuration['CHANNEL_WIDTH'])
         set_fitting_parameters(Configuration, Tirific_Template,stage = 'final_os',\
