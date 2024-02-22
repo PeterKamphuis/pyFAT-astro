@@ -1089,11 +1089,13 @@ def fit_smoothed_check(Configuration, Fits_Files,Tirific_Template,current_run, \
     except TirificOutputError:
         accepted,current_run = failed_fit(Configuration,Tirific_Template,current_run,\
             Fits_Files, stage=stage, fit_type=fit_type)
-    if Configuration['NO_RINGS'] > 5.:
-        Tirific_Template = cut_low_rings(Configuration, Tirific_Template,Fits_Files,fit_type=fit_type,current_run=current_run)
+    
     write_new_to_template(Configuration, f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def", Tirific_Template)
-
+    
+       
     if Configuration['NO_RINGS'] > 5.:
+        Configuration['FIX_RING_SIZE'] = True
+        cut_low_rings(Configuration, Tirific_Template,Fits_Files,fit_type=fit_type,current_run=current_run)
         smoothed_vrot = regularise_profile(Configuration,Tirific_Template,'VROT',min_error = Configuration['CHANNEL_WIDTH'])
         set_fitting_parameters(Configuration, Tirific_Template,stage = 'final_os',\
                           initial_estimates = parameters,parameters_to_adjust  = ['VROT'])

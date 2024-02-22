@@ -706,6 +706,14 @@ def transfer_errors(Configuration,fit_type='Undefined'):
         profile = sf.load_tirific(Configuration,\
             f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}_Iteration_{Configuration['ITERATIONS']}.def",\
             Variables=[parameter,f"{parameter}_2"],array=True)
+        
+        # As we can cut rings away during the smoothing we have to ensure the profiles have the same length
+
+        if len(profile[0,:]) != len(reg_profile[0,:]):
+            tmp = [[],[]]    
+            for i in [0,1]:
+                tmp[i] = profile[i,:len(reg_profile[i,:]-1)]
+            profile=np.array(tmp,dtype=float)
             #it is possible that the last iteration of the fitted smooth check
             #Crashes and is rerun with
         if parameter == 'VROT':

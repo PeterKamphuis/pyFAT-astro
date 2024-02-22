@@ -6,7 +6,7 @@ from pyFAT_astro.Support.fat_errors import SupportRunError,SmallSourceError,\
                                               InputError,ProgramError,DefFileError,\
                                               BadHeaderError,FittingError,TirificOutputError,\
                                               SofiaMissingError
-
+from pyFAT_astro.Support.modify_template import smooth_profile
 from pyFAT_astro import Templates as templates
 from collections import OrderedDict #used in Proper_Dictionary
 from inspect import stack
@@ -2290,6 +2290,7 @@ def get_ring_weights(Configuration,Tirific_Template):
 ''',Configuration,case=['debug_start'])
     sbr = load_tirific(Configuration,Tirific_Template,Variables=["SBR",f"SBR_2"],\
                 array=True )
+    
     print_log(f'''GET_RING_WEIGTHS: retrieve this sbr.
 {'':8s} sbr = {sbr}
 ''',Configuration,case=['debug_add'])
@@ -2297,9 +2298,17 @@ def get_ring_weights(Configuration,Tirific_Template):
     print_log(f'''GET_RING_WEIGTHS: retrieved these cut_off_limits.
 {'':8s} col = {cut_off_limits}
 ''',Configuration,case=['debug_add'])
+    sm_sbr = smooth_profile(Configuration,Tirific_Template,'SBR',
+                            min_error= [cut_off_limits,cut_off_limits],no_apply = True,
+                            fix_sbr_call = True, profile_in = sbr )
+    print_log(f'''GET_RING_WEIGTHS: retrieve this sbr.
+{'':8s} sbr = {sbr}
+{'':8s} using sm_sbr {sm_sbr}
+''',Configuration,case=['debug_add'])
+
     weights= [[],[]]
     for i in [0,1]:
-        weights[i] = [set_limits(x/y,0.1,10.) for x,y in zip(sbr[i],cut_off_limits)]
+        weights[i] = [set_limits(x/y,0.1,10.) for x,y in zip(sm_sbr[i],cut_off_limits)]
         weights[i] = weights[i]/np.nanmax(weights[i])
         weights[i][0:2] = np.nanmin(weights[i])
         weights[i] = [set_limits(x,0.1,1.) for x in weights[i]]
@@ -3984,7 +3993,7 @@ def sbr_limits(Configuration, Tirific_Template ):
     if len(radii) == 0.:
         radii = set_rings(Configuration)
         Tirific_Template['RADI']= ' '.join([str(x) for x in radii])
-    print_log(f'''SBR_LIMITS: Got {len(radii)} 
+    print_log(f'''SBR_LIMITS: Got {len(radii)} rings at the start
 ''',Configuration, case=['debug_start'])
     level = Configuration['NOISE']*1000
     noise_in_column = columndensity(Configuration,level,systemic = \
@@ -4207,7 +4216,7 @@ def set_ring_size(Configuration,requested_ring_size = 0., size_in_beams = 0., \
          requested_ring_size =  Configuration['RING_SIZE']
 
     print_log(f'''SET_RING_SIZE: Starting with the following parameters.
-{'':8s}size in beams = {size_in_beams}
+{'':8s}minimum size in beams = {size_in_beams}
 {'':8s}requested ring size = {requested_ring_size}
 ''', Configuration,case=['debug_start'])
     if not Configuration['FIX_RING_SIZE']:
@@ -4231,6 +4240,7 @@ def set_ring_size(Configuration,requested_ring_size = 0., size_in_beams = 0., \
             # we had two values in the size_in beams we get the number of rings from the maximum
             #As we used the minimum to calate the ring size we need to recalculated the number of rings
             no_rings = calc_rings(Configuration,ring_size=ring_size,size_in_beams=np.max(Configuration['SIZE_IN_BEAMS']) )
+            size_in_beams = copy.deepcopy(Configuration['SIZE_IN_BEAMS'])
     else:
         ring_size = requested_ring_size
         no_rings = calc_rings(Configuration,ring_size=ring_size,size_in_beams=np.max(Configuration['SIZE_IN_BEAMS']) )

@@ -443,13 +443,15 @@ def check_flat(Configuration,profile,error,key, last_reliable_ring = -1,\
 ''',Configuration, case= ['debug_start'])
 
     inner = np.mean(profile[:inner_fix])
-    mean_error = np.mean(error[inner_fix+1:last_reliable_ring])
+   
     if inner_fix+1 < last_reliable_ring:
+        mean_error = np.mean(error[inner_fix+1:last_reliable_ring])
         outer = np.mean(profile[inner_fix+1:last_reliable_ring])
         outer_std = np.std(profile[inner_fix+1:last_reliable_ring])
     else:
         outer = inner
         outer_std = np.mean(error)
+        mean_error = np.mean(error)
 
     if key in ['SDIS']:
         mean_error = mean_error*0.5
@@ -647,7 +649,7 @@ def cut_low_rings(Configuration, Tirific_Template,Fits_Files, fit_type = 'Unknow
                 if radii[x]/Configuration['BEAM'][0] < Configuration['SIZE_IN_BEAMS'][i]:
                     new_size[i] = radii[x]/Configuration['BEAM'][0]
                 break 
-    sf.print_log(f'''''CUT_LOW_RINGS: This is or new model size {new_size}
+    sf.print_log(f'''CUT_LOW_RINGS: This is or new model size {new_size}
 {'':8s} This was before {Configuration['SIZE_IN_BEAMS']}
 ''',Configuration,case= ['debug_add'])        
     apply_size = apply_new_size(Configuration,new_size)
@@ -660,6 +662,9 @@ def cut_low_rings(Configuration, Tirific_Template,Fits_Files, fit_type = 'Unknow
         set_new_size(Configuration,Tirific_Template,fit_type= fit_type\
             ,current_run = current_run)
         set_overall_parameters(Configuration, Fits_Files,Tirific_Template ,fit_type=fit_type)
+    sf.print_log(f'''CUT_LOW_RINGS: At the end we get
+{'':8s} {Tirific_Template}
+''',Configuration,case= ['debug_add']) 
     
 
 
@@ -812,7 +817,7 @@ def fit_polynomial(Configuration,radii,profile,sm_profile,error, key, \
 
     st_fit = int(0)
     if key in ['VROT']:
-
+        bound_fit = int(1)
         if np.mean(profile[1:3]) > 120.:
             st_fit = int(1)
 
@@ -829,6 +834,7 @@ def fit_polynomial(Configuration,radii,profile,sm_profile,error, key, \
         start_order = sf.set_limits(start_order,lower_limit,max_order)
 
     else:
+        bound_fit = int(0)
         if key in ['PA','INCL','Z0']:
             max_order = sf.set_limits(len(radii)-fixed,3,5)
         elif key in ['SBR']:
@@ -890,11 +896,24 @@ def fit_polynomial(Configuration,radii,profile,sm_profile,error, key, \
 {'':8s} VROT = {', '.join([str(x) for x in fit_profile[st_fit:]])}
 ''',Configuration,case = ['debug_add'])
             if np.sum(np.absolute(np.array(boundary_limits,dtype=float))) != 0.:
-                    diff = np.sum(np.array([abs(x-sf.set_limits(x,\
+                    with warnings.catch_warnings():
+                        warnings.filterwarnings("error",category=RuntimeWarning)
+                        
+                        try:                       
+                            diff = np.sum(np.array([abs(x-sf.set_limits(x,\
                                                     boundary_limits[0],\
                                                     boundary_limits[1]))/abs(x) \
-                                            for x in  fit_profile[st_fit:]],dtype = float))
-                    if diff > 1.:
+                                            for x in  fit_profile[bound_fit:]],dtype = float))
+                        except RuntimeWarning:
+                             sf.print_log(f'''FIT_POLYNOMIAL: We are throwing an error as there should not be 0's in the diff,
+{'':8s} boundary_limits =  {boundary_limits}
+{'':8s} fit_profile  = {fit_profile[bound_fit:]}
+{'':8s} For the parameter {key}
+''',Configuration,case = ['debug_add'])
+                             raise RuntimeError(f"The profile in fit_polynomial should not have zeros.") 
+
+                       
+                    if diff > 1. and not np.isnan(diff):
                         sf.print_log(f'''FIT_POLYNOMIAL: because of crossing {boundary_limits}
 {'':8s} we penalize the orginal chi**2 {red_chi} of order {ord} with {diff}
 ''',Configuration,case = ['debug_add'])
@@ -3296,7 +3315,8 @@ set_new_size.__doc__ =f'''
 
 def set_overall_parameters(Configuration, Fits_Files,Tirific_Template,\
                 fit_type='Undefined', flux = None):
-
+    sf.print_log(f'''SET_OVERALL_PARAMETERS: startin to set the overall parameters.
+''',Configuration,case=['debug_add'])
     if Configuration['OPTIMIZED']:
         Tirific_Template['INSET'] = f"{Fits_Files['OPTIMIZED_CUBE']}"
     else:
@@ -3394,6 +3414,8 @@ def set_sbr_fitting(Configuration,Tirific_Template, stage = 'no_stage'):
     inner_ring = 2
     sbr_profile= sf.load_tirific(Configuration,Tirific_Template,Variables= ['SBR','SBR_2'],array=True)
     radii= sf.load_tirific(Configuration,Tirific_Template, Variables=['RADI'],array=True)
+    last_ring_to_fit = [len(radii)-1,len(radii)-1]
+
     if stage in ['initial','run_cc','initialize_ec','run_ec','initialize_os','run_os']:
         sbr_ring_limits = sf.sbr_limits(Configuration,Tirific_Template)
         if stage in ['run_ec','run_os']:
@@ -3413,15 +3435,15 @@ def set_sbr_fitting(Configuration,Tirific_Template, stage = 'no_stage'):
         pmax = np.full((2,len(sbr_profile[0,:])),1.)
         pmin = np.full((2,len(sbr_profile[0,:])),0.)
         for i in [0,1]:
+            last_ring_to_fit[i] = np.where(radii <= Configuration['SIZE_IN_BEAMS'][i]*Configuration['BEAM'][0])[0][-1]
             if stage in ['initialize_os']:
                 fact[i] = 0.75
             elif Configuration['SIZE_IN_BEAMS'][i] < max_size:
                 fact[i]=2.5
 
             for x in range(len(radii)-1,inner_ring-1,-1):
-                if radii[x] < Configuration['SIZE_IN_BEAMS'][i]*Configuration['BEAM'][0]:
+                if radii[x] <= Configuration['SIZE_IN_BEAMS'][i]*Configuration['BEAM'][0]:
                     sbr_profile[i,x] = sf.set_limits(sbr_profile[i,x],sbr_ring_limits[x]/fact[i]*2.,1.)
-
                 else:
                     sbr_profile[i,x] = 0.
             sbr_profile[i,:inner_ring] = [sf.set_limits(x,np.min(sbr_ring_limits),1.) for x in sbr_profile[i,:inner_ring]]
@@ -3477,10 +3499,13 @@ beamarea = {Configuration['BEAM_AREA']}, channelwidth = {Configuration['CHANNEL_
                 pmin[i,x] = sbr_ring_limits[x]/fact[i]
 
 
-
+     
+       
         if np.mean(Configuration['SIZE_IN_BEAMS']) < max_size or Configuration['NUMBER_OF_DISKS'] == 1:
+            extend = np.max(last_ring_to_fit)
+               
             sbr_input['VARY'] =  np.array([f"SBR {x+1} SBR_2 {x+1}" for x \
-                in range(len(radii)-1,inner_ring-1,-1)],dtype=str)
+                in range(extend,inner_ring-1,-1)],dtype=str)
 
 
             sbr_input['PARMAX'] = np.array([sf.set_limits(sbr_av_smoothed[x-1]\
@@ -3490,17 +3515,35 @@ beamarea = {Configuration['BEAM_AREA']}, channelwidth = {Configuration['CHANNEL_
             #    sbr_input['PARMIN'] = np.array([sbr_ring_limits[x]/2. if x <= (3./4.)*len(radii) else 0 for x in range(len(radii)-1,inner_ring-1,-1)])
             #elif stage in ['initialize_ec','run_ec']:
 
-            sbr_input['PARMIN'] = np.array([sbr_ring_limits[x]/np.max(fact) for x in range(len(radii)-1,inner_ring-1,-1)],dtype=float)
-            sbr_input['MODERATE'] = np.array([5 for x in range(len(radii)-1,inner_ring-1,-1)],dtype=float) #How many steps from del start to del end
-            sbr_input['DELSTART'] = np.array([1e-4 for x in range(len(radii)-1,inner_ring-1,-1)],dtype=float) # Starting step
-            sbr_input['DELEND'] = np.array([2.5e-6 for x in range(len(radii)-1,inner_ring-1,-1)],dtype=float) #Ending step
-            sbr_input['MINDELTA'] = np.array([5e-6 for x in range(len(radii)-1,inner_ring-1,-1)],dtype=float) #saturation criterum when /SIZE SIZE should be 10 troughout the code
+            sbr_input['PARMIN'] = np.array([sbr_ring_limits[x]/np.max(fact) for x in range(extend,inner_ring-1,-1)],dtype=float)
+            sbr_input['MODERATE'] = np.array([5 for x in range(extend,inner_ring-1,-1)],dtype=float) #How many steps from del start to del end
+            sbr_input['DELSTART'] = np.array([1e-4 for x in range(extend,inner_ring-1,-1)],dtype=float) # Starting step
+            sbr_input['DELEND'] = np.array([2.5e-6 for x in range(extend,inner_ring-1,-1)],dtype=float) #Ending step
+            sbr_input['MINDELTA'] = np.array([5e-6 for x in range(extend,inner_ring-1,-1)],dtype=float) #saturation criterum when /SIZE SIZE should be 10 troughout the code
         else:
-            sbr_input['VARY'] =  np.array([[f"SBR {x+1}",f"SBR_2 {x+1}"] for x in range(len(radii)-1,inner_ring-1,-1)],dtype=str).reshape((len(radii)-inner_ring)*2)
+            input_variables = ['VARY','PARMAX','PARMIN','MODERATE','DELSTART','DELEND','MINDELTA']
+            for key in input_variables:
+                sbr_input[key] = []
 
-
-
-
+            ext = ''
+            for x in  range(np.max(last_ring_to_fit),inner_ring-1,-1):
+                for i in [0,1]:
+                    if x <= last_ring_to_fit[i]:
+                        if i == 0:
+                            ext = ''
+                        else:
+                            ext='_2'
+                        sbr_input['VARY'].append(f'SBR{ext} {x+1}') 
+                        sbr_input['PARMAX'].append(pmax[i,x]) 
+                        sbr_input['PARMIN'].append(pmin[i,x]) 
+                        sbr_input['MODERATE'].append(5.)
+                        sbr_input['DELSTART'].append(sbr_smoothed_profile[i,x]/10.) 
+                        sbr_input['DELEND'].append(sbr_ring_limits[x]/20.) 
+                        sbr_input['MINDELTA'].append(sbr_ring_limits[x]/20.)
+            for key in input_variables:
+                sbr_input[key] =np.array(sbr_input[key]) 
+            '''           
+            sbr_input['VARY'] =  np.array([[f"SBR {x+1}",f"SBR_2 {x+1}"] for x in range(extend,inner_ring-1,-1)],dtype=str).reshape((len(radii)-inner_ring)*2)
             #pmax = np.array([np.full(2,sf.set_limits(sbr_av_smoothed[x-1]*20.,sbr_ring_limits[x]*30.,1.)) for x in range(len(radii)-1,inner_ring-1,-1)], dtype=float)
             sbr_input['PARMAX'] = np.array([[pmax[0,x],pmax[1,x]] for x in range(len(radii)-1,inner_ring-1,-1)],dtype=float).reshape((len(radii)-inner_ring)*2)
             #sbr_input['PARMAX'] = np.array([[sf.set_limits(sbr_smoothed_profile[0,x-1]*20.,sbr_ring_limits[x]*30.,1.),sf.set_limits(sbr_smoothed_profile[1,x-1]*20.,sbr_ring_limits[x]*30.,1.)] for x in range(len(radii)-1,inner_ring-1,-1)],dtype=float).reshape((len(radii)-inner_ring)*2)
@@ -3513,7 +3556,7 @@ beamarea = {Configuration['BEAM_AREA']}, channelwidth = {Configuration['CHANNEL_
             sbr_input['DELSTART'] = np.array([[1e-4,1e-4] for x in range(len(radii)-1,inner_ring-1,-1)],dtype=float).reshape((len(radii)-inner_ring)*2) # Starting step
             sbr_input['DELEND'] = np.array([[sbr_ring_limits[x]/20.,sbr_ring_limits[x]/20.] for x in range(len(radii)-1,inner_ring-1,-1)],dtype=float).reshape((len(radii)-inner_ring)*2)
             sbr_input['MINDELTA'] = np.array([[sbr_ring_limits[x]/20.,sbr_ring_limits[x]/20.] for x in range(len(radii)-1,inner_ring-1,-1)],dtype=float).reshape((len(radii)-inner_ring)*2)
-
+            '''
         sbr_input['VARY'] = np.concatenate((sbr_input['VARY'],\
             [f"SBR {' '.join([str(int(x)) for x in range(1,inner_ring+1)])} SBR_2 {' '.join([str(int(x)) for x in range(1,inner_ring+1)])}"]\
             ),axis=0)
