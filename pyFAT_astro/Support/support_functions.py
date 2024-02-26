@@ -1956,8 +1956,7 @@ get_fit_groups.__doc__ =f'''
  NOTE:
 '''
 
-def get_inclination_pa(Configuration, Image, center, cutoff = 0.,\
-        figure_name = 'test'):
+def get_inclination_pa(Configuration, Image, center, cutoff = 0.):
     map = copy.deepcopy(Image[0].data)
     for i in [0,1]:
         print_log(f'''GET_INCLINATION_PA: Doing iteration {i} in the estimates
@@ -1971,6 +1970,7 @@ def get_inclination_pa(Configuration, Image, center, cutoff = 0.,\
         sin_ratios,sin_parameters = fit_sine(Configuration,angles,ratios)
         if np.any(np.isnan(sin_parameters)):
             return [float('NaN'),float('NaN')],  [float('NaN'),float('NaN')],float('NaN')
+        
         ratios=sin_ratios
 
         max_index = np.where(ratios == np.nanmax(ratios))[0]
@@ -2003,7 +2003,7 @@ def get_inclination_pa(Configuration, Image, center, cutoff = 0.,\
 
         if tenp_min_index.size <= 1:
             tenp_min_index= [min_index-2,min_index+2]
-
+       
         if angles[min_index] > angles[max_index]:
             pa = float(np.nanmean(np.array([angles[min_index]-90,angles[max_index]],dtype=float)))
         else:
@@ -2028,7 +2028,7 @@ def get_inclination_pa(Configuration, Image, center, cutoff = 0.,\
             warnings.simplefilter("ignore")
             inclination = np.nanmean([np.degrees(np.arccos(np.sqrt((float(ratios[min_index])**2-0.2**2)/0.96))) \
                               ,np.degrees(np.arccos(np.sqrt(((1./float(ratios[max_index]))**2-0.2**2)/0.96))) ])
-
+          
 
         if i == 0:
             with warnings.catch_warnings():
@@ -2051,19 +2051,21 @@ def get_inclination_pa(Configuration, Image, center, cutoff = 0.,\
                 inclination_error = float(inclination_error*4./(maj_extent*3600./Configuration['BEAM'][0]))
 
         if i == 0:
-            print_log(f'''GET_INCLINATION_PA: The initial inclination = {inclination}.
+            print_log(f'''GET_INCLINATION_PA: The initial inclination = {inclination} +- {inclination_error}.
 ''',Configuration,case=['debug_add'])
         else:
-            print_log(f'''GET_INCLINATION_PA: From the cleaned map we find inclination = {inclination}.
+            print_log(f'''GET_INCLINATION_PA: From the cleaned map we find inclination = {inclination}+- {inclination_error}.
 ''',Configuration,case=['debug_add'])
         # this leads to trouble for small sources due to uncertain PA and inclination estimates
-        if inclination < 70. and maj_extent*3600./Configuration['BEAM'][0] > 4:
+        # at low inclinations the error is too uncertain to have a proper deprojection    
+        inclination_error = inclination_error/np.sin(np.radians(inclination)) 
+        if inclination < 70. and maj_extent*3600./Configuration['BEAM'][0] > 4 and inclination_error < 10.:
             Image_clean = remove_inhomogeneities(Configuration,Image,inclination=inclination, pa = pa,iteration=i, center = center,WCS_center = False )
             map = Image_clean[0].data
             Image_clean.close()
         else:
             break
-    inclination_error = inclination_error/np.sin(np.radians(inclination))
+    
     return [inclination,inclination_error], [pa,pa_error],maj_extent
 
 get_inclination_pa.__doc__ =f'''

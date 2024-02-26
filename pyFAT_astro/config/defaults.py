@@ -83,7 +83,7 @@ class Advanced:
     multiprocessing: bool = True
     number_of_disks: int = 2
     # The whole mechanism beheind the sbr_limits (which weigh the smoothing) is emperically determined. They are multiplied with this factor to allow optimization
-    limit_modifier_factor: float = 1.1
+    limit_modifier_factor: float = 1.05
     #We do not want to use too many cores per galaxy.
     per_galaxy_ncpu: int = 4
     catalogue_split_character: str = '|'

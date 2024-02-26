@@ -1004,15 +1004,18 @@ def fix_outer_rotation(Configuration,profile):
 ''',Configuration,case = ['debug_start'])
     profile = np.array(profile,dtype=float)
     # if the outer parts are less then 5 channels there is something wrong And we just take a flat curve from max
-    if np.mean(profile[Configuration['RC_UNRELIABLE']:]) < 5.*Configuration['CHANNEL_WIDTH']:
-        Configuration['RC_UNRELIABLE'] = int(np.where(np.max(profile) == profile)[0][0])+1
-        if Configuration['RC_UNRELIABLE'] < Configuration['NO_RINGS']-1:
-            profile[Configuration['RC_UNRELIABLE']:] = profile[Configuration['RC_UNRELIABLE']-1]
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore",message="Mean of empty slice."\
+                            ,category=RuntimeWarning)
+        if np.mean(profile[Configuration['RC_UNRELIABLE']:]) < 5.*Configuration['CHANNEL_WIDTH']:
+            Configuration['RC_UNRELIABLE'] = int(np.where(np.max(profile) == profile)[0][0])+1
+            if Configuration['RC_UNRELIABLE'] < Configuration['NO_RINGS']-1:
+                profile[Configuration['RC_UNRELIABLE']:] = profile[Configuration['RC_UNRELIABLE']-1]
 
-            sf.print_log(f'''FIX_OUTER_ROTATION: we adjusted the unreliable part.
-{'':8s}{profile}
-{'':8s} from ring {Configuration['RC_UNRELIABLE']} we do not trust the rings.
-    ''',Configuration, case= ['debug_add'])
+                sf.print_log(f'''FIX_OUTER_ROTATION: we adjusted the unreliable part.
+    {'':8s}{profile}
+    {'':8s} from ring {Configuration['RC_UNRELIABLE']} we do not trust the rings.
+        ''',Configuration, case= ['debug_add'])
 
     #inner_slope = int(round(sf.set_limits(NUR*(4.-Configuration['LIMIT_MODIFIER'][0])/4.,round(NUR/2.),NUR-2)))
     if Configuration['RC_UNRELIABLE'] < Configuration['NO_RINGS']-1 and np.mean(profile[1:3]) > 180.:
@@ -3414,7 +3417,12 @@ def set_sbr_fitting(Configuration,Tirific_Template, stage = 'no_stage'):
     inner_ring = 2
     sbr_profile= sf.load_tirific(Configuration,Tirific_Template,Variables= ['SBR','SBR_2'],array=True)
     radii= sf.load_tirific(Configuration,Tirific_Template, Variables=['RADI'],array=True)
-    last_ring_to_fit = [len(radii)-1,len(radii)-1]
+    last_ring_to_fit = []
+    for i in [0,1]:
+        last_ring_to_fit.append(np.where(radii <= \
+            Configuration['SIZE_IN_BEAMS'][i]*Configuration['BEAM'][0])[0][-1])
+        
+  
 
     if stage in ['initial','run_cc','initialize_ec','run_ec','initialize_os','run_os']:
         sbr_ring_limits = sf.sbr_limits(Configuration,Tirific_Template)
@@ -3435,7 +3443,6 @@ def set_sbr_fitting(Configuration,Tirific_Template, stage = 'no_stage'):
         pmax = np.full((2,len(sbr_profile[0,:])),1.)
         pmin = np.full((2,len(sbr_profile[0,:])),0.)
         for i in [0,1]:
-            last_ring_to_fit[i] = np.where(radii <= Configuration['SIZE_IN_BEAMS'][i]*Configuration['BEAM'][0])[0][-1]
             if stage in ['initialize_os']:
                 fact[i] = 0.75
             elif Configuration['SIZE_IN_BEAMS'][i] < max_size:
@@ -3589,9 +3596,9 @@ beamarea = {Configuration['BEAM_AREA']}, channelwidth = {Configuration['CHANNEL_
             sbr_input[var] = []
 
         if Configuration['NUMBER_OF_DISKS'] == 2:
-            sbr_input['VARY'] = [f"SBR 3:{Configuration['NO_RINGS']}, SBR_2 3:{Configuration['NO_RINGS']}"]
+            sbr_input['VARY'] = [f"SBR {inner_ring+1}:{last_ring_to_fit[0]+1}, SBR_2 {inner_ring+1}:{last_ring_to_fit[1]+1}"]
         else:
-            sbr_input['VARY'] = [f"SBR 3:{Configuration['NO_RINGS']} SBR_2 3:{Configuration['NO_RINGS']}"]
+            sbr_input['VARY'] = [f"SBR {inner_ring+1}:{last_ring_to_fit[0]+1} SBR_2 {inner_ring+1}:{last_ring_to_fit[1]+1}"]
 
         for i in range(Configuration['NUMBER_OF_DISKS']):
             for i,var in enumerate(par_to_fill):

@@ -524,7 +524,8 @@ def guess_orientation(Configuration,Fits_Files, vsys = -1 ,center = None, \
     sf.update_statistic(Configuration, message= "Starting the initial search for the pa, inclination and center.")
 
     while not center_stable:
-        inclination_av, pa_av, maj_extent_av = sf.get_inclination_pa(Configuration, mom0, center, cutoff = scale_factor* median_noise_in_map, figure_name=f'{Configuration["LOG_DIRECTORY"]}loc_{center[0]:.2f}_{center[1]:.2f}')
+        inclination_av, pa_av, maj_extent_av =\
+            sf.get_inclination_pa(Configuration, mom0, center, cutoff = scale_factor* median_noise_in_map)
         inclination_av = [inclination_av]
         int_weight = [2.]
         pa_av = [pa_av]
@@ -542,8 +543,7 @@ def guess_orientation(Configuration,Fits_Files, vsys = -1 ,center = None, \
 
                 inclination_tmp, pa_tmp, maj_extent_tmp= \
                     sf.get_inclination_pa(Configuration, mom0, center_tmp,\
-                    cutoff = scale_factor* median_noise_in_map,\
-                    figure_name=f'{Configuration["LOG_DIRECTORY"]}loc_{center_tmp[0]:.2f}_{center_tmp[1]:.2f}')
+                    cutoff = scale_factor* median_noise_in_map,)
                 inclination_av.append(inclination_tmp)
                 pa_av.append(pa_tmp)
                 int_weight.append(mod/beam_check[0]*0.25)

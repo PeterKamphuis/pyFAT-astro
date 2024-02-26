@@ -708,7 +708,6 @@ def transfer_errors(Configuration,fit_type='Undefined'):
             Variables=[parameter,f"{parameter}_2"],array=True)
         
         # As we can cut rings away during the smoothing we have to ensure the profiles have the same length
-
         if len(profile[0,:]) != len(reg_profile[0,:]):
             tmp = [[],[]]    
             for i in [0,1]:

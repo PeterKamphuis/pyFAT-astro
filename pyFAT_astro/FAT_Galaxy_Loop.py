@@ -90,6 +90,10 @@ def FAT_Galaxy_Loop(Configuration):
         registered_exception = e
         Configuration['FINAL_COMMENT'] = e
         Configuration['OUTPUT_QUANTITY'] = 'error'
+        try:
+            tmp=Fits_Files
+        except:
+            Fits_Files= None
         catalogue_line = cf.finish_galaxy(Configuration,
                           current_run=current_run,Fits_Files=Fits_Files,
                           exiting=registered_exception)
