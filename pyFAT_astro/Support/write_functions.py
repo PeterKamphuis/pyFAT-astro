@@ -1,7 +1,7 @@
 # -*- coding: future_fstrings -*-
 # This module contains a set of functions and classes that are used to write text files to Disk
 
-
+from pyFAT_astro.Support.log_functions import print_log
 from pyFAT_astro.Support.modify_template import set_model_parameters, set_overall_parameters,\
                                 set_fitting_parameters,get_warp_slope, update_disk_angles
 from make_moments.functions import extract_pv                                
@@ -526,7 +526,7 @@ create_plot_stats.__doc__ =f'''
 
 def make_overview_plot(Configuration,Fits_Files ):
     fit_type = Configuration['USED_FITTING']
-    sf.print_log(f'''MAKE_OVERVIEW_PLOT: We are starting the overview plot.
+    print_log(f'''MAKE_OVERVIEW_PLOT: We are starting the overview plot.
 ''',Configuration,case=['debug_start'])
 
     with warnings.catch_warnings():
@@ -544,7 +544,7 @@ def make_overview_plot(Configuration,Fits_Files ):
    
 
     # Open the model info
-    sf.print_log(f'''MAKE_OVERVIEW_PLOT: Reading the variables from the final model
+    print_log(f'''MAKE_OVERVIEW_PLOT: Reading the variables from the final model
 ''',Configuration,case=['debug_add'])
     Vars_to_plot_short= ['RADI','XPOS','YPOS','VSYS','VROT','INCL','PA','SDIS',\
                     'SBR','Z0']
@@ -565,7 +565,7 @@ def make_overview_plot(Configuration,Fits_Files ):
             Variables= Vars_to_plot,array=True )
     else:
         Extra_Model = []
-    sf.print_log(f'''MAKE_OVERVIEW_PLOT: We find the following model values.
+    print_log(f'''MAKE_OVERVIEW_PLOT: We find the following model values.
 {'':8s}{[f"{x} = {FAT_Model[i,:]}" for i,x in enumerate(Vars_to_plot)]}
 ''',Configuration,case=['debug_add'])
 
@@ -855,7 +855,7 @@ def make_overview_plot(Configuration,Fits_Files ):
                 map_velocity_unit= 'km/s',log = True,silent = True,\
                 output_directory = f"{Configuration['FITTING_DIR']}Finalmodel",\
                 output_name =f"{Configuration['BASE_NAME']}_final_xv.fits")
-    sf.print_log(messages,Configuration,case=["verbose"])
+    print_log(messages,Configuration,case=["verbose"])
     PV = fits.open(f"{Configuration['FITTING_DIR']}/Finalmodel/{Configuration['BASE_NAME']}_final_xv.fits")
    
     messages = extract_pv(cube = cube_mod,\
@@ -867,7 +867,7 @@ def make_overview_plot(Configuration,Fits_Files ):
                 map_velocity_unit= 'km/s',log = True,silent = True,\
                 output_directory = f"{Configuration['FITTING_DIR']}/Finalmodel/",\
                 output_name =f"Finalmodel_xv.fits")
-    sf.print_log(messages,Configuration,case=["verbose"])
+    print_log(messages,Configuration,case=["verbose"])
     PV_model = fits.open(f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel_xv.fits")
 
 
@@ -1182,14 +1182,14 @@ def plot_parameters(Configuration,Vars_to_plot,FAT_Model,location,Figure,\
         Extra_Model = []
     if legend is None:
         legend = ['Empty','Empty','Empty','Empty']
-    sf.print_log(f'''PLOT_PARAMETERS: We are starting to plot {parameter}
+    print_log(f'''PLOT_PARAMETERS: We are starting to plot {parameter}
 ''', Configuration,case=['debug_start'])
     ax = Figure.add_subplot(location)
     try:
         yerr = FAT_Model[Vars_to_plot.index(f'# {parameter}_ERR'),:]
     except ValueError:
         yerr =np.zeros(len(FAT_Model[Vars_to_plot.index('RADI'),:]))
-    sf.print_log(f'''PLOT_PARAMETERS: We found these errors {yerr}
+    print_log(f'''PLOT_PARAMETERS: We found these errors {yerr}
 ''', Configuration,case=['debug_add'])
 
     ax.errorbar(FAT_Model[Vars_to_plot.index('RADI'),:],FAT_Model[Vars_to_plot.index(f'{parameter}'),:],yerr= yerr, c ='k', label=f'{legend[0]}',zorder=3)
@@ -1330,7 +1330,7 @@ def plot_PV(Configuration,image=None, model = None, figure = None, \
     else:
         pos_cont =  np.array([0,1,2,3,4,5,6,7],dtype=float)*(np.nanmax(data) * 0.95-3.*Configuration['NOISE'])/7. +3.*Configuration['NOISE']
     pos_cont = np.array([x for x in pos_cont if x <= np.nanmax(data) * 0.95],dtype=float)
-    sf.print_log(f'''PV_PLOT: postive {pos_cont}, negative {neg_cont}, noise {Configuration['NOISE']}
+    print_log(f'''PV_PLOT: postive {pos_cont}, negative {neg_cont}, noise {Configuration['NOISE']}
 ''',Configuration,case=['debug_add'] )
     if pos_cont.size == 0:
         pos_cont = 0.5 * np.nanmax(data) * 0.95

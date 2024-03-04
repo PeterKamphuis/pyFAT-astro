@@ -1,15 +1,14 @@
 # -*- coding: future_fstrings -*-
-# This module contains a set of functions and classes that are used in several different Python scripts in the Database.
 
 from pyFAT_astro.Support.fat_errors import SupportRunError,SmallSourceError,\
                                               FileNotFoundError,TirificKillError,\
                                               InputError,ProgramError,DefFileError,\
                                               BadHeaderError,FittingError,TirificOutputError,\
                                               SofiaMissingError
+from pyFAT_astro.Support.log_functions import print_log,get_usage_statistics,write_config
 from pyFAT_astro.Support.modify_template import smooth_profile
 from pyFAT_astro import Templates as templates
 from collections import OrderedDict #used in Proper_Dictionary
-from inspect import stack
 from numpy.linalg import LinAlgError
 from scipy.optimize import curve_fit, OptimizeWarning
 from scipy import ndimage
@@ -2425,44 +2424,6 @@ get_tirific_output_names.__doc__=f'''
  NOTE:
 '''
 
-def get_usage_statistics(Configuration,process):
-    #try:
-    memory_in_mb = (process.memory_info()[0])/2**20. #psutilreturns bytes
-    cpu_percent = process.cpu_percent(interval=1)
-    #except:
-    #    cpu_percent= 0.
-    #    memory_in_mb=0.
-    return cpu_percent,memory_in_mb
-
-get_usage_statistics.__doc__ =f'''
- NAME:
-    get_usage_statistics
- PURPOSE:
-    use psutil to get the current CPU and memory usage of tirific
-
- CATEGORY:
-    support_functions
-
- INPUTS:
-    Configuration = Standard FAT configuration
-    process_id = process id of the tirific currently running.
-
- OPTIONAL INPUTS:
-
-
- OUTPUTS:
-    CPU = The current CPU usage
-    mem = current memory usage in Mb
-
- OPTIONAL OUTPUTS:
-
- PROCEDURES CALLED:
-    Unspecified
-
- NOTE:
-    pyFAT version < 1.0.0 uses top which only works on unix and has an error in the MB calculation
-'''
-
 def get_vel_pa(Configuration,velocity_field,center= [0.,0.] ):
     print_log(f'''GET_VEL_PA: This is the center we use {center}
 ''',Configuration,case=['debug_start'])
@@ -2616,66 +2577,6 @@ isiterable.__doc__ =f'''
 
  NOTE:
 '''
-
-
-# A simple function to return the line numbers in the stack from where the functions are called
-def linenumber(debug='short'):
-    '''get the line number of the print statement in the main.'''
-    line = []
-    for key in stack():
-        if key[1] == 'main.py':
-            break
-        if key[3] != 'linenumber' and key[3] != 'print_log' and key[3] != '<module>':
-            file = key[1].split('/')
-            to_add= f"In the function {key[3]} at line {key[2]}"
-            if debug == 'long':
-                to_add = f"{to_add} in file {file[-1]}."
-            else:
-                to_add = f"{to_add}."
-            line.append(to_add)
-    if len(line) > 0:
-        if debug == 'long':
-            line = ', '.join(line)+f'\n{"":8s}'
-        elif debug == 'short':
-            line = line[0]+f'\n{"":8s}'
-        else:
-            line = f'{"":8s}'
-    else:
-        for key in stack():
-            if key[1] == 'main.py':
-                line = f"{'('+str(key[2])+')':8s}"
-                break
-    return line
-
-linenumber.__doc__ =f'''
- NAME:
-    linenumber
-
- PURPOSE:
-    get the line number of the print statement in the main. Not sure how well this is currently working
-
- CATEGORY:
-    support_functions
-
- INPUTS:
-
- OPTIONAL INPUTS:
-
-
- OUTPUTS:
-    the line number of the print statement
-
- OPTIONAL OUTPUTS:
-
- PROCEDURES CALLED:
-    Unspecified
-
- NOTE:
-    If debug = True the full stack of the line print will be given, in principle
-    the first debug message in every function should set this to true and later messages not.
-    !!!!Not sure whether currently the linenumber is produced due to the restructuring.
-'''
-
 #The functions load_tirifiic,load_template and get_from template were extremely similar
 #This replaces all with a single function
 def load_tirific(Configuration,def_input,Variables = None,array = False,\
@@ -3157,66 +3058,6 @@ obtain_ratios.__doc__ = '''
       np.mean, ndimage.map_coordinates, np.linspace, np.vstack, np.cos, np.radians, np.sin
 
  NOTE:
-'''
-
-def print_log(log_statement,Configuration, case = None):
-    if case is None:
-        case=['main']
-    if Configuration['DEBUG']:
-        if 'debug_start' in case:
-            debug = 'long'
-        else:
-            debug= 'short'
-    else:
-        debug = 'empty'
-    if Configuration['TIMING']:
-        log_statement = f"{linenumber(debug=debug)} {datetime.now()} {log_statement}"
-    else:
-        log_statement = f"{linenumber(debug=debug)}{log_statement}"
-    print_statement = False
-    if (Configuration['DEBUG'] and ('debug_start' in case or 'debug_add' in case))\
-        or ('verbose' in case and (Configuration['VERBOSE_LOG'] or Configuration['DEBUG']))\
-         or 'main' in case:
-            print_statement = True
-    if print_statement:
-        if Configuration['VERBOSE_SCREEN'] \
-            or not Configuration['OUTPUTLOG']  \
-            or 'screen' in case \
-            or (Configuration['VERBOSE_LOG'] and 'main' in case):
-            print(log_statement)
-        if Configuration['OUTPUTLOG']:
-            with open(Configuration['OUTPUTLOG'],'a') as log_file:
-                log_file.write(log_statement)
-
-print_log.__doc__ =f'''
- NAME:
-    print_log
- PURPOSE:
-    Print statements to log if existent and screen if Requested
- CATEGORY:
-    support_functions
-
- INPUTS:
-    log_statement = statement to be printed
-    Configuration = Standard FAT Configuration
-
- OPTIONAL INPUTS:
-
-
-    screen = False
-    also print the statement to the screen
-
- OUTPUTS:
-    line in the log or on the screen
-
- OPTIONAL OUTPUTS:
-
- PROCEDURES CALLED:
-    linenumber, .write
-
- NOTE:
-    If the log is None messages are printed to the screen.
-    This is useful for testing functions.
 '''
 
 def remove_inhomogeneities(Configuration,fits_map_in,inclination=30., pa = 90.\
@@ -3810,6 +3651,7 @@ def setup_configuration(cfg):
                'OUTPUTLOG': None,
                'RUN_COUNTER': 0,
                'CENTRAL_CONVERGENCE_COUNTER': 1.,
+               'RP_COUNTER': 1,
                'ITERATIONS': 0,
                'CURRENT_STAGE': 'initial', #Current stage of the fitting process, set at switiching stages
                'USED_FITTING': None,
@@ -4493,66 +4335,3 @@ tirific_template.__doc__ ='''
  NOTE:
 '''
 
-def update_statistic(Configuration,process= None,message = None ):
-    if Configuration['TIMING']:
-        function = traceback.format_stack()[-2].split('\n')
-        function = function[0].split()[-1].strip()
-        if not process:
-            process = Configuration['FAT_PSUPROCESS']
-            program = 'pyFAT'
-        else:
-            program = 'TiRiFiC'
-
-        CPU,mem = get_usage_statistics(Configuration,process)
-        with open(f"{Configuration['LOG_DIRECTORY']}Usage_Statistics.txt",'a') as file:
-            if message:
-                file.write(f"# {function.upper()}: {message} at {datetime.now()} \n")
-            # We cannot copy the process so initialize in the configuration
-            file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Mb for {program} \n")
-
-def write_config(file,Configuration ):
-    #be clear we are pickle dumping
-    tmp = os.path.splitext(file)
-    file = f'{tmp[0]}.pkl'
-    print_log(f'''WRITE_CONFIG: writing the configuration to {file}
-''',Configuration,case=['debug_start'])
-    # Separate the keyword names
-    #Proper dictionaries are not pickable
-
-    Pick_Configuration = {}
-    for key in Configuration:
-        Pick_Configuration[key] = Configuration[key]
-        if key == 'FAT_PSUPROCESS':
-            Pick_Configuration[key] = None
-    import pickle
-    with open(file,'wb') as tmp:
-        pickle.dump(Pick_Configuration,tmp)
-
-
-write_config.__doc__ =f'''
- NAME:
-    write_config
-
- PURPOSE:
-    Write a config file to the fitting directory.
-
- CATEGORY:
-    write_functions
-
- INPUTS:
-    file = name of the file to write to
-    Configuration = Standard FAT configuration
-
- OPTIONAL INPUTS:
-
-
- OUTPUTS:
-    A FAT config file.
-
- OPTIONAL OUTPUTS:
-
- PROCEDURES CALLED:
-    Unspecified
-
- NOTE: This doesn't work in python 3.6
-'''

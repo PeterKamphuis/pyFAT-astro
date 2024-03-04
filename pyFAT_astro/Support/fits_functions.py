@@ -5,7 +5,10 @@ from astropy.wcs import WCS
 from datetime import datetime
 from shutil import copyfile
 from pyFAT_astro.Support.fat_errors import FunctionCallError,BadCubeError,BadMaskError
+from pyFAT_astro.Support.log_functions import print_log
 import pyFAT_astro.Support.support_functions as sf
+
+
 from make_moments.functions import moments
 
 #from pyFAT_astro.Support.read_functions import obtain_border_pix
@@ -17,7 +20,7 @@ import os
 
 #Check that the mask only contains the selected sources
 def check_mask(Configuration,id,Fits_Files,SNR= 5.):
-    sf.print_log(f'''CHECK_MASK: Checking the mask to contain only the correct source.
+    print_log(f'''CHECK_MASK: Checking the mask to contain only the correct source.
 and to have decent signal noise
 ''',Configuration, case =['debug_start','verbose'])
     if Configuration['DEBUG']:
@@ -36,14 +39,14 @@ and to have decent signal noise
         chan_map,header=mask[0].header,overwrite = True)
     mask.close()
     if Configuration['SOFIA_RAN']:
-        sf.print_log('CHECK_MASK: Creating Sofia Moments',Configuration,case=['verbose'])
+        print_log('CHECK_MASK: Creating Sofia Moments',Configuration,case=['verbose'])
         messages = moments(filename =  f"{Configuration['FITTING_DIR']}{Fits_Files['FITTING_CUBE']}",\
                         mask =  f"{Configuration['FITTING_DIR']}/{Fits_Files['MASK']}",\
                         overwrite = True, map_velocity_unit= 'km/s',\
                         debug = Configuration['DEBUG'], log=True,\
                         output_directory =   f"{Configuration['FITTING_DIR']}/Sofia_Output",\
                         output_name = f"{Configuration['BASE_NAME']}")
-        sf.print_log(messages,Configuration,case=['verbose'])
+        print_log(messages,Configuration,case=['verbose'])
         
     
     #moments()
@@ -83,7 +86,7 @@ check_mask.__doc__ =f'''
 
 def check_mask_sources(Configuration,id,mask):
     if float(id) not in mask[0].data:
-        sf.print_log(f'''CHECK_MASK: We cannot find the selected source in the mask. This will lead to errors. Aborting the fit.
+        print_log(f'''CHECK_MASK: We cannot find the selected source in the mask. This will lead to errors. Aborting the fit.
     ''',Configuration,case=['main','screen'])
         BadMaskError(f" We can not find the sofia source id in the mask.")
     else:
@@ -92,7 +95,7 @@ def check_mask_sources(Configuration,id,mask):
         diff = data-mask[0].data
         neg_index = np.where(diff < 0.)[0]
         if len(neg_index) != 0:
-            sf.print_log(f'''CHECK_MASK: The initial mask had more than a single source. redoing the mask.
+            print_log(f'''CHECK_MASK: The initial mask had more than a single source. redoing the mask.
     ''',Configuration, case = ['verbose'])
             mask[0].data = data
 
@@ -154,7 +157,7 @@ def create_fat_cube(Configuration, Fits_Files = None,sofia_catalogue=False,\
     data = prep_cube(Configuration,hdr,data)
     # and write our new cube
 
-    sf.print_log(f'''CREATE_FAT_CUBE: We are writing a FAT modified cube to be used for the fitting. This cube is called {Configuration['FITTING_DIR']+Fits_Files['FITTING_CUBE']}
+    print_log(f'''CREATE_FAT_CUBE: We are writing a FAT modified cube to be used for the fitting. This cube is called {Configuration['FITTING_DIR']+Fits_Files['FITTING_CUBE']}
 ''',Configuration)
     if sofia_catalogue:
         fits.writeto(f"{Configuration['MAIN_DIRECTORY']}{name}_FAT_cubelets/{name}_{id}/{name}_{id}_FAT.fits",data,hdr)
@@ -200,7 +203,7 @@ create_fat_cube.__doc__ =f'''
 '''
 
 def cut_cubes(Configuration, Fits_Files, galaxy_box):
-    sf.print_log(f'''CUT_CUBES: Starting to cut the cube_size.
+    print_log(f'''CUT_CUBES: Starting to cut the cube_size.
 ''', Configuration, case= ['debug_start'])
     cube_edge= [6.,5.*round(Configuration['BEAM_IN_PIXELS'][0]),5.*round(Configuration['BEAM_IN_PIXELS'][0])]
     cube_size= []
@@ -230,7 +233,7 @@ def cut_cubes(Configuration, Fits_Files, galaxy_box):
                         Fits_Files['CHANNEL_MAP'],\
                         ]
     if cut:
-        sf.print_log(f'''CUT_CUBES: Your input cube is significantly larger than the detected source.
+        print_log(f'''CUT_CUBES: Your input cube is significantly larger than the detected source.
 {"":8s}CUT_CUBES: we will cut to x-axis = [{new_cube[2,0]},{new_cube[2,1]}] y-axis = [{new_cube[1,0]},{new_cube[1,1]}]
 {"":8s}CUT_CUBES: z-axis = [{new_cube[2,0]},{new_cube[2,1]}].
 {"":8s}CUT_CUBES: We will cut the following files:
@@ -238,7 +241,7 @@ def cut_cubes(Configuration, Fits_Files, galaxy_box):
 ''', Configuration)
 
         for file in files_to_cut:
-            sf.print_log(f'''CUT_CUBES: We are cutting the file {file}
+            print_log(f'''CUT_CUBES: We are cutting the file {file}
 ''', Configuration)
             if os.path.exists(f"{Configuration['FITTING_DIR']}{file}"):
                 cutout_cube(Configuration,file,new_cube)
@@ -352,11 +355,11 @@ cutout_cube.__doc__ =f'''
 
 
 def prep_cube(Configuration,hdr,data):
-    sf.print_log( f'''PREPROCESSING: starting the preprocessing of the cube
+    print_log( f'''PREPROCESSING: starting the preprocessing of the cube
 ''',Configuration, case = ['debug_start'])
 
     if hdr['CDELT3'] < -1:
-        sf.print_log( f'''PREPROCESSING: Your velocity axis is declining with increasing channels
+        print_log( f'''PREPROCESSING: Your velocity axis is declining with increasing channels
 {"":8s}PREPROCESSING: We reversed the velocity axis.
 ''', Configuration)
         hdr['CDELT3'] = abs(hdr['CDELT3'])
@@ -364,7 +367,7 @@ def prep_cube(Configuration,hdr,data):
         data = data[::-1,:,:]
     #Check for zeros
     if np.where(data == 0.):
-        sf.print_log(f'''PREPROCESSING: Your cube contains values exactly 0. If this is padding these should be blanks.
+        print_log(f'''PREPROCESSING: Your cube contains values exactly 0. If this is padding these should be blanks.
 {"":8s}PREPROCESSING: We have changed them to blanks.
 ''', Configuration)
         data[np.where(data == 0.)] = float('NaN')
@@ -384,21 +387,21 @@ def prep_cube(Configuration,hdr,data):
             hdr['NAXIS3'] = hdr['NAXIS3']-1
             hdr['CRPIX3'] = hdr['CRPIX3'] - 1
             if hdr['NAXIS3'] < 5:
-                sf.print_log(f'''PREPROCESSING: This cube has too many blanked channels.
+                print_log(f'''PREPROCESSING: This cube has too many blanked channels.
 ''', Configuration,case = ['main', 'screen'])
                 raise BadCubeError("The cube has too many blanked channels")
             log_statement = f'''PREPROCESSING: We are cutting the cube as the first channel is completely blank.
 '''
-            sf.print_log(f'''PREPROCESSING: We are cutting the cube as the first channel is completely blank.
+            print_log(f'''PREPROCESSING: We are cutting the cube as the first channel is completely blank.
 ''', Configuration)
         while np.isnan(data[-1,:,:]).all():
             data=data[:-1,:,:]
             hdr['NAXIS3'] = hdr['NAXIS3']-1
             if hdr['NAXIS3'] < 5:
-                sf.print_log(f'''PREPROCESSING: This cube has too many blanked channels.
+                print_log(f'''PREPROCESSING: This cube has too many blanked channels.
 ''', Configuration,case = ['main', 'screen'])
                 raise BadCubeError("The cube has too many blanked channels")
-            sf.print_log(f'''PREPROCESSING: We are cutting the cube as the last channel is completely blank.
+            print_log(f'''PREPROCESSING: We are cutting the cube as the last channel is completely blank.
 ''', Configuration)
         #Then check the noise statistics
         noise_first_channel = np.nanstd(data[0,:,:])
@@ -418,7 +421,7 @@ def prep_cube(Configuration,hdr,data):
         if difference < 0.2 and np.isfinite(difference) and difference2 < 0.25:
             cube_ok = True
         else:
-            sf.print_log(f'''PREPROCESSING: We are cutting the cube as clearly the noise statistics are off.
+            print_log(f'''PREPROCESSING: We are cutting the cube as clearly the noise statistics are off.
 {"":8s}PREPROCESSING: Noise in the first channel is {noise_first_channel}
 {"":8s}PREPROCESSING: Noise in the last channel is {noise_last_channel}
 {"":8s}PREPROCESSING: Noise in the corners is {noise_corner}
@@ -450,14 +453,14 @@ def prep_cube(Configuration,hdr,data):
 
             if times_cut_first_channel >= 8 and times_cut_last_channel >= 8:
                 cube_ok = True
-                sf.print_log( f'''PREPROCESSING: This cube has non-uniform noise statistics.'
+                print_log( f'''PREPROCESSING: This cube has non-uniform noise statistics.'
 ''',Configuration)
             if hdr['NAXIS3'] < 5:
-                sf.print_log(f'''PREPROCESSING: This cube has noise statistics that cannot be dealt with.
+                print_log(f'''PREPROCESSING: This cube has noise statistics that cannot be dealt with.
 ''',Configuration,case = ['main','screen'])
                 raise BadCubeError('The Cube has noise statistics that cannot be dealt with')
     if ~np.isfinite(noise_corner):
-        sf.print_log(f'''PREPROCESSING: This cube has noise statistics that cannot be dealt with.
+        print_log(f'''PREPROCESSING: This cube has noise statistics that cannot be dealt with.
 ''',Configuration,case = ['main','screen'])
         raise BadCubeError('The Cube has noise statistics that cannot be dealt with')
     #hdr['FATNOISE'] = noise_corner
@@ -466,7 +469,7 @@ def prep_cube(Configuration,hdr,data):
         low_noise_indices = np.where(data < -10*noise_corner)
     if len(low_noise_indices) > 0.0001*hdr['NAXIS1']*hdr['NAXIS2']*hdr['NAXIS3']:
         data[low_noise_indices] = float('NaN')
-        sf.print_log(f'''PREPROCESSING: Your cube had a significant amount of values below -10*sigma. If you do not have a central absorption source there is something seriously wrong with the cube.
+        print_log(f'''PREPROCESSING: Your cube had a significant amount of values below -10*sigma. If you do not have a central absorption source there is something seriously wrong with the cube.
 {"":8s}PREPROCESSING: We blanked these values.
 ''',Configuration)
 
@@ -483,7 +486,7 @@ def prep_cube(Configuration,hdr,data):
         data[:,int(hdr['NAXIS2']/2.-buffer):int(hdr['NAXIS2']/2.+buffer),\
                         int(hdr['NAXIS1']/2.-buffer):int(hdr['NAXIS1']/2.+buffer)] =\
                         central
-        sf.print_log(f'''PREPROCESSING: Your cube had a significant amount of values below -10*sigma. If you do not have a central absorption source there is something seriously wrong with the cube.
+        print_log(f'''PREPROCESSING: Your cube had a significant amount of values below -10*sigma. If you do not have a central absorption source there is something seriously wrong with the cube.
 {"":8s}PREPROCESSING: We blanked these values.
 ''',Configuration)
 
@@ -503,7 +506,7 @@ def prep_cube(Configuration,hdr,data):
     #If we have noiseles cubes this will be far to low
     if abs(new_noise/np.mean([channel_noise,noise_corner])) > 4. \
         or abs(new_noise/np.mean([channel_noise,noise_corner])) < 0.25:
-            sf.print_log(f'''PREPROCESSING: There is something odd in the noise statistics of your cube. We are not using the nehgative values
+            print_log(f'''PREPROCESSING: There is something odd in the noise statistics of your cube. We are not using the nehgative values
 ''',Configuration)
             #new_noise = np.mean([channel_noise,noise_corner])
     hdr['FATNOISE'] = new_noise
@@ -546,7 +549,7 @@ def optimized_cube(Configuration,Fits_Files):
         data = cube[0].data
         hdr = cube[0].header
         if f"{abs(hdr['CDELT1']):.16f}" != f"{abs(hdr['CDELT2']):.16f}":
-            sf.print_log(f'''OPTIMIZED_CUBE: Your input cube does not have square pixels.
+            print_log(f'''OPTIMIZED_CUBE: Your input cube does not have square pixels.
 {"":8s}OPTIMIZED_CUBE: FAT cannot optimize your cube.
 ''', Configuration)
         cube.close()
@@ -557,13 +560,13 @@ def optimized_cube(Configuration,Fits_Files):
         fits.writeto(Configuration['FITTING_DIR']+Fits_Files['OPTIMIZED_CUBE'], opt_data,opt_hdr)
 
         Configuration['OPTIMIZED'] = True
-        sf.print_log(f'''OPTIMIZED_CUBE: Your input cube has {pix_per_beam} pixels along the minor FWHM.
+        print_log(f'''OPTIMIZED_CUBE: Your input cube has {pix_per_beam} pixels along the minor FWHM.
 {"":8s}OPTIMIZED_CUBE: You requested { Configuration['OPT_PIXEL_BEAM']} therefore we regridded the cube into a new cube.
 {"":8s}OPTIMIZED_CUBE: We are using the pixel size of {required_cdelt}.
 ''', Configuration)
 
     else:
-        sf.print_log(f'''OPTIMIZED_CUBE: Your input cube has {pix_per_beam} pixels along the minor FWHM.
+        print_log(f'''OPTIMIZED_CUBE: Your input cube has {pix_per_beam} pixels along the minor FWHM.
 {"":8s}OPTIMIZED_CUBE: You requested {Configuration['OPT_PIXEL_BEAM']} but we cannot improve the resolution.
 {"":8s}OPTIMIZED_CUBE: We are using the pixel size of the original cube.
 ''', Configuration)
@@ -705,7 +708,7 @@ Regrid an array into a new shape through the ndimage module
 '''
 
 def smooth_mask(Configuration,mask):
-    sf.print_log(f'''SMOOTH_MASK: Starting smooth mask
+    print_log(f'''SMOOTH_MASK: Starting smooth mask
 ''', Configuration)
 
     # First we smooth the mask

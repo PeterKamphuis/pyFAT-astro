@@ -16,6 +16,7 @@ import pyFAT_astro.Support.write_functions as wf
 
 from datetime import datetime
 from pyFAT_astro.Support.fat_errors import BadCatalogueError
+from pyFAT_astro.Support.log_functions import print_log,write_config
 
 def FAT_Galaxy_Loop(Configuration):
 
@@ -34,11 +35,11 @@ def FAT_Galaxy_Loop(Configuration):
                     Configuration, Fits_Files)
 
             #sf.sofia_output_exists(Configuration,Fits_Files)
-            sf.print_log(f'''FAT_GALAXY_LOOPS: The source is well defined and we will now setup the initial tirific file
+            print_log(f'''FAT_GALAXY_LOOPS: The source is well defined and we will now setup the initial tirific file
 ''', Configuration)
             #Add your personal fitting types here
             if Configuration['DEBUG']:
-                sf.write_config(
+                write_config(
                     f'{Configuration["LOG_DIRECTORY"]}CFG_Before_Fitting.txt', Configuration)
         # then we want to read the template
       
@@ -47,7 +48,7 @@ def FAT_Galaxy_Loop(Configuration):
             current_run,Tirific_Template = runf.fitting_osc(
                 Configuration, Fits_Files,  Initial_Parameters)
         elif 'fit_make_your_own' in Configuration['FITTING_STAGES']:
-            sf.print_log(f'''FAT_GALAXY_LOOPS: If you add any fitting routine make sure that the fit stage  starts with Fit_
+            print_log(f'''FAT_GALAXY_LOOPS: If you add any fitting routine make sure that the fit stage  starts with Fit_
 ''',Configuration)
             sf.create_directory(Configuration['USED_FITTING'],Configuration['FITTING_DIR'])
             Configuration['FINAL_COMMENT'] = 'This example does not work'
@@ -80,7 +81,7 @@ def FAT_Galaxy_Loop(Configuration):
             if Configuration['INSTALLATION_CHECK']:
                 cf.installation_check(
                     Configuration)
-        sf.print_log(f'''FAT_GALAXY_LOOP: This galaxy has succesfully ran through all parts of the fitting
+        print_log(f'''FAT_GALAXY_LOOP: This galaxy has succesfully ran through all parts of the fitting
 ''', Configuration)
     except Exception as e:
         if e.__class__.__name__ in Configuration['STOP_INDIVIDUAL_ERRORS']:
@@ -145,7 +146,7 @@ def initialize_loop(Configuration):
 
     if Fits_Files['ORIGINAL_CUBE'][-9:] == '_FAT.fits':
         if 'create_fat_cube' in Configuration['FITTING_STAGES']:
-            sf.print_log(f'''FAT_GALAXY_LOOPS: Your input cube ends in _FAT.fits indicating it is a FAT processed cube.
+            print_log(f'''FAT_GALAXY_LOOPS: Your input cube ends in _FAT.fits indicating it is a FAT processed cube.
 Therefore we remove the Create_FAT_Cube stages from the loop.
 ''', Configuration)
             Configuration['FITTING_STAGES'].remove('create_fat_cube')
@@ -184,7 +185,7 @@ Therefore we remove the Create_FAT_Cube stages from the loop.
             from matplotlib import __version__ as mpversion
         #from subprocess import __version__ as subversion
 
-        sf.print_log(f'''FAT_GALAXY_LOOPS: We are using the following versions
+        print_log(f'''FAT_GALAXY_LOOPS: We are using the following versions
 {'':8s}NumPy {npversion}
 {'':8s}SciPy {spversion}
 {'':8s}AstroPy {apversion}
@@ -192,7 +193,7 @@ Therefore we remove the Create_FAT_Cube stages from the loop.
 ''', Configuration)
 
     log_statement = f'''We are starting the catalogue entry {Configuration['ID']} in the directory {Configuration['SUB_DIR']}.\n'''
-    sf.print_log(
+    print_log(
         log_statement, Configuration)
 
     if Configuration['TIMING']:
@@ -216,7 +217,7 @@ def loop_sofia(Configuration,Fits_Files):
     Configuration['SOFIA_TIME'][0] = datetime.now()
     #If we have Sofia Preprocessed Output request make sure it all exists
     if Configuration['DEBUG']:
-        sf.write_config(
+        write_config(
             f'{Configuration["LOG_DIRECTORY"]}CFG_Before_Sofia.txt', Configuration)
 
     if 'external_sofia' in Configuration['FITTING_STAGES']:
@@ -242,7 +243,7 @@ def MP_initialize_sofia(Configuration,timing_lock,catalogue_lock):
         if Configuration['USED_FITTING']:
             Initial_Parameters = runf.check_source(Configuration, Fits_Files)
             succes =True
-            sf.print_log(f'''FAT_GALAXY_LOOPS: The source is well defined and we will now setup the initial tirific file
+            print_log(f'''FAT_GALAXY_LOOPS: The source is well defined and we will now setup the initial tirific file
 ''', Configuration)
         else:
             catalogue_line = cf.finish_galaxy(Configuration,
@@ -291,14 +292,14 @@ def MP_Fitting_Loop(input,timing_lock,catalogue_lock):
             # If you add any make sure that the fitstage  starts with 'Fit_'
 
         if Configuration['DEBUG']:
-            sf.write_config(
+            write_config(
                 f'{Configuration["LOG_DIRECTORY"]}CFG_Before_Fitting.txt', Configuration)
 
         if 'fit_tirific_osc' in Configuration['FITTING_STAGES']:   
             current_run,Tirific_Template = runf.fitting_osc(
                 Configuration, Fits_Files, Initial_Parameters)
         elif 'fit_make_your_own' in Configuration['FITTING_STAGES']:
-            sf.print_log(f'''FAT_GALAXY_LOOPS: If you add any fitting routine make sure that the fit stage  starts with Fit_
+            print_log(f'''FAT_GALAXY_LOOPS: If you add any fitting routine make sure that the fit stage  starts with Fit_
 ''',Configuration)
             sf.create_directory(Configuration['USED_FITTING'],Configuration['FITTING_DIR'])
             Configuration['FINAL_COMMENT'] = 'This example does not work'
@@ -333,7 +334,7 @@ def MP_Fitting_Loop(input,timing_lock,catalogue_lock):
             if Configuration['INSTALLATION_CHECK']:
                 cf.installation_check(
                     Configuration)
-        sf.print_log(f'''FAT_GALAXY_LOOP: This galaxy has succesfully ran through all parts of the fitting
+        print_log(f'''FAT_GALAXY_LOOP: This galaxy has succesfully ran through all parts of the fitting
 ''', Configuration)
     except Exception as e:
         if e.__class__.__name__ in Configuration['STOP_INDIVIDUAL_ERRORS']:
