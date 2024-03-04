@@ -801,7 +801,7 @@ def fit_polynomial(Configuration,radii,profile,sm_profile,error, key, \
 {'':8s} error = {error}
 ''',Configuration, case = ['debug_start'])
     only_inner = False
-    if key in ['PA','INCL','Z0','ARBITRARY']:
+    if key in ['PA','INCL','Z0','THETA_FACTOR','PHI_FACTOR','CHANGE_ANGLE']:
         fixed = inner_fix
         only_inner = True
         error[:fixed] = error[:fixed]/10.
@@ -898,8 +898,8 @@ def fit_polynomial(Configuration,radii,profile,sm_profile,error, key, \
             
             red_chi = np.sum((profile[st_fit:]-fit_profile[st_fit:])**2/error[st_fit:]**2)/(len(radii[st_fit:])-ord)
             #We penailze profiles that go outside the boundaries
-            print_log(f'''FIT_POLYNOMIAL: From the final profile we get chi**2{red_chi}
-{'':8s} VROT = {', '.join([str(x) for x in fit_profile[st_fit:]])}
+            print_log(f'''FIT_POLYNOMIAL: From the final profile we get chi**2 = {red_chi}
+{'':8s} {key} = {', '.join([str(x) for x in fit_profile[st_fit:]])}
 ''',Configuration,case = ['debug_add'])
             if np.sum(np.absolute(np.array(boundary_limits,dtype=float))) != 0.:
                     with warnings.catch_warnings():
@@ -2145,7 +2145,7 @@ def regularise_warp(Configuration,Tirific_Template, min_error = None, \
 ''',Configuration,case=['debug_add'])
 
     theta_zero = Theta[:,0]
-    phi_zero = Theta[:,0]
+    phi_zero = Phi[:,0]
     multiple_zero = multiple[:,0]
      #Let's combine the variation as fraction of the existing angle
     theta_change= np.array([[float(x-theta_zero[0]) for x in Theta[0]],\
@@ -2201,15 +2201,18 @@ def regularise_warp(Configuration,Tirific_Template, min_error = None, \
             new_theta_factor = theta_factor[i]
             new_phi_factor = phi_factor[i]
         else:
-            new_change_angle,fit_order = fit_polynomial(Configuration,radii,change_angle[i],sm_change_angle[i],error_change_angle[i],'ARBITRARY', Tirific_Template,\
-                                         inner_fix = Configuration['INNER_FIX'][i],min_error=min_change_error,\
-                                         allowed_order= [2,5],boundary_limits= change_boundary[i+1], return_order=True)
-            new_theta_factor = fit_polynomial(Configuration,radii,theta_factor[i],sm_theta_factor[i],error_theta_factor[i],'ARBITRARY', Tirific_Template,\
-                                         inner_fix = Configuration['INNER_FIX'][i],min_error=0.005,\
-                                         allowed_order= [fit_order,fit_order],boundary_limits= [0.,1.])
-            new_phi_factor = fit_polynomial(Configuration,radii,phi_factor[i],sm_phi_factor[i],error_phi_factor[i],'ARBITRARY', Tirific_Template,\
-                                         inner_fix = Configuration['INNER_FIX'][i],min_error=0.005,\
-                                         allowed_order= [fit_order,fit_order],boundary_limits= [0.,1.])
+            new_change_angle,fit_order = fit_polynomial(Configuration,radii,change_angle[i],\
+                sm_change_angle[i],error_change_angle[i],'CHANGE_ANGLE', Tirific_Template,\
+                inner_fix = Configuration['INNER_FIX'][i],min_error=min_change_error,\
+                allowed_order= [2,5],boundary_limits= change_boundary[i+1], return_order=True)
+            new_theta_factor = fit_polynomial(Configuration,radii,theta_factor[i],\
+                sm_theta_factor[i],error_theta_factor[i],'THETA_FACTOR', Tirific_Template,\
+                inner_fix = Configuration['INNER_FIX'][i],min_error=0.005,\
+                allowed_order= [fit_order,fit_order],boundary_limits= [-1.,1.])
+            new_phi_factor = fit_polynomial(Configuration,radii,phi_factor[i],sm_phi_factor[i],\
+                error_phi_factor[i],'PHI_FACTOR', Tirific_Template,\
+                inner_fix = Configuration['INNER_FIX'][i],min_error=0.005,\
+                allowed_order= [fit_order,fit_order],boundary_limits= [-1.,1.])
         print_log(f'''REGULARISE_WARP:
 {'':8s} new_change_angle = {new_change_angle}
 {'':8s} new_theta_factor = {new_theta_factor}
@@ -3251,7 +3254,7 @@ def set_new_size(Configuration,Tirific_Template, fit_type = 'Undefined',
                 if key == ' SBR_2':
                     j=1
                 for n in range(len(parameters[i])):
-                    if radii[n] > Configuration['SIZE_IN_BEAMS'][j]*Configuration['BEAMS'][0] or \
+                    if radii[n] > Configuration['SIZE_IN_BEAMS'][j]*Configuration['BEAM'][0] or \
                         parameters[i][n] < 0.:
                         parameters[i][n] = 0.
                 Tirific_Template[key] =f" {' '.join([f'{x:{format}}' for x in parameters[i]])}"        
