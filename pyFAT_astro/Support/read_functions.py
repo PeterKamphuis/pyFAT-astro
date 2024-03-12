@@ -366,8 +366,8 @@ def get_DHI(Configuration, Model='Finalmodel'):
     #convert to solar_mass/pc^2
     sbr_msolar = sf.columndensity(Configuration,sbr*1000.,systemic=systemic[0],arcsquare=True,solar_mass_output=True)
     sbr_2_msolar = sf.columndensity(Configuration,sbr_2*1000.,systemic=systemic[0],arcsquare=True,solar_mass_output=True)
-    # interpolate these to ~1" steps
-    new_radii = np.linspace(0,radi[-1],int(radi[-1]))
+    # interpolate these to ~0.1 beam steps
+    new_radii = np.linspace(0,radi[-1],int(radi[-1]/(0.1*Configuration['BEAM'][0])+1))
     new_sbr_msolar = np.interp(new_radii,radi,sbr_msolar)
     new_sbr_2_msolar = np.interp(new_radii,radi,sbr_2_msolar)
 

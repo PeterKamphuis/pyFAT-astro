@@ -16,7 +16,7 @@ import pyFAT_astro.Support.write_functions as wf
 
 from datetime import datetime
 from pyFAT_astro.Support.fat_errors import BadCatalogueError
-from pyFAT_astro.Support.log_functions import print_log,write_config
+from pyFAT_astro.Support.log_functions import print_log,write_config,update_statistics
 
 def FAT_Galaxy_Loop(Configuration):
 
@@ -199,7 +199,7 @@ Therefore we remove the Create_FAT_Cube stages from the loop.
     if Configuration['TIMING']:
         Configuration['FAT_PSUPROCESS'] = psu.Process(
             Configuration['FAT_PID'])
-        sf.update_statistic(
+        update_statistics(
             Configuration, message="Creating a CPU RAM Log for analysis.")
 
 
@@ -270,7 +270,7 @@ def MP_initialize_sofia(Configuration,timing_lock,catalogue_lock):
                       'Size': Configuration['SIZE_IN_BEAMS'],
                       'Initial_Parameters': Initial_Parameters}
     
-    sf.update_statistic(
+    update_statistics(
             Configuration, message="Pause at")  
     Configuration['FAT_PSUPROCESS'] = None
     return sofia_output
@@ -282,7 +282,7 @@ def MP_Fitting_Loop(input,timing_lock,catalogue_lock):
         Configuration = input['Configuration']
         Configuration['FAT_PSUPROCESS'] = psu.Process(
             Configuration['FAT_PID'])
-        sf.update_statistic(
+        update_statistics(
             Configuration, message="Start fitting loop")  
         Initial_Parameters = input['Initial_Parameters']
         Fits_Files = input['Fits_Files']

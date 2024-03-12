@@ -1087,7 +1087,6 @@ def fit_smoothed(Configuration, Fits_Files,Tirific_Template,current_run, stage =
             Fits_Files, stage=stage, fit_type=fit_type)
     
     write_new_to_template(Configuration, f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def", Tirific_Template)
-    
        
     if Configuration['NO_RINGS'] > 5.:
         Configuration['FIX_RING_SIZE'] = True
@@ -1207,9 +1206,9 @@ make_full_resolution.__doc__ =f'''
 '''
 
 def one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run):
-
     print_log(f'''ONE_STEP_CONVERGENCE: For {Configuration['ID']} we are starting loop {Configuration['ITERATIONS']} out of maximum {Configuration['MAX_ITERATIONS']}.
 ''',Configuration, case=['main','screen','debug_start'])
+    
     fit_type = 'Fit_Tirific_OSC'
     stage = 'run_os'
     #First we run tirific
@@ -1233,8 +1232,8 @@ def one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run):
         Configuration['ACCEPTED_TIRIFIC'] = True
     #Then we load the produced output into our template
     write_new_to_template(Configuration,f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def" , Tirific_Template)
+    
     #Check that the centre does not deviate too much
-
     accepted_central = check_central_convergence(Configuration,Tirific_Template, fit_type = fit_type)
     if accepted_central:
         Configuration['CENTRAL_CONVERGENCE'] = True
@@ -1252,7 +1251,7 @@ def one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run):
         accepted_angle = False
         accepted_boundary = False
    
-
+    
     if all(Configuration['FIX_SIZE']):
         accepted_size = True
     else:
@@ -1297,7 +1296,10 @@ def one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run):
 
 
         # First we fix the SBR we are left with also to set the reliable ring to configuration.
-        fix_sbr(Configuration,Tirific_Template,smooth = True)    # Then we determine the inner rings that should remain fixed
+          
+        fix_sbr(Configuration,Tirific_Template,smooth = True)  
+       
+        # Then we determine the inner rings that should remain fixed
 
         sf.get_inner_fix(Configuration, Tirific_Template)
 

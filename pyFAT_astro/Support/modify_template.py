@@ -143,6 +143,8 @@ arc_tan_function.__doc__ =f'''
 '''
 
 def calc_new_size(Configuration,Tirific_Template,radii,sbr_in,sbr_ring_limits ):
+    print_log(f'''CALC_NEW_SIZE: Starting to calculate the new size
+''',Configuration,case=['debug_start'])
 
     sbr=copy.deepcopy(sbr_in)
 
@@ -154,13 +156,20 @@ def calc_new_size(Configuration,Tirific_Template,radii,sbr_in,sbr_ring_limits ):
                             min_error= sbr_ring_limits,no_apply = True,
                             fix_sbr_call = True, profile_in = sbr )
     old_size = copy.deepcopy(Configuration['SIZE_IN_BEAMS'])
+    print_log(f'''CALC_NEW_SIZE: The old size = {old_size}
+''',Configuration,case=['debug_add'])
     new_size = copy.deepcopy(Configuration['SIZE_IN_BEAMS'])
     difference_with_limit = np.array(sbr-sbr_ring_limits,dtype=float)
-    smooth_diff = smooth_profile(Configuration,{'EMPTY':None}, 'ARBITRARY' ,\
+    print_log(f'''CALC_NEW_SIZE: We find the following limiting SBR 
+{'':8s} sbr = {sbr}
+{'':8s} sbr_limits = {sbr_ring_limits}
+{'':8s} difference_with_limit = {difference_with_limit}
+''',Configuration,case=['debug_add'])
+    smooth_diff = smooth_profile(Configuration,{'EMPTY':None}, 'SMOOTH_DIFFERENCE' ,\
         profile_in=difference_with_limit, min_error=[0.,0.],no_fix=True,no_apply=True)
     print_log(f'''CALC_NEW_SIZE: We find the following smoothed difference profile:
 {'':8s} smooth_diff = {smooth_diff}
-''',Configuration,case=['debug_start'])
+''',Configuration,case=['debug_add'])
     for i in [0,1]:
         #If all last three values are above the limit we need to extend
         if np.all(smooth_diff[i,-3:] > 0.):
@@ -172,9 +181,13 @@ def calc_new_size(Configuration,Tirific_Template,radii,sbr_in,sbr_ring_limits ):
                 Gauss_diff = Gauss_profile-sbr_ring_limits[i,-1]
                 this_size=sf.set_limits(extend_radii[np.where(Gauss_diff < 0.)[0][0]]/Configuration['BEAM'][0]+0.5, Configuration['MIN_SIZE_IN_BEAMS'], Configuration['MAX_SIZE_IN_BEAMS'])
             except FittingError:
+                print_log(f'''CALC_NEW_SIZE: We failed to fit a Gaussian
+''',Configuration,case=['debug_add'])
                 #If we cannot fit a gaussian we extend by a beam
                 this_size=sf.set_limits(radii[-1]/Configuration['BEAM'][0]+1.0, Configuration['MIN_SIZE_IN_BEAMS'], Configuration['MAX_SIZE_IN_BEAMS'])
             except IndexError:
+                print_log(f'''CALC_NEW_SIZE: We failed to find where the GAussian drop below 0.
+''',Configuration,case=['debug_add'])
                 #If we do not find any values in the gaussian below the limits we extend 2 beams
                 this_size=sf.set_limits(radii[-1]/Configuration['BEAM'][0]+2.0, Configuration['MIN_SIZE_IN_BEAMS'], Configuration['MAX_SIZE_IN_BEAMS'])
 
@@ -200,7 +213,7 @@ def calc_new_size(Configuration,Tirific_Template,radii,sbr_in,sbr_ring_limits ):
             this_size = sf.set_limits((x1+y1*(x2-x1)/(y1-y2))/Configuration['BEAM'][0],Configuration['MIN_SIZE_IN_BEAMS'], Configuration['MAX_SIZE_IN_BEAMS'])
 
 
-            print_log(f'''CALC_NEW_SIZE: The profile for {i} drop below 0. between {x1} and {x2}.
+            print_log(f'''CALC_NEW_SIZE: The profile for {i} drops below zero between {x1} and {x2}.
 {'':8s} with y1 = {y1} and y2 = {y2}
 {'':8s} the new size is {this_size}
 ''',Configuration,case= ['debug_add'])
@@ -517,10 +530,11 @@ check_flat.__doc__ = '''
 def check_size(Configuration,Tirific_Template, fit_type = 'Undefined', \
         stage = 'initial', Fits_Files= 'No Files' ,current_run='Not Initialized',
         no_apply=False):
-
+    Configuration['DEBUG'] = True
     print_log(f'''CHECK_SIZE: Starting check_size with the following parameters:
 {'':8s}Rings = {Configuration['NO_RINGS']}, Size in Beams = {Configuration['SIZE_IN_BEAMS']}
-''',Configuration,case=['debug_start'])
+{'':8s}The Rings isze we use = {Configuration['RING_SIZE']}
+''',Configuration,case=['debug_start','verbose'])
 
 
     sbr_ring_limits = sf.sbr_limits(Configuration,Tirific_Template)
@@ -577,16 +591,18 @@ def check_size(Configuration,Tirific_Template, fit_type = 'Undefined', \
     Configuration['RC_UNRELIABLE'] = get_number_of_rings(Configuration,sbr,limit_factor*sbr_ring_limits)-1
     if Configuration['RC_UNRELIABLE'] == Configuration['NO_RINGS']:
         Configuration['RC_UNRELIABLE'] -= 1
+    
+
     for i in [0,1]:
         corr_val = np.where(sbr[i,2:] > sbr_ring_limits[i,2:]*3.)[0]+2
         if corr_val.size > 0:
             Configuration['LAST_RELIABLE_RINGS'][i] = corr_val[-1]+1
         else:
             Configuration['LAST_RELIABLE_RINGS'][i] = Configuration['NO_RINGS']
-
     print_log(f'''CHECK_SIZE: We set these as the last reliable rings {Configuration['LAST_RELIABLE_RINGS']}
-{'':8s}The RC is deemed unrliable from ring {Configuration['RC_UNRELIABLE']} on.
+{'':8s}The RC is deemed unreliable from ring {Configuration['RC_UNRELIABLE']} on.
 ''',Configuration,case= ['debug_add'])
+
 
     if any(apply_size):
         # Do not move this from here else other routines such as sbr_limits are messed up
@@ -1195,6 +1211,9 @@ def fix_sbr(Configuration,Tirific_Template, smooth = False, initial = False ):
     # get the cutoff limits
     cutoff_limits = sf.sbr_limits(Configuration,Tirific_Template)
     cutoff_limits = np.array([cutoff_limits,cutoff_limits],dtype=float)
+    print_log(f'''FIX_SBR: Using these cutoff limits.
+{'':8s}cutoff_limits = {cutoff_limits}
+''',Configuration,case=['debug_add'])
     # Then get the profile from the template
     radii = sf.load_tirific(Configuration,Tirific_Template,Variables=['RADI'],array=True)
     sbr = sf.load_tirific(Configuration,Tirific_Template,Variables=['SBR','SBR_2'], array=True)
@@ -2145,6 +2164,7 @@ def regularise_warp(Configuration,Tirific_Template, min_error = None, \
 ''',Configuration,case=['debug_add'])
 
     theta_zero = Theta[:,0]
+    
     phi_zero = Phi[:,0]
     multiple_zero = multiple[:,0]
      #Let's combine the variation as fraction of the existing angle
@@ -3239,25 +3259,31 @@ def set_new_size(Configuration,Tirific_Template, fit_type = 'Undefined',
                 del parameters_int
             format = sf.set_format(key)
 
+            #If we have the SBR we have to set things to 0
+            if key in ['SBR','SBR_2']:
+                j = 0 
+                if key == ' SBR_2':
+                    j=1
+                
+                for n in range(len(parameters[i])-1):
+                    if n > len(radii)-1: 
+                        parameters[i][n] = 0. 
+                    else:
+                        if radii[n] > Configuration['SIZE_IN_BEAMS'][j]*Configuration['BEAM'][0]\
+                            or parameters[i][n] < 0.:
+                            parameters[i][n] = 0.     
+
             if len(parameters[i]) > Configuration['NO_RINGS']-1:
                 # if we are cutting a ring it is likely the outer ring have done weird stuff so we flatten the curve
-
                 Tirific_Template[key] =f" {' '.join([f'{x:{format}}' for x in parameters[i][:int(Configuration['NO_RINGS'])]])}"
+
             elif len(parameters[i]) <= Configuration['NO_RINGS']-1:
                 # We simply add the last value
                 counter = len(parameters[i])
                 while counter !=  Configuration['NO_RINGS']:
                     Tirific_Template[key] = Tirific_Template[key] + f" {parameters[i][-1]:{format}}"
                     counter += 1
-            if key in ['SBR','SBR_2']:
-                j = 0 
-                if key == ' SBR_2':
-                    j=1
-                for n in range(len(parameters[i])):
-                    if radii[n] > Configuration['SIZE_IN_BEAMS'][j]*Configuration['BEAM'][0] or \
-                        parameters[i][n] < 0.:
-                        parameters[i][n] = 0.
-                Tirific_Template[key] =f" {' '.join([f'{x:{format}}' for x in parameters[i]])}"        
+                   
                        
         print_log(f'''SET_NEW_SIZE: We wrote the following line {Tirific_Template[key]}
 ''',Configuration,case=['debug_add'])
