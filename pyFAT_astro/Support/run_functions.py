@@ -820,6 +820,21 @@ def construct_kernels(Configuration,sofia_template):
 {'':8s} spatial kernels = {spatial_kernels}
 ''', Configuration)
     velocity_kernels = [0]
+    #We want to smooth at 5 km/s,10 kms and 15 and 25 km/s andif the cube spans more than 400 km/s\
+    #also at 50 km/s
+    dispersion = [5.,10,15.,25. ,50.]
+    fact = 5.
+    for disp in dispersion:
+        kernel = int(disp/Configuration['CHANNEL_WIDTH'])
+        if disp == 50:
+            fact = 8.
+        if kernel*fact < Configuration['NAXES'][2]:
+            if fact == 8.:
+                Configuration['VEL_SMOOTH_EXTENDED'] = True
+                print_log(f'''CONSTRUCT_KERNELS: Using a very extended velocity smoothing as the cube spans more than 400 km/s.
+''', Configuration)       
+            velocity_kernels.append(kernel)
+    '''
     if Configuration['NAXES'][2] > 12:
         velocity_kernels.append(3)
     if Configuration['NAXES'][2] > 24:
@@ -829,9 +844,9 @@ def construct_kernels(Configuration,sofia_template):
     if Configuration['NAXES'][2] > 52:
         velocity_kernels.append(16)
         Configuration['VEL_SMOOTH_EXTENDED'] = True
-        print_log(f'''CONSTRUCT_KERNELS: Using a very extended velocity smoothing as the cube has more than 52 channels.
-''', Configuration)
-
+        print_log(f''CONSTRUCT_KERNELS: Using a very extended velocity smoothing as the cube has more than 52 channels.
+'', Configuration)
+    '''
     print_log(f'''CONSTRUCT_KERNELS: We use the following velocity kernels
 {'':8s} velocity kernels = {velocity_kernels}
 ''', Configuration)
@@ -1014,34 +1029,15 @@ def fit_smoothed(Configuration, Fits_Files,Tirific_Template,current_run, stage =
     if stage == 'after_cc':
         smoothed_vrot = smooth_profile(Configuration,Tirific_Template,'VROT',min_error = Configuration['CHANNEL_WIDTH'])
     else:
-        min_error = []
-        pars_to_smooth = []
-        not_to_smooth = []
-        #fixed_errors = []
-        for parameter in ['VROT','INCL','Z0','SDIS','PA','XPOS','YPOS','VSYS']:
-            if parameter in Configuration['FIXED_PARAMETERS'][0]:
-                not_to_smooth.append(parameter)
-            else:
-                pars_to_smooth.append(parameter)
-            min_error.append(Configuration['MIN_ERROR'][parameter])
-        warp_triggered = False
-        for key in pars_to_smooth:
-                if key in ['PA','INCL']:
-                    if not warp_triggered:
-                        smoothed = regularise_warp(Configuration,Tirific_Template,\
-                            min_error = [Configuration['MIN_ERROR']['PA'],\
-                            Configuration['MIN_ERROR']['INCL']])
-                        warp_triggered = True
-                    else:
-                        pass
-                else:
-                    smoothed = regularise_profile(Configuration,Tirific_Template,key,min_error = Configuration['MIN_ERROR'][parameter])
-                if key == 'VROT':
-                    smoothed_vrot=copy.deepcopy(smoothed)
-
-        for key in not_to_smooth:
-            set_errors(Configuration,Tirific_Template,key,min_error = Configuration['MIN_ERROR'][parameter])
-    #
+      
+        for parameter in ['VROT','Z0','SDIS','XPOS','YPOS','VSYS']:
+            smoothed = regularise_profile(Configuration,Tirific_Template,\
+                        parameter)
+            if parameter == 'VROT':
+                smoothed_vrot=copy.deepcopy(smoothed)
+        #For the warp the PA and INCL we do it differently 
+        smoothed = regularise_warp(Configuration,Tirific_Template)
+                          
     if stage == 'after_cc':
 
         Tirific_Template['LOOPS'] = 1.

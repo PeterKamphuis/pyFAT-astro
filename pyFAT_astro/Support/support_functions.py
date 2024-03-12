@@ -392,7 +392,7 @@ Inclination = {inclination}
 
         change_angle = np.sqrt(theta_change**2+phi_change**2)
         change_angle[in_zero] =0.
-        new_change_angle = max_profile_change(Configuration,radkpc,change_angle,'ARBITRARY',\
+        new_change_angle = max_profile_change(Configuration,radkpc,change_angle,'CHANGE_ANGLE',\
             slope = Configuration['WARP_SLOPE'][side],max_change=max_shift, kpc_radius=True, quadrant=quadrant )
 
         #for i in range(len(new_change_angle)):
@@ -2794,9 +2794,9 @@ def max_profile_change(Configuration,radius,profile,key,max_change=None,\
     new_profile = copy.deepcopy(profile)
   
     sm_profile = savgol_filter(new_profile, 3, 1)
-    if key == 'ARBITRARY' and not max_change:
-        raise InputError('For arbitrary checks you have to set the max_change.')
-    if key != 'ARBITRARY':
+    if key in ['ARBITRARY','CHANGE_ANGLE'] and not max_change:
+        raise InputError(f'For {key} checks you have to set the max_change.')
+    if max_change == None:
         max_change=Configuration['MAX_CHANGE'][key]
     diff_rad =  [float(y-x) for x,y in zip(radkpc,radkpc[1:])]
     diff_profile = [float(y-x) for x,y in zip(profile,profile[1:])]

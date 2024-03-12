@@ -211,7 +211,7 @@ At the cutoff the SNR = {Max_SNR}.
     Mean_SNR = np.nanmean(snr)
     if Mean_SNR < Configuration['SOURCE_MEAN_SNR']*fact_mean:
         print_log(f'''CHECK_SOURCE_BRIGHTNESS: The mean SNR of the pixels in the mask is {Mean_SNR} in the {checking}.
-This too faint.
+This is less than {Configuration['SOURCE_MEAN_SNR']*fact_mean} and therefore deemed too faint.
 ''', Configuration,case= case)
         Too_Faint = True
             #raise BadSourceError(f"The mean SNR of the pixels in the mask is {Mean_SNR}. This is too faint.")
