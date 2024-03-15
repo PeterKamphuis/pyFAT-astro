@@ -1032,6 +1032,10 @@ def check_parameters(Configuration,Variables,input_columns):
                 Variables[Variables.index('v_app')]='v_rad'
                 velocity = 'v_rad'
                 continue
+            elif  'v_opt' in input_columns:
+                Variables[Variables.index('v_app')]='v_opt'
+                velocity = 'v_opt'
+                continue
             else:
                 trig = True    
         else:
