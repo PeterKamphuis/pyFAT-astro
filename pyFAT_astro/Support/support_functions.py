@@ -342,6 +342,46 @@ calculate_am_vector.__doc__ =f'''
  NOTE:
 '''
 
+'This is for singular arrays not both sides'
+def calculate_change_angle(Configuration,Theta,Phi):
+    theta_zero = Theta[0]
+    phi_zero = Phi[0]
+       
+    theta_change= np.array([float(x-theta_zero) for x in Theta]\
+                           ,dtype=float)
+    
+    phi_change=  np.array([float(x-phi_zero) for x in Phi]\
+                           ,dtype=float)
+   
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore",message="invalid value encountered in true_divide"\
+                            ,category=RuntimeWarning)
+        #pYthon being really incredibly dumb again as changed the run time warning 
+        warnings.filterwarnings("ignore",message="invalid value encountered in divide"\
+                            ,category=RuntimeWarning)
+        theta_factor = np.sqrt(theta_change**2/(theta_change**2+phi_change**2))\
+                    *(theta_change)/abs(theta_change)
+        
+        theta_factor[np.where(np.array(theta_change) == 0.)] = 0.
+        phi_factor = np.sqrt(phi_change**2/(theta_change**2+phi_change**2))*(phi_change)/abs(phi_change)
+        phi_factor[np.where(np.array(phi_change) == 0.)] = 0.
+
+    in_zero = np.where(np.array(theta_change+phi_change) == 0.)
+    phi_factor[in_zero]=0.
+    theta_factor[in_zero]=0.
+
+    change_angle = np.sqrt(theta_change**2+phi_change**2)
+    change_angle[in_zero] =0.
+
+    return {'CHANGE_ANGLE': change_angle, 'PHI': {'ZERO': phi_zero, 'FACTOR':phi_factor},\
+                                     'THETA':{'ZERO': theta_zero, 'FACTOR':theta_factor}}
+
+def revert_change_angle(Configuration,change_angle):
+    new_theta = change_angle['THETA']['ZERO']+change_angle['CHANGE_ANGLE']\
+            *change_angle['THETA']['FACTOR']
+    new_phi =  change_angle['PHI']['ZERO']+change_angle['CHANGE_ANGLE']\
+            *change_angle['PHI']['FACTOR']
+    return new_theta,new_phi
 
 def check_angular_momentum_vector(Configuration,radius_in,pa_in,inclination_in,\
                                     modified= False,side=0):
@@ -366,47 +406,13 @@ PA = {pa}
 Inclination = {inclination}
 ''',Configuration,case= ['debug_add'])
         Theta,Phi,quadrant = calculate_am_vector(Configuration,pa,inclination )
-        theta_zero = Theta[0]
-        phi_zero = Phi[0]
-
-        #Let's combine the variation as fraction of the existing angle
-        theta_change= np.array([float(x-theta_zero) for x in Theta],dtype=float)
-        phi_change= np.array([float(x-phi_zero) for x in Phi],dtype=float)
-
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore",message="invalid value encountered in true_divide"\
-                                ,category=RuntimeWarning)
-            #pYthon being really incredibly dumb again as changed the run time warning 
-            warnings.filterwarnings("ignore",message="invalid value encountered in divide"\
-                                ,category=RuntimeWarning)
-            theta_factor = np.sqrt(theta_change**2/(theta_change**2+phi_change**2))\
-                        *(theta_change)/abs(theta_change)
-            
-            theta_factor[np.where(np.array(theta_change) == 0.)] = 0.
-            phi_factor = np.sqrt(phi_change**2/(theta_change**2+phi_change**2))*(phi_change)/abs(phi_change)
-            phi_factor[np.where(np.array(phi_change) == 0.)] = 0.
-
-        in_zero = np.where(np.array(theta_change+phi_change) == 0.)
-        phi_factor[in_zero]=0.
-        theta_factor[in_zero]=0.
-
-        change_angle = np.sqrt(theta_change**2+phi_change**2)
-        change_angle[in_zero] =0.
-        new_change_angle = max_profile_change(Configuration,radkpc,change_angle,'CHANGE_ANGLE',\
+        change_angle = calculate_change_angle(Configuration,Theta,Phi)
+        new_change_angle = max_profile_change(Configuration,radkpc,change_angle['CHANGE_ANGLE'],'CHANGE_ANGLE',\
             slope = Configuration['WARP_SLOPE'][side],max_change=max_shift, kpc_radius=True, quadrant=quadrant )
-
-        #for i in range(len(new_change_angle)):
-        #        print(f'new_ch = {new_change_angle[i]}, phi_factor = {phi_factor[i]}, theta_factor = {theta_factor[i]} ')
-        new_theta_change = new_change_angle*theta_factor
-        new_phi_change = new_change_angle*phi_factor
-        new_theta = theta_zero+new_theta_change
-        new_phi = phi_zero+new_phi_change
-        print_log(f'''We put in the difference of
-phi {phi_change}, theta {theta_change}, angle {change_angle}
-new values
-phi {new_phi_change}, theta {new_theta_change}, angle {new_change_angle}
-''',Configuration,case= ['debug_add'])
-
+        change_angle['CHANGE_ANGLE'] = new_change_angle
+        new_theta,new_phi = revert_change_angle(Configuration,change_angle)
+       
+     
         diff_phi = np.array(np.where(np.array([abs(x-y) for x,y in zip(Phi,new_phi) ],dtype=float) > 1e-6))
         diff_theta = np.array(np.where(np.array([abs(x-y) for x,y in zip(Theta,new_theta)],dtype=float) > 1e-6))
 
