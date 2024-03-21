@@ -21,8 +21,8 @@ Run Sofia on the FAT cube and  process the output. The brightest source is selec
 Sofia_Catalogue
 ----------------
 
-The input catalogue is an sofia catalogue. In this case all objects in the catalogue are deemed separate targets and pyFAT will setup the require directory structure itself. When using this stage the keyword sofia_basename is required.
-If used in combination with Create_FAT_Cube  all cubelets are checked, however it is more efficient to first run pyFAT with only the Create_FAT_Cube stage on the large cube and then run sofia before running pyFAT with fitting modules.
+The input catalogue is a sofia text catalogue. In this case all objects in the catalogue are deemed separate targets and pyFAT will setup the required directory structure itself. When using this stage the keyword sofia_basename is required and sofia has to be ran with the setting output.writeCubelets = true. The cubelets are then copied into the FAT directory structure so for large cubes with many sources it is important to have enough disk space.
+If used in combination with Create_FAT_Cube  all cubelets are checked and made pyFAT compatible, however it is more efficient to first run pyFAT with only the Create_FAT_Cube stage on the initial cube before running sofia and then feed the output to pyFAT without the Create_FAT_Cube stage.
 
 Existing_Sofia
 --------------

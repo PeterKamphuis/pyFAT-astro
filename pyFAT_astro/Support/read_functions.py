@@ -1315,21 +1315,17 @@ def sofia_input_catalogue(Configuration):
             tmp =line.split()
 
             if line.strip() == '' or line.strip() == '#':
-                headerlines.append(line)
                 pass
             elif tmp[0] == '#' and len(tmp) > 1:
                 headerlines.append(line)
                 if tmp[1].strip().lower() in ['name']:
-
                     input_columns = [x.strip() for x in tmp[1:]]
                     column_locations = []
                     for col in input_columns:
                         column_locations.append(line.find(col)+len(col))
-
                     # check that we found all parameters
                     velocity = check_parameters(Configuration,Variables,input_columns)                   
             else:
-
                 outlist = ['' for x in input_columns]
                 for col in input_columns:
                     if input_columns.index(col) == 0:
@@ -1343,7 +1339,8 @@ def sofia_input_catalogue(Configuration):
                     sf.create_directory(f"{Configuration['MAIN_DIRECTORY']}{basename}_FAT_cubelets/{basename}_{outlist[input_columns.index('id')]}",f"{Configuration['MAIN_DIRECTORY']}")
 
                 if 'create_fat_cube' in Configuration['FITTING_STAGES']:
-                    create_fat_cube(Configuration,sofia_catalogue=True,name=basename,id = outlist[input_columns.index('id')])
+                    hdr = create_fat_cube(Configuration,sofia_catalogue=True,name=basename,id = outlist[input_columns.index('id')])
+
                 else:
                     Cube = fits.open(f"{Configuration['SOFIA_DIR']}{basename}_{outlist[input_columns.index('id')]}_cube.fits",uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
                     data = Cube[0].data
@@ -1368,27 +1365,29 @@ def sofia_input_catalogue(Configuration):
 
                     if hdr['CDELT3'] < -1:
                         raise InputError(f"Your velocity axis is declining this won't work. exiting")
+                    fits.writeto(f"{Configuration['MAIN_DIRECTORY']}{basename}_FAT_cubelets/{basename}_{outlist[input_columns.index('id')]}/{basename}_{outlist[input_columns.index('id')]}_FAT.fits",\
+                                 data,hdr,overwrite=True)
                     #Translate the big cube to parameters in this cube.
-                    with warnings.catch_warnings():
-                        warnings.simplefilter("ignore")
-                        coordinate_frame = WCS(hdr)
-                        x,y,z =coordinate_frame.wcs_world2pix(float(outlist[input_columns.index('ra')]),\
-                                                          float(outlist[input_columns.index('dec')]), \
-                                                          float(outlist[input_columns.index(velocity)]), 1.)
-                    shift = [int(float(outlist[input_columns.index('x')]) - x), \
-                            int(float(outlist[input_columns.index('y')]) - y),\
-                            int(float(outlist[input_columns.index('z')]) - z)]
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    coordinate_frame = WCS(hdr)
+                    x,y,z =coordinate_frame.wcs_world2pix(float(outlist[input_columns.index('ra')]),\
+                                                    float(outlist[input_columns.index('dec')]), \
+                                                    float(outlist[input_columns.index(velocity)]), 1.)
+                shift = [int(float(outlist[input_columns.index('x')]) - x), \
+                        int(float(outlist[input_columns.index('y')]) - y),\
+                        int(float(outlist[input_columns.index('z')]) - z)]
 
-                    for i,coord in enumerate(['x','y','z']):
-                        for chang in ['','_min','_max','_peak']:
-                            val = f'{coord}{chang}'
-                            if chang == '':
-                                outlist[input_columns.index(val)] = f'{float(outlist[input_columns.index(val)])-shift[i]:.6f}'
-                            else:
-                                outlist[input_columns.index(val)] = f'{int(outlist[input_columns.index(val)])-shift[i]:d}'
+                for i,coord in enumerate(['x','y','z']):
+                    for chang in ['','_min','_max','_peak']:
+                        val = f'{coord}{chang}'
+                        if chang == '':
+                            outlist[input_columns.index(val)] = f'{float(outlist[input_columns.index(val)])-shift[i]:.6f}'
+                        else:
+                            outlist[input_columns.index(val)] = f'{int(outlist[input_columns.index(val)])-shift[i]:d}'
 
 
-                    fits.writeto(f"{Configuration['MAIN_DIRECTORY']}{basename}_FAT_cubelets/{basename}_{outlist[input_columns.index('id')]}/{basename}_{outlist[input_columns.index('id')]}_FAT.fits",data,hdr,overwrite=True)
+                    
                 sf.create_directory(f"{Configuration['MAIN_DIRECTORY']}{basename}_FAT_cubelets/{basename}_{outlist[input_columns.index('id')]}/Sofia_Output",f"{Configuration['MAIN_DIRECTORY']}")
 
                 Configuration['FITTING_DIR']=f"{Configuration['MAIN_DIRECTORY']}{basename}_FAT_cubelets/{basename}_{outlist[input_columns.index('id')]}/"
@@ -1401,7 +1400,7 @@ def sofia_input_catalogue(Configuration):
                 Catalogue['CUBENAME'].append(f"{basename}_{outlist[input_columns.index('id')]}")
                 with open(f"{Configuration['FITTING_DIR']}/Sofia_Output/{Configuration['BASE_NAME']}_cat.txt",'w') as cat:
                     for hline in headerlines:
-                        cat.write(f"{hline}\n")
+                        cat.write(f"{hline}")
                     comline=''
                     for col in input_columns:
                         if input_columns.index(col) == 0:

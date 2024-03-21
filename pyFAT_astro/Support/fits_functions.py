@@ -4,7 +4,8 @@ from astropy.io import fits
 from astropy.wcs import WCS
 from datetime import datetime
 from shutil import copyfile
-from pyFAT_astro.Support.fat_errors import FunctionCallError,BadCubeError,BadMaskError
+from pyFAT_astro.Support.fat_errors import FunctionCallError,BadCubeError\
+    ,BadMaskError,InputError
 from pyFAT_astro.Support.log_functions import print_log
 import pyFAT_astro.Support.support_functions as sf
 
@@ -157,17 +158,26 @@ def create_fat_cube(Configuration, Fits_Files = None,sofia_catalogue=False,\
     data = prep_cube(Configuration,hdr,data)
     # and write our new cube
 
-    print_log(f'''CREATE_FAT_CUBE: We are writing a FAT modified cube to be used for the fitting. This cube is called {Configuration['FITTING_DIR']+Fits_Files['FITTING_CUBE']}
-''',Configuration)
+  
     if sofia_catalogue:
-        fits.writeto(f"{Configuration['MAIN_DIRECTORY']}{name}_FAT_cubelets/{name}_{id}/{name}_{id}_FAT.fits",data,hdr)
+        print_log(f'''CREATE_FAT_CUBE: We are writing a FAT modified cube to be used for the fitting. This cube is called {name}_{id}/{name}_{id}_FAT.fits
+''',Configuration)
+        try:
+            fits.writeto(f"{Configuration['MAIN_DIRECTORY']}{name}_FAT_cubelets/{name}_{id}/{name}_{id}_FAT.fits",data,hdr,overwrite=Configuration['SOFIA_OVERWRITE'])
+        except OSError:
+            raise InputError('pyFAT has already setup this directory, if you want to overwrite the bcubelets please set advanced.sofia_overwrite to True in the configuration')
+
     else:
+        print_log(f'''CREATE_FAT_CUBE: We are writing a FAT modified cube to be used for the fitting. This cube is called {Configuration['FITTING_DIR']+Fits_Files['FITTING_CUBE']}
+''',Configuration)
         fits.writeto(Configuration['FITTING_DIR']+Fits_Files['FITTING_CUBE'],data,hdr)
     # Release the arrays
 
     Cube.close()
 
     data = []
+    if sofia_catalogue:
+        return hdr
     hdr = []
     Configuration['PREPARATION_TIME'][1] = datetime.now()
 

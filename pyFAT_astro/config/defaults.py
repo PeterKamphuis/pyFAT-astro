@@ -116,7 +116,8 @@ class Advanced:
     #option to bypass all initial checks on the intial sofia source and simply force the TRM fitting
     force_fit: bool = False
     # Add the channel dependency, minimum inclination,
-
+    # If we are using a sofia catalogue and want tor overwrite the create FAT Cubes
+    sofia_overwrite: bool = False
 
 @dataclass
 class defaults:
