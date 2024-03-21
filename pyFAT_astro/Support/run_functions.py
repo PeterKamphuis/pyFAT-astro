@@ -972,7 +972,7 @@ def fitting_osc(Configuration,Fits_Files,Initial_Parameters):
 ''',Configuration)
         current_run = fit_smoothed(Configuration, Fits_Files,\
             Tirific_Template,current_run,stage = 'after_os',\
-             fit_type = Configuration['USED_FITTING'])
+            fit_type = Configuration['USED_FITTING'])
         if Configuration['OPTIMIZED']:
             make_full_resolution(Configuration,Tirific_Template,Fits_Files,\
                 current_run = current_run,fit_type = Configuration['USED_FITTING'])
@@ -1019,6 +1019,18 @@ fitting_osc.__doc__ =f'''
 
 def fit_smoothed(Configuration, Fits_Files,Tirific_Template,current_run, stage = 'initial', \
                  fit_type='Undefined'):
+    #As check angles makes modifications we first want to reload the last fit into the template
+    Last_Fit_File = f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def"
+    variables_to_reset =['PA','PA_2','INCL','INCL_2']
+    reset_values = sf.load_tirific(Configuration,Last_Fit_File,Variables =\
+                                 variables_to_reset,array=True)
+
+    for parameter in variables_to_reset:
+        Tirific_Template[parameter] = \
+            f"{' '.join([f'{x}' for x in reset_values[variables_to_reset.index(parameter)][:Configuration['NO_RINGS']]])}"
+
+
+    #And we create a recovery point
     enter_recovery_point(Configuration, Fits_Files = Fits_Files, Tirific_Template= Tirific_Template,
                          message = 'Start of fit_smoothed.',point_ID='Start_Fit_Smoothed')
 

@@ -116,6 +116,7 @@ class Advanced:
     #option to bypass all initial checks on the intial sofia source and simply force the TRM fitting
     force_fit: bool = False
     # Add the channel dependency, minimum inclination,
+    debug_function: List = field(default_factory=lambda: ['ALL'] )
 
 
 @dataclass

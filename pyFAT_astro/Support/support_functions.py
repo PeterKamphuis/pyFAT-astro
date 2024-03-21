@@ -396,19 +396,21 @@ def check_angular_momentum_vector(Configuration,radius_in,pa_in,inclination_in,\
     #phi is dependent on theta but the max change should be the same
     max_shift = np.arctan(np.tan(Configuration['MAX_CHANGE']['INCL']*(np.pi/180.))\
                     *np.tan(Configuration['MAX_CHANGE']['PA']*(np.pi/180.)))
+  
     print_log(f'''CHECK_ANGULAR_MOMENTUM_VECTOR: The maximum allowed shift  = {max_shift}.
 ''',Configuration,case= ['debug_start'])
     succes = False
     counter = 0.
     while not succes:
-        print_log(f'''CHECK_ANGULAR_MOMENTUM_VECTOR: Calculating Phi and Theta from these PA and inclination
-PA = {pa}
-Inclination = {inclination}
-''',Configuration,case= ['debug_add'])
+        #print_log(f'''CHECK_ANGULAR_MOMENTUM_VECTOR: Calculating Phi and Theta from these PA and inclination
+#PA = {pa}
+#Inclination = {inclination}
+#''',Configuration,case= ['debug_add'])
         Theta,Phi,quadrant = calculate_am_vector(Configuration,pa,inclination )
-        change_angle = calculate_change_angle(Configuration,Theta,Phi)
+        change_angle = calculate_change_angle(Configuration,Theta,Phi) 
         new_change_angle = max_profile_change(Configuration,radkpc,change_angle['CHANGE_ANGLE'],'CHANGE_ANGLE',\
             slope = Configuration['WARP_SLOPE'][side],max_change=max_shift, kpc_radius=True, quadrant=quadrant )
+        
         change_angle['CHANGE_ANGLE'] = new_change_angle
         new_theta,new_phi = revert_change_angle(Configuration,change_angle)
        
@@ -418,12 +420,12 @@ Inclination = {inclination}
 
         if diff_phi.size != 0. or \
             diff_theta.size != 0.:
-            print_log(f'''CHECK_ANGULAR_MOMENTUM_VECTOR
-{'':8s} Phi = {Phi}, new_phi = {new_phi}
-{'':8s} Phi diff = {np.array([abs(x-y) for x,y in zip(Phi,new_phi) ],dtype=float)}{'':8s}
-{'':8s} Theta = {Theta}, new_theta = {new_theta}
-{'':8s} Theta diff = {np.array([abs(x-y) for x,y in zip(Theta,new_theta) ],dtype=float)}
-''',Configuration,case= ['debug_add'])
+            #print_log(f'''CHECK_ANGULAR_MOMENTUM_VECTOR
+#{'':8s} Phi = {Phi}, new_phi = {new_phi}
+#{'':8s} Phi diff = {np.array([abs(x-y) for x,y in zip(Phi,new_phi) ],dtype=float)}{'':8s}
+#{'':8s} Theta = {Theta}, new_theta = {new_theta}
+#{'':8s} Theta diff = {np.array([abs(x-y) for x,y in zip(Theta,new_theta) ],dtype=float)}
+#''',Configuration,case= ['debug_add'])
 
 
             pa,inclination = calculate_am_vector(Configuration,new_theta,new_phi,\
@@ -433,10 +435,10 @@ Inclination = {inclination}
             pa,inclination = check_quadrant_change(Configuration,pa,inclination,quadrant)
             #for i in range(len(pa)):
             #    print(f'PA = {pa[i]}, inclination = {inclination[i]}, quadrant = {quadrant[i]} ')
-            print_log(f'''CHECK_ANGULAR_MOMENTUM_VECTOR: new PA and inclination
-PA = {pa}
-Inclination = {inclination}
-''',Configuration,case= ['debug_add'])
+#            print_log(f'''CHECK_ANGULAR_MOMENTUM_VECTOR: new PA and inclination
+#PA = {pa}
+#Inclination = {inclination}
+#''',Configuration,case= ['debug_add'])
             counter += 1
             if counter > 1000.:
                 #It is not really a succes but we have to exit the loop and one point.
@@ -3763,6 +3765,9 @@ Please pick one of the following {', '.join(possible_stages)}.
     ''')
         else:
             approved_stages.append(stage.lower())
+    if Configuration['DEBUG']:
+        Configuration['DEBUG_FUNCTION'] = [x.upper() for x in \
+                                        Configuration['DEBUG_FUNCTION']]
 
     Configuration['FITTING_STAGES'] =approved_stages
     if 'sofia_catalogue' in Configuration['FITTING_STAGES'] and 'external_sofia' in Configuration['FITTING_STAGES']:

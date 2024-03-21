@@ -119,33 +119,47 @@ linenumber.__doc__ =f'''
 '''
 
 def print_log(log_statement,Configuration, case = None):
-    if case is None:
-        case=['main']
-    if Configuration['DEBUG']:
-        if 'debug_start' in case:
+   if case is None:
+      case=['main']
+   
+   debugging = False
+   debug= 'empty'
+   if Configuration['DEBUG']:
+      trig=False
+      if Configuration['DEBUG_FUNCTION'] == 'ALL':
+         trig = True
+      else:
+         # get the function  
+         for key in stack():
+            if key[3] != 'linenumber' and key[3] != 'print_log' and key[3] != '<module>': 
+               current_function= f"{key[3]}"
+               break
+         if current_function.lower() in [x.lower() for x in  Configuration['DEBUG_FUNCTION']]:
+            trig=True             
+      if trig:
+         debugging=True    
+         if 'debug_start' in case:
             debug = 'long'
-        else:
+         else:
             debug= 'short'
-    else:
-        debug = 'empty'
-    if Configuration['TIMING']:
-        log_statement = f"{linenumber(debug=debug)} {datetime.now()} {log_statement}"
-    else:
-        log_statement = f"{linenumber(debug=debug)}{log_statement}"
-    print_statement = False
-    if (Configuration['DEBUG'] and ('debug_start' in case or 'debug_add' in case))\
-        or ('verbose' in case and (Configuration['VERBOSE_LOG'] or Configuration['DEBUG']))\
+   if Configuration['TIMING']:
+      log_statement = f"{linenumber(debug=debug)} {datetime.now()} {log_statement}"
+   else:
+      log_statement = f"{linenumber(debug=debug)}{log_statement}"
+   print_statement = False
+   if (debugging and ('debug_start' in case or 'debug_add' in case))\
+      or ('verbose' in case and (Configuration['VERBOSE_LOG'] or debugging))\
          or 'main' in case:
             print_statement = True
-    if print_statement:
-        if Configuration['VERBOSE_SCREEN'] \
-            or not Configuration['OUTPUTLOG']  \
-            or 'screen' in case \
-            or (Configuration['VERBOSE_LOG'] and 'main' in case):
-            print(log_statement)
-        if Configuration['OUTPUTLOG']:
-            with open(Configuration['OUTPUTLOG'],'a') as log_file:
-                log_file.write(log_statement)
+   if print_statement:
+      if Configuration['VERBOSE_SCREEN'] \
+         or not Configuration['OUTPUTLOG']  \
+         or 'screen' in case \
+         or (Configuration['VERBOSE_LOG'] and 'main' in case):
+         print(log_statement)
+      if Configuration['OUTPUTLOG']:
+         with open(Configuration['OUTPUTLOG'],'a') as log_file:
+            log_file.write(log_statement)
 
 print_log.__doc__ =f'''
  NAME:
