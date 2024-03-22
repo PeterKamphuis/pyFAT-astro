@@ -1249,7 +1249,7 @@ def fix_sbr(Configuration,Tirific_Template, smooth = False, initial = False ):
     # Then get the profile from the template
     radii = sf.load_tirific(Configuration,Tirific_Template,Variables=['RADI'],array=True)
     sbr = sf.load_tirific(Configuration,Tirific_Template,Variables=['SBR','SBR_2'], array=True)
- 
+    original_sbr=copy.deepcopy(sbr)
     print_log(f'''FIX_SBR: Before modify.
 {'':8s}sbr from template = {sbr}
 ''',Configuration,case=['debug_add'])
@@ -1340,44 +1340,9 @@ def fix_sbr(Configuration,Tirific_Template, smooth = False, initial = False ):
         for i in [0,1]:
             if Configuration['WARP_SLOPE'][i] <  0.75*(Configuration['NO_RINGS']) and Configuration['WARP_SLOPE'][i] != None:
                 sbr[i,Configuration['WARP_SLOPE'][i]:] = 0.5*sbr[i,Configuration['WARP_SLOPE'][i]-1]+2.5*sbr[i,Configuration['WARP_SLOPE'][i]:]
-    else:
+  
 
-        #sbr[np.where(sbr<cutoff_limits/2.)] = 1e-16
-        #no rising outer end profiles
-        for i in [0,1]:
-            counter = len(sbr[i,:])-1
-            found_good  = False
-            print_log(f'''FIX_SBR: check sbr vs limits
-{'':8s}sbr = {sbr[i, :]}
-{'':8s}cutoff_limits  = {cutoff_limits[i, :]}
-{'':8s}counter = {counter}
-''',Configuration,case=['debug_add'])
-            while not found_good and counter > 0:
-                if sbr[i, counter] < cutoff_limits[i,counter]/2.:
-                    if counter > 3:
-                        sbr[i, counter] = 1e-16
-                    else:
-                        sbr[i, counter] = cutoff_limits[i,counter]*1.5
-                    counter -= 1
-                else:
-                    found_good =True
-            if counter == 0:
-                print_log(f'''FIX_SBR: We set all off the SBR to 1e-16
-{'':8s}sbr = {sbr[i, :]}
-{'':8s}cutoff_limits  = {cutoff_limits[i, :]}
-{'':8s}counter = {counter}
-''',Configuration,case=['debug_add'])
-                raise FaintSourceError(f"After correcting the SBRs all values we're below the cutoff limit, your source is too faint.")
-            if sbr[i,-2] < sbr[i,-1]:
-                last = sbr[i,-1]
-                second = sbr[i,-2]
-                sbr[i,-2] = last
-                sbr[i,-1] = second
-            print_log(f'''FIX_SBR: check sbr vs limits after
-{'':8s}sbr = {sbr[i, :]}
-{'':8s}cutoff_limits  = {cutoff_limits[i, :]}
-{'':8s}counter = {counter}
-''',Configuration,case=['debug_add'])
+      
 
     # and ensure that both sides the inner two rings are the same
     sbr[:,[0,1]] = np.mean(sbr[:,[0,1]])
@@ -1402,6 +1367,35 @@ def fix_sbr(Configuration,Tirific_Template, smooth = False, initial = False ):
                 if fit_profile[i-1] < fit_profile[i]:
                     fit_profile[i]=fit_profile[i-1]*0.9
             sbr[j] = fit_profile
+
+    # And finally we need to make sure all values are positive and reasonable
+    # And that values that are not fitted are set to 0.   
+    not_too_faint = False             
+    for i in [0,1]:
+        #In setting rings to fit the Tirific rings start at one but python is 0 based
+        last_ring_to_fit = np.where(radii <= \
+            Configuration['SIZE_IN_BEAMS'][i]*Configuration['BEAM'][0])\
+                [0][-1]   #+1            
+        for n in range(len(sbr[i,:])):
+            if n > last_ring_to_fit: 
+                sbr[i,n] = 0. 
+            elif sbr[i,n] < cutoff_limits[i,n]:
+                sbr[i,n] = cutoff_limits[i,n]*1.5
+            else:
+                not_too_faint = True
+        if sbr[i,last_ring_to_fit-1] < sbr[i,last_ring_to_fit]:
+                last = sbr[i,last_ring_to_fit]
+                second = sbr[i,last_ring_to_fit-1]
+                sbr[i,last_ring_to_fit-1] = last
+                sbr[i,last_ring_to_fit] = second         
+    if smooth and not not_too_faint:
+        print_log(f'''FIX_SBR: All SBR rings are below the cutoff limits
+{'':8s}original sbr = {original_sbr}
+{'':8s}cutoff_limits  = {cutoff_limits}
+''',Configuration,case=['debug_add'])
+        raise FaintSourceError(f"After correcting the SBRs all values we're below the cutoff limit, your source is too faint.")
+           
+
 
     print_log(f'''FIX_SBR: After modify.
 {'':8s}{sbr}
@@ -3396,20 +3390,7 @@ def set_new_size(Configuration,Tirific_Template, fit_type = 'Undefined',
                 del parameters_int
             format = sf.set_format(key)
 
-            #If we have the SBR we have to set things to 0
-            if key in ['SBR','SBR_2']:
-                j = 0 
-                if key == ' SBR_2':
-                    j=1
-                
-                for n in range(len(parameters[i])-1):
-                    if n > len(radii)-1: 
-                        parameters[i][n] = 0. 
-                    else:
-                        if radii[n] > Configuration['SIZE_IN_BEAMS'][j]*Configuration['BEAM'][0]\
-                            or parameters[i][n] < 0.:
-                            parameters[i][n] = 0.     
-
+          
             if len(parameters[i]) > Configuration['NO_RINGS']-1:
                 # if we are cutting a ring it is likely the outer ring have done weird stuff so we flatten the curve
                 Tirific_Template[key] =f" {' '.join([f'{x:{format}}' for x in parameters[i][:int(Configuration['NO_RINGS'])]])}"
