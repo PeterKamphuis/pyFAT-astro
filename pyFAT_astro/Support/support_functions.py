@@ -3521,8 +3521,10 @@ def set_individual_configuration(current_galaxy_index,Full_Catalogue,\
         Configuration['FITTING_DIR'] = f"{Configuration['MAIN_DIRECTORY']}"
     else:
         Configuration['FITTING_DIR'] = f"{Configuration['MAIN_DIRECTORY']}{Full_Catalogue['DIRECTORYNAME'][current_galaxy_index]}/"
-
-    Configuration['INPUT_CUBE']= f"{Full_Catalogue['CUBENAME'][current_galaxy_index]}.fits"
+    if 'sofia_catalogue' in Configuration['FITTING_STAGES']:
+        Configuration['INPUT_CUBE']= f"{Full_Catalogue['CUBENAME'][current_galaxy_index]}_FAT.fits"
+    else:        
+        Configuration['INPUT_CUBE']= f"{Full_Catalogue['CUBENAME'][current_galaxy_index]}.fits"
     return(Configuration)
 set_individual_configuration.__doc__ =f'''
  NAME:
@@ -3729,6 +3731,7 @@ Your main fitting directory ({Configuration['MAIN_DIRECTORY']}) does not exist.
 Please provide the correct directory.
 :  ''')
 
+
     if Configuration['CATALOGUE']:
         if not os.path.exists(Configuration['CATALOGUE']) and len(Configuration['CATALOGUE'].split('/')) == 1:
             Configuration['CATALOGUE']= f'''{Configuration['MAIN_DIRECTORY']}{Configuration['CATALOGUE']}'''
@@ -3774,8 +3777,14 @@ Please pick one of the following {', '.join(possible_stages)}.
         Configuration['FITTING_STAGES'].remove('external_sofia')
     if ('sofia_catalogue' in Configuration['FITTING_STAGES'] or 'external_sofia' in Configuration['FITTING_STAGES']) and 'run_sofia' in Configuration['FITTING_STAGES']:
         Configuration['FITTING_STAGES'].remove('run_sofia')
-    if 'sofia_catalogue' in Configuration['FITTING_STAGES'] and 'create_fat_cube' in Configuration['FITTING_STAGES']:
-        Configuration['FITTING_STAGES'].remove('create_fat_cube')
+    #if 'sofia_catalogue' in Configuration['FITTING_STAGES'] and 'create_fat_cube' in Configuration['FITTING_STAGES']:
+    #    Configuration['FITTING_STAGES'].remove('create_fat_cube')
+    if 'sofia_catalogue' in Configuration['FITTING_STAGES']:
+        if Configuration['SOFIA_DIR'][-1] != '/':
+            Configuration['SOFIA_DIR'] = f"{Configuration['SOFIA_DIR']}/"
+
+  
+
 
     if 'run_sofia' in Configuration['FITTING_STAGES'] and 'external_sofia' in Configuration['FITTING_STAGES']:
         raise InputError(f"You are both providing existing sofia input and ask for sofia to be ran. This won't work exiting.")
@@ -3811,6 +3820,12 @@ Please pick one of the following {', '.join(['sinusoidal','independent','hanning
         Configuration['OUTPUT_QUANTITY'] = 4
     if Configuration['SHAKER_ITERATIONS'] < 2:
         Configuration['SHAKER_ITERATIONS'] = 2
+    if Configuration['NCPU'] == 1:
+        if Configuration['MULTIPROCESSING']:
+             print(f'''You are only requesting 1 CPU to be used, we turn off multiprocessing.
+''')
+        Configuration['MULTIPROCESSING'] = False
+    
 
     return Configuration
 setup_configuration.__doc__ =f'''

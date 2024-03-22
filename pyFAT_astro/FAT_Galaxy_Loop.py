@@ -143,7 +143,7 @@ def initialize_loop(Configuration):
 
 
     #if we skip the create_fat _cube stage peaople could give the fat cube itself
-
+  
     if Fits_Files['ORIGINAL_CUBE'][-9:] == '_FAT.fits':
         if 'create_fat_cube' in Configuration['FITTING_STAGES']:
             print_log(f'''FAT_GALAXY_LOOPS: Your input cube ends in _FAT.fits indicating it is a FAT processed cube.
@@ -154,7 +154,7 @@ Therefore we remove the Create_FAT_Cube stages from the loop.
     else:
         fat_ext = '_FAT'
     stripped_file_name = os.path.splitext(Configuration['INPUT_CUBE'])[0]
-
+    
     Fits_Files['FITTING_CUBE'] = f"{stripped_file_name}{fat_ext}.fits"
     Fits_Files['OPTIMIZED_CUBE'] = f"{stripped_file_name}{fat_ext}_opt.fits"
     Fits_Files['MOMENT0'] = f"Sofia_Output/{Configuration['BASE_NAME']}_mom0.fits"
