@@ -1,23 +1,18 @@
 # -*- coding: future_fstrings -*-
 # This module contains a set of functions and classes that are used to write text files to Disk
 
-from pyFAT_astro.Support.log_functions import print_log
+from pyFAT_astro.Support.log_functions import print_log,extract_date
 from pyFAT_astro.Support.modify_template import set_model_parameters, set_overall_parameters,\
                                 set_fitting_parameters,get_warp_slope, update_disk_angles
 from make_moments.functions import extract_pv                                
-#from pyFAT_astro.Support.fits_functions import extract_pv
 from pyFAT_astro.Support.read_functions import load_basicinfo
-from pyFAT_astro.Support.fat_errors import ProgramError
+
 import pyFAT_astro.Support.support_functions as sf
 
 import copy
 import numpy as np
-import psutil as psu
-import time
-import warnings
-from datetime import datetime
-import traceback
 import os
+import warnings
 
 with warnings.catch_warnings():
     warnings.simplefilter("ignore")
@@ -176,44 +171,6 @@ def create_tirific_run_cube(Configuration,Fits_Files):
     Fits_Files['TIR_RUN_CUBE'] = target    
     return Fits_Files
 
-def extract_date(string):
-    tmp = string.split(' ')
-    tmp2 = tmp[0].split('-')
-    if len(tmp2) == 3:
-        try:
-            date =  datetime.strptime(f"{tmp[0]} {tmp[1]}", '%Y-%m-%d %H:%M:%S.%f')
-        except ValueError:
-            date =  datetime.strptime(f"{tmp[0]} {tmp[1]}", '%Y-%m-%d %H:%M:%S')
-    else:
-        raise ProgramError("There is no date in the provided string.")
-    return date
-extract_date.__doc__ =f'''
- NAME:
-    extract_date
-
- PURPOSE:
-    convert a string into a date object
-
- CATEGORY:
-    write_functions
-
- INPUTS:
-    string = string
-
- OPTIONAL INPUTS:
-
-
- OUTPUTS:
-    date = the date object
-
- OPTIONAL OUTPUTS:
-
- PROCEDURES CALLED:
-    Unspecified
-
- NOTE:
-'''
-
 # Function to write the first def file for a galaxy
 def initialize_def_file(Configuration, Fits_Files,Tirific_Template,\
         Initial_Parameters = None, fit_type = 'Undefined' ):
@@ -301,104 +258,7 @@ initialize_def_file.__doc__ =f'''
  NOTE:
 '''
 
-class full_system_tracking:
-    def __init__(self,Configuration):
-        self.stop = False
-        self.pid = os.getpid()
-        self.main_pyFAT = psu.Process(self.pid)
-        self.user = self.main_pyFAT.username()
-        self.python = self.main_pyFAT.name()
-        self.tirific = Configuration['TIRIFIC']
-        self.font_file = Configuration['FONT_FILE']
-        self.sofia = Configuration['SOFIA2']
-        self.file = f"{Configuration['MAIN_DIRECTORY']}FAT_Resources_Used.txt"
-        self.plot_name= f"{Configuration['MAIN_DIRECTORY']}pyFAT_Resources_Monitor.pdf"
-        self.cpus= psu.cpu_count()
-        with open(self.file,'w') as resources:
-            resources.write("# This file contains an estimate of all resources used for a pyFAT run. \n")
-            resources.write(f"# {'Time':20s} {'Sys CPU':>10s} {'Sys RAM':>10s} {'FAT CPU':>10s} {'FAT RAM':>10s} \n")
-            resources.write(f"# {'YYYY-MM-DD hh:mm:ss':20s} {'%':>10s} {'Gb':>10s} {'%':>10s} {'Gb':>10s} \n")
-        self.interval = 60 # amount of second when to do new monitor
-
-    def start_monitoring(self):
-        while not self.stop:
-            try:
-                self.sys_cpu= psu.cpu_percent(interval=1)
-                self.sys_ram= psu.virtual_memory().used/2**30.
-                self.CPU = 0.
-                self.RAM = 0.
-                for proc in psu.process_iter():
-                    if proc.username() == self.user \
-                        and proc.status() == 'running'\
-                        and (proc.name() == self.python or\
-                         proc.name() == self.tirific or\
-                         proc.name() == self.sofia or\
-                         proc.name() == 'python3'):
-                        try:
-                            self.CPU += proc.cpu_percent(interval=0.5)/self.cpus
-                            self.RAM += (proc.memory_info()[0])/2**30.
-                        except:
-                            pass
-                #file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Gb for TiRiFiC \n")
-                with open(self.file,'a') as resources:
-                    resources.write(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S'):20s} {self.sys_cpu:>10.1f} {self.sys_ram:>10.2f} {self.CPU:>10.1f} {self.RAM:>10.2f} \n")
-            except Exception as e:
-                #We do not care if something goes wrong once. We don't want the monitor to crash
-                #but we would like to know what went wrong
-                traceback.print_exception(type(e),e,e.__traceback__)
-                pass
-            time.sleep(self.interval)
-
-    def stop_monitoring(self):
-        self.stop = True
-        loads = {'Time':[]}
-        keys=['SCPU','SRAM','FCPU','FRAM']
-        for key in keys:
-            loads[key]  = []
-        with open(self.file) as file:
-            lines = file.readlines()
-        startdate = 0
-        #load data from file into dictionary
-        for line in lines:
-            line = line.split()
-            if line[0] == '#':
-                continue
-            else:
-                date = extract_date(f"{line[0]} {line[1]}")
-            if startdate == 0:
-                startdate = date
-            diff = date - startdate
-            time = diff.total_seconds()/(3600.)
-            loads['Time'].append(time)
-            for i,key in enumerate(keys):
-                loads[key].append(float(line[int(2+i)]))
-        #Plot the parameters
-        try:
-            mpl_fm.fontManager.addfont(self.font_file)
-            font_name = mpl_fm.FontProperties(fname=self.font_file).get_name()
-        except FileNotFoundError:
-            font_name = 'DejaVu Sans'
-        labelfont = {'family': font_name,
-                 'weight': 'normal',
-                 'size': 4}
-        fig, ax1 = plt.subplots(figsize = (8,6))
-        fig.subplots_adjust(left = 0.1, right = 0.9, bottom = 0.3, top = 0.7)
-        ax1.plot(loads['Time'],loads['SRAM'],'b--',lw=0.5,alpha=0.5, label='System RAM')
-        ax1.plot(loads['Time'],loads['FRAM'],'b-',lw=0.5,alpha=1.0, label='pyFAT RAM')
-        ax1.set_ylim(0,np.max(np.array(loads['SRAM']+loads['FRAM'],dtype=float))*1.1)
-        ax1.set_ylabel('RAM (Gb) ', color='b')
-        ax1.tick_params(axis='y', labelcolor='b')
-        ax1.set_xlabel('Run Duration (h)', color='k',zorder=5)
-        ax2 = ax1.twinx()
-        ax2.plot(loads['Time'],loads['SCPU'],'r--',lw=0.5,alpha=0.5, label='System CPU')
-        ax2.plot(loads['Time'],loads['FCPU'],'r-',lw=0.5,alpha=1.0, label='pyFAT CPU')
-        ax2.set_ylim(0,np.max(np.array(loads['SCPU']+loads['FCPU'],dtype=float))*1.1)
-        ax2.set_ylabel('CPUs (%)',color='r')
-        ax2.tick_params(axis='y', labelcolor='r')
-        fig.savefig(self.plot_name)
-        plt.close()
-
-def ist(ax,hdr,im_wcs):
+def beam_artist(ax,hdr,im_wcs):
     xmin, xmax = ax.get_xlim()
     ymin, ymax = ax.get_ylim()
     ghxloc, ghyloc = im_wcs.wcs_pix2world(float(xmin+(xmax-xmin)/18.), float(ymin+(ymax-ymin)/18.), 1.)
@@ -414,7 +274,7 @@ def ist(ax,hdr,im_wcs):
            edgecolor='k', lw=1, facecolor='none', hatch='/////',zorder=15)
     return beam
 
-ist.__doc__ =f'''
+beam_artist.__doc__ =f'''
  NAME:
     ist
 
@@ -673,7 +533,7 @@ def make_overview_plot(Configuration,Fits_Files ):
   
     square_plot(ax_moment0)
     ax_moment0.grid()    
-    beam = ist(ax_moment0,moment0[0].header,im_wcs)
+    beam = beam_artist(ax_moment0,moment0[0].header,im_wcs)
     ax_moment0.add_patch(beam)
     #center_x,center_y = im_wcs.wcs_world2pix(FAT_Model[Vars_to_plot.index('XPOS'),0],\
     #                    FAT_Model[Vars_to_plot.index('YPOS'),0], 1.)
@@ -761,7 +621,7 @@ def make_overview_plot(Configuration,Fits_Files ):
     #          levels=momlevel, colors='r',zorder=8, linewidths=0.9)
    
     square_plot(ax_moment1)
-    beam = ist(ax_moment1,moment1[0].header,im_wcs)
+    beam = beam_artist(ax_moment1,moment1[0].header,im_wcs)
     ax_moment1.add_patch(beam)
     ax_moment1.grid()
     # colorbar
@@ -811,7 +671,7 @@ def make_overview_plot(Configuration,Fits_Files ):
 
    
     square_plot(ax_moment2)
-    beam = ist(ax_moment2,moment2[0].header,im_wcs)
+    beam = beam_artist(ax_moment2,moment2[0].header,im_wcs)
     ax_moment2.add_patch(beam)
     ax_moment2.grid()
 

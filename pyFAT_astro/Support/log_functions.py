@@ -1,12 +1,158 @@
 # -*- coding: future_fstrings -*-
 # This module  contains (eventually all) functions that relate to the 
 # logging process
+import numpy as np
 import os
+import psutil as psu
 import sys
+import time
 import traceback
+import warnings
 
 from datetime import datetime
 from inspect import stack
+from pyFAT_astro.Support.fat_errors import ProgramError
+
+with warnings.catch_warnings():
+   warnings.simplefilter("ignore")
+   import matplotlib
+   matplotlib.use('pdf')
+   import matplotlib.pyplot as plt
+   import matplotlib.font_manager as mpl_fm
+
+
+class full_system_tracking:
+   def __init__(self,Configuration):
+      self.stop = False
+      self.pid = os.getpid()
+      self.main_pyFAT = psu.Process(self.pid)
+      self.user = self.main_pyFAT.username()
+      self.python = self.main_pyFAT.name()
+      self.tirific = Configuration['TIRIFIC']
+      self.font_file = Configuration['FONT_FILE']
+      self.sofia = Configuration['SOFIA2']
+      self.file = f"{Configuration['MAIN_DIRECTORY']}FAT_Resources_Used.txt"
+      self.plot_name= f"{Configuration['MAIN_DIRECTORY']}pyFAT_Resources_Monitor.pdf"
+      self.cpus= psu.cpu_count()
+      with open(self.file,'w') as resources:
+         resources.write("# This file contains an estimate of all resources used for a pyFAT run. \n")
+         resources.write(f"# {'Time':20s} {'Sys CPU':>10s} {'Sys RAM':>10s} {'FAT CPU':>10s} {'FAT RAM':>10s} \n")
+         resources.write(f"# {'YYYY-MM-DD hh:mm:ss':20s} {'%':>10s} {'Gb':>10s} {'%':>10s} {'Gb':>10s} \n")
+      self.interval = 60 # amount of second when to do new monitor
+
+   def start_monitoring(self):
+      while not self.stop:
+         try:
+               self.sys_cpu= psu.cpu_percent(interval=1)
+               self.sys_ram= psu.virtual_memory().used/2**30.
+               self.CPU = 0.
+               self.RAM = 0.
+               for proc in psu.process_iter():
+                  if proc.username() == self.user \
+                     and proc.status() == 'running'\
+                     and (proc.name() == self.python or\
+                        proc.name() == self.tirific or\
+                        proc.name() == self.sofia or\
+                        proc.name() == 'python3'):
+                     try:
+                           self.CPU += proc.cpu_percent(interval=0.5)/self.cpus
+                           self.RAM += (proc.memory_info()[0])/2**30.
+                     except:
+                           pass
+               #file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Gb for TiRiFiC \n")
+               with open(self.file,'a') as resources:
+                  resources.write(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S'):20s} {self.sys_cpu:>10.1f} {self.sys_ram:>10.2f} {self.CPU:>10.1f} {self.RAM:>10.2f} \n")
+         except Exception as e:
+               #We do not care if something goes wrong once. We don't want the monitor to crash
+               #but we would like to know what went wrong
+               traceback.print_exception(type(e),e,e.__traceback__)
+               pass
+         time.sleep(self.interval)
+
+   def stop_monitoring(self):
+      self.interval = 0.1
+      self.stop = True
+      try:
+         loads = {'Time':[]}
+         keys=['SCPU','SRAM','FCPU','FRAM']
+         for key in keys:
+               loads[key]  = []
+         with open(self.file) as file:
+               lines = file.readlines()
+         startdate = 0
+         #load data from file into dictionary
+         for line in lines:
+               line = line.split()
+               if line[0] == '#':
+                  continue
+               else:
+                  date = extract_date(f"{line[0]} {line[1]}")
+               if startdate == 0:
+                  startdate = date
+               diff = date - startdate
+               time = diff.total_seconds()/(3600.)
+               loads['Time'].append(time)
+               for i,key in enumerate(keys):
+                  loads[key].append(float(line[int(2+i)]))
+         #Plot the parameters
+         try:
+               mpl_fm.fontManager.addfont(self.font_file)
+               font_name = mpl_fm.FontProperties(fname=self.font_file).get_name()
+         except FileNotFoundError:
+               font_name = 'DejaVu Sans'
+         
+         labelfont = {'family': font_name,
+                  'weight': 'normal',
+                  'size': 4}
+         fig, ax1 = plt.subplots(figsize = (8,6))
+         fig.subplots_adjust(left = 0.1, right = 0.9, bottom = 0.3, top = 0.7)
+         ax1.plot(loads['Time'],loads['SRAM'],'b--',lw=0.5,alpha=0.5, label='System RAM')
+         ax1.plot(loads['Time'],loads['FRAM'],'b-',lw=0.5,alpha=1.0, label='pyFAT RAM')
+         ax1.set_ylim(0,np.max(np.array(loads['SRAM']+loads['FRAM'],dtype=float))*1.1)
+         ax1.set_ylabel('RAM (Gb) ', color='b')
+         ax1.tick_params(axis='y', labelcolor='b')
+         ax1.set_xlabel('Run Duration (h)', color='k',zorder=5)
+         ax2 = ax1.twinx()
+         ax2.plot(loads['Time'],loads['SCPU'],'r--',lw=0.5,alpha=0.5, label='System CPU')
+         ax2.plot(loads['Time'],loads['FCPU'],'r-',lw=0.5,alpha=1.0, label='pyFAT CPU')
+         ax2.set_ylim(0,np.max(np.array(loads['SCPU']+loads['FCPU'],dtype=float))*1.1)
+         ax2.set_ylabel('CPUs (%)',color='r')
+         ax2.tick_params(axis='y', labelcolor='r')
+         fig.savefig(self.plot_name)
+         plt.close()
+      except Exception as e:
+         traceback.print_exception(type(e),e,e.__traceback__)
+         print(f'We failed to write the statistics plot.')
+         pass
+full_system_tracking.__doc__ =f'''
+NAME:
+   full_system_tracking
+
+PURPOSE:
+   A class that can be started in a thread and run in the background to track 
+   all instances of tirific sofia 2 and the main python id   
+
+ CATEGORY:
+    log_functions 
+
+ INPUTS:
+   Configuration = Standard FAT configuration
+   
+
+ OPTIONAL INPUTS:
+
+
+ OUTPUTS:
+
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+ 
+'''
 
 
 def enter_recovery_point(Configuration, Fits_Files = None, Tirific_Template= None,
@@ -18,6 +164,77 @@ def enter_recovery_point(Configuration, Fits_Files = None, Tirific_Template= Non
 ''',Configuration,case= ['debug_start','main'])
     write_config(f'{Configuration["LOG_DIRECTORY"]}CFG_{point_ID}.txt', Configuration, Fits_Files=Fits_Files,\
                  Tirific_Template=Tirific_Template,message=message )
+enter_recovery_point.__doc__ =f'''
+ NAME:
+   enter_recovery_point
+ PURPOSE:
+   use pickle to enter a recovery point where the current configuration and other 
+   tracking is written.
+
+ CATEGORY:
+    log_functions 
+
+ INPUTS:
+   Configuration = Standard FAT configuration
+   Fits_Files = standard FAT Fits Files
+   Tirific_Template = 
+   message = message for the point
+   point_ID = Name of Recovery point
+
+ OPTIONAL INPUTS:
+
+
+ OUTPUTS:
+
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+ 
+'''
+
+def extract_date(string):
+    tmp = string.split(' ')
+    tmp2 = tmp[0].split('-')
+    if len(tmp2) == 3:
+        try:
+            date =  datetime.strptime(f"{tmp[0]} {tmp[1]}", '%Y-%m-%d %H:%M:%S.%f')
+        except ValueError:
+            date =  datetime.strptime(f"{tmp[0]} {tmp[1]}", '%Y-%m-%d %H:%M:%S')
+    else:
+        raise ProgramError("There is no date in the provided string.")
+    return date
+extract_date.__doc__ =f'''
+ NAME:
+    extract_date
+
+ PURPOSE:
+    convert a string into a date object
+
+ CATEGORY:
+    write_functions
+
+ INPUTS:
+    string = string
+
+ OPTIONAL INPUTS:
+
+
+ OUTPUTS:
+    date = the date object
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
+    
+
 def get_usage_statistics(Configuration,process):
         # psutil returns bytes
     memory_in_mb = (process.memory_info()[0])/2**20. 
@@ -124,9 +341,10 @@ def print_log(log_statement,Configuration, case = None):
    
    debugging = False
    debug= 'empty'
+   
    if Configuration['DEBUG']:
       trig=False
-      if Configuration['DEBUG_FUNCTION'] == 'ALL':
+      if 'ALL' in Configuration['DEBUG_FUNCTION']:
          trig = True
       else:
          # get the function  
@@ -147,6 +365,7 @@ def print_log(log_statement,Configuration, case = None):
    else:
       log_statement = f"{linenumber(debug=debug)}{log_statement}"
    print_statement = False
+ 
    if (debugging and ('debug_start' in case or 'debug_add' in case))\
       or ('verbose' in case and (Configuration['VERBOSE_LOG'] or debugging))\
          or 'main' in case:

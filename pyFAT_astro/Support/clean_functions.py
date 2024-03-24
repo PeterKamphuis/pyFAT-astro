@@ -571,6 +571,7 @@ def finish_galaxy(Configuration,current_run = 'Not initialized',\
             with open(Configuration['OUTPUTLOG'],'a') as log_file:
                 traceback.print_exception(type(exiting),exiting,exiting.__traceback__,file=log_file)
             traceback.print_exception(type(exiting),exiting,exiting.__traceback__)
+        
         if Configuration['MULTIPROCESSING']:
             Configuration['ACCEPTED'] = False
             Configuration['FINAL_COMMENT'] = f"The code crashed while fitting this galaxy please check it's log."
@@ -615,7 +616,7 @@ def finish_galaxy(Configuration,current_run = 'Not initialized',\
                     print_log(messages,Configuration,case=['verbose'])
                     #make_moments(Configuration,Fits_Files,fit_type = 'Generic_Final',vel_unit = 'm/s')
                     make_overview_plot(Configuration,Fits_Files)
-
+    
 
     print_log(f'''Finished the fitting in {Configuration['FITTING_DIR']}.
 ''',Configuration, case = ['main','screen'])
@@ -647,12 +648,10 @@ Full run time from {Configuration['FULL_TIME'][0]} to {Configuration['FULL_TIME'
     cleanup_final(Configuration,Fits_Files)
     # Need to write to results catalog
     catalogue_line = f"{Configuration['FITTING_DIR'].split('/')[-2]:{Configuration['MAXIMUM_DIRECTORY_LENGTH']}s} {str(Configuration['ACCEPTED']):>6s} {Configuration['FINAL_COMMENT']} \n"
-
     if Configuration['OUTPUT_CATALOGUE']:
         with catalogue_lock:
             with open(Configuration['OUTPUT_CATALOGUE'],'a') as output_catalogue:
                 output_catalogue.write(catalogue_line)
-
     return catalogue_line
 
 finish_galaxy.__doc__ =f'''

@@ -895,10 +895,11 @@ def fit_polynomial(Configuration,radii,profile,error, key, \
             max_order=  allowed_order[1]
 
     print_log(f'''FIT_POLYNOMIAL: For {key} we start at {start_order} because we have {len(radii)} rings of which {fixed} are fixed
-{'':8s} this gves us a maximum order of {max_order}
+{'':8s} this gives us a maximum order of {max_order}
 ''',Configuration,case = ['debug_add'])
     found = False
     count = 0
+    failed=False
     while not found:
         reduced_chi = []
         order = range(start_order,max_order+1)
@@ -950,7 +951,7 @@ def fit_polynomial(Configuration,radii,profile,error, key, \
                                             for x in  fit_profile[bound_fit:]],dtype = float))
                         except RuntimeWarning:
                             if key in ['THETA_FACTOR','PHI_FACTOR']:
-                                diff = np.where(abs(fit_profile[bound_fit:]) > 1.)
+                                diff = np.where(abs(fit_profile[bound_fit:]) > 1.)[0]
                                 if len(diff) > 0:
                                     diff = 1.5
                                 else:
@@ -969,6 +970,7 @@ def fit_polynomial(Configuration,radii,profile,error, key, \
                     if diff > 1. and not np.isnan(diff):
                         print_log(f'''FIT_POLYNOMIAL: because of crossing {boundary_limits}
 {'':8s} we penalize the orginal chi**2 {red_chi} of order {ord} with {diff}
+{'':8s} the fitted profile is {fit_profile}
 ''',Configuration,case = ['debug_add'])
                         red_chi = red_chi*(diff)
             if red_chi < 1.:
@@ -982,15 +984,25 @@ def fit_polynomial(Configuration,radii,profile,error, key, \
             else:
                 error = error/2.
                 count += 1
-            
+        if count > 100 or np.sum(error) == 0.:
+            print_log(f'''FIT_POLYNOMIAL: we failed to fit a polynomial
+''',Configuration,case = ['debug_add'])
+            found = True
+            failed =True     
         #if key in ['VROT'] and Configuration['NO_RINGS'] < 2.5*max_order:
         #    reduced_chi[-1] = reduced_chi[-1]*(ord/Configuration['NO_RINGS'])**2.5
-    print_log(f'''FIT_POLYNOMIAL: We have fitted these:
+    if not failed:
+        print_log(f'''FIT_POLYNOMIAL: We have fitted these:
 {'':8s} order = {[x for x in order]}
 {'':8s} reduced chi = {reduced_chi}
 ''',Configuration,case = ['debug_add'])
-    reduced_chi = np.array(reduced_chi,dtype = float)
-    final_order = order[np.where(np.nanmin(reduced_chi ) == reduced_chi )[0][0]]
+        reduced_chi = np.array(reduced_chi,dtype = float)
+        final_order = order[np.where(np.nanmin(reduced_chi ) == reduced_chi )[0][0]]
+    else:
+        print_log(f'''FIT_POLYNOMIAL: we failed to fit a polynomial
+{'':8s} order = 0
+''',Configuration,case = ['debug_add'])
+        final_order=0.
 
     print_log(f'''FIT_POLYNOMIAL: We have regularised {key} with a polynomial of order {final_order}.
 ''',Configuration,case=['verbose'])
@@ -1055,6 +1067,8 @@ def fix_outer_rotation(Configuration,profile):
     # if the outer parts are less then 5 channels there is something wrong And we just take a flat curve from max
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore",message="Mean of empty slice."\
+                            ,category=RuntimeWarning) 
+        warnings.filterwarnings("ignore",message="invalid value encountered in scalar divide"\
                             ,category=RuntimeWarning)
         if np.mean(profile[Configuration['RC_UNRELIABLE']:]) < 5.*Configuration['CHANNEL_WIDTH']:
             Configuration['RC_UNRELIABLE'] = int(np.where(np.max(profile) == profile)[0][0])+1
@@ -1108,11 +1122,14 @@ fix_outer_rotation.__doc__ =f'''
 '''
 
 def fix_profile(Configuration, key, profile, Tirific_Template = None,\
-                 inner_fix = None,singular = False,only_inner = False ):
-    if inner_fix is None:
-        inner_fix = [4,4]
+                 inner_fix = 4,singular = False,only_inner = False ):
+  
     if isinstance(inner_fix,int):
-        inner_fix = [inner_fix,inner_fix]
+        if singular:
+            inner_fix = [inner_fix]
+        else:
+            inner_fix = [inner_fix,inner_fix]
+       
     print_log(f'''FIX_PROFILE: Starting to fix {key} with the input values:
 {'':8s}{profile}
 ''', Configuration, case= ['debug_add'])
@@ -2289,16 +2306,16 @@ def regularise_warp(Configuration,Tirific_Template, min_error = None, \
         {'':8s} change_angle = {change_angle['CHANGE_ANGLE'][i]}
         {'':8s} sm_change_angle = {sm_change_angle[i]}
         ''',Configuration,case=['debug_add'])
-            if smooth_only:
-                new_change_angle = sm_change_angle
-                new_theta_factor = sm_theta_factor
-                new_phi_factor = sm_phi_factor
-            else:
+            #if smooth_only:
+            new_change_angle = sm_change_angle
+            #    new_theta_factor = sm_theta_factor
+            #    new_phi_factor = sm_phi_factor
+            #else:
                 
-                new_change_angle,fit_order = fit_polynomial(Configuration,radii,\
-                    change_angle['CHANGE_ANGLE'],error_change_angle,'CHANGE_ANGLE', Tirific_Template,\
-                    inner_fix = Configuration['INNER_FIX'][i],\
-                    allowed_order= [3,6],boundary_limits= change_boundary, return_order=True)
+            #    new_change_angle,fit_order = fit_polynomial(Configuration,radii,\
+            #        change_angle['CHANGE_ANGLE'],error_change_angle,'CHANGE_ANGLE', Tirific_Template,\
+            #        inner_fix = Configuration['INNER_FIX'][i],\
+            #        allowed_order= [3,6],boundary_limits= change_boundary, return_order=True)
                 
             print_log(f'''REGULARISE_WARP:
         {'':8s} new_change_angle = {new_change_angle}
@@ -3909,12 +3926,13 @@ Original Theta = {change_angle['THETA']['FACTOR']}
     #Smoothing doesn't work
     theta_factor = np.concatenate((np.full(inner_fix,theta_factor[0]),theta_factor))
     phi_factor = np.concatenate((np.full(inner_fix,phi_factor[0]),phi_factor))
-    
-    theta_factor = fit_polynomial(Configuration,radius,\
-                theta_factor,np.full(len(theta_factor),0.1),'THETA_FACTOR', Tirific_Template,\
-                inner_fix = inner_fix,allowed_order= [1,6],
-                boundary_limits= [-1,1])
-    phi_factor = fit_polynomial(Configuration,radius,\
+    if np.mean( theta_factor) !=  theta_factor[0]:
+        theta_factor = fit_polynomial(Configuration,radius,\
+                    theta_factor,np.full(len(theta_factor),0.1),'THETA_FACTOR', Tirific_Template,\
+                    inner_fix = inner_fix,allowed_order= [1,6],
+                    boundary_limits= [-1,1])
+    if np.mean(phi_factor) !=  phi_factor[0]:  
+        phi_factor = fit_polynomial(Configuration,radius,\
                 phi_factor,np.full(len(phi_factor),0.1),'PHI_FACTOR', Tirific_Template,\
                 inner_fix = inner_fix,allowed_order= [1,6],
                 boundary_limits= [-1,1])
@@ -3969,7 +3987,7 @@ Original Theta = {theta_factor}
                     if abs(diff) < 1e-7:
                         tmp_phi = phi_factor[i]
                         tmp_theta = theta_factor[i] 
-                        diff = np.random.default_rng()
+                        diff = float(np.random.default_rng().random())
                         new_comb =  tmp_phi**2+tmp_theta**2    
                 phi_factor[i]=tmp_phi
                 theta_factor[i]=tmp_theta

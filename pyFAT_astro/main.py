@@ -7,7 +7,6 @@ import psutil
 import pyFAT_astro
 import pyFAT_astro.Support.support_functions as sf
 import pyFAT_astro.Support.read_functions as rf
-import pyFAT_astro.Support.write_functions as wf
 import sys
 import traceback
 import warnings
@@ -22,6 +21,7 @@ from pyFAT_astro.FAT_Galaxy_Loop import FAT_Galaxy_Loop,MP_initialize_sofia,\
 from pyFAT_astro.config.defaults import defaults
 from pyFAT_astro.Support.fat_errors import ProgramError,BadCatalogueError
 from pyFAT_astro.Support.write_functions import reorder_output_catalogue
+from pyFAT_astro.Support.log_functions import full_system_tracking
 
 def warn_with_traceback(message, category, filename, lineno, file=None, line=None):
     log = file if hasattr(file,'write') else sys.stderr
@@ -196,7 +196,7 @@ def main(argv):
                 timing_result.write("Timing results for every section of the fit process for all galaxies.  \n")
             # If we do this we should have 1 cpu to keep going
             Original_Configuration['NCPU'] -= 1
-            system_monitor = wf.full_system_tracking(Original_Configuration)
+            system_monitor = full_system_tracking(Original_Configuration)
             fst = threading.Thread(target=system_monitor.start_monitoring)
             fst.start()
 
@@ -268,6 +268,7 @@ def main(argv):
             for current_galaxy_index in range(Original_Configuration['CATALOGUE_START_ID'], Original_Configuration['CATALOGUE_END_ID']):
                 Configuration = sf.set_individual_configuration(current_galaxy_index,Full_Catalogue,Original_Configuration)
                 catalogue_line = FAT_Galaxy_Loop(Configuration)
+        
         if Original_Configuration['TIMING']:
             system_monitor.stop_monitoring()
             fst.join()
