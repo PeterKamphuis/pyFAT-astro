@@ -95,11 +95,11 @@ def FAT_Galaxy_Loop(Configuration):
             tmp=Fits_Files
         except:
             Fits_Files= None
-        print(f"!!!!!!!!!!!!!she would get here")
+       
         catalogue_line = cf.finish_galaxy(Configuration,
                           current_run=current_run,Fits_Files=Fits_Files,
                           exiting=registered_exception)
-        print(f'And here !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
+        
     return catalogue_line
 
 

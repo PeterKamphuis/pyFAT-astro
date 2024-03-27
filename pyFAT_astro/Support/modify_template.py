@@ -3966,6 +3966,7 @@ def ensure_total_dist(Configuration,theta_factor,phi_factor,inner_fix=3):
 Original Phi = {phi_factor}
 Original Theta = {theta_factor}             
 ''',Configuration,case= ['debug_start'])
+
     for i in range(len(theta_factor)):
         #if i < inner_fix:
         #    if phi_factor[i]+theta_factor[i] != 0:
@@ -3973,10 +3974,16 @@ Original Theta = {theta_factor}
         #else:
                 new_comb =  phi_factor[i]**2+theta_factor[i]**2
                 diff = np.sqrt(abs(1.-new_comb)/2.)
-                tmp_phi = phi_factor[i]
-                tmp_theta = theta_factor[i]
+                if phi_factor[i] == 0.:
+                    tmp_phi = abs(1-abs(theta_factor[i]))
+                else:
+                    tmp_phi = phi_factor[i]
+                if theta_factor[i] == 0.:
+                    tmp_theta = abs(1-abs(phi_factor[i]))
+                else:
+                    tmp_theta = theta_factor[i]
+                count = 0
                 while not isclose(new_comb,1.,abs_tol=1e-3):
-                   
                     if new_comb >   1.:
                         diff = -1.*abs(diff/2.)
                     else:
@@ -3988,7 +3995,14 @@ Original Theta = {theta_factor}
                         tmp_phi = phi_factor[i]
                         tmp_theta = theta_factor[i] 
                         diff = float(np.random.default_rng().random())
-                        new_comb =  tmp_phi**2+tmp_theta**2    
+                        new_comb =  tmp_phi**2+tmp_theta**2 
+                    count += 1
+                    if count > 1000:
+                        break   
+                if np.isnan(tmp_phi):
+                    tmp_phi=0.
+                if np.isnan(tmp_theta):
+                    tmp_theta=0.
                 phi_factor[i]=tmp_phi
                 theta_factor[i]=tmp_theta
     return theta_factor,phi_factor
