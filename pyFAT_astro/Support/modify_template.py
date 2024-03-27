@@ -1535,18 +1535,14 @@ flatten_the_curve.__doc__ =f'''
  NOTE:
 '''
 
-def get_error(Configuration,profile,sm_profile,key,min_error = None,\
+def get_error(Configuration,profile,sm_profile,key,min_error = 0.,\
     singular = False,weights= None,apply_max_error = False ):
-
-    if min_error is None:
-        min_error = [0.]
+   
     if weights is None:
         weights= [1.]
-    try:
-        size= len(min_error)
-        min_error = np.array(min_error,dtype=float)
-    except TypeError:
-        min_error = np.array([min_error],dtype=float)
+    
+        
+   
 
     print_log(f'''GET_ERROR: starting;
 {'':8s}original profile = {profile}
@@ -1560,8 +1556,8 @@ def get_error(Configuration,profile,sm_profile,key,min_error = None,\
     if singular:
         if len(weights) == 1:
             weights = np.full((len(profile)),weights[0])
-        profile = [profile]
-        sm_profile = [sm_profile]
+        profile = np.array([profile],dtype=float)
+        sm_profile = np.array([sm_profile],dtype=float)
         error =[[]]
         sides = [0]
 
@@ -1570,18 +1566,28 @@ def get_error(Configuration,profile,sm_profile,key,min_error = None,\
         if len(weights) == 1:
             weights = np.full((len(profile[0]),len(profile[1])),1.)
         sides =[0,1]
+    if sf.isiterable(min_error):
+        if not min_error.shape == profile.shape:
+            if len(min_error) != len(sides):
+                min_error = [min_error,min_error]    
+            tmp_min_error = copy.deepcopy(min_error)
+            
+            min_error = []
+            print(sides,profile,tmp_min_error)
+            for i in sides:
+                min_error.append(np.full(len(profile[i]), tmp_min_error[i]))
+    else:
+        min_error=np.full(profile.shape, min_error)
+    
     print_log(f'''GET_ERROR: using these weights =
 {'':8s}{weights}
 ''',Configuration,case=['debug_add'])
     for i in sides:
         error[i] = abs(profile[i]-sm_profile[i])/2.
         error[i]= error[i]/weights[i]
-        if len(min_error.shape) == 2:
-            error[i] = [np.max([y,x]) for x,y in zip(error[i],min_error[i])]
-        elif len(min_error) == len(error[i]):
-            error[i] = [np.max([y,x]) for x,y in zip(error[i],min_error)]
-        else:
-            error[i] = [np.max([x,min_error[0]]) for x in error[i]]
+       
+        error[i] = [np.max([y,x]) for x,y in zip(error[i],min_error[i])]
+        
         if apply_max_error:
             if len(Configuration['MAX_ERROR'][key]) == len(error[i]):
                 error[i] = [np.nanmin([x,y]) for x,y in zip(error[i],Configuration['MAX_ERROR'][key])]
@@ -1593,11 +1599,12 @@ def get_error(Configuration,profile,sm_profile,key,min_error = None,\
         error = np.array(error[0],dtype=float)
     else:
         error = np.array(error,dtype=float)
-    if np.sum(error) == 0.:
-        error[:] = min_error
-    if 0. in error:
-        error[error == 0.] = np.min(error[error > 0.])
+    
+    low = np.where(error < min_error)
+    if np.sum(low) > 0.:
+        error[low] =min_error[low]
 
+  
     print_log(f'''GET_ERROR: error =
 {'':8s}{error}
 ''',Configuration,case=['debug_add'])
@@ -2296,8 +2303,8 @@ def regularise_warp(Configuration,Tirific_Template, min_error = None, \
             sm_theta_factor,sm_phi_factor = smooth_factor_profile(Configuration, \
                 change_angle,radii,inner_fix=Configuration['INNER_FIX'][i],\
                 Tirific_Template=Tirific_Template)
-            
-
+            print(f'!!! What is happening?')
+            print(change_angle['CHANGE_ANGLE'],type(change_angle['CHANGE_ANGLE']))
             error_change_angle = get_error(Configuration,change_angle['CHANGE_ANGLE'],\
                 sm_change_angle,'CHANGE_ANGLE',min_error=min_change_error,\
                 weights = weights,singular=True)
