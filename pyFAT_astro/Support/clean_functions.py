@@ -9,7 +9,7 @@ import traceback
 from datetime import datetime
 from astropy.io import fits
 from make_moments.functions import moments
-from pyFAT_astro.Support.modify_template import get_error
+from pyFAT_astro.Support.modify_template import get_error,set_fitting_parameters
 from pyFAT_astro.Support.write_functions import make_overview_plot,plot_usage_stats,tirific
 from pyFAT_astro.Support.log_functions import print_log,write_config
 import pyFAT_astro.Support.support_functions as sf
@@ -601,6 +601,8 @@ def finish_galaxy(Configuration,current_run = 'Not initialized',\
                 sf.create_directory('Finalmodel',Configuration['FITTING_DIR'])
                 if 'tirshaker' not in Configuration['FITTING_STAGES']:
                     transfer_errors(Configuration,fit_type=Configuration['USED_FITTING'])
+                    #Also transfer the last fitting settings
+                    transfer_fitting_parameters(Configuration)    
                 linkname = f"../{Configuration['USED_FITTING']}/{Configuration['USED_FITTING']}"
                 os.symlink(f"{linkname}.fits",f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel.fits")
                 os.symlink(f"{linkname}.def",f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel.def")
@@ -759,3 +761,18 @@ transfer_errors.__doc__ =f'''
  PROCEDURES CALLED:
     Unspecified
 '''
+
+def transfer_fitting_parameters(Configuration):
+    fit_type = Configuration['USED_FITTING']
+    # first read the Final file
+    print_log(f'''TRANSFER_FITTING_PARAMETERS: Start.
+''',Configuration, case = ['debug_start'])
+    # Load the final file
+    Tirific_Template = sf.tirific_template(filename = \
+        f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def")
+    
+    set_fitting_parameters(Configuration, Tirific_Template,stage = 'run_os')
+   
+    # write back to the File
+    tirific(Configuration,Tirific_Template, name = f"{fit_type}/{fit_type}.def")
+

@@ -2588,7 +2588,7 @@ isiterable.__doc__ =f'''
 #The functions load_tirifiic,load_template and get_from template were extremely similar
 #This replaces all with a single function
 def load_tirific(Configuration,def_input,Variables = None,array = False,\
-        ensure_rings = False ):
+        ensure_rings = False,brightness_check=False ):
     #Cause python is the dumbest and mutable objects in the FAT_defaults
     # such as lists transfer
     if Variables is None:
@@ -2596,8 +2596,14 @@ def load_tirific(Configuration,def_input,Variables = None,array = False,\
                      'VROT','Z0', 'SBR', 'INCL','PA','XPOS','YPOS','VSYS',\
                      'SDIS','VROT_2',  'Z0_2','SBR_2','INCL_2','PA_2','XPOS_2',\
                      'YPOS_2','VSYS_2','SDIS_2','CONDISP','CFLUX','CFLUX_2']
-
-
+    sbr_added =[False,False]
+    if brightness_check:
+        if 'SBR' not in Variables:
+            Variables.append('SBR')
+            sbr_added[0] =True
+        if 'SBR_2' not in Variables:
+            Variables.append('SBR_2')
+            sbr_added[1] =True
     # if the input is a string we first load the template
     if isinstance(def_input,str):
         def_input = tirific_template(filename = def_input )
@@ -2626,6 +2632,20 @@ def load_tirific(Configuration,def_input,Variables = None,array = False,\
         for i,variable in enumerate(tmp):
             if len(variable) > 0.:
                 out[i,0:len(variable)] = variable[0:len(variable)]
+    if brightness_check:
+        for variable in Variables:
+            tmp = variable.split('_')
+            ext=''
+            if tmp[-1] == '2':
+                ext = '_2'
+            elif tmp[-1] == 'ERR':
+                if tmp[-2] == 2:
+                   ext = '_2'  
+           
+            cut = np.where(out[Variables.index(f'SBR{ext}'),:] < 1e-15)
+            if np.sum(cut) > 0.:
+                out[Variables.index(variable),cut] = float('NaN')
+        
 
     if len(Variables) == 1:
         out= out[0]
@@ -3569,7 +3589,7 @@ def setup_configuration(cfg):
         cfg.fitting.fitting_stages = ['Create_FAT_Cube','Run_Sofia','Fit_Tirific_OSC','Tirshaker']
         #cfg.fitting.fitting_stages = ['Create_FAT_Cube','Run_Sofia','Fit_Tirific_OSC']
         cfg.cube_name = 'NGC_2903.fits'
-        cfg.output.debug = False
+        #cfg.output.debug = False
         cfg.output.timing = True
         test_files = ['NGC_2903.fits','ModelInput.def']
         if not os.path.isdir(cfg.input.main_directory):

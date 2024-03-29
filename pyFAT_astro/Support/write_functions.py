@@ -417,12 +417,13 @@ def make_overview_plot(Configuration,Fits_Files ):
             Vars_to_plot.append(f'# {x}_2_ERR')
     FAT_Model = sf.load_tirific(Configuration,\
         f"{Configuration['FITTING_DIR']}Finalmodel/Finalmodel.def",\
-        Variables= Vars_to_plot,array=True )
+        Variables= Vars_to_plot,array=True ,brightness_check=True)
     Extra_Model_File = f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}_Iteration_{Configuration['ITERATIONS']}.def"
 
     if os.path.exists(Extra_Model_File):
         Extra_Model = sf.load_tirific(Configuration,Extra_Model_File,\
-            Variables= Vars_to_plot,array=True )
+            Variables= Vars_to_plot,array=True ,brightness_check=True)
+        
     else:
         Extra_Model = []
     print_log(f'''MAKE_OVERVIEW_PLOT: We find the following model values.
@@ -432,7 +433,7 @@ def make_overview_plot(Configuration,Fits_Files ):
     if os.path.exists(f"{Configuration['FITTING_DIR']}ModelInput.def"):
         Input_Model = sf.load_tirific(Configuration,\
             f"{Configuration['FITTING_DIR']}ModelInput.def",\
-            Variables= Vars_to_plot,array=True )
+            Variables= Vars_to_plot,array=True,brightness_check=False )
     else:
         Input_Model = []
     sof_basic_ra,sof_basic_dec, sof_basic_vsys,sof_basic_maxrot,sof_basic_pa,sof_basic_inclination,sof_basic_extent = load_basicinfo(Configuration,
@@ -776,30 +777,30 @@ def make_overview_plot(Configuration,Fits_Files ):
     ax_RC = plot_parameters(Configuration,Vars_to_plot,FAT_Model,gs[19:22,3:9],\
                             Overview,'VROT',Input_Model = Input_Model,initial_extent= sof_basic_extent[0], \
                             initial = sof_basic_maxrot[0],Extra_Model = Extra_Model)
-    ymin =np.min([FAT_Model[Vars_to_plot.index('VROT'),1:],FAT_Model[Vars_to_plot.index('VROT_2'),1:]])
-    ymax =np.max([FAT_Model[Vars_to_plot.index('VROT'),1:],FAT_Model[Vars_to_plot.index('VROT_2'),1:]])
+    ymin =np.nanmin([FAT_Model[Vars_to_plot.index('VROT'),1:],FAT_Model[Vars_to_plot.index('VROT_2'),1:]])
+    ymax =np.nanmax([FAT_Model[Vars_to_plot.index('VROT'),1:],FAT_Model[Vars_to_plot.index('VROT_2'),1:]])
 
     if len(Extra_Model) > 0:
-        ymin2 =np.min([Extra_Model[Vars_to_plot.index('VROT'),1:],Extra_Model[Vars_to_plot.index('VROT_2'),1:]])
-        ymax2 =np.max([Extra_Model[Vars_to_plot.index('VROT'),1:],Extra_Model[Vars_to_plot.index('VROT_2'),1:]])
+        ymin2 =np.nanmin([Extra_Model[Vars_to_plot.index('VROT'),1:],Extra_Model[Vars_to_plot.index('VROT_2'),1:]])
+        ymax2 =np.nanmax([Extra_Model[Vars_to_plot.index('VROT'),1:],Extra_Model[Vars_to_plot.index('VROT_2'),1:]])
     else:
         ymin2 = ymin
         ymax2 = ymax
   
     if len(Input_Model) > 0:
-        ymin3 =np.min([Input_Model[Vars_to_plot.index('VROT'),1:],Input_Model[Vars_to_plot.index('VROT_2'),1:]])
-        ymax3 =np.max([Input_Model[Vars_to_plot.index('VROT'),1:],Input_Model[Vars_to_plot.index('VROT_2'),1:]])
+        ymin3 =np.nanmin([Input_Model[Vars_to_plot.index('VROT'),1:],Input_Model[Vars_to_plot.index('VROT_2'),1:]])
+        ymax3 =np.nanmax([Input_Model[Vars_to_plot.index('VROT'),1:],Input_Model[Vars_to_plot.index('VROT_2'),1:]])
     else:
         ymin3=ymin
         ymax3= ymax
-    ymin = np.min([ymin,ymin2,ymin3])
-    ymax = np.max([ymax,ymax2,ymax3])
+    ymin = np.nanmin([ymin,ymin2,ymin3])
+    ymax = np.nanmax([ymax,ymax2,ymax3])
 
-    buffer = np.mean([ymin,ymax])/20.
+    buffer = np.nanmean([ymin,ymax])/20.
     ymin= ymin-buffer
     ymax = ymax+buffer
-
-    ax_RC.set_ylim(ymin,ymax)
+    if not np.isnan(ymin) and not np.isnan(ymax):
+        ax_RC.set_ylim(ymin,ymax)
 
     plt.tick_params(
         axis='x',          # changes apply to the x-axis
@@ -1231,7 +1232,7 @@ def plot_PV(Configuration,image=None, model = None, figure = None, \
     if tirific_model != None:
         parameters = sf.load_tirific(Configuration,tirific_model,\
             Variables= ['RADI','VROT','VROT_2','INCL','INCL_2','VSYS','VSYS_2']\
-                ,array=True )
+                ,array=True ,brightness_check=True)
         if np.sum(parameters[2]) == 0.:
             parameters[2] =   parameters[1]
             parameters[4] =   parameters[3]
@@ -1239,7 +1240,7 @@ def plot_PV(Configuration,image=None, model = None, figure = None, \
         if 'DRVAL1' in hdr:
             center = [float(x) for x in hdr['DRVAL1'].split('+')]
             model_center = [float(x[0]) for x in sf.load_tirific(Configuration,tirific_model,\
-            Variables= ['XPOS','XPOS_2','YPOS','YPOS'],array=True ) ]
+            Variables= ['XPOS','XPOS_2','YPOS','YPOS_2'],array=True ) ]
         if 'DRVAL2' in hdr:
             vsys = float(hdr['DRVAL2'])
             model_vsys = [float(x[0]) for x in sf.load_tirific(Configuration,tirific_model,\

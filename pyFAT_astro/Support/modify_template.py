@@ -1537,22 +1537,10 @@ flatten_the_curve.__doc__ =f'''
 
 def get_error(Configuration,profile,sm_profile,key,min_error = 0.,\
     singular = False,weights= None,apply_max_error = False ):
-   
     if weights is None:
         weights= [1.]
-    
-        
-   
-
     print_log(f'''GET_ERROR: starting;
-{'':8s}original profile = {profile}
-{'':8s}new profile = {sm_profile}
-{'':8s}weights = {weights}
-{'':8s}singular = {singular}
-{'':8s}min_error = {min_error}
-{'':8s}max_error = {apply_max_error}
 ''',Configuration, case=['debug_start'])
-
     if singular:
         if len(weights) == 1:
             weights = np.full((len(profile)),weights[0])
@@ -1560,28 +1548,26 @@ def get_error(Configuration,profile,sm_profile,key,min_error = 0.,\
         sm_profile = np.array([sm_profile],dtype=float)
         error =[[]]
         sides = [0]
-
+     
     else:
-        error = [[],[]]
+        error = [[],[]] 
+        profile = np.array(profile,dtype=float)
         if len(weights) == 1:
             weights = np.full((len(profile[0]),len(profile[1])),1.)
         sides =[0,1]
-    if sf.isiterable(min_error):
-        if not min_error.shape == profile.shape:
-            if len(min_error) != len(sides):
-                min_error = [min_error,min_error]    
-            tmp_min_error = copy.deepcopy(min_error)
-            
-            min_error = []
-            print(sides,profile,tmp_min_error)
-            for i in sides:
-                min_error.append(np.full(len(profile[i]), tmp_min_error[i]))
-    else:
-        min_error=np.full(profile.shape, min_error)
+    min_error = get_min_error(Configuration,min_error_in=min_error,profile=profile,parameter=key)
+    if singular:
+        if min_error.shape[0] != 1:
+            min_error = np.array([min_error],dtype=float)
+    print_log(f'''GET_ERROR: Using these values;
+{'':8s}original profile = {profile}
+{'':8s}new profile = {sm_profile}
+{'':8s}weights = {weights}
+{'':8s}singular = {singular}
+{'':8s}min_error = {min_error}
+{'':8s}max_error = {apply_max_error}
+''',Configuration, case=['debug_add'])
     
-    print_log(f'''GET_ERROR: using these weights =
-{'':8s}{weights}
-''',Configuration,case=['debug_add'])
     for i in sides:
         error[i] = abs(profile[i]-sm_profile[i])/2.
         error[i]= error[i]/weights[i]
@@ -1649,7 +1635,61 @@ get_error.__doc__ =f'''
 
  NOTE: the maximum errors are defined in main.py
 '''
-
+def get_min_error(Configuration,profile = None,min_error_in = None, parameter = None):
+    if profile is None:
+        raise FunctionCallError(f'You have to provide a profile to match')
+    if min_error_in is None:
+        if parameter is None:
+            raise FunctionCallError(f'You have to provide a parameter (parameter=) or input min_error (min_error_in=)')
+        else:
+            if parameter in Configuration['MIN_ERR']:
+                min_error = np.full(profile.shape,Configuration['MIN_ERR'][parameter][0])
+            else:
+                min_error = 0.
+    else:
+        min_error = copy.deepcopy(min_error_in)
+    
+    #If they have the same shape we stop here
+   
+    
+    # else we first check it is equivalant
+    if sf.isiterable(min_error):
+        min_error= np.array(min_error,dtype=float)
+        if min_error.shape == profile.shape:
+            return min_error
+        print_log(f'''GET_MIN_ERROR:  These are the input shapes:
+{'':8s} min_errror =  {min_error.shape} 
+{'':8s} profile =  {profile.shape}
+''',Configuration,case=['debug_add'])
+        try:
+            if min_error.shape[0] == profile.shape[1]:
+                min_error = np.array([min_error,min_error],dtype=float)
+            elif min_error.shape[0] == 1:
+                min_error = np.full(profile.shape,min_error[0])
+            else:
+                tmp_err1,profile1 = sf.make_equal_length(min_error[0],profile[0]) 
+                tmp_err2,profile2 = sf.make_equal_length(min_error[1],profile[1])
+                min_error = np.array([tmp_err1,tmp_err2],dtype=float)
+        
+        except IndexError:
+            print_log(f'''GET_MIN_ERROR: Assuming singular
+''',Configuration,case=['debug_add'])
+            if min_error.shape[0] == 1:
+                min_error = np.full(profile.shape,min_error[0])
+            else:
+                tmp_err1,profile1 = sf.make_equal_length(min_error[0],profile[0]) 
+                min_error = np.array([tmp_err1],dtype=float)
+    else:
+        print_log(f'''GET_MIN_ERROR:  min_error is not iterable
+''',Configuration,case=['debug_add'])
+        min_error = np.full(profile.shape,min_error)
+    if min_error.shape != profile.shape:
+        print_log(f'''GET_MIN_ERROR:  These are the input shapes:
+{'':8s} min_errror =  {min_error.shape} 
+{'':8s} profile =  {profile.shape}
+''',Configuration,case=['debug_add'])
+        raise FunctionCallError('GET_MIN_ERROR: the min error and profile shape are not matching')
+    return min_error          
 
 def get_number_of_rings(Configuration,sbr,sbr_ring_limits ):
     '''Determine whether the amount of rings is good for the limits or not'''
@@ -2303,8 +2343,8 @@ def regularise_warp(Configuration,Tirific_Template, min_error = None, \
             sm_theta_factor,sm_phi_factor = smooth_factor_profile(Configuration, \
                 change_angle,radii,inner_fix=Configuration['INNER_FIX'][i],\
                 Tirific_Template=Tirific_Template)
-            print(f'!!! What is happening?')
-            print(change_angle['CHANGE_ANGLE'],type(change_angle['CHANGE_ANGLE']))
+          
+           
             error_change_angle = get_error(Configuration,change_angle['CHANGE_ANGLE'],\
                 sm_change_angle,'CHANGE_ANGLE',min_error=min_change_error,\
                 weights = weights,singular=True)

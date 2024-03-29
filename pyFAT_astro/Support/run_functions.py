@@ -3,7 +3,8 @@
 
 
 
-from pyFAT_astro.Support.clean_functions import clean_before_sofia,clean_after_sofia,transfer_errors
+from pyFAT_astro.Support.clean_functions import clean_before_sofia,\
+    clean_after_sofia,transfer_errors,transfer_fitting_parameters
 from pyFAT_astro.Support.fits_functions import cut_cubes
 from make_moments.functions import extract_pv,moments
 from pyFAT_astro.Support.log_functions import print_log,update_statistics,enter_recovery_point
@@ -1507,6 +1508,7 @@ def tirshaker_call(Configuration,Fits_Files):
     # Then we open the final file
     #filename = f"{Configuration['FITTING_DIR']}Error_Shaker/Error_Shaker_In.def"
     #Preaper the fat fitting file
+    #transfer_fitting_parameters(Configuration)    
     final_FAT_file= f"{Configuration['FITTING_DIR']}{Configuration['USED_FITTING']}/{Configuration['USED_FITTING']}.def"
     Tirific_Template = sf.tirific_template(filename = final_FAT_file)
     #Change the name and run only 2 LOOPS
