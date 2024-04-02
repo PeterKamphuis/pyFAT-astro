@@ -6,7 +6,6 @@ from pyFAT_astro.Support.fat_errors import SupportRunError,SmallSourceError,\
                                               BadHeaderError,FittingError,TirificOutputError,\
                                               SofiaMissingError
 from pyFAT_astro.Support.log_functions import print_log,get_usage_statistics,write_config
-from pyFAT_astro.Support.modify_template import smooth_profile
 from pyFAT_astro import Templates as templates
 from collections import OrderedDict #used in Proper_Dictionary
 from numpy.linalg import LinAlgError
