@@ -2294,67 +2294,6 @@ get_profile.__doc__=f'''
  NOTE:
 '''
 
-def get_ring_weights(Configuration,Tirific_Template):
-    print_log(f'''GET_RING_WEIGTHS: Getting the importance of the rings in terms of SBR.
-''',Configuration,case=['debug_start'])
-    sbr = load_tirific(Configuration,Tirific_Template,Variables=["SBR",f"SBR_2"],\
-                array=True )
-    
-    print_log(f'''GET_RING_WEIGTHS: retrieve this sbr.
-{'':8s} sbr = {sbr}
-''',Configuration,case=['debug_add'])
-    cut_off_limits = sbr_limits(Configuration,Tirific_Template )
-    print_log(f'''GET_RING_WEIGTHS: retrieved these cut_off_limits.
-{'':8s} col = {cut_off_limits}
-''',Configuration,case=['debug_add'])
-    sm_sbr = smooth_profile(Configuration,Tirific_Template,'SBR',
-                            min_error= [cut_off_limits,cut_off_limits],no_apply = True,
-                            fix_sbr_call = True, profile_in = sbr )
-    print_log(f'''GET_RING_WEIGTHS: retrieve this sbr.
-{'':8s} sbr = {sbr}
-{'':8s} using sm_sbr {sm_sbr}
-''',Configuration,case=['debug_add'])
-
-    weights= [[],[]]
-    for i in [0,1]:
-        weights[i] = [set_limits(x/y,0.1,10.) for x,y in zip(sm_sbr[i],cut_off_limits)]
-        weights[i] = weights[i]/np.nanmax(weights[i])
-        weights[i][0:2] = np.nanmin(weights[i])
-        weights[i] = [set_limits(x,0.1,1.) for x in weights[i]]
-    print_log(f'''GET_RING_WEIGTHS: Obtained the following weights.
-{'':8s}{weights}
-''',Configuration,case=['debug_add'])
-    return np.array(weights,dtype = float)
-
-get_ring_weights.__doc__=f'''
- NAME:
-    get_ring_weights
-
- PURPOSE:
-    Get the importance of the rings based on how much the SBR lies above the noise limit for each ring
-
- CATEGORY:
-    support_functions
-
- INPUTS:
-    Configuration = Standard FAT configuration
-    Tirific_Template = Standard Tirific template containg the SBR profiles
-
- OPTIONAL INPUTS:
-
-
- OUTPUTS:
-    numpy array with the weight normalized to the the maximum.
-
- OPTIONAL OUTPUTS:
-
- PROCEDURES CALLED:
-    Unspecified
-
- NOTE:
-    Weight 1 is most important, weight 0. least important.
-    Errors should be divided by these weights to reflect the importance
-'''
 
 def get_system_string(string):
     '''Escape any spaces in string with backlash'''

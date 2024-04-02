@@ -9,7 +9,8 @@ import traceback
 from datetime import datetime
 from astropy.io import fits
 from make_moments.functions import moments
-from pyFAT_astro.Support.modify_template import get_error,set_fitting_parameters
+from pyFAT_astro.Support.modify_template import get_error,\
+    set_fitting_parameters,get_ring_weights
 from pyFAT_astro.Support.write_functions import make_overview_plot,plot_usage_stats,tirific
 from pyFAT_astro.Support.log_functions import print_log,write_config
 import pyFAT_astro.Support.support_functions as sf
@@ -697,7 +698,7 @@ def transfer_errors(Configuration,fit_type='Undefined'):
     # Load the final file
     Tirific_Template = sf.tirific_template(filename = f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def")
     variables = ['INCL','PA','VROT','SDIS','SBR','VSYS','XPOS','YPOS','Z0']
-    weights = sf.get_ring_weights(Configuration,Tirific_Template)
+    weights = get_ring_weights(Configuration,Tirific_Template)
     incl_error = None
     incl = None
     for parameter in variables:
