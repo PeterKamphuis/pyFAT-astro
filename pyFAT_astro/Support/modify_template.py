@@ -1768,7 +1768,7 @@ get_number_of_rings.__doc__ =f'''
 def get_ring_weights(Configuration,Tirific_Template):
     print_log(f'''GET_RING_WEIGTHS: Getting the importance of the rings in terms of SBR.
 ''',Configuration,case=['debug_start'])
-    sbr = load_tirific(Configuration,Tirific_Template,Variables=["SBR",f"SBR_2"],\
+    sbr = sf.load_tirific(Configuration,Tirific_Template,Variables=["SBR",f"SBR_2"],\
                 array=True )
     
     print_log(f'''GET_RING_WEIGTHS: retrieve this sbr.
