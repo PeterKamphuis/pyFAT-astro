@@ -1,14 +1,21 @@
 # -*- coding: future_fstrings -*-
 
-import pkg_resources
+
+try:
+    from importlib.metadata import version
+except ImportError:
+    # Try backported to PY<37 `importlib_resources`.
+    # For Py<3.9 files is not available
+    from importlib_metadata import version 
+
 import os
 import subprocess
 
 def report_version():
     # Distutils standard  way to do version numbering
     try:
-        __version__ = pkg_resources.require("pyFAT-astro")[0].version
-    except pkg_resources.DistributionNotFound:
+        __version__ = version("pyFAT-astro")
+    except:
         __version__ = "dev"
     # perhaps we are in a github with tags; in that case return describe
     path = os.path.dirname(os.path.abspath(__file__))
@@ -49,6 +56,6 @@ def report_branch():
     return result
 
 __version__ = report_version()
-__branch__ =report_branch()
+__branch__ = report_branch()
 
 #set_logger_values()

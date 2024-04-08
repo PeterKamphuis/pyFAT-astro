@@ -1,14 +1,12 @@
 # -*- coding: future_fstrings -*-
 
 # This is the python version of FAT
-import copy
 import numpy as np
 import os
 import psutil
 import pyFAT_astro
 import pyFAT_astro.Support.support_functions as sf
 import pyFAT_astro.Support.read_functions as rf
-import pyFAT_astro.Support.write_functions as wf
 import sys
 import traceback
 import warnings
@@ -21,8 +19,9 @@ from omegaconf import OmegaConf
 from pyFAT_astro.FAT_Galaxy_Loop import FAT_Galaxy_Loop,MP_initialize_sofia,\
                                         MP_Fitting_Loop
 from pyFAT_astro.config.defaults import defaults
-from pyFAT_astro.Support.fat_errors import ProgramError
+from pyFAT_astro.Support.fat_errors import ProgramError,BadCatalogueError
 from pyFAT_astro.Support.write_functions import reorder_output_catalogue
+from pyFAT_astro.Support.log_functions import full_system_tracking
 
 def warn_with_traceback(message, category, filename, lineno, file=None, line=None):
     log = file if hasattr(file,'write') else sys.stderr
@@ -62,9 +61,7 @@ def main(argv):
         where configuration_file specifies a yaml file with specific settings
         such as the catalog.
 
-        For fitting global screen
-    screen = False
-    global debuga single galaxy use pyFAT in this way:
+        For fitting use pyFAT in this way:
 
             pyFAT cube_name=Input_Cube.fits
 
@@ -105,7 +102,8 @@ def main(argv):
         inputconf = OmegaConf.from_cli(argv)
         cfg_input = OmegaConf.merge(cfg,inputconf)
         if cfg_input.print_examples:
-            no_cube = OmegaConf.masked_copy(cfg, ['input','output','fitting'])
+            no_cube = OmegaConf.masked_copy(cfg, ['ncpu','input','output',\
+                'fitting','advanced'])
             with open('FAT_defaults.yml','w') as default_write:
                 default_write.write(OmegaConf.to_yaml(no_cube))
             my_resources = import_pack_files('pyFAT_astro.config')
@@ -141,8 +139,12 @@ def main(argv):
             print(help_message)
             sys.exit()
         # if we set more cpus than available we limit to the available cpus
-        if cfg.ncpu > len(psutil.Process().cpu_affinity()):
-            cfg.ncpu  = len(psutil.Process().cpu_affinity())
+        try:
+            if cfg.ncpu > len(psutil.Process().cpu_affinity()):
+                cfg.ncpu  = len(psutil.Process().cpu_affinity())
+        except AttributeError:
+            if cfg.ncpu > psutil.cpu_count():
+                cfg.ncpu  = psutil.cpu_count()
 
         #Let's write and input example to the main directory
         if cfg.output.debug:
@@ -194,7 +196,7 @@ def main(argv):
                 timing_result.write("Timing results for every section of the fit process for all galaxies.  \n")
             # If we do this we should have 1 cpu to keep going
             Original_Configuration['NCPU'] -= 1
-            system_monitor = wf.full_system_tracking(Original_Configuration)
+            system_monitor = full_system_tracking(Original_Configuration)
             fst = threading.Thread(target=system_monitor.start_monitoring)
             fst.start()
 
@@ -215,7 +217,7 @@ def main(argv):
             Original_Configuration['CATALOGUE_END_ID'] = int(np.where(Original_Configuration['CATALOGUE_END_ID'] == np.array(Full_Catalogue['ID'],dtype=str))[0][0])+1
         # start the main fitting loop
         if float(Original_Configuration['CATALOGUE_START_ID']) > float(Original_Configuration['CATALOGUE_END_ID']):
-            raise CatalogError(f''' Your starting galaxy (Line nr = {Original_Configuration['CATALOGUE_START_ID']}) is listed after your ending galaxy (Line nr = {Original_Configuration['CATALOGUE_END_ID']}), maybe you have double catalogue ids?''')
+            raise BadCatalogueError(f''' Your starting galaxy (Line nr = {Original_Configuration['CATALOGUE_START_ID']}) is listed after your ending galaxy (Line nr = {Original_Configuration['CATALOGUE_END_ID']}), maybe you have double catalogue ids?''')
             sys.exit(1)
 
         if Original_Configuration['MULTIPROCESSING']:
@@ -266,6 +268,7 @@ def main(argv):
             for current_galaxy_index in range(Original_Configuration['CATALOGUE_START_ID'], Original_Configuration['CATALOGUE_END_ID']):
                 Configuration = sf.set_individual_configuration(current_galaxy_index,Full_Catalogue,Original_Configuration)
                 catalogue_line = FAT_Galaxy_Loop(Configuration)
+        
         if Original_Configuration['TIMING']:
             system_monitor.stop_monitoring()
             fst.join()

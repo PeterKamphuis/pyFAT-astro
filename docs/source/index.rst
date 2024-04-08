@@ -9,11 +9,9 @@ Contents
 --------
 .. toctree::
 
-
-
-  Introduction, Installation & Easy use <README.rst>
+  Introduction, Installation & Easy use <readme.md>
   The Configuration File <configuration.rst>
   Catalogue Setup  <catalogue.rst>
   The Different Stages <stage.rst>
   Advanced Settings <advanced.rst>
-  Copyright <copyright.rst>
+  Copyright <license.rst>

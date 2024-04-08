@@ -4,30 +4,91 @@ from astropy.io import fits
 from astropy.wcs import WCS
 from datetime import datetime
 from shutil import copyfile
-from pyFAT_astro.Support.fat_errors import FunctionCallError,BadHeaderError,\
-                                        BadCubeError,BadMaskError
+from pyFAT_astro.Support.fat_errors import FunctionCallError,BadCubeError\
+    ,BadMaskError,InputError
+from pyFAT_astro.Support.log_functions import print_log
 import pyFAT_astro.Support.support_functions as sf
 
+
+from make_moments.functions import moments
+
 #from pyFAT_astro.Support.read_functions import obtain_border_pix
-import pyFAT_astro
 from scipy import ndimage
 import numpy as np
 import copy
-import shutil
 import warnings
 import os
 
 #Check that the mask only contains the selected sources
-def check_mask(Configuration,id,Fits_Files):
-    sf.print_log(f'''CHECK_MASK: Checking the mask to contain only the correct source.
+def check_mask(Configuration,id,Fits_Files,SNR= 5.):
+    print_log(f'''CHECK_MASK: Checking the mask to contain only the correct source.
+and to have decent signal noise
 ''',Configuration, case =['debug_start','verbose'])
     if Configuration['DEBUG']:
         copyfile(f"{Configuration['FITTING_DIR']}/{Fits_Files['MASK']}",f"{Configuration['FITTING_DIR']}/Sofia_Output/{Configuration['BASE_NAME']}_Original_Mask.fits")
     mask = fits.open(f"{Configuration['FITTING_DIR']}/{Fits_Files['MASK']}",uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
+    mask = check_mask_sources(Configuration,id,mask)
 
+    if SNR < 3.:
+        mask = smooth_mask(Configuration,mask)
+    fits.writeto(f"{Configuration['FITTING_DIR']}{Fits_Files['MASK']}",mask[0].data,\
+            mask[0].header, overwrite = True)
+    # to ensure compatible units and calculations with th models we make the maps ourselves
+    del mask[0].header['C*3']
+    chan_map = np.array(np.nansum(mask[0].data,axis=0),dtype =float)
+    fits.writeto(f"{Configuration['FITTING_DIR']}/Sofia_Output/{Configuration['BASE_NAME']}_chan.fits",\
+        chan_map,header=mask[0].header,overwrite = True)
+    mask.close()
+    if Configuration['SOFIA_RAN']:
+        print_log('CHECK_MASK: Creating Sofia Moments',Configuration,case=['verbose'])
+        messages = moments(filename =  f"{Configuration['FITTING_DIR']}{Fits_Files['FITTING_CUBE']}",\
+                        mask =  f"{Configuration['FITTING_DIR']}/{Fits_Files['MASK']}",\
+                        overwrite = True, map_velocity_unit= 'km/s',\
+                        debug = Configuration['DEBUG'], log=True,\
+                        output_directory =   f"{Configuration['FITTING_DIR']}/Sofia_Output",\
+                        output_name = f"{Configuration['BASE_NAME']}")
+        print_log(messages,Configuration,case=['verbose'])
+        
+    
+    #moments()
+        #make_moments(Configuration, Fits_Files,fit_type='Generic_Initialize',vel_unit = 'm/s')
+
+check_mask.__doc__ =f'''
+ NAME:
+    check_mask
+
+ PURPOSE:
+    Check that the mask only contains the source we want and if that source
+    has low SNR that it is smoothed with a beam
+
+ CATEGORY:
+    fits_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    id = the SoFiA ID of the source we are interested in
+    Fits_Files = Standard FAT dictionary with filenames
+    Tirific_Template = Standard FAT Tirific Template
+
+ OPTIONAL INPUTS:
+    fit_type = 'Undefined'
+
+ OUTPUTS:
+    moment maps and the channel map
+
+ OPTIONAL OUTPUTS:
+    a cleaned mask
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
+
+def check_mask_sources(Configuration,id,mask):
     if float(id) not in mask[0].data:
-        sf.print_log(f'''CHECK_MASK: We cannot find the selected source in the mask. This will lead to errors. Aborting the fit.
-''',Configuration,case=['main','screen'])
+        print_log(f'''CHECK_MASK: We cannot find the selected source in the mask. This will lead to errors. Aborting the fit.
+    ''',Configuration,case=['main','screen'])
         BadMaskError(f" We can not find the sofia source id in the mask.")
     else:
         data = copy.deepcopy(mask[0].data)
@@ -35,20 +96,16 @@ def check_mask(Configuration,id,Fits_Files):
         diff = data-mask[0].data
         neg_index = np.where(diff < 0.)[0]
         if len(neg_index) != 0:
-            sf.print_log(f'''CHECK_MASK: The initial mask had more than a single source. redoing the mask.
-''',Configuration, case = ['verbose'])
+            print_log(f'''CHECK_MASK: The initial mask had more than a single source. redoing the mask.
+    ''',Configuration, case = ['verbose'])
             mask[0].data = data
-            fits.writeto(f"{Configuration['FITTING_DIR']}{Fits_Files['MASK']}",mask[0].data,mask[0].header, overwrite = True)
-# to ensure compatible units and calculations with th models we make the maps ourselves
-    del mask[0].header['C*3']
+
+
     mask[0].data[mask[0].data> 0.5] = 1.
-    chan_map = np.array(np.nansum(mask[0].data,axis=0),dtype =float)
+
     mask[0].header['BITPIX'] = -32
-    fits.writeto(f"{Configuration['FITTING_DIR']}/Sofia_Output/{Configuration['BASE_NAME']}_chan.fits",chan_map,header=mask[0].header,overwrite = True)
-    mask.close()
-    if Configuration['SOFIA_RAN']:
-        make_moments(Configuration, Fits_Files,fit_type='Generic_Initialize',vel_unit = 'm/s')
-check_mask.__doc__ =f'''
+    return mask
+check_mask_sources.__doc__ =f'''
  NAME:
     check_mask
 
@@ -79,12 +136,8 @@ check_mask.__doc__ =f'''
 
  NOTE:
 '''
-
-
-
-
 # Create a cube suitable for FAT
-def create_fat_cube(Configuration, Fits_Files,sofia_catalogue=False,\
+def create_fat_cube(Configuration, Fits_Files = None,sofia_catalogue=False,\
         id='No default',name='No default'):
     Configuration['PREPARATION_TIME'][0] = datetime.now()
     #First get the cubes
@@ -105,17 +158,26 @@ def create_fat_cube(Configuration, Fits_Files,sofia_catalogue=False,\
     data = prep_cube(Configuration,hdr,data)
     # and write our new cube
 
-    sf.print_log(f'''CREATE_FAT_CUBE: We are writing a FAT modified cube to be used for the fitting. This cube is called {Configuration['FITTING_DIR']+Fits_Files['FITTING_CUBE']}
-''',Configuration)
+  
     if sofia_catalogue:
-        fits.writeto(f"{Configuration['MAIN_DIRECTORY']}{name}_FAT_cubelets/{name}_{id}/{name}_{id}_FAT.fits",data,hdr)
+        print_log(f'''CREATE_FAT_CUBE: We are writing a FAT modified cube to be used for the fitting. This cube is called {name}_{id}/{name}_{id}_FAT.fits
+''',Configuration)
+        try:
+            fits.writeto(f"{Configuration['MAIN_DIRECTORY']}{name}_FAT_cubelets/{name}_{id}/{name}_{id}_FAT.fits",data,hdr,overwrite=Configuration['SOFIA_OVERWRITE'])
+        except OSError:
+            raise InputError('pyFAT has already setup this directory, if you want to overwrite the bcubelets please set advanced.sofia_overwrite to True in the configuration')
+
     else:
+        print_log(f'''CREATE_FAT_CUBE: We are writing a FAT modified cube to be used for the fitting. This cube is called {Configuration['FITTING_DIR']+Fits_Files['FITTING_CUBE']}
+''',Configuration)
         fits.writeto(Configuration['FITTING_DIR']+Fits_Files['FITTING_CUBE'],data,hdr)
     # Release the arrays
 
     Cube.close()
 
     data = []
+    if sofia_catalogue:
+        return hdr
     hdr = []
     Configuration['PREPARATION_TIME'][1] = datetime.now()
 
@@ -151,7 +213,7 @@ create_fat_cube.__doc__ =f'''
 '''
 
 def cut_cubes(Configuration, Fits_Files, galaxy_box):
-    sf.print_log(f'''CUT_CUBES: Starting to cut the cube_size.
+    print_log(f'''CUT_CUBES: Starting to cut the cube_size.
 ''', Configuration, case= ['debug_start'])
     cube_edge= [6.,5.*round(Configuration['BEAM_IN_PIXELS'][0]),5.*round(Configuration['BEAM_IN_PIXELS'][0])]
     cube_size= []
@@ -181,7 +243,7 @@ def cut_cubes(Configuration, Fits_Files, galaxy_box):
                         Fits_Files['CHANNEL_MAP'],\
                         ]
     if cut:
-        sf.print_log(f'''CUT_CUBES: Your input cube is significantly larger than the detected source.
+        print_log(f'''CUT_CUBES: Your input cube is significantly larger than the detected source.
 {"":8s}CUT_CUBES: we will cut to x-axis = [{new_cube[2,0]},{new_cube[2,1]}] y-axis = [{new_cube[1,0]},{new_cube[1,1]}]
 {"":8s}CUT_CUBES: z-axis = [{new_cube[2,0]},{new_cube[2,1]}].
 {"":8s}CUT_CUBES: We will cut the following files:
@@ -189,7 +251,7 @@ def cut_cubes(Configuration, Fits_Files, galaxy_box):
 ''', Configuration)
 
         for file in files_to_cut:
-            sf.print_log(f'''CUT_CUBES: We are cutting the file {file}
+            print_log(f'''CUT_CUBES: We are cutting the file {file}
 ''', Configuration)
             if os.path.exists(f"{Configuration['FITTING_DIR']}{file}"):
                 cutout_cube(Configuration,file,new_cube)
@@ -301,175 +363,13 @@ cutout_cube.__doc__ =f'''
  NOTE:
 '''
 
-# Extract a PV-Diagrams
-def extract_pv(Configuration,cube_in,angle,center= None,finalsize=None,convert=-1):
-    if center is None:
-        center=[-1,-1,-1]
-    if finalsize is None:
-        finalsize=[-1,-1]
-    sf.print_log(f'''EXTRACT_PV: We are the extraction of a PV-Diagram
-{'':8s} PA = {angle}
-{'':8s} center = {center}
-{'':8s} finalsize = {finalsize}
-{'':8s} convert = {convert}
-''', Configuration, case = ['debug_start'])
-
-
-    cube = copy.deepcopy(cube_in)
-    hdr = copy.deepcopy(cube[0].header)
-    TwoD_hdr= copy.deepcopy(cube[0].header)
-    data = copy.deepcopy(cube[0].data)
-    #Because astro py is even dumber than Python
-    try:
-        if hdr['CUNIT3'].lower() == 'km/s':
-            hdr['CUNIT3'] = 'm/s'
-            hdr['CDELT3'] = hdr['CDELT3']*1000.
-            hdr['CRVAL3'] = hdr['CRVAL3']*1000.
-        elif hdr['CUNIT3'].lower() == 'm/s':
-            hdr['CUNIT3'] = 'm/s'
-    except KeyError:
-        hdr['CUNIT3'] = 'm/s'
-    if center[0] == -1:
-        center = [hdr['CRVAL1'],hdr['CRVAL2'],hdr['CRVAL3']]
-        xcenter,ycenter,zcenter = hdr['CRPIX1'],hdr['CRPIX2'],hdr['CRPIX3']
-    else:
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            coordinate_frame = WCS(hdr)
-        xcenter,ycenter,zcenter = coordinate_frame.wcs_world2pix(center[0], center[1], center[2], 1.)
-
-    nz, ny, nx = data.shape
-    if finalsize[0] != -1:
-        if finalsize[1] >nz:
-            finalsize[1] = nz
-        if finalsize[0] > nx:
-            finalsize[0] = nx
-    # if the center is not set assume the crval values
-
-    sf.print_log(f'''EXTRACT_PV: The shape of the output
-{'':8s} nz = {nz}
-{'':8s} ny = {ny}
-{'':8s} nx = {nx}
-''', Configuration,case=['verbose'])
-    x1,x2,y1,y2 = sf.obtain_border_pix(Configuration,angle,[xcenter,ycenter])
-    linex,liney,linez = np.linspace(x1,x2,nx), np.linspace(y1,y2,nx), np.linspace(0,nz-1,nz)
-    #This only works when ny == nx hence nx is used in liney
-    new_coordinates = np.array([(z,y,x)
-                        for z in linez
-                        for y,x in zip(liney,linex)
-                        ],dtype=float).transpose().reshape((-1,nz,nx))
-    #spatial_resolution = abs((abs(x2-x1)/nx)*np.sin(np.radians(angle)))+abs(abs(y2-y1)/ny*np.cos(np.radians(angle)))
-    PV = ndimage.map_coordinates(data, new_coordinates,order=1)
-    if hdr['CDELT1'] < 0:
-        PV = PV[:,::-1]
-
-    if finalsize[0] == -1:
-        # then lets update the header
-        # As python is stupid making a simple copy will mean that these changes are still applied to hudulist
-        TwoD_hdr['NAXIS2'] = nz
-        TwoD_hdr['NAXIS1'] = nx
-
-        TwoD_hdr['CRPIX2'] = hdr['CRPIX3']
-        TwoD_hdr['CRPIX1'] = xcenter+1
-    else:
-        zstart = sf.set_limits(int(zcenter-finalsize[1]/2.),0,int(nz))
-        zend = sf.set_limits(int(zcenter+finalsize[1]/2.),0,int(nz))
-        xstart = sf.set_limits(int(xcenter-finalsize[0]/2.),0,int(nx))
-        xend = sf.set_limits(int(xcenter+finalsize[0]/2.),0,int(nx))
-
-        PV =  PV[zstart:zend, xstart:xend]
-        TwoD_hdr['NAXIS2'] = int(finalsize[1])
-        TwoD_hdr['NAXIS1'] = int(finalsize[0])
-        TwoD_hdr['CRPIX2'] = hdr['CRPIX3']-int(nz/2.-finalsize[1]/2.)
-        TwoD_hdr['CRPIX1'] = int(finalsize[0]/2.)+1
-
-    if convert !=-1:
-        TwoD_hdr['CRVAL2'] = hdr['CRVAL3']/convert
-        TwoD_hdr['CDELT2'] = hdr['CDELT3']/convert
-    else:
-        TwoD_hdr['CRVAL2'] = hdr['CRVAL3']
-        TwoD_hdr['CDELT2'] = hdr['CDELT3']
-    TwoD_hdr['CTYPE2'] = hdr['CTYPE3']
-    try:
-        if hdr['CUNIT3'].lower() == 'm/s' and convert == 1000. :
-            TwoD_hdr['CDELT2'] = hdr['CDELT3']/1000.
-            TwoD_hdr['CRVAL2'] = hdr['CRVAL3']/1000.
-            TwoD_hdr['CUNIT2'] = 'km/s'
-            del (TwoD_hdr['CUNIT3'])
-        elif  convert != -1:
-            del (TwoD_hdr['CUNIT3'])
-            try:
-                del (TwoD_hdr['CUNIT2'])
-            except KeyError:
-                pass
-        else:
-            TwoD_hdr['CUNIT2'] = hdr['CUNIT3']
-            del (TwoD_hdr['CUNIT3'])
-    except KeyError:
-        sf.print_log(f'''EXTRACT_PV: We could not find units in the header for the 3rd axis.
-''', Configuration)
-    del (TwoD_hdr['CRPIX3'])
-    del (TwoD_hdr['CRVAL3'])
-    del (TwoD_hdr['CDELT3'])
-    del (TwoD_hdr['CTYPE3'])
-    del (TwoD_hdr['NAXIS3'])
-    TwoD_hdr['NAXIS'] = 2
-    TwoD_hdr['CRVAL1'] = 0.
-    #Because we used nx in the linspace for liney we also use it here
-    TwoD_hdr['CDELT1'] = np.sqrt(((x2-x1)*abs(hdr['CDELT1'])/nx)**2+((y2-y1)*abs(hdr['CDELT2'])/nx)**2)*3600.
-
-    TwoD_hdr['CTYPE1'] = 'OFFSET'
-    TwoD_hdr['CUNIT1'] = 'ARCSEC'
-    TwoD_hdr['HISTORY'] = f'EXTRACT_PV: PV diagram extracted with angle {angle} and center {center}'
-    # Then we change the cube and rteturn the PV construct
-    cube[0].header = TwoD_hdr
-    cube[0].data = PV
-
-    return cube
-extract_pv.__doc__ = '''
- NAME:
-    extract_pv
-
- PURPOSE:
-    extract a PV diagram from a cube object. Angle is the PA and center the central location. The profile is extracted over the full length of the cube and afterwards cut back to the finalsize.
-
- CATEGORY:
-     fits_functions
-
- INPUTS:
-    Configuration = Standard FAT Configuration
-    cube_in = is a fits cube object
-    angle = Pa of the slice
-
- OPTIONAL INPUTS:
-    center = [-1,-1,-1]
-    the central location of the slice in WCS map_coordinates [RA,DEC,VSYS], default is the CRVAL values in the header
-
-    finalsize = [-1,-1,-1]
-    final size of the PV-diagram in pixels, default is no cutting
-
-    convert=-1
-    conversion factor for velocity axis, default no conversion
-
- KEYWORD PARAMETERS:
-
- OUTPUTS:
-
- OPTIONAL OUTPUTS:
-
- PROCEDURES CALLED:
-    Unspecified
-
- NOTE:
-'''
-
 
 def prep_cube(Configuration,hdr,data):
-    sf.print_log( f'''PREPROCESSING: starting the preprocessing of the cube
+    print_log( f'''PREPROCESSING: starting the preprocessing of the cube
 ''',Configuration, case = ['debug_start'])
 
     if hdr['CDELT3'] < -1:
-        sf.print_log( f'''PREPROCESSING: Your velocity axis is declining with increasing channels
+        print_log( f'''PREPROCESSING: Your velocity axis is declining with increasing channels
 {"":8s}PREPROCESSING: We reversed the velocity axis.
 ''', Configuration)
         hdr['CDELT3'] = abs(hdr['CDELT3'])
@@ -477,7 +377,7 @@ def prep_cube(Configuration,hdr,data):
         data = data[::-1,:,:]
     #Check for zeros
     if np.where(data == 0.):
-        sf.print_log(f'''PREPROCESSING: Your cube contains values exactly 0. If this is padding these should be blanks.
+        print_log(f'''PREPROCESSING: Your cube contains values exactly 0. If this is padding these should be blanks.
 {"":8s}PREPROCESSING: We have changed them to blanks.
 ''', Configuration)
         data[np.where(data == 0.)] = float('NaN')
@@ -497,21 +397,21 @@ def prep_cube(Configuration,hdr,data):
             hdr['NAXIS3'] = hdr['NAXIS3']-1
             hdr['CRPIX3'] = hdr['CRPIX3'] - 1
             if hdr['NAXIS3'] < 5:
-                sf.print_log(f'''PREPROCESSING: This cube has too many blanked channels.
+                print_log(f'''PREPROCESSING: This cube has too many blanked channels.
 ''', Configuration,case = ['main', 'screen'])
                 raise BadCubeError("The cube has too many blanked channels")
             log_statement = f'''PREPROCESSING: We are cutting the cube as the first channel is completely blank.
 '''
-            sf.print_log(f'''PREPROCESSING: We are cutting the cube as the first channel is completely blank.
+            print_log(f'''PREPROCESSING: We are cutting the cube as the first channel is completely blank.
 ''', Configuration)
         while np.isnan(data[-1,:,:]).all():
             data=data[:-1,:,:]
             hdr['NAXIS3'] = hdr['NAXIS3']-1
             if hdr['NAXIS3'] < 5:
-                sf.print_log(f'''PREPROCESSING: This cube has too many blanked channels.
+                print_log(f'''PREPROCESSING: This cube has too many blanked channels.
 ''', Configuration,case = ['main', 'screen'])
                 raise BadCubeError("The cube has too many blanked channels")
-            sf.print_log(f'''PREPROCESSING: We are cutting the cube as the last channel is completely blank.
+            print_log(f'''PREPROCESSING: We are cutting the cube as the last channel is completely blank.
 ''', Configuration)
         #Then check the noise statistics
         noise_first_channel = np.nanstd(data[0,:,:])
@@ -531,7 +431,7 @@ def prep_cube(Configuration,hdr,data):
         if difference < 0.2 and np.isfinite(difference) and difference2 < 0.25:
             cube_ok = True
         else:
-            sf.print_log(f'''PREPROCESSING: We are cutting the cube as clearly the noise statistics are off.
+            print_log(f'''PREPROCESSING: We are cutting the cube as clearly the noise statistics are off.
 {"":8s}PREPROCESSING: Noise in the first channel is {noise_first_channel}
 {"":8s}PREPROCESSING: Noise in the last channel is {noise_last_channel}
 {"":8s}PREPROCESSING: Noise in the corners is {noise_corner}
@@ -563,14 +463,14 @@ def prep_cube(Configuration,hdr,data):
 
             if times_cut_first_channel >= 8 and times_cut_last_channel >= 8:
                 cube_ok = True
-                sf.print_log( f'''PREPROCESSING: This cube has non-uniform noise statistics.'
+                print_log( f'''PREPROCESSING: This cube has non-uniform noise statistics.'
 ''',Configuration)
             if hdr['NAXIS3'] < 5:
-                sf.print_log(f'''PREPROCESSING: This cube has noise statistics that cannot be dealt with.
+                print_log(f'''PREPROCESSING: This cube has noise statistics that cannot be dealt with.
 ''',Configuration,case = ['main','screen'])
                 raise BadCubeError('The Cube has noise statistics that cannot be dealt with')
     if ~np.isfinite(noise_corner):
-        sf.print_log(f'''PREPROCESSING: This cube has noise statistics that cannot be dealt with.
+        print_log(f'''PREPROCESSING: This cube has noise statistics that cannot be dealt with.
 ''',Configuration,case = ['main','screen'])
         raise BadCubeError('The Cube has noise statistics that cannot be dealt with')
     #hdr['FATNOISE'] = noise_corner
@@ -579,7 +479,7 @@ def prep_cube(Configuration,hdr,data):
         low_noise_indices = np.where(data < -10*noise_corner)
     if len(low_noise_indices) > 0.0001*hdr['NAXIS1']*hdr['NAXIS2']*hdr['NAXIS3']:
         data[low_noise_indices] = float('NaN')
-        sf.print_log(f'''PREPROCESSING: Your cube had a significant amount of values below -10*sigma. If you do not have a central absorption source there is something seriously wrong with the cube.
+        print_log(f'''PREPROCESSING: Your cube had a significant amount of values below -10*sigma. If you do not have a central absorption source there is something seriously wrong with the cube.
 {"":8s}PREPROCESSING: We blanked these values.
 ''',Configuration)
 
@@ -596,7 +496,7 @@ def prep_cube(Configuration,hdr,data):
         data[:,int(hdr['NAXIS2']/2.-buffer):int(hdr['NAXIS2']/2.+buffer),\
                         int(hdr['NAXIS1']/2.-buffer):int(hdr['NAXIS1']/2.+buffer)] =\
                         central
-        sf.print_log(f'''PREPROCESSING: Your cube had a significant amount of values below -10*sigma. If you do not have a central absorption source there is something seriously wrong with the cube.
+        print_log(f'''PREPROCESSING: Your cube had a significant amount of values below -10*sigma. If you do not have a central absorption source there is something seriously wrong with the cube.
 {"":8s}PREPROCESSING: We blanked these values.
 ''',Configuration)
 
@@ -616,7 +516,7 @@ def prep_cube(Configuration,hdr,data):
     #If we have noiseles cubes this will be far to low
     if abs(new_noise/np.mean([channel_noise,noise_corner])) > 4. \
         or abs(new_noise/np.mean([channel_noise,noise_corner])) < 0.25:
-            sf.print_log(f'''PREPROCESSING: There is something odd in the noise statistics of your cube. We are not using the nehgative values
+            print_log(f'''PREPROCESSING: There is something odd in the noise statistics of your cube. We are not using the nehgative values
 ''',Configuration)
             #new_noise = np.mean([channel_noise,noise_corner])
     hdr['FATNOISE'] = new_noise
@@ -659,7 +559,7 @@ def optimized_cube(Configuration,Fits_Files):
         data = cube[0].data
         hdr = cube[0].header
         if f"{abs(hdr['CDELT1']):.16f}" != f"{abs(hdr['CDELT2']):.16f}":
-            sf.print_log(f'''OPTIMIZED_CUBE: Your input cube does not have square pixels.
+            print_log(f'''OPTIMIZED_CUBE: Your input cube does not have square pixels.
 {"":8s}OPTIMIZED_CUBE: FAT cannot optimize your cube.
 ''', Configuration)
         cube.close()
@@ -670,13 +570,13 @@ def optimized_cube(Configuration,Fits_Files):
         fits.writeto(Configuration['FITTING_DIR']+Fits_Files['OPTIMIZED_CUBE'], opt_data,opt_hdr)
 
         Configuration['OPTIMIZED'] = True
-        sf.print_log(f'''OPTIMIZED_CUBE: Your input cube has {pix_per_beam} pixels along the minor FWHM.
+        print_log(f'''OPTIMIZED_CUBE: Your input cube has {pix_per_beam} pixels along the minor FWHM.
 {"":8s}OPTIMIZED_CUBE: You requested { Configuration['OPT_PIXEL_BEAM']} therefore we regridded the cube into a new cube.
 {"":8s}OPTIMIZED_CUBE: We are using the pixel size of {required_cdelt}.
 ''', Configuration)
 
     else:
-        sf.print_log(f'''OPTIMIZED_CUBE: Your input cube has {pix_per_beam} pixels along the minor FWHM.
+        print_log(f'''OPTIMIZED_CUBE: Your input cube has {pix_per_beam} pixels along the minor FWHM.
 {"":8s}OPTIMIZED_CUBE: You requested {Configuration['OPT_PIXEL_BEAM']} but we cannot improve the resolution.
 {"":8s}OPTIMIZED_CUBE: We are using the pixel size of the original cube.
 ''', Configuration)
@@ -700,157 +600,6 @@ optimized_cube.__doc__ =f'''
 
  OUTPUTS:
     An optimized cube is created and written to disk.
-
- OPTIONAL OUTPUTS:
-
- PROCEDURES CALLED:
-    Unspecified
-
- NOTE:
-'''
-
-def make_moments(Configuration,Fits_Files,fit_type = 'Undefined',
-                 moments = None,overwrite = False, level=None,
-                  vel_unit= None):
-    if moments is None:
-        moments = [0,1,2]
-    sf.print_log(f'''MAKE_MOMENTS: We are starting to create the moment maps.
-''',Configuration, case = ['debug_start'])
-    if fit_type == 'Generic_Initialize':
-        filename = f"{Configuration['FITTING_DIR']}{Fits_Files['FITTING_CUBE']}"
-        basename = f"{Configuration['BASE_NAME']}"
-        directory = f"{Configuration['FITTING_DIR']}/Sofia_Output/"
-        mask_cube = f"{Configuration['FITTING_DIR']}/{Fits_Files['MASK']}"
-    elif fit_type == 'Generic_Final':
-        filename = f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel.fits"
-        basename = 'Finalmodel'
-        directory = f"{Configuration['FITTING_DIR']}/Finalmodel/"
-        mask_cube = f"{Configuration['FITTING_DIR']}/{Fits_Files['MASK']}"
-    else:
-        filename = f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.fits"
-        basename = fit_type
-        directory = f"{Configuration['FITTING_DIR']}{fit_type}"
-        if not level:
-            mask_cube = f"{Configuration['FITTING_DIR']}/{Fits_Files['MASK']}"
-
-    cube = fits.open(filename)
-    if vel_unit:
-        cube[0].header['CUNIT3'] = vel_unit
-    if mask_cube:
-        mask = fits.open(mask_cube)
-        with np.errstate(invalid='ignore', divide='ignore'):
-            cube[0].data[mask[0].data < 0.5] = float('NaN')
-        mask.close()
-    else:
-        if not level:
-            level = 3.*np.mean([np.nanstd(cube[0].data[0:2,:,:]),np.nanstd(cube[0].data[-3:-1,:,:])])
-        with np.errstate(invalid='ignore', divide='ignore'):
-            cube[0].data[cube[0].data < level] = float('NaN')
-    try:
-        if cube[0].header['CUNIT3'].lower().strip() == 'm/s':
-            sf.print_log(f"MAKE_MOMENTS: We convert your m/s to km/s. \n", Configuration, case=['verbose'])
-            cube[0].header['CUNIT3'] = 'km/s'
-            cube[0].header['CDELT3'] = cube[0].header['CDELT3']/1000.
-            cube[0].header['CRVAL3'] = cube[0].header['CRVAL3']/1000.
-        elif cube[0].header['CUNIT3'].lower().strip() == 'km/s':
-            pass
-        else:
-            sf.print_log(f"MAKE_MOMENTS: Your Velocity unit {cube[0].header['CUNIT3']} is weird. Your units could be off", Configuration)
-    except KeyError:
-        sf.print_log(f"MAKE_MOMENTS: Your CUNIT3 is missing, that is bad practice. We'll add a blank one but we're not guessing the value", Configuration)
-        cube[0].header['CUNIT3'] = 'Unknown'
-    #Make a 2D header to use
-    hdr2D = copy.deepcopy(cube[0].header)
-    hdr2D.remove('NAXIS3')
-    hdr2D['NAXIS'] = 2
-    # removing the third axis means we cannot correct for varying platescale, Sofia does so this is and issue so let's not do this
-    hdr2D.remove('CDELT3')
-    hdr2D.remove('CTYPE3')
-    hdr2D.remove('CUNIT3')
-    hdr2D.remove('CRPIX3')
-    hdr2D.remove('CRVAL3')
-
-    # we need a moment 0 for the moment 2 as well
-    if 0 in moments:
-        hdr2D['BUNIT'] = f"{cube[0].header['BUNIT']}*{cube[0].header['CUNIT3']}"
-        moment0 = np.nansum(cube[0].data, axis=0) * cube[0].header['CDELT3']
-        moment0[np.invert(np.isfinite(moment0))] = float('NaN')
-        try:
-            hdr2D['DATAMAX'] = np.nanmax(moment0)
-            hdr2D['DATAMIN'] = np.nanmin(moment0)
-            fits.writeto(f"{directory}/{basename}_mom0.fits",moment0,hdr2D,overwrite = overwrite)
-        except ValueError:
-            sf.print_log(f"MAKE_MOMENTS: Your Moment 0 has bad data and we could not write the moment 0 fits file", Configuration)
-
-
-
-    if 1 in moments or 2 in moments:
-        zaxis = cube[0].header['CRVAL3'] + (np.arange(cube[0].header['NAXIS3'])+1 \
-              - cube[0].header['CRPIX3']) * cube[0].header['CDELT3']
-        c=np.transpose(np.resize(zaxis,[cube[0].header['NAXIS1'],cube[0].header['NAXIS2'],len(zaxis)]),(2,1,0))
-        hdr2D['BUNIT'] = f"{cube[0].header['CUNIT3']}"
-        # Remember Python is stupid so z,y,x
-        with np.errstate(invalid='ignore', divide='ignore'):
-            moment1 = np.nansum(cube[0].data*c, axis=0)/ np.nansum(cube[0].data, axis=0)
-        moment1[np.invert(np.isfinite(moment1))] = float('NaN')
-        try:
-            hdr2D['DATAMAX'] = np.nanmax(moment1)
-            hdr2D['DATAMIN'] = np.nanmin(moment1)
-            if 1 in moments:
-                fits.writeto(f"{directory}/{basename}_mom1.fits",moment1,hdr2D,\
-                    overwrite = overwrite)
-
-        except ValueError:
-            sf.print_log(f"MAKE_MOMENTS: Your Moment 1 has bad data and we could not write the moment 0 fits file", Configuration)
-
-        if 2 in moments:
-            d = c - np.resize(moment1,[len(zaxis),cube[0].header['NAXIS2'],cube[0].header['NAXIS1']])
-            with np.errstate(invalid='ignore', divide='ignore'):
-                moment2 = np.sqrt(np.nansum(cube[0].data*d**2, axis=0)/ np.nansum(cube[0].data, axis=0))
-            moment2[np.invert(np.isfinite(moment1))] = float('NaN')
-            try:
-                hdr2D['DATAMAX'] = np.nanmax(moment2)
-                hdr2D['DATAMIN'] = np.nanmin(moment2)
-                fits.writeto(f"{directory}/{basename}_mom2.fits",\
-                    moment2,hdr2D,overwrite = overwrite)
-
-            except ValueError:
-                sf.print_log(f"MAKE_MOMENTS: Your Moment 1 has bad data and we could not write the moment 0 fits file", Configuration)
-
-    cube.close()
-
-make_moments.__doc__ =f'''
- NAME:
-    make_moments
-
- PURPOSE:
-    Make the moment maps
-
- CATEGORY:
-    fits_functions
-
- INPUTS:
-    Configuration = Standard FAT configuration
-    Fits_Files = Standard FAT dictionary with filenames
-
-
- OPTIONAL INPUTS:
-    fit_type = 'Undefined'
-    type of ftting
-
-    moments = [0,1,2]
-    moment maps to create
-
-    overwrite = False
-    overwrite existing maps
-
-    level=None
-    cutoff level to use, if set the mask will not be used
-
-    vel_unit= none
-    velocity unit of the input cube
-
- OUTPUTS:
 
  OPTIONAL OUTPUTS:
 
@@ -964,6 +713,46 @@ Regrid an array into a new shape through the ndimage module
 
  PROCEDURES CALLED:
     scipy.ndimage.map_coordinates, np.array, np.mgrid
+
+ NOTE:
+'''
+
+def smooth_mask(Configuration,mask):
+    print_log(f'''SMOOTH_MASK: Starting smooth mask
+''', Configuration)
+
+    # First we smooth the mask
+    mask_data = np.array(mask[0].data,dtype=float)
+    mask_data = ndimage.gaussian_filter(mask_data,sigma=(0.,\
+        Configuration['BEAM_IN_PIXELS'][1] / np.sqrt(8 * np.log(2)),\
+        Configuration['BEAM_IN_PIXELS'][0] / np.sqrt(8 * np.log(2))),order=0)
+    mask_data[mask_data > 0.05] = 1.
+    mask_data[mask_data < 0.05] = 0.
+    mask[0].data=mask_data
+    return mask
+    #reaplly it to get the moments
+
+
+    # If we have a lot of pixels and stuff we need smooth more
+    #So we take the inverse of the initial factor with a standard of 0.75 minimum of 0.5 and a maximum of 1.25
+
+smooth_mask.__doc__ =f'''
+ NAME:
+    smooth_mask
+ PURPOSE:
+    smooth the mask with a beam
+ CATEGORY:
+    fits_functions
+
+ INPUTS:
+
+ OPTIONAL INPUTS:
+
+ OUTPUTS:
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
 
  NOTE:
 '''

@@ -1,21 +1,20 @@
 # -*- coding: future_fstrings -*-
-# This module contains a set of functions and classes that are used in several different Python scripts in the Database.
-import pyFAT_astro
+
 from pyFAT_astro.Support.fat_errors import SupportRunError,SmallSourceError,\
                                               FileNotFoundError,TirificKillError,\
                                               InputError,ProgramError,DefFileError,\
-                                              BadHeaderError,FittingError,TirificOutputError
-
+                                              BadHeaderError,FittingError,TirificOutputError,\
+                                              SofiaMissingError
+from pyFAT_astro.Support.log_functions import print_log,get_usage_statistics,write_config
 from pyFAT_astro import Templates as templates
 from collections import OrderedDict #used in Proper_Dictionary
-from inspect import getframeinfo,stack
 from numpy.linalg import LinAlgError
 from scipy.optimize import curve_fit, OptimizeWarning
 from scipy import ndimage
 from scipy.signal import savgol_filter
 from astropy.wcs import WCS
 from astropy.io import fits
-from dataclasses import  asdict
+
 try:
     from importlib.resources import files as import_pack_files
 except ImportError:
@@ -29,8 +28,6 @@ except ImportError:
     from importlib_resources import open_text as pack_open_txt
 import matplotlib.pyplot as plt
 import os
-import sys
-import inspect
 import psutil as psu
 import signal
 import time
@@ -48,7 +45,10 @@ class Proper_Dictionary(OrderedDict):
     def __setitem__(self, key, value):
         if key not in self:
             # If it is a new item we only allow it if it is not Configuration or Original_Cube or if we are in setup_configuration
-            function,variable,empty = traceback.format_stack()[-2].split('\n')
+            try:
+                function,variable,empty = traceback.format_stack()[-2].split('\n')
+            except ValueError: 
+                function,variable = traceback.format_stack()[-2].split('\n')
             function = function.split()[-1].strip()
             variable = variable.split('[')[0].strip()
             if variable == 'Original_Configuration' or variable == 'Configuration':
@@ -226,6 +226,8 @@ def complex_am_invert(Configuration,Theta_in,Phi_in):
             with warnings.catch_warnings():
                 warnings.filterwarnings("ignore",message="divide by zero encountered in true_divide"\
                                     ,category=RuntimeWarning)
+                warnings.filterwarnings("ignore",message="divide by zero encountered in divide"\
+                                    ,category=RuntimeWarning)
                 for i in range(len(Theta)):
                     Inclination_plane[:,i]= 90-np.arctan(1./(np.cos(Theta[i])*np.tan(Phi[:])))*(360./(2*np.pi))
             Inclination_plane[np.where(Inclination_plane > 90.)] = 180 - Inclination_plane[np.where(Inclination_plane > 90.)]
@@ -248,6 +250,8 @@ def complex_am_invert(Configuration,Theta_in,Phi_in):
             PA_plane =   np.zeros((len(Theta),len(Phi)))
             with warnings.catch_warnings():
                 warnings.filterwarnings("ignore",message="divide by zero encountered in true_divide"\
+                                    ,category=RuntimeWarning)
+                warnings.filterwarnings("ignore",message="divide by zero encountered in divide"\
                                     ,category=RuntimeWarning)
                 for i in range(len(Theta)):
                     PA_plane[:,i] = abs(np.arctan(np.sin(Theta[i])*np.tan(Phi[:]))*(360./(2*np.pi)))
@@ -337,6 +341,46 @@ calculate_am_vector.__doc__ =f'''
  NOTE:
 '''
 
+'This is for singular arrays not both sides'
+def calculate_change_angle(Configuration,Theta,Phi):
+    theta_zero = Theta[0]
+    phi_zero = Phi[0]
+       
+    theta_change= np.array([float(x-theta_zero) for x in Theta]\
+                           ,dtype=float)
+    
+    phi_change=  np.array([float(x-phi_zero) for x in Phi]\
+                           ,dtype=float)
+   
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore",message="invalid value encountered in true_divide"\
+                            ,category=RuntimeWarning)
+        #pYthon being really incredibly dumb again as changed the run time warning 
+        warnings.filterwarnings("ignore",message="invalid value encountered in divide"\
+                            ,category=RuntimeWarning)
+        theta_factor = np.sqrt(theta_change**2/(theta_change**2+phi_change**2))\
+                    *(theta_change)/abs(theta_change)
+        
+        theta_factor[np.where(np.array(theta_change) == 0.)] = 0.
+        phi_factor = np.sqrt(phi_change**2/(theta_change**2+phi_change**2))*(phi_change)/abs(phi_change)
+        phi_factor[np.where(np.array(phi_change) == 0.)] = 0.
+
+    in_zero = np.where(np.array(theta_change+phi_change) == 0.)
+    phi_factor[in_zero]=0.
+    theta_factor[in_zero]=0.
+
+    change_angle = np.sqrt(theta_change**2+phi_change**2)
+    change_angle[in_zero] =0.
+
+    return {'CHANGE_ANGLE': change_angle, 'PHI': {'ZERO': phi_zero, 'FACTOR':phi_factor},\
+                                     'THETA':{'ZERO': theta_zero, 'FACTOR':theta_factor}}
+
+def revert_change_angle(Configuration,change_angle):
+    new_theta = change_angle['THETA']['ZERO']+change_angle['CHANGE_ANGLE']\
+            *change_angle['THETA']['FACTOR']
+    new_phi =  change_angle['PHI']['ZERO']+change_angle['CHANGE_ANGLE']\
+            *change_angle['PHI']['FACTOR']
+    return new_theta,new_phi
 
 def check_angular_momentum_vector(Configuration,radius_in,pa_in,inclination_in,\
                                     modified= False,side=0):
@@ -351,77 +395,56 @@ def check_angular_momentum_vector(Configuration,radius_in,pa_in,inclination_in,\
     #phi is dependent on theta but the max change should be the same
     max_shift = np.arctan(np.tan(Configuration['MAX_CHANGE']['INCL']*(np.pi/180.))\
                     *np.tan(Configuration['MAX_CHANGE']['PA']*(np.pi/180.)))
-    print_log(f'''CHECK_ANGULAR_MOMENTUM_VECTOR: The maximum allowed shift = {max_shift}.
+  
+    print_log(f'''CHECK_ANGULAR_MOMENTUM_VECTOR: The maximum allowed shift  = {max_shift}.
 ''',Configuration,case= ['debug_start'])
     succes = False
     counter = 0.
     while not succes:
-        print_log(f'''CHECK_ANGULAR_MOMENTUM_VECTOR: Calculating Phi and Theta from these PA and inclination
-PA = {pa}
-Inclination = {inclination}
-''',Configuration,case= ['debug_add'])
+        #print_log(f'''CHECK_ANGULAR_MOMENTUM_VECTOR: Calculating Phi and Theta from these PA and inclination
+#PA = {pa}
+#Inclination = {inclination}
+#''',Configuration,case= ['debug_add'])
         Theta,Phi,quadrant = calculate_am_vector(Configuration,pa,inclination )
-        theta_zero = Theta[0]
-        phi_zero = Phi[0]
-
-        #Let's combine the variation as fraction of the existing angle
-        theta_change= np.array([float(x-theta_zero) for x in Theta],dtype=float)
-        phi_change= np.array([float(x-phi_zero) for x in Phi],dtype=float)
-
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore",message="invalid value encountered in true_divide"\
-                                ,category=RuntimeWarning)
-            theta_factor = np.sqrt(theta_change**2/(theta_change**2+phi_change**2))\
-                        *(theta_change)/abs(theta_change)
-            theta_factor[np.where(np.array(theta_change) == 0.)] = 0.
-            phi_factor = np.sqrt(phi_change**2/(theta_change**2+phi_change**2))*(phi_change)/abs(phi_change)
-            phi_factor[np.where(np.array(phi_change) == 0.)] = 0.
-
-        in_zero = np.where(np.array(theta_change+phi_change) == 0.)
-        phi_factor[in_zero]=0.
-        theta_factor[in_zero]=0.
-
-        change_angle = np.sqrt(theta_change**2+phi_change**2)
-        change_angle[in_zero] =0.
-        new_change_angle = max_profile_change(Configuration,radkpc,change_angle,'ARBITRARY',\
-            slope = Configuration['WARP_SLOPE'][side],max_change=max_shift, kpc_radius=True )
-
-
-        new_theta_change = new_change_angle*theta_factor
-        new_phi_change = new_change_angle*phi_factor
-        new_theta = theta_zero+new_theta_change
-        new_phi = phi_zero+new_phi_change
-        print_log(f'''We put in the difference of
-phi {phi_change}, theta {theta_change}, angle {change_angle}
-new values
-phi {new_phi_change}, theta {new_theta_change}, angle {new_change_angle}
-''',Configuration,case= ['debug_add'])
-
+        change_angle = calculate_change_angle(Configuration,Theta,Phi) 
+        new_change_angle = max_profile_change(Configuration,radkpc,change_angle['CHANGE_ANGLE'],'CHANGE_ANGLE',\
+            slope = Configuration['WARP_SLOPE'][side],max_change=max_shift, kpc_radius=True, quadrant=quadrant )
+        
+        change_angle['CHANGE_ANGLE'] = new_change_angle
+        new_theta,new_phi = revert_change_angle(Configuration,change_angle)
+       
+     
         diff_phi = np.array(np.where(np.array([abs(x-y) for x,y in zip(Phi,new_phi) ],dtype=float) > 1e-6))
         diff_theta = np.array(np.where(np.array([abs(x-y) for x,y in zip(Theta,new_theta)],dtype=float) > 1e-6))
 
         if diff_phi.size != 0. or \
             diff_theta.size != 0.:
-            print_log(f'''CHECK_ANGULAR_MOMENTUM_VECTOR
-{'':8s} Phi = {Phi}, new_phi = {new_phi}
-{'':8s} Phi diff = {np.array([abs(x-y) for x,y in zip(Phi,new_phi) ],dtype=float)}{'':8s}
-{'':8s} Theta = {Theta}, new_theta = {new_theta}
-{'':8s} Theta diff = {np.array([abs(x-y) for x,y in zip(Theta,new_theta) ],dtype=float)}
-''',Configuration,case= ['debug_add'])
+            #print_log(f'''CHECK_ANGULAR_MOMENTUM_VECTOR
+#{'':8s} Phi = {Phi}, new_phi = {new_phi}
+#{'':8s} Phi diff = {np.array([abs(x-y) for x,y in zip(Phi,new_phi) ],dtype=float)}{'':8s}
+#{'':8s} Theta = {Theta}, new_theta = {new_theta}
+#{'':8s} Theta diff = {np.array([abs(x-y) for x,y in zip(Theta,new_theta) ],dtype=float)}
+#''',Configuration,case= ['debug_add'])
 
 
             pa,inclination = calculate_am_vector(Configuration,new_theta,new_phi,\
                                 multiple=quadrant,invert=True )
-            print_log(f'''CHECK_ANGULAR_MOMENTUM_VECTOR: new PA and inclination
-PA = {pa}
-Inclination = {inclination}
-''',Configuration,case= ['debug_add'])
+            # Because when the quadrant changes the PA and inclination are not checked against maximum variations 
+            # Hence this stille needs to be done
+            pa,inclination = check_quadrant_change(Configuration,pa,inclination,quadrant)
+            #for i in range(len(pa)):
+            #    print(f'PA = {pa[i]}, inclination = {inclination[i]}, quadrant = {quadrant[i]} ')
+#            print_log(f'''CHECK_ANGULAR_MOMENTUM_VECTOR: new PA and inclination
+#PA = {pa}
+#Inclination = {inclination}
+#''',Configuration,case= ['debug_add'])
             counter += 1
             if counter > 1000.:
                 #It is not really a succes but we have to exit the loop and one point.
                 succes = True
         else:
             succes = True
+        #exit()
 
     print_log(f'''CHECK_ANGULAR_MOMENTUM_VECTOR: Before checking we have modified = {modified}
 ''',Configuration,case= ['debug_add'])
@@ -462,11 +485,53 @@ check_angular_momentum_vector.__doc__ =f'''
  PROCEDURES CALLED:
     Unspecified
 
- NOTE:
+ NOTE: PA and inclination are singular sides
 '''
 
+def check_quadrant_change(Configuration,pa,inclination,quadrant):
+    diff_quadrant = [x -quadrant[0] for x in quadrant]
+    if np.sum(diff_quadrant) != 0.:
+        for i,x in enumerate(diff_quadrant):
+            if x != 0. and (1 < i <len(diff_quadrant)-1):
+                pa[i] = np.mean([pa[i-1],pa[i+1]]) 
+                inclination[i] = np.mean([inclination[i-1],inclination[i+1]])
+            elif i == len(diff_quadrant)-1:
+                pa[i] = pa[i-1]
+                inclination[i] = inclination[i-1]
+            else:
+                pass
+    return pa,inclination
+check_angular_momentum_vector.__doc__ =f'''
+ NAME:
+    check_angular_momentum_vector
 
+ PURPOSE:
+    Check the output warp by ensuring that the pa and inclination vary smoothly at the rings where the 
+    angular momentum is switching quadrants
 
+ CATEGORY:
+    support_functions
+
+ INPUTS:
+    Configuration = Standard Original FAT configuration
+    pa = PA of the model
+    inclination = inclination of the model
+    quadrants = the array that specifies the quadrants into which the am vector belongs
+
+ OPTIONAL INPUTS:
+   
+ OUTPUTS:
+    pa_new = the modfied PA
+    incl_new= the modified incl
+   
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE: PA and inclination are singular sides
+'''             
+        
 def check_sofia(Configuration,Fits_Files):
     files =['_mask.fits','_mom0.fits','_mom1.fits','_chan.fits','_mom2.fits','_cat.txt']
     for file in files:
@@ -563,7 +628,7 @@ def clean_header(Configuration,hdr_in,two_dim=False,mask_file=False):
     hdr = copy.deepcopy(hdr_in)
     print_log(f'''CLEAN_HEADER: Starting to clean the header.
 ''',Configuration,case= ['debug_start'])
-    keywords = ['CDELT','CUNIT','CRPIX','CRVAL','CTYPE']
+    keywords = ['CDELT','CUNIT','CRPIX','CRVAL','CTYPE','CROTA']
     for key in keywords:
         try:
             del hdr[f'{key}4']
@@ -579,22 +644,47 @@ def clean_header(Configuration,hdr_in,two_dim=False,mask_file=False):
             print_log(f'''CLEAN_HEADER:
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 Your header did not have a unit for the third axis, that is bad policy.
-{"":8s} We have set it to {hdr['CUNIT3']}. Please ensure that is correct.'
+{"":8s} We have set it to {hdr['CUNIT3']}. Please ensure that this is correct.'
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ''',Configuration)
         if hdr['CUNIT3'].upper() == 'HZ' or hdr['CTYPE3'].upper() == 'FREQ':
             print_log('CLEAN_HEADER: FREQUENCY IS NOT A SUPPORTED VELOCITY AXIS.', Configuration, case=['main','screen'])
             raise BadHeaderError('The Cube has frequency as a velocity axis this is not supported')
 
-        vel_types = ['VELO-HEL','VELO-LSR','VELO', 'VELOCITY']
+        #vel_types = ['VELO-HEL','VELO-LSR','VELO', 'VELOCITY','VOPT','VRAD']
+        vel_types = ['VELO','VOPT','VRAD']
         if hdr['CTYPE3'].upper() not in vel_types:
             if hdr['CTYPE3'].split('-')[0].upper() in ['RA','DEC']:
                 print_log(f'''CLEAN_HEADER: Your zaxis is a spatial axis not a velocity axis.
 {"":8s}CLEAN_HEADER: Please arrange your cube logically
 ''',Configuration,case= ['main','screen'])
                 raise BadHeaderError("The Cube's third axis is not a velocity axis")
-            hdr['CTYPE3'] = 'VELO'
-            print_log(f'''CLEAN_HEADER: Your velocity projection is not standard. The keyword is changed to VELO (relativistic definition). This might be dangerous.
+            if hdr['CTYPE3'].split('-')[0].upper() == 'VELO':
+                frame = hdr['CTYPE3'].split('-')[1].upper()
+                hdr['CTYPE3'] = 'VELO'
+                if frame in ['LSR','LSRK']:
+                    hdr['SPECSYS3']='LSRK'
+                elif frame in ['HEL','HELO']:
+                    hdr['SPECSYS3']='HELIOCEN'
+            else:
+                print_log(f'''CLEAN_HEADER: Your velocity projection is not standard (CTYPE3 = {hdr["CTYPE3"]}). 
+Please note that FAT can only deal with velocity cubes, not frequency.
+''',Configuration, case=['main','screen'])
+                raise BadHeaderError(f'The Cube has a non-standard velocity projection (CTYPE3 = {hdr["CTYPE3"]})')
+        #Tirific will only run with VELO so if VRAD of VOPT then we need to run with VELO and fix it in the end
+        Configuration['HDR_VELOCITY'] = hdr['CTYPE3']
+        if  hdr['CTYPE3'].upper() in ['VRAD','VOPT']:
+            print_log(f'''CLEAN_HEADER: you are use a velocity type of {hdr['CTYPE3'].upper()} however tirific takes issue with this.
+As such we are replacing it with VELO before every tirific run. 
+!!!!!!!!!!!! ---- We are not converting anything so your fitting and all products are are of type {hdr['CTYPE3'].upper()}-------!!!!!!!!                                              
+''',Configuration)
+            #hdr['CTYPE3'] = 'VELO'
+
+        if 'SPECSYS3' not in hdr:
+            if 'SPECSYS' in hdr:
+                hdr['SPECSYS3'] = hdr['SPECSYS']
+            else:
+                print_log(f'''CLEAN_HEADER: There is no reference frame defined in your header. This is ok for FAT but WCS might complain.
 ''',Configuration)
 
         if hdr['CUNIT3'].lower() == 'km/s':
@@ -603,6 +693,7 @@ Your header did not have a unit for the third axis, that is bad policy.
             hdr['CUNIT3'] = 'm/s'
             hdr['CDELT3'] = hdr['CDELT3']*1000.
             hdr['CRVAL3'] = hdr['CRVAL3']*1000.
+
         #because astropy is truly stupid
 
         if hdr['CUNIT3'] == 'M/S':
@@ -639,12 +730,12 @@ Your header did not have a unit for the third axis, that is bad policy.
                 for line in hdr['HISTORY']:
                     tmp = [x.strip().upper() for x in line.split()]
                     if 'BMAJ=' in tmp:
-                        hdr['BMAJ'] = tmp[tmp.index('BMAJ=') + 1]
+                        hdr['BMAJ'] = float(tmp[tmp.index('BMAJ=') + 1])
                         found = True
                     if 'BMIN=' in tmp:
-                        hdr['BMIN'] = tmp[tmp.index('BMIN=') + 1]
+                        hdr['BMIN'] = float(tmp[tmp.index('BMIN=') + 1])
                     if 'BPA=' in tmp:
-                        hdr['BPA'] = tmp[tmp.index('BPA=') + 1]
+                        hdr['BPA'] = float(tmp[tmp.index('BPA=') + 1])
                     if found:
                         break
             if not found:
@@ -690,6 +781,13 @@ Your header did not have a unit for the third axis, that is bad policy.
 ''',Configuration)
     except KeyError:
         pass
+    #The blank value only applies to integer value data
+    try:
+        if int(hdr['BITPIX']) != 16:
+            del hdr['BLANK']
+    except KeyError:
+        pass
+
     try:
         if abs(hdr['BMAJ']/hdr['CDELT1']) < 2:
             print_log( f'''CLEAN_HEADER: !!!!!!!!!!Your cube has less than two pixels per beam major axis.!!!!!!!!!!!!!!!!!
@@ -1265,7 +1363,7 @@ deproject.__doc__ =f'''
 def ensure_list(variable):
     '''Make sure that variable is a list'''
     if not isinstance(variable,list):
-        if not isiterable(list1):
+        if not isiterable(variable):
             variable=[variable]
         else:
             variable=[x for x in variable]
@@ -1306,7 +1404,7 @@ def find_program(name,search):
             run.stderr.close()
             os.kill(run.pid, signal.SIGKILL)
             found = True
-        except FileNotFoundError:
+        except OSError:
             name = input(f'''You have indicated to use {name} for using {search} but it cannot be found.
 Please provide the correct name : ''')
     return name
@@ -1733,8 +1831,8 @@ def get_fit_groups(Configuration,Tirific_Template):
     groups = Tirific_Template['VARY'].split(',')
     variation_type = []
     variation = []
-    radii,cut_off_limits = sbr_limits(Configuration,Tirific_Template )
-    sbr_standard = np.mean(cut_off_limits) * 5.
+    cut_off_limits = sbr_limits(Configuration,Tirific_Template )
+    sbr_standard = np.mean(cut_off_limits) * 5. 
     paramater_standard_variation = {'PA': [10.,'a'],
                                    'INCL': [10.,'a'],
                                    'VROT': [Configuration['CHANNEL_WIDTH']*3.,'a'],
@@ -1864,8 +1962,7 @@ get_fit_groups.__doc__ =f'''
  NOTE:
 '''
 
-def get_inclination_pa(Configuration, Image, center, cutoff = 0.,\
-        figure_name = 'test'):
+def get_inclination_pa(Configuration, Image, center, cutoff = 0.):
     map = copy.deepcopy(Image[0].data)
     for i in [0,1]:
         print_log(f'''GET_INCLINATION_PA: Doing iteration {i} in the estimates
@@ -1879,17 +1976,18 @@ def get_inclination_pa(Configuration, Image, center, cutoff = 0.,\
         sin_ratios,sin_parameters = fit_sine(Configuration,angles,ratios)
         if np.any(np.isnan(sin_parameters)):
             return [float('NaN'),float('NaN')],  [float('NaN'),float('NaN')],float('NaN')
+        
         ratios=sin_ratios
 
         max_index = np.where(ratios == np.nanmax(ratios))[0]
         if max_index.size > 1:
             max_index =int(max_index[0])
         min_index = np.where(ratios == np.nanmin(ratios))[0]
-
         if min_index.size > 1:
             min_index =int(min_index[0])
-        max_index = set_limits(max_index,2,177)
-        min_index = set_limits(min_index,2,177)
+        #From here we know it is 1 value so lets set it to an integer    
+        max_index = set_limits(int(max_index),2,177)
+        min_index = set_limits(int(min_index),2,177)
 
         if min_index > 135 and max_index < 45:
             min_index=min_index-90
@@ -1911,7 +2009,7 @@ def get_inclination_pa(Configuration, Image, center, cutoff = 0.,\
 
         if tenp_min_index.size <= 1:
             tenp_min_index= [min_index-2,min_index+2]
-
+       
         if angles[min_index] > angles[max_index]:
             pa = float(np.nanmean(np.array([angles[min_index]-90,angles[max_index]],dtype=float)))
         else:
@@ -1936,7 +2034,7 @@ def get_inclination_pa(Configuration, Image, center, cutoff = 0.,\
             warnings.simplefilter("ignore")
             inclination = np.nanmean([np.degrees(np.arccos(np.sqrt((float(ratios[min_index])**2-0.2**2)/0.96))) \
                               ,np.degrees(np.arccos(np.sqrt(((1./float(ratios[max_index]))**2-0.2**2)/0.96))) ])
-
+          
 
         if i == 0:
             with warnings.catch_warnings():
@@ -1959,19 +2057,21 @@ def get_inclination_pa(Configuration, Image, center, cutoff = 0.,\
                 inclination_error = float(inclination_error*4./(maj_extent*3600./Configuration['BEAM'][0]))
 
         if i == 0:
-            print_log(f'''GET_INCLINATION_PA: The initial inclination = {inclination}.
+            print_log(f'''GET_INCLINATION_PA: The initial inclination = {inclination} +- {inclination_error}.
 ''',Configuration,case=['debug_add'])
         else:
-            print_log(f'''GET_INCLINATION_PA: From the cleaned map we find inclination = {inclination}.
+            print_log(f'''GET_INCLINATION_PA: From the cleaned map we find inclination = {inclination}+- {inclination_error}.
 ''',Configuration,case=['debug_add'])
         # this leads to trouble for small sources due to uncertain PA and inclination estimates
-        if inclination < 70. and maj_extent*3600./Configuration['BEAM'][0] > 4:
+        # at low inclinations the error is too uncertain to have a proper deprojection    
+        inclination_error = inclination_error/np.sin(np.radians(inclination)) 
+        if inclination < 70. and maj_extent*3600./Configuration['BEAM'][0] > 4 and inclination_error < 10.:
             Image_clean = remove_inhomogeneities(Configuration,Image,inclination=inclination, pa = pa,iteration=i, center = center,WCS_center = False )
             map = Image_clean[0].data
             Image_clean.close()
         else:
             break
-    inclination_error = inclination_error/np.sin(np.radians(inclination))
+    
     return [inclination,inclination_error], [pa,pa_error],maj_extent
 
 get_inclination_pa.__doc__ =f'''
@@ -2193,58 +2293,6 @@ get_profile.__doc__=f'''
  NOTE:
 '''
 
-def get_ring_weights(Configuration,Tirific_Template):
-    print_log(f'''GET_RING_WEIGTHS: Getting the importance of the rings in terms of SBR.
-''',Configuration,case=['debug_start'])
-    sbr = load_tirific(Configuration,Tirific_Template,Variables=["SBR",f"SBR_2"],\
-                array=True )
-    print_log(f'''GET_RING_WEIGTHS: retrieve this sbr.
-{'':8s} sbr = {sbr}
-''',Configuration,case=['debug_add'])
-    radii,cut_off_limits = sbr_limits(Configuration,Tirific_Template )
-    print_log(f'''GET_RING_WEIGTHS: retrieved these cut_off_limits.
-{'':8s} col = {cut_off_limits}
-''',Configuration,case=['debug_add'])
-    weights= [[],[]]
-    for i in [0,1]:
-        weights[i] = [set_limits(x/y,0.1,10.) for x,y in zip(sbr[i],cut_off_limits)]
-        weights[i] = weights[i]/np.nanmax(weights[i])
-        weights[i][0:2] = np.nanmin(weights[i])
-        weights[i] = [set_limits(x,0.1,1.) for x in weights[i]]
-    print_log(f'''GET_RING_WEIGTHS: Obtained the following weights.
-{'':8s}{weights}
-''',Configuration,case=['debug_add'])
-    return np.array(weights,dtype = float)
-
-get_ring_weights.__doc__=f'''
- NAME:
-    get_ring_weights
-
- PURPOSE:
-    Get the importance of the rings based on how much the SBR lies above the noise limit for each ring
-
- CATEGORY:
-    support_functions
-
- INPUTS:
-    Configuration = Standard FAT configuration
-    Tirific_Template = Standard Tirific template containg the SBR profiles
-
- OPTIONAL INPUTS:
-
-
- OUTPUTS:
-    numpy array with the weight normalized to the the maximum.
-
- OPTIONAL OUTPUTS:
-
- PROCEDURES CALLED:
-    Unspecified
-
- NOTE:
-    Weight 1 is most important, weight 0. least important.
-    Errors should be divided by these weights to reflect the importance
-'''
 
 def get_system_string(string):
     '''Escape any spaces in string with backlash'''
@@ -2277,15 +2325,20 @@ get_system_string.__doc__=f'''
 
  NOTE:
 '''
-def get_tirific_output_names(Configuration,work_dir,deffile):
+def get_tirific_output_names(Configuration,work_dir,deffile,shaker=False):
     print_log(f'''GET_TIRIFIC_OUTPUT_NAMES: Starting the extraction of the output names in {deffile} tot be ran in {work_dir})
 ''',Configuration,case=['debug_start'])
 
     fitsfile,deffile = load_tirific(Configuration,f'{work_dir}/{deffile}' ,\
         Variables=['OUTSET','TIRDEF'])
-    output_fits = f'{work_dir}/{fitsfile[0]}'
     output_deffile = f'{work_dir}/{deffile[0]}'
+    #Tirshakerdoes not produce the fits outset
+    if not shaker:   
+        output_fits = f'{work_dir}/{fitsfile[0]}'
+    else:
+        output_fits = f'{work_dir}/{deffile[0]}'
     return output_fits,output_deffile
+    
 get_tirific_output_names.__doc__=f'''
  NAME:
     get_tirific_output_names
@@ -2315,44 +2368,6 @@ get_tirific_output_names.__doc__=f'''
     Unspecified
 
  NOTE:
-'''
-
-def get_usage_statistics(Configuration,process):
-    #try:
-    memory_in_mb = (process.memory_info()[0])/2**20. #psutilreturns bytes
-    cpu_percent = process.cpu_percent(interval=1)
-    #except:
-    #    cpu_percent= 0.
-    #    memory_in_mb=0.
-    return cpu_percent,memory_in_mb
-
-get_usage_statistics.__doc__ =f'''
- NAME:
-    get_usage_statistics
- PURPOSE:
-    use psutil to get the current CPU and memory usage of tirific
-
- CATEGORY:
-    support_functions
-
- INPUTS:
-    Configuration = Standard FAT configuration
-    process_id = process id of the tirific currently running.
-
- OPTIONAL INPUTS:
-
-
- OUTPUTS:
-    CPU = The current CPU usage
-    mem = current memory usage in Mb
-
- OPTIONAL OUTPUTS:
-
- PROCEDURES CALLED:
-    Unspecified
-
- NOTE:
-    pyFAT version < 1.0.0 uses top which only works on unix and has an error in the MB calculation
 '''
 
 def get_vel_pa(Configuration,velocity_field,center= [0.,0.] ):
@@ -2508,70 +2523,10 @@ isiterable.__doc__ =f'''
 
  NOTE:
 '''
-
-
-# A simple function to return the line numbers in the stack from where the functions are called
-def linenumber(debug='short'):
-    '''get the line number of the print statement in the main.'''
-    line = []
-    for key in stack():
-        if key[1] == 'main.py':
-            break
-        if key[3] != 'linenumber' and key[3] != 'print_log' and key[3] != '<module>':
-            file = key[1].split('/')
-            to_add= f"In the function {key[3]} at line {key[2]}"
-            if debug == 'long':
-                to_add = f"{to_add} in file {file[-1]}."
-            else:
-                to_add = f"{to_add}."
-            line.append(to_add)
-    if len(line) > 0:
-        if debug == 'long':
-            line = ', '.join(line)+f'\n{"":8s}'
-        elif debug == 'short':
-            line = line[0]+f'\n{"":8s}'
-        else:
-            line = f'{"":8s}'
-    else:
-        for key in stack():
-            if key[1] == 'main.py':
-                line = f"{'('+str(key[2])+')':8s}"
-                break
-    return line
-
-linenumber.__doc__ =f'''
- NAME:
-    linenumber
-
- PURPOSE:
-    get the line number of the print statement in the main. Not sure how well this is currently working
-
- CATEGORY:
-    support_functions
-
- INPUTS:
-
- OPTIONAL INPUTS:
-
-
- OUTPUTS:
-    the line number of the print statement
-
- OPTIONAL OUTPUTS:
-
- PROCEDURES CALLED:
-    Unspecified
-
- NOTE:
-    If debug = True the full stack of the line print will be given, in principle
-    the first debug message in every function should set this to true and later messages not.
-    !!!!Not sure whether currently the linenumber is produced due to the restructuring.
-'''
-
 #The functions load_tirifiic,load_template and get_from template were extremely similar
 #This replaces all with a single function
 def load_tirific(Configuration,def_input,Variables = None,array = False,\
-        ensure_rings = False ):
+        ensure_rings = False,brightness_check=False ):
     #Cause python is the dumbest and mutable objects in the FAT_defaults
     # such as lists transfer
     if Variables is None:
@@ -2579,8 +2534,14 @@ def load_tirific(Configuration,def_input,Variables = None,array = False,\
                      'VROT','Z0', 'SBR', 'INCL','PA','XPOS','YPOS','VSYS',\
                      'SDIS','VROT_2',  'Z0_2','SBR_2','INCL_2','PA_2','XPOS_2',\
                      'YPOS_2','VSYS_2','SDIS_2','CONDISP','CFLUX','CFLUX_2']
-
-
+    sbr_added =[False,False]
+    if brightness_check:
+        if 'SBR' not in Variables:
+            Variables.append('SBR')
+            sbr_added[0] =True
+        if 'SBR_2' not in Variables:
+            Variables.append('SBR_2')
+            sbr_added[1] =True
     # if the input is a string we first load the template
     if isinstance(def_input,str):
         def_input = tirific_template(filename = def_input )
@@ -2609,6 +2570,20 @@ def load_tirific(Configuration,def_input,Variables = None,array = False,\
         for i,variable in enumerate(tmp):
             if len(variable) > 0.:
                 out[i,0:len(variable)] = variable[0:len(variable)]
+    if brightness_check:
+        for variable in Variables:
+            tmp = variable.split('_')
+            ext=''
+            if tmp[-1] == '2':
+                ext = '_2'
+            elif tmp[-1] == 'ERR':
+                if tmp[-2] == 2:
+                   ext = '_2'  
+           
+            cut = np.where(out[Variables.index(f'SBR{ext}'),:] < 1e-15)
+            if np.sum(cut) > 0.:
+                out[Variables.index(variable),cut] = float('NaN')
+        
 
     if len(Variables) == 1:
         out= out[0]
@@ -2712,9 +2687,7 @@ def make_tiltogram(Configuration,Tirific_Template):
 ''',Configuration,case=['debug_start'])
     pa_incl = load_tirific(Configuration,Tirific_Template,\
             Variables=['PA','PA_2','INCL','INCL_2'],array=True)
-    sbr = load_tirific(Configuration,Tirific_Template,Variables=["SBR",f"SBR_2"]\
-            ,array=True)
-    radii,cut_off_limits = sbr_limits(Configuration,Tirific_Template )
+
     add = [[],[]]
     Theta = [[],[]]
     phi = [[],[]]
@@ -2779,20 +2752,26 @@ make_tiltogram.__doc__ =f'''
 
 
 def max_profile_change(Configuration,radius,profile,key,max_change=None,\
-                        slope = None, kpc_radius=False):
+                        slope = None, kpc_radius=False , quadrant = None):
     if not kpc_radius:
         radkpc = convertskyangle(Configuration,radius)
     else:
         radkpc = copy.deepcopy(radius)
     new_profile = copy.deepcopy(profile)
-    sm_profile = savgol_filter(profile, 3, 1)
-    if key == 'ARBITRARY' and not max_change:
-        raise InputError('For arbitrary checks you have to set the max_change.')
-    if key != 'ARBITRARY':
+  
+    sm_profile = savgol_filter(new_profile, 3, 1)
+    if key in ['ARBITRARY','CHANGE_ANGLE'] and not max_change:
+        raise InputError(f'For {key} checks you have to set the max_change.')
+    if max_change == None:
         max_change=Configuration['MAX_CHANGE'][key]
     diff_rad =  [float(y-x) for x,y in zip(radkpc,radkpc[1:])]
     diff_profile = [float(y-x) for x,y in zip(profile,profile[1:])]
     diff_sm_profile = [float(y-x) for x,y in zip(sm_profile,sm_profile[1:])]
+    if quadrant is None:
+        diff_q = np.zeros(len(diff_profile))
+    else:
+        diff_q = [float(y-x) for x,y in zip(quadrant,quadrant[1:])]
+
     print_log(f'''MAX_CHANGE_PROFILE: The profile {key} starts with.
 {'':8s} {key} = {new_profile} and max change = {max_change}
 {'':8s} smoothed {key}  = {sm_profile}
@@ -2801,22 +2780,40 @@ def max_profile_change(Configuration,radius,profile,key,max_change=None,\
 {'':8s} slope = {slope}
 {'':8s} diff/kpc = {[x/y for x,y in zip(diff_profile,diff_rad)]}
 ''', Configuration,case=['debug_start'])
-
+    #print(f''' For the PA and the inlcination we get a max shift per ring
+    #PA = {[Configuration['MAX_CHANGE']['PA']*y for x,y in zip(diff_profile,diff_rad)]}   
+    #INCL =  {[Configuration['MAX_CHANGE']['INCL']*y for x,y in zip(diff_profile,diff_rad)]}            
+    #          ''')
+    #    exit()
     for i,diff in enumerate(diff_profile):
-        if abs(diff)/diff_rad[i] > max_change:
+        if abs(diff)/diff_rad[i] > max_change and diff_q[i] == 0.:
+            print_log(f'''MAX_CHANGE_PROFILE: for ring {i} with {new_profile[i+1]} we find the difference {diff/diff_rad[i]}
+''', Configuration,case=['debug_add'])
             #if it is the last point we simply limit it
             if i == len(diff_profile)-1:
-                new_profile[i+1] = profile[i]+ diff/abs(diff)*(max_change*0.5*diff_rad[i])
+                new_profile[i+1] = new_profile[i]+ diff/abs(diff)*(max_change*0.5*diff_rad[i])
+                #print_log(f'''MAX_CHANGE_PROFILE: This is the last ring putting {new_profile[i+1] }.
+#''', Configuration,case=['debug_add'])
             elif i+1 == slope:
                 # if we have the start of the slope on the max_change then put it to value of the previous ring
                 new_profile[i+1] = new_profile[i]
-            elif diff_sm_profile[i]/diff_rad[i] < max_change*0.5:
+                print_log(f'''MAX_CHANGE_PROFILE: This is the start of the slope putting {new_profile[i+1] }.
+''', Configuration,case=['debug_add'])
+            elif abs(diff_sm_profile[i])/diff_rad[i] < max_change*0.5:
                 new_profile[i+1] = sm_profile[i+1]
+                print_log(f'''MAX_CHANGE_PROFILE: The smoothed profile is acceptable using {new_profile[i+1] }.
+''', Configuration,case=['debug_add'])
+                sm_profile = savgol_filter(new_profile, 3, 1)
+                diff_sm_profile = [float(y-x) for x,y in zip(sm_profile,sm_profile[1:])]
             elif diff_profile[i+1] == 0:
-                new_profile[i+1] = profile[i]+ diff/abs(diff)*(max_change*0.9*diff_rad[i])
+                new_profile[i+1] = profile[i]+ diff/abs(diff)*(max_change*0.9*diff_rad[i]) 
+                print_log(f'''MAX_CHANGE_PROFILE: The next ring is the same using {new_profile[i+1] }.
+''', Configuration,case=['debug_add'])
                 #If the change does not reverse we simply limit
             elif diff/abs(diff) == diff_profile[i+1]/abs(diff_profile[i+1]):
-                new_profile[i+1] = profile[i]+ diff/abs(diff)*(max_change*0.9*diff_rad[i])
+                new_profile[i+1] = new_profile[i]+ diff/abs(diff)*(max_change*0.9*diff_rad[i])
+                print_log(f'''MAX_CHANGE_PROFILE: We are simply applying the maximum change using {new_profile[i+1] }.
+''', Configuration,case=['debug_add'])
             else:
                 if abs(diff) > abs(diff_profile[i+1]):
                     gapped_diff = radkpc[i+2] - radkpc[i]
@@ -2824,9 +2821,11 @@ def max_profile_change(Configuration,radius,profile,key,max_change=None,\
                         new_profile[i+1] = np.mean([new_profile[i],new_profile[i+2]])
                     else:
                         new_profile[i+1] = new_profile[i]
+                    print_log(f'''MAX_CHANGE_PROFILE: Bridged the gap using {new_profile[i+1] }.
+''', Configuration,case=['debug_add'])
                 else:
 
-                    new_profile[i+1] = profile[i]+ diff/abs(diff)*(max_change*0.9*diff_rad[i])
+                    new_profile[i+1] = new_profile[i]+ diff/abs(diff)*(max_change*0.9*diff_rad[i])
 
             if i < len(diff_profile)-1:
                 diff_profile[i+1] = float(new_profile[i+2]-new_profile[i+1])
@@ -2834,6 +2833,10 @@ def max_profile_change(Configuration,radius,profile,key,max_change=None,\
     print_log(f'''MAX_CHANGE_PROFILE: The returned profile is:
 {'':8s}{key} = {new_profile}
 ''', Configuration,case=['debug_add'])
+    #for i,diff in enumerate([float(y-x) for x,y in zip(new_profile,new_profile[1:])]):
+    #    print(f'The change {diff} allowed {max_change*diff_rad[i]}')
+    #
+    #exit()
     return new_profile
 max_profile_change.__doc__ =f'''
  NAME:
@@ -2864,6 +2867,7 @@ max_profile_change.__doc__ =f'''
     Unspecified
 
  NOTE:
+    Currently this function is only applied to the angular momentum vector
 
 '''
 
@@ -3022,66 +3026,6 @@ obtain_ratios.__doc__ = '''
  NOTE:
 '''
 
-def print_log(log_statement,Configuration, case = None):
-    if case is None:
-        case=['main']
-    if Configuration['DEBUG']:
-        if 'debug_start' in case:
-            debug = 'long'
-        else:
-            debug= 'short'
-    else:
-        debug = 'empty'
-    if Configuration['TIMING']:
-        log_statement = f"{linenumber(debug=debug)} {datetime.now()} {log_statement}"
-    else:
-        log_statement = f"{linenumber(debug=debug)}{log_statement}"
-    print_statement = False
-    if (Configuration['DEBUG'] and ('debug_start' in case or 'debug_add' in case))\
-        or ('verbose' in case and (Configuration['VERBOSE_LOG'] or Configuration['DEBUG']))\
-         or 'main' in case:
-            print_statement = True
-    if print_statement:
-        if Configuration['VERBOSE_SCREEN'] \
-            or not Configuration['OUTPUTLOG']  \
-            or 'screen' in case \
-            or (Configuration['VERBOSE_LOG'] and 'main' in case):
-            print(log_statement)
-        if Configuration['OUTPUTLOG']:
-            with open(Configuration['OUTPUTLOG'],'a') as log_file:
-                log_file.write(log_statement)
-
-print_log.__doc__ =f'''
- NAME:
-    print_log
- PURPOSE:
-    Print statements to log if existent and screen if Requested
- CATEGORY:
-    support_functions
-
- INPUTS:
-    log_statement = statement to be printed
-    Configuration = Standard FAT Configuration
-
- OPTIONAL INPUTS:
-
-
-    screen = False
-    also print the statement to the screen
-
- OUTPUTS:
-    line in the log or on the screen
-
- OPTIONAL OUTPUTS:
-
- PROCEDURES CALLED:
-    linenumber, .write
-
- NOTE:
-    If the log is None messages are printed to the screen.
-    This is useful for testing functions.
-'''
-
 def remove_inhomogeneities(Configuration,fits_map_in,inclination=30., pa = 90.\
         ,center = None, WCS_center = True, iteration= 0 ):
     if center is None:
@@ -3195,7 +3139,7 @@ def rename_fit_products(Configuration,stage = 'initial', fit_type='Undefined'):
                 elif fit_type == Configuration['USED_FITTING'] and stage in ['final_os']:
                     Loopnr = f"Smoothed_1"
                 else:
-                    Loopnr = 'Output_before_'+stage
+                    Loopnr = 'Output_Before_'+stage
                 if os.path.exists(f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.{filetype}"):
                     target = get_system_string(f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}_{Loopnr}.{filetype}")
                     os.system(f"mv {source} {target}")
@@ -3275,8 +3219,8 @@ rotateImage.__doc__ =f'''
 
 
 def run_tirific(Configuration, current_run, stage = 'initial',\
-        fit_type = 'Undefined',deffile='Undefined'):
-    print_log(f'''RUN_TIRIFIC: For the galaxy {Configuration['ID']} in directory {Configuration['SUB_DIR']} we are starting a new TiRiFiC.
+        fit_type = 'Undefined',deffile='Undefined',max_ini_time = 600):
+    print_log(f'''RUN_TIRIFIC: For the galaxy {Configuration['ID']} in directory {Configuration['SUB_DIR']} we are starting a RUN_TIRIFIC.
 We are in in stage {stage} and fit_type {fit_type} and have done {Configuration['ITERATIONS']} loops
 ''',Configuration,case=['debug_start'])
     if deffile == 'Undefined':
@@ -3292,11 +3236,14 @@ We are in in stage {stage} and fit_type {fit_type} and have done {Configuration[
     if fit_type == 'Error_Shaker':
         work_dir = os.getcwd()
         restart_file = f"restart_Error_Shaker.txt"
+        shaker = True
     else:
         restart_file = f"{Configuration['LOG_DIRECTORY']}restart_{fit_type}.txt"
         work_dir = Configuration['FITTING_DIR']
+        shaker = False
     #Get the output fits file and def file defined in workdir+ deffile
-    output_fits,output_deffile = get_tirific_output_names(Configuration,work_dir,deffile )
+    output_fits,output_deffile = get_tirific_output_names(Configuration,work_dir,deffile\
+                                ,shaker=shaker )
     # Then if already running change restart file
     if Configuration['TIRIFIC_RUNNING']:
         print_log(f'''RUN_TIRIFIC: We are using an initialized tirific in {Configuration['FITTING_DIR']} with the file {deffile}
@@ -3305,7 +3252,7 @@ We are in in stage {stage} and fit_type {fit_type} and have done {Configuration[
         with open(restart_file,'a') as file:
             file.write("Restarting from previous run \n")
     else:
-        print_log(f'''RUN_TIRIFIC: We are starting a new TiRiFiC in {Configuration['FITTING_DIR']} with the file {deffile}
+        print_log(f'''RUN_TIRIFIC: We are inizializing a new TiRiFiC in {Configuration['FITTING_DIR']} with the file {deffile}
 ''',Configuration)
         with open(restart_file,'w') as file:
             file.write("Initialized a new run \n")
@@ -3344,16 +3291,16 @@ We are in in stage {stage} and fit_type {fit_type} and have done {Configuration[
                     if tmp[0] == 'L' and not triggered:
                         if tmp[1] == '1':
                             file.write(f"# TIRIFIC: Started the actual fitting {datetime.now()} \n")
-                            triggered = True
                     CPU,mem = get_usage_statistics(Configuration,current_process)
                     file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Mb for TiRiFiC \n")
         if tmp[0] == 'L':
+            if not triggered:
+                triggered = True
             if int(tmp[1]) != currentloop and Configuration['VERBOSE_SCREEN']:
                 print(f"\r{'':8s}RUN_TIRIFIC: {set_limits(float(tmp[1])-1.,0.,float(max_loop))/float(max_loop)*100.:.1f} % Completed", end =" ",flush = True)
             currentloop  = int(tmp[1])
             if max_loop == 0:
                 max_loop = int(tmp[2])
-
             Configuration['NO_POINTSOURCES'] = np.array([tmp[18],tmp[19]],dtype=float)
 
         if tmp[0].strip() == 'Finished':
@@ -3364,8 +3311,12 @@ We are in in stage {stage} and fit_type {fit_type} and have done {Configuration[
             #Check that the initialization doesn't take to long
             check = datetime.now()
             diff = (check-initialized).total_seconds()
-            if diff > 600:
-                raise TirificOutputError(f'''10 minutes after initialization the fitting has still not started.
+            if diff > max_ini_time:
+                print_log(f'''RUN_TIRIFIC: After {diff/60.} min we could not find the expected output from the tirific run. 
+running in the directory = {work_dir} 
+and the file deffile = {deffile}                         
+''',Configuration,case=['main','screen'])
+                raise TirificOutputError(f'''{diff/60.} minutes after initialization the fitting has still not started.
 We were running {deffile} and failed to find the output {output_fits} or {output_deffile}.
 ''')
     if Configuration['VERBOSE_SCREEN']:
@@ -3389,14 +3340,18 @@ We were running {deffile} and failed to find the output {output_fits} or {output
                 print(f"\r Waiting for {output_fits}. \n", end = "", flush = True)
                 print_log(f'''RUN_TIRIFIC: we have waited {0.3*wait_counter} seconds for the output of tirific but it is not there yet.
 ''',Configuration)
-        if not  os.path.exists(output_fits) \
+        if not os.path.exists(output_fits) \
             or not  os.path.exists(output_deffile):
             print_log(f'''RUN_TIRIFIC: After 30 seconds we could not find the expected output from the tirific run. We are raising an error for this galaxy.
 ''',Configuration,case=['main','screen'])
             raise TirificOutputError(f'''The tirific subprocess did not produce the correct output, most likely it crashed.
 We were running {deffile} and failed to find the output {output_fits} or {output_deffile}.
 ''')
-
+    #If we are running tirific with an incorrect velocity type we should addapt the velocity type of the output
+    if Configuration['HDR_VELOCITY'] != 'VELO':
+        cube = fits.open(output_fits)
+        cube[0].header['CTYPE3'] = Configuration['HDR_VELOCITY']
+        fits.writeto(output_fits,cube[0].data,cube[0].header,overwrite=True)
     if currentloop != max_loop:
         return 1,current_run
     else:
@@ -3423,6 +3378,10 @@ run_tirific.__doc__ =f'''
 
     stage = 'initial'
     stage of the fitting process
+
+    max_ini_time = 600
+    maximum time it can take for tirific to initialize 
+    Higher ini times take longer
 
  OUTPUTS:
 
@@ -3520,8 +3479,10 @@ def set_individual_configuration(current_galaxy_index,Full_Catalogue,\
         Configuration['FITTING_DIR'] = f"{Configuration['MAIN_DIRECTORY']}"
     else:
         Configuration['FITTING_DIR'] = f"{Configuration['MAIN_DIRECTORY']}{Full_Catalogue['DIRECTORYNAME'][current_galaxy_index]}/"
-
-    Configuration['INPUT_CUBE']= f"{Full_Catalogue['CUBENAME'][current_galaxy_index]}.fits"
+    if 'sofia_catalogue' in Configuration['FITTING_STAGES']:
+        Configuration['INPUT_CUBE']= f"{Full_Catalogue['CUBENAME'][current_galaxy_index]}_FAT.fits"
+    else:        
+        Configuration['INPUT_CUBE']= f"{Full_Catalogue['CUBENAME'][current_galaxy_index]}.fits"
     return(Configuration)
 set_individual_configuration.__doc__ =f'''
  NAME:
@@ -3560,10 +3521,14 @@ def setup_configuration(cfg):
         cfg.fitting.fixed_parameters=['INCL','PA','SDIS']
         cfg.advanced.max_iterations= 1
         cfg.advanced.loops= 1
+        cfg.advanced.shaker_iterations = 2
         cfg.input.main_directory= f'{cfg.input.main_directory}/FAT_Installation_Check/'
         cfg.output.output_quantity = 0
-        cfg.fitting.fitting_stages = ['Create_FAT_Cube','Run_Sofia','Fit_Tirific_OSC']
+        cfg.fitting.fitting_stages = ['Create_FAT_Cube','Run_Sofia','Fit_Tirific_OSC','Tirshaker']
+        #cfg.fitting.fitting_stages = ['Create_FAT_Cube','Run_Sofia','Fit_Tirific_OSC']
         cfg.cube_name = 'NGC_2903.fits'
+        #cfg.output.debug = False
+        cfg.output.timing = True
         test_files = ['NGC_2903.fits','ModelInput.def']
         if not os.path.isdir(cfg.input.main_directory):
             os.mkdir(cfg.input.main_directory)
@@ -3654,13 +3619,14 @@ def setup_configuration(cfg):
                'OUTPUTLOG': None,
                'RUN_COUNTER': 0,
                'CENTRAL_CONVERGENCE_COUNTER': 1.,
+               'RP_COUNTER': 1,
                'ITERATIONS': 0,
                'CURRENT_STAGE': 'initial', #Current stage of the fitting process, set at switiching stages
                'USED_FITTING': None,
                'TIRIFIC_PID': 'Not Initialized', #Process ID of tirific that is running
                'FAT_PID': os.getpid(), #Process ID of FAT that is running
                'FAT_PSUPROCESS': 'cant copy',
-               'FINAL_COMMENT': "This fitting stopped with an unregistered exit.", 
+               'FINAL_COMMENT': "This fitting stopped with an unregistered exit.",
 
                'MAX_SIZE_IN_BEAMS': 30, # The galaxy is not allowed to extend beyond this number of beams in radius, set in check_source
                'MIN_SIZE_IN_BEAMS': 0., # Minimum allowed radius in number of beams of the galaxy, set in check_source
@@ -3683,6 +3649,8 @@ def setup_configuration(cfg):
                'BEAM_IN_PIXELS': [0.,0.,0.], #FWHM BMAJ, BMIN in pixels and total number of pixels in beam area, set in read_cube in read_functions
                'BEAM': [0.,0.,0.], #  FWHM BMAJ, BMIN in arcsec and BPA, set in main
                'BEAM_AREA': 0., #BEAM_AREA in arcsec set in main
+               'HDR_VELOCITY': 'VELO', #Track the velocity frame as tirific will only run with VELO
+               'TIR_RUN_CUBE': None, # if the type of velocity axis is not VELO we need to run on a cube with that key word adjusted.
                'NAXES': [0.,0.,0.], #  Size of the cube in pixels x,y,z arranged like sane people not python, set in main
                'MAX_ERROR': {}, #The maximum allowed errors for the parameters, set in main derived from cube
                'MIN_ERROR': {}, #The minumum allowed errors for the parameters, initially set in check_source but can be modified through out INCL,PA,SDSIS,Z0 errors change when the parameters is fixed or release
@@ -3721,6 +3689,7 @@ Your main fitting directory ({Configuration['MAIN_DIRECTORY']}) does not exist.
 Please provide the correct directory.
 :  ''')
 
+
     if Configuration['CATALOGUE']:
         if not os.path.exists(Configuration['CATALOGUE']) and len(Configuration['CATALOGUE'].split('/')) == 1:
             Configuration['CATALOGUE']= f'''{Configuration['MAIN_DIRECTORY']}{Configuration['CATALOGUE']}'''
@@ -3757,17 +3726,29 @@ Please pick one of the following {', '.join(possible_stages)}.
     ''')
         else:
             approved_stages.append(stage.lower())
+    if Configuration['DEBUG']:
+        Configuration['DEBUG_FUNCTION'] = [x.upper() for x in \
+                                        Configuration['DEBUG_FUNCTION']]
 
     Configuration['FITTING_STAGES'] =approved_stages
     if 'sofia_catalogue' in Configuration['FITTING_STAGES'] and 'external_sofia' in Configuration['FITTING_STAGES']:
         Configuration['FITTING_STAGES'].remove('external_sofia')
     if ('sofia_catalogue' in Configuration['FITTING_STAGES'] or 'external_sofia' in Configuration['FITTING_STAGES']) and 'run_sofia' in Configuration['FITTING_STAGES']:
         Configuration['FITTING_STAGES'].remove('run_sofia')
-    if 'sofia_catalogue' in Configuration['FITTING_STAGES'] and 'create_fat_cube' in Configuration['FITTING_STAGES']:
-        Configuration['FITTING_STAGES'].remove('create_fat_cube')
+    #if 'sofia_catalogue' in Configuration['FITTING_STAGES'] and 'create_fat_cube' in Configuration['FITTING_STAGES']:
+    #    Configuration['FITTING_STAGES'].remove('create_fat_cube')
+    if 'sofia_catalogue' in Configuration['FITTING_STAGES']:
+        if Configuration['SOFIA_DIR'][-1] != '/':
+            Configuration['SOFIA_DIR'] = f"{Configuration['SOFIA_DIR']}/"
+
+  
+
 
     if 'run_sofia' in Configuration['FITTING_STAGES'] and 'external_sofia' in Configuration['FITTING_STAGES']:
         raise InputError(f"You are both providing existing sofia input and ask for sofia to be ran. This won't work exiting.")
+    if 'fit_tirific_osc' in Configuration['FITTING_STAGES'] and \
+        Configuration['NUMBER_OF_DISKS'] > 2:
+        raise InputError(f"Fit_Tirific_OSC only allows for 2 or 1 disk. This won't work exiting.")
 
     #Check that the channel_dependency is acceptable
     while Configuration['CHANNEL_DEPENDENCY'].lower() not in ['sinusoidal','independent','hanning']:
@@ -3797,6 +3778,12 @@ Please pick one of the following {', '.join(['sinusoidal','independent','hanning
         Configuration['OUTPUT_QUANTITY'] = 4
     if Configuration['SHAKER_ITERATIONS'] < 2:
         Configuration['SHAKER_ITERATIONS'] = 2
+    if Configuration['NCPU'] == 1:
+        if Configuration['MULTIPROCESSING']:
+             print(f'''You are only requesting 1 CPU to be used, we turn off multiprocessing.
+''')
+        Configuration['MULTIPROCESSING'] = False
+    
 
     return Configuration
 setup_configuration.__doc__ =f'''
@@ -3830,8 +3817,11 @@ setup_configuration.__doc__ =f'''
 
 
 def sbr_limits(Configuration, Tirific_Template ):
-    radii = set_rings(Configuration )
-    print_log(f'''SBR_LIMITS: Got {len(radii)} radii
+    radii = load_tirific(Configuration,Tirific_Template,Variables=['RADI'],array=True)
+    if len(radii) == 0.:
+        radii = set_rings(Configuration)
+        Tirific_Template['RADI']= ' '.join([str(x) for x in radii])
+    print_log(f'''SBR_LIMITS: Got {len(radii)} rings at the start
 ''',Configuration, case=['debug_start'])
     level = Configuration['NOISE']*1000
     noise_in_column = columndensity(Configuration,level,systemic = \
@@ -3867,7 +3857,7 @@ def sbr_limits(Configuration, Tirific_Template ):
 {'':8s}{radii}
 {'':8s}{sbr_ring_limits}
 ''',Configuration,case=['debug_add'])
-    return radii,sbr_ring_limits
+    return sbr_ring_limits
 
 sbr_limits.__doc__ =f'''
  NAME:
@@ -3974,8 +3964,8 @@ def set_limit_modifier(Configuration,Tirific_Template):
     #Scale the limits with the deviation away from 0.2 kpc as this is more or less the unmodified scale height
 
     modifier_list=[set_limits(x*(1.125-0.625*y)*set_limits(((Configuration['RING_SIZE']*Configuration['BEAM'][0])/45.)**0.25,0.75,1.25),0.5,3.) for x,y in zip(modifier_list,Z0_kpc)]
-
-    Configuration['LIMIT_MODIFIER'] = np.array(modifier_list,dtype=float)
+    #The 1.1 is emprically determined and might need modification. Lets put it in advanced configuration
+    Configuration['LIMIT_MODIFIER'] = np.array(modifier_list,dtype=float)*Configuration['LIMIT_MODIFIER_FACTOR']
     print_log(f'''SET_LIMIT_MODIFIER: Based on a Z0 in kpc {Z0_kpc}
 {'':8s} and Inclination = {Inclination}
 {'':8s} We updated the LIMIT_MODIFIER to {Configuration['LIMIT_MODIFIER']}.
@@ -4054,7 +4044,7 @@ def set_ring_size(Configuration,requested_ring_size = 0., size_in_beams = 0., \
          requested_ring_size =  Configuration['RING_SIZE']
 
     print_log(f'''SET_RING_SIZE: Starting with the following parameters.
-{'':8s}size in beams = {size_in_beams}
+{'':8s}minimum size in beams = {size_in_beams}
 {'':8s}requested ring size = {requested_ring_size}
 ''', Configuration,case=['debug_start'])
     if not Configuration['FIX_RING_SIZE']:
@@ -4078,6 +4068,7 @@ def set_ring_size(Configuration,requested_ring_size = 0., size_in_beams = 0., \
             # we had two values in the size_in beams we get the number of rings from the maximum
             #As we used the minimum to calate the ring size we need to recalculated the number of rings
             no_rings = calc_rings(Configuration,ring_size=ring_size,size_in_beams=np.max(Configuration['SIZE_IN_BEAMS']) )
+            size_in_beams = copy.deepcopy(Configuration['SIZE_IN_BEAMS'])
     else:
         ring_size = requested_ring_size
         no_rings = calc_rings(Configuration,ring_size=ring_size,size_in_beams=np.max(Configuration['SIZE_IN_BEAMS']) )
@@ -4295,6 +4286,7 @@ def tirific_template(filename = ''):
             counter += 1
         else:
             result[key] = str(line.split('=')[1].strip())
+   
     return result
 tirific_template.__doc__ ='''
  NAME:
@@ -4327,66 +4319,3 @@ tirific_template.__doc__ ='''
  NOTE:
 '''
 
-def update_statistic(Configuration,process= None,message = None ):
-    if Configuration['TIMING']:
-        function = traceback.format_stack()[-2].split('\n')
-        function = function[0].split()[-1].strip()
-        if not process:
-            process = Configuration['FAT_PSUPROCESS']
-            program = 'pyFAT'
-        else:
-            program = 'TiRiFiC'
-
-        CPU,mem = get_usage_statistics(Configuration,process)
-        with open(f"{Configuration['LOG_DIRECTORY']}Usage_Statistics.txt",'a') as file:
-            if message:
-                file.write(f"# {function.upper()}: {message} at {datetime.now()} \n")
-            # We cannot copy the process so initialize in the configuration
-            file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Mb for {program} \n")
-
-def write_config(file,Configuration ):
-    #be clear we are pickle dumping
-    tmp = os.path.splitext(file)
-    file = f'{tmp[0]}.pkl'
-    print_log(f'''WRITE_CONFIG: writing the configuration to {file}
-''',Configuration,case=['debug_start'])
-    # Separate the keyword names
-    #Proper dictionaries are not pickable
-
-    Pick_Configuration = {}
-    for key in Configuration:
-        Pick_Configuration[key] = Configuration[key]
-        if key == 'FAT_PSUPROCESS':
-            Pick_Configuration[key] = None
-    import pickle
-    with open(file,'wb') as tmp:
-        pickle.dump(Pick_Configuration,tmp)
-
-
-write_config.__doc__ =f'''
- NAME:
-    write_config
-
- PURPOSE:
-    Write a config file to the fitting directory.
-
- CATEGORY:
-    write_functions
-
- INPUTS:
-    file = name of the file to write to
-    Configuration = Standard FAT configuration
-
- OPTIONAL INPUTS:
-
-
- OUTPUTS:
-    A FAT config file.
-
- OPTIONAL OUTPUTS:
-
- PROCEDURES CALLED:
-    Unspecified
-
- NOTE: This doesn't work in python 3.6
-'''

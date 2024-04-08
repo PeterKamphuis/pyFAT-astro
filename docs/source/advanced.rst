@@ -1,8 +1,8 @@
 Setting your fit preferences through a yaml file.
-=================================
+=================================================
 
 Introduction
---------
+-------------
 
 In comparision to FAT pyFAT delivers much more control over the fitting procedure. This is made possible by the new modular setup and the use of omegaconf for the input and default settings.
 In this page we explain how the fitting in FAT can be adapted by providing a yaml input parameters for pyFAT. An example file with all the settings can be printed by runnning 'pyFAT print_examples=True' after installing pyFAT-astro. This command prints both an example yaml file and an example catalogue input file with the names FAT_defaults.yml and FAT_Input_Catalogue.txt, respectively
@@ -12,7 +12,7 @@ The is divided  in four different sections and has 4 independent keywords. All k
 All these options can also be called directly from the command line when calling pyFAT. For example the number of cores can easily be adapted by calling 'pyFAT fitting.ncpu=5'. In the case of a list the option has to be bracketed in apostrophes, i.e. 'pyFAT "fitting.fitting_stages=[Create_FAT_Cube,Run_Sofia]"'.
 
 Input Keywords
---------
+--------------
 *Specified with input:*
 
 **main_directory**:
@@ -58,7 +58,7 @@ Input Keywords
   Directory of the existing Sofia output. This will only be used if the input catalogue is a sofia catalogue or pre-processed sofia products are sepecified.
 
 Output Keywords
---------
+---------------
 *Specified with output:*
 
 **log_directory**:
@@ -81,7 +81,7 @@ Output Keywords
 
 **new_output**:
 
-  *bool, optional, default = True *
+  *bool, optional, default = True*
 
   Create all output anew. Set this to false in case you are looking for a final catalogue and the fitting got interrupted.
 
@@ -147,7 +147,7 @@ Output Keywords
   Write all log messages to the screen. If set to False screen messages will be minimal, i.e. only start, finish and termination messages in case verbose_log = False. When verbose_log = True important messages go to screen as well.
 
 Fitting Keywords
---------
+----------------
  *Specified with fitting:*
 
 **catalogue_start_id**:
@@ -188,10 +188,11 @@ Fitting Keywords
 
 **fixed_parameters**:
 
- *List, optional, default = ['Z0','XPOS','YPOS','VSYS']
+ *List, optional, default = ['Z0','XPOS','YPOS','VSYS']*
 
  A list of the parameters that should stay fixed with radius, i.e. all rings fitted as a single value, in the fitting. The rotation curve (VROT) can not be fixed at the moment. If the surface brightness is fixed it is fitted with a Gaussian after every iterations.
  XPOS, YPOS, and VSYS are always fitted as singular.
+
 **opt_pixel_beam**:
 
   *int, optional, default=4*
@@ -208,7 +209,7 @@ Fitting Keywords
 
 
 Advanced Keywords
---------
+-----------------
 *Specified with advanced:*
 
 **start_directory**:
@@ -271,6 +272,12 @@ Advanced Keywords
   *bool, optional, default = True*
 
   Use multiprocessing
+
+**number_of_disks**
+
+  *int, optional, default = 2*
+
+  The number of disks used in the fitting procedure. Fit_Tirific_OSC always uses 2 disks but if this parameter is set to 1 then they will be kept exactly equal.
 
 **per_galaxy_ncpu**
 
@@ -350,11 +357,23 @@ Advanced Keywords
     The boundaries that the surface brightness profile needs to remain within. Too small boundaries can lead to FAT not finding a a succesfull model.
     Given as min,max for the three areas of the fit: the central part, the approaching side warp, the receding side warp.
 
+**sofia_threshold**
+
+  *int, optional, default=5*
+
+  Threshold used in the sofia source finding. This can help to have FAT select the right source. It does not affect the fitting.
+
+**force_fit**
+
+  *bool, optional, default=False*
+
+  Bypass all initial checks on the source and force pyFAT to fit a TRM regardless of the size of the source.
+  !!!!!!!!!!!!Not fully functional yet!!!!!!!!!!!!!!!
 
 
 
 Individual Keywords
- --------
+-------------------
 *No specifier*
 
 **ncpu**:

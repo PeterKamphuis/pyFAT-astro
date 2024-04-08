@@ -16,6 +16,7 @@ import pyFAT_astro.Support.write_functions as wf
 
 from datetime import datetime
 from pyFAT_astro.Support.fat_errors import BadCatalogueError
+from pyFAT_astro.Support.log_functions import print_log,write_config,update_statistics
 
 def FAT_Galaxy_Loop(Configuration):
 
@@ -29,23 +30,25 @@ def FAT_Galaxy_Loop(Configuration):
         # If you add any make sure that the fitstage  starts with 'Fit_'
         if Configuration['USED_FITTING']:
             # Process the found source in sofia to set up the proper fitting and make sure source can be fitted
+
             Initial_Parameters = runf.check_source(
-                Configuration, Fits_Files)
+                    Configuration, Fits_Files)
+
             #sf.sofia_output_exists(Configuration,Fits_Files)
-            sf.print_log(f'''FAT_GALAXY_LOOPS: The source is well defined and we will now setup the initial tirific file
+            print_log(f'''FAT_GALAXY_LOOPS: The source is well defined and we will now setup the initial tirific file
 ''', Configuration)
             #Add your personal fitting types here
             if Configuration['DEBUG']:
-                sf.write_config(
+                write_config(
                     f'{Configuration["LOG_DIRECTORY"]}CFG_Before_Fitting.txt', Configuration)
         # then we want to read the template
-        Tirific_Template = sf.tirific_template()
+      
 
-        if 'fit_tirific_osc' in Configuration['FITTING_STAGES']:
-            current_run = runf.fitting_osc(
-                Configuration, Fits_Files, Tirific_Template, Initial_Parameters)
+        if 'fit_tirific_osc' in Configuration['FITTING_STAGES']: 
+            current_run,Tirific_Template = runf.fitting_osc(
+                Configuration, Fits_Files,  Initial_Parameters)
         elif 'fit_make_your_own' in Configuration['FITTING_STAGES']:
-            sf.print_log(f'''FAT_GALAXY_LOOPS: If you add any fitting routine make sure that the fit stage  starts with Fit_
+            print_log(f'''FAT_GALAXY_LOOPS: If you add any fitting routine make sure that the fit stage  starts with Fit_
 ''',Configuration)
             sf.create_directory(Configuration['USED_FITTING'],Configuration['FITTING_DIR'])
             Configuration['FINAL_COMMENT'] = 'This example does not work'
@@ -61,7 +64,7 @@ def FAT_Galaxy_Loop(Configuration):
         if Configuration['OUTPUT_QUANTITY'] != 5:
             if 'tirshaker' in Configuration['FITTING_STAGES']:
                 runf.tirshaker_call(
-                    Configuration)
+                    Configuration,Fits_Files)
 
             Configuration['FINAL_COMMENT'] = 'The fit has converged succesfully'
 
@@ -78,6 +81,8 @@ def FAT_Galaxy_Loop(Configuration):
             if Configuration['INSTALLATION_CHECK']:
                 cf.installation_check(
                     Configuration)
+        print_log(f'''FAT_GALAXY_LOOP: This galaxy has succesfully ran through all parts of the fitting
+''', Configuration)
     except Exception as e:
         if e.__class__.__name__ in Configuration['STOP_INDIVIDUAL_ERRORS']:
             Configuration['OUTPUT_QUANTITY'] = 5
@@ -86,9 +91,15 @@ def FAT_Galaxy_Loop(Configuration):
         registered_exception = e
         Configuration['FINAL_COMMENT'] = e
         Configuration['OUTPUT_QUANTITY'] = 'error'
+        try:
+            tmp=Fits_Files
+        except:
+            Fits_Files= None
+        
         catalogue_line = cf.finish_galaxy(Configuration,
                           current_run=current_run,Fits_Files=Fits_Files,
                           exiting=registered_exception)
+       
     return catalogue_line
 
 
@@ -134,10 +145,10 @@ def initialize_loop(Configuration):
 
 
     #if we skip the create_fat _cube stage peaople could give the fat cube itself
-
+  
     if Fits_Files['ORIGINAL_CUBE'][-9:] == '_FAT.fits':
         if 'create_fat_cube' in Configuration['FITTING_STAGES']:
-            sf.print_log(f'''FAT_GALAXY_LOOPS: Your input cube ends in _FAT.fits indicating it is a FAT processed cube.
+            print_log(f'''FAT_GALAXY_LOOPS: Your input cube ends in _FAT.fits indicating it is a FAT processed cube.
 Therefore we remove the Create_FAT_Cube stages from the loop.
 ''', Configuration)
             Configuration['FITTING_STAGES'].remove('create_fat_cube')
@@ -145,6 +156,7 @@ Therefore we remove the Create_FAT_Cube stages from the loop.
     else:
         fat_ext = '_FAT'
     stripped_file_name = os.path.splitext(Configuration['INPUT_CUBE'])[0]
+    
     Fits_Files['FITTING_CUBE'] = f"{stripped_file_name}{fat_ext}.fits"
     Fits_Files['OPTIMIZED_CUBE'] = f"{stripped_file_name}{fat_ext}_opt.fits"
     Fits_Files['MOMENT0'] = f"Sofia_Output/{Configuration['BASE_NAME']}_mom0.fits"
@@ -152,6 +164,7 @@ Therefore we remove the Create_FAT_Cube stages from the loop.
     Fits_Files['MOMENT2'] = f"Sofia_Output/{Configuration['BASE_NAME']}_mom2.fits"
     Fits_Files['MASK'] = f"Sofia_Output/{Configuration['BASE_NAME']}_mask.fits"
     Fits_Files['CHANNEL_MAP'] = f"Sofia_Output/{Configuration['BASE_NAME']}_chan.fits"
+    Fits_Files['TIR_RUN_CUBE'] = copy.deepcopy(Fits_Files['FITTING_CUBE'])
     if 'create_fat_cube' in Configuration['FITTING_STAGES']:
         if not os.path.exists(f"{Configuration['FITTING_DIR']}/{Fits_Files['ORIGINAL_CUBE']}"):
             raise BadCatalogueError(
@@ -174,7 +187,7 @@ Therefore we remove the Create_FAT_Cube stages from the loop.
             from matplotlib import __version__ as mpversion
         #from subprocess import __version__ as subversion
 
-        sf.print_log(f'''FAT_GALAXY_LOOPS: We are using the following versions
+        print_log(f'''FAT_GALAXY_LOOPS: We are using the following versions
 {'':8s}NumPy {npversion}
 {'':8s}SciPy {spversion}
 {'':8s}AstroPy {apversion}
@@ -182,19 +195,19 @@ Therefore we remove the Create_FAT_Cube stages from the loop.
 ''', Configuration)
 
     log_statement = f'''We are starting the catalogue entry {Configuration['ID']} in the directory {Configuration['SUB_DIR']}.\n'''
-    sf.print_log(
+    print_log(
         log_statement, Configuration)
 
     if Configuration['TIMING']:
         Configuration['FAT_PSUPROCESS'] = psu.Process(
             Configuration['FAT_PID'])
-        sf.update_statistic(
+        update_statistics(
             Configuration, message="Creating a CPU RAM Log for analysis.")
 
 
     # Let's see if our base cube exists, Note that cleanup removes it if we want to start from the original dir so no need to check start_point
     if not os.path.exists(f"{Configuration['FITTING_DIR']}{Fits_Files['FITTING_CUBE']}"):
-        ff.create_fat_cube(Configuration, Fits_Files)
+        ff.create_fat_cube(Configuration, Fits_Files = Fits_Files)
     # Get a bunch of info from the cube
     rf.read_cube(
         Configuration, Fits_Files['FITTING_CUBE'])
@@ -202,10 +215,11 @@ Therefore we remove the Create_FAT_Cube stages from the loop.
     return Fits_Files
 
 def loop_sofia(Configuration,Fits_Files):
+     
     Configuration['SOFIA_TIME'][0] = datetime.now()
     #If we have Sofia Preprocessed Output request make sure it all exists
     if Configuration['DEBUG']:
-        sf.write_config(
+        write_config(
             f'{Configuration["LOG_DIRECTORY"]}CFG_Before_Sofia.txt', Configuration)
 
     if 'external_sofia' in Configuration['FITTING_STAGES']:
@@ -231,7 +245,7 @@ def MP_initialize_sofia(Configuration,timing_lock,catalogue_lock):
         if Configuration['USED_FITTING']:
             Initial_Parameters = runf.check_source(Configuration, Fits_Files)
             succes =True
-            sf.print_log(f'''FAT_GALAXY_LOOPS: The source is well defined and we will now setup the initial tirific file
+            print_log(f'''FAT_GALAXY_LOOPS: The source is well defined and we will now setup the initial tirific file
 ''', Configuration)
         else:
             catalogue_line = cf.finish_galaxy(Configuration,
@@ -252,39 +266,42 @@ def MP_initialize_sofia(Configuration,timing_lock,catalogue_lock):
                           timing_lock=timing_lock, catalogue_lock = catalogue_lock,
                           exiting=registered_exception)
 
-    Configuration['FAT_PSUPROCESS'] = None
+   
     sofia_output = {'Succes': succes, 'Configuration': Configuration,
                       'catalogue_line': catalogue_line, 'Fits_Files':Fits_Files,
                       'Size': Configuration['SIZE_IN_BEAMS'],
                       'Initial_Parameters': Initial_Parameters}
-
-
+    
+    update_statistics(
+            Configuration, message="Pause at")  
+    Configuration['FAT_PSUPROCESS'] = None
     return sofia_output
 
 
 def MP_Fitting_Loop(input,timing_lock,catalogue_lock):
     try:
+       
         Configuration = input['Configuration']
         Configuration['FAT_PSUPROCESS'] = psu.Process(
             Configuration['FAT_PID'])
+        update_statistics(
+            Configuration, message="Start fitting loop")  
         Initial_Parameters = input['Initial_Parameters']
         Fits_Files = input['Fits_Files']
         registered_exception = None
         current_run = 'Not Initialized'
-        # then we want to read the template
-        Tirific_Template = sf.tirific_template()
-
+       
             # If you add any make sure that the fitstage  starts with 'Fit_'
 
         if Configuration['DEBUG']:
-            sf.write_config(
+            write_config(
                 f'{Configuration["LOG_DIRECTORY"]}CFG_Before_Fitting.txt', Configuration)
 
-        if 'fit_tirific_osc' in Configuration['FITTING_STAGES']:
-            current_run = runf.fitting_osc(
-                Configuration, Fits_Files, Tirific_Template, Initial_Parameters)
+        if 'fit_tirific_osc' in Configuration['FITTING_STAGES']:   
+            current_run,Tirific_Template = runf.fitting_osc(
+                Configuration, Fits_Files, Initial_Parameters)
         elif 'fit_make_your_own' in Configuration['FITTING_STAGES']:
-            sf.print_log(f'''FAT_GALAXY_LOOPS: If you add any fitting routine make sure that the fit stage  starts with Fit_
+            print_log(f'''FAT_GALAXY_LOOPS: If you add any fitting routine make sure that the fit stage  starts with Fit_
 ''',Configuration)
             sf.create_directory(Configuration['USED_FITTING'],Configuration['FITTING_DIR'])
             Configuration['FINAL_COMMENT'] = 'This example does not work'
@@ -300,7 +317,7 @@ def MP_Fitting_Loop(input,timing_lock,catalogue_lock):
         if Configuration['OUTPUT_QUANTITY'] != 5:
             if 'tirshaker' in Configuration['FITTING_STAGES']:
                 runf.tirshaker_call(
-                    Configuration)
+                    Configuration,Fits_Files)
 
             Configuration['FINAL_COMMENT'] = 'The fit has converged succesfully'
 
@@ -319,6 +336,8 @@ def MP_Fitting_Loop(input,timing_lock,catalogue_lock):
             if Configuration['INSTALLATION_CHECK']:
                 cf.installation_check(
                     Configuration)
+        print_log(f'''FAT_GALAXY_LOOP: This galaxy has succesfully ran through all parts of the fitting
+''', Configuration)
     except Exception as e:
         if e.__class__.__name__ in Configuration['STOP_INDIVIDUAL_ERRORS']:
             Configuration['OUTPUT_QUANTITY'] = 5

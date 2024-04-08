@@ -5,6 +5,7 @@ recursive-include pyFAT_astro/config *.txt
 recursive-include pyFAT_astro/Support *.py
 recursive-include pyFAT_astro/Templates *.def
 recursive-include pyFAT_astro/Templates *.par
+recursive-include pyFAT_astro/Templates *.yml
 recursive-include pyFAT_astro/Installation_Check *.fits
 recursive-include pyFAT_astro/Installation_Check *.def
 recursive-include pyFAT_astro/Installation_Check *.config

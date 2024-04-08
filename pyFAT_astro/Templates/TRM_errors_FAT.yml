@@ -1,0 +1,30 @@
+print_examples: false
+configuration_file: null
+general:
+  ncpu: -1
+  directory: '-'
+  multiprocessing: false
+  calc_mode: 'fat'
+  verbose: False
+tirshaker:
+  enable: true
+  deffile_in: Finalmodel.def
+  deffile_out: Shaken_Errors.def
+  directory: Error_Shaker
+  log: false
+  mode: fitted
+  inimode: 3
+  iterations: 20
+  individual_loops: -1
+  tirific: tirific
+min_errors:
+  PA: 1.0
+  INCL: 1.0
+  VROT: 4.0
+  VRAD: 4.0
+  VSYS: 1.0
+  XPOS: 0.00001
+  YPOS: 0.00001
+  SBR: 0.00001
+  Z0: 1.0
+  SDIS: 4.0

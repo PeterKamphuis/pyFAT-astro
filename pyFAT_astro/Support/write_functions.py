@@ -1,24 +1,18 @@
 # -*- coding: future_fstrings -*-
 # This module contains a set of functions and classes that are used to write text files to Disk
 
-
+from pyFAT_astro.Support.log_functions import print_log,extract_date
 from pyFAT_astro.Support.modify_template import set_model_parameters, set_overall_parameters,\
                                 set_fitting_parameters,get_warp_slope, update_disk_angles
-from pyFAT_astro.Support.fits_functions import extract_pv
+from make_moments.functions import extract_pv                                
 from pyFAT_astro.Support.read_functions import load_basicinfo
-from pyFAT_astro.Support.fat_errors import ProgramError
-import pyFAT_astro.Support.support_functions as sf
-import pyFAT_astro
 
+import pyFAT_astro.Support.support_functions as sf
 
 import copy
 import numpy as np
-import psutil as psu
-import time
-import warnings
-from datetime import datetime
-import traceback
 import os
+import warnings
 
 with warnings.catch_warnings():
     warnings.simplefilter("ignore")
@@ -160,6 +154,23 @@ basicinfo.__doc__ =f'''
  NOTE:
 '''
 
+def create_tirific_run_cube(Configuration,Fits_Files):
+    # if we have an optimized size cube this is only used in the run and we need t o change the ctyp 
+    if Configuration['OPTIMIZED']:
+        optimized_cube = f'{Configuration["FITTING_DIR"]}/{Fits_Files["OPTIMIZED_CUBE"]}'
+        cube = fits.open(optimized_cube)
+        cube[0].header['CTYPE3'] = 'VELO'
+        fits.writeto(optimized_cube,cube[0].data,cube[0].header,overwrite=True)
+    source = f'{Configuration["FITTING_DIR"]}/{Fits_Files["FITTING_CUBE"]}'
+    stripped_file_name = os.path.splitext(Fits_Files["FITTING_CUBE"])[0]
+    target = f'{Configuration["FITTING_DIR"]}/{stripped_file_name}_tirific.fits'
+    os.system(f'''cp {source} {target}''')
+    cube = fits.open(target)
+    cube[0].header['CTYPE3'] = 'VELO'
+    fits.writeto(target,cube[0].data,cube[0].header,overwrite=True)
+    Fits_Files['TIR_RUN_CUBE'] = target    
+    return Fits_Files
+
 # Function to write the first def file for a galaxy
 def initialize_def_file(Configuration, Fits_Files,Tirific_Template,\
         Initial_Parameters = None, fit_type = 'Undefined' ):
@@ -247,107 +258,135 @@ initialize_def_file.__doc__ =f'''
  NOTE:
 '''
 
+def beam_artist(ax,hdr,im_wcs):
+    xmin, xmax = ax.get_xlim()
+    ymin, ymax = ax.get_ylim()
+    ghxloc, ghyloc = im_wcs.wcs_pix2world(float(xmin+(xmax-xmin)/18.), float(ymin+(ymax-ymin)/18.), 1.)
+    localoc = [float(ghxloc),float(ghyloc) ]
+    widthb = hdr['BMIN']
+    heightb = hdr['BMAJ']
+    try:
+        angleb  = hdr['BPA']
+    except KeyError:
+        angleb = 0.
+    #either the location or the beam has to be transformed 
+    beam = Ellipse(xy=localoc, width=widthb, height=heightb, angle=angleb, transform=ax.get_transform('world'),
+           edgecolor='k', lw=1, facecolor='none', hatch='/////',zorder=15)
+    return beam
 
-class full_system_tracking:
-    def __init__(self,Configuration):
-        self.stop = False
-        self.pid = os.getpid()
-        self.main_pyFAT = psu.Process(self.pid)
-        self.user = self.main_pyFAT.username()
-        self.python = self.main_pyFAT.name()
-        self.tirific = Configuration['TIRIFIC']
-        self.font_file = Configuration['FONT_FILE']
-        self.sofia = Configuration['SOFIA2']
-        self.file = f"{Configuration['MAIN_DIRECTORY']}FAT_Resources_Used.txt"
-        self.plot_name= f"{Configuration['MAIN_DIRECTORY']}pyFAT_Resources_Monitor.pdf"
-        self.cpus= psu.cpu_count()
-        with open(self.file,'w') as resources:
-            resources.write("# This file contains an estimate of all resources used for a pyFAT run. \n")
-            resources.write(f"# {'Time':20s} {'Sys CPU':>10s} {'Sys RAM':>10s} {'FAT CPU':>10s} {'FAT RAM':>10s} \n")
-            resources.write(f"# {'YYYY-MM-DD hh:mm:ss':20s} {'%':>10s} {'Gb':>10s} {'%':>10s} {'Gb':>10s} \n")
-        self.interval = 60 # amount of second when to do new monitor
+beam_artist.__doc__ =f'''
+ NAME:
+    ist
 
-    def start_monitoring(self):
-        while not self.stop:
-            try:
-                self.sys_cpu= psu.cpu_percent(interval=1)
-                self.sys_ram= psu.virtual_memory().used/2**30.
-                self.CPU = 0.
-                self.RAM = 0.
-                for proc in psu.process_iter():
-                    if proc.username() == self.user \
-                        and proc.status() == 'running'\
-                        and (proc.name() == self.python or\
-                         proc.name() == self.tirific or\
-                         proc.name() == self.sofia or\
-                         proc.name() == 'python3'):
-                        try:
-                            self.CPU += proc.cpu_percent(interval=0.5)/self.cpus
-                            self.RAM += (proc.memory_info()[0])/2**30.
-                        except:
-                            pass
-                #file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Gb for TiRiFiC \n")
-                with open(self.file,'a') as resources:
-                    resources.write(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S'):20s} {self.sys_cpu:>10.1f} {self.sys_ram:>10.2f} {self.CPU:>10.1f} {self.RAM:>10.2f} \n")
-            except Exception as e:
-                #We do not care if something goes wrong once. We don't want the monitor to crash
-                #but we would like to know what went wrong
-                traceback.print_exception(type(e),e,e.__traceback__)
-                pass
-            time.sleep(self.interval)
+ PURPOSE:
+    create a beam patch
+        
+ CATEGORY:
+    write_functions
 
-    def stop_monitoring(self):
-        self.stop = True
-        loads = {'Time':[]}
-        keys=['SCPU','SRAM','FCPU','FRAM']
-        for key in keys:
-            loads[key]  = []
-        with open(self.file) as file:
-            lines = file.readlines()
-        startdate = 0
-        #load data from file into dictionary
-        for line in lines:
-            line = line.split()
-            if line[0] == '#':
-                continue
+ INPUTS:
+    ax = is the axes object where the beam is intended to go
+    hdr = the image header
+    im_wcs = WCS frame of the image
+
+ OPTIONAL INPUTS:
+
+
+ OUTPUTS:
+    IST
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+
+ NOTE:
+'''
+
+def create_plot_stats(Configuration,loads,labels):
+    combined_time =  np.sort(np.array(loads['Tirific']['Time']+loads['FAT']['Time'],dtype=float))
+
+    combined_loads ={'Tirific':{'CPU':np.interp(combined_time,np.array(loads['Tirific']['Time'],dtype=float),np.array(loads['Tirific']['CPU'],dtype=float)),\
+                                'MEM':np.interp(combined_time,np.array(loads['Tirific']['Time'],dtype=float),np.array(loads['Tirific']['MEM'],dtype=float))},\
+                    'FAT':{'CPU':np.interp(combined_time,np.array(loads['FAT']['Time'],dtype=float),np.array(loads['FAT']['CPU'],dtype=float)),\
+                                                'MEM':np.interp(combined_time,np.array(loads['FAT']['Time'],dtype=float),np.array(loads['FAT']['MEM'],dtype=float))}
+
+    }
+    comb_list= labels['Tirific']['Time']+labels['FAT']['Time']
+    comb_label = labels['Tirific']['label']+labels['FAT']['label']
+
+    labels_times=np.array([x for x, _ in sorted(zip(comb_list, comb_label))],dtype=float)
+    labels_comb = np.array([x for _, x in sorted(zip(comb_list, comb_label))],dtype=str)
+    if Configuration['MULTIPROCESSING']:
+        non_split_ct = copy.deepcopy(combined_time)
+        combined_time =[[],[]]
+        non_split_cl = copy.deepcopy(combined_loads)
+        combined_loads = [[],[]]
+        non_split_lt = copy.deepcopy(labels_times)
+        labels_times =[[],[]]
+        non_split_lc = copy.deepcopy(labels_comb)
+        labels_comb =[[],[]]
+        split_time_lab = non_split_lt[np.where(non_split_lc == 'Pausing FAT')[0]] 
+        split_time = non_split_lt[np.where(non_split_lc == 'Pausing FAT')[0]+1] 
+     
+        for i in  [0,1]:
+            if i == 0:
+                indxs = np.where(non_split_ct <= split_time)[0]
+                indxslab =  np.where(non_split_lt <= split_time_lab)[0]
+              
             else:
-                date = extract_date(f"{line[0]} {line[1]}")
-            if startdate == 0:
-                startdate = date
-            diff = date - startdate
-            time = diff.total_seconds()/(3600.)
-            loads['Time'].append(time)
-            for i,key in enumerate(keys):
-                loads[key].append(float(line[int(2+i)]))
-        #Plot the parameters
-        try:
-            mpl_fm.fontManager.addfont(self.font_file)
-            font_name = mpl_fm.FontProperties(fname=self.font_file).get_name()
-        except FileNotFoundError:
-            font_name = 'DejaVu Sans'
-        labelfont = {'family': font_name,
-                 'weight': 'normal',
-                 'size': 4}
-        fig, ax1 = plt.subplots(figsize = (8,6))
-        fig.subplots_adjust(left = 0.1, right = 0.9, bottom = 0.3, top = 0.7)
-        ax1.plot(loads['Time'],loads['SRAM'],'b--',lw=0.5,alpha=0.5, label='System RAM')
-        ax1.plot(loads['Time'],loads['FRAM'],'b-',lw=0.5,alpha=1.0, label='pyFAT RAM')
-        ax1.set_ylim(0,np.max(np.array(loads['SRAM']+loads['FRAM'],dtype=float))*1.1)
-        ax1.set_ylabel('RAM (Gb) ', color='b')
-        ax1.tick_params(axis='y', labelcolor='b')
-        ax1.set_xlabel('Run Duration (h)', color='k',zorder=5)
-        ax2 = ax1.twinx()
-        ax2.plot(loads['Time'],loads['SCPU'],'r--',lw=0.5,alpha=0.5, label='System CPU')
-        ax2.plot(loads['Time'],loads['FCPU'],'r-',lw=0.5,alpha=1.0, label='pyFAT CPU')
-        ax2.set_ylim(0,np.max(np.array(loads['SCPU']+loads['FCPU'],dtype=float))*1.1)
-        ax2.set_ylabel('CPUs (%)',color='r')
-        ax2.tick_params(axis='y', labelcolor='r')
-        fig.savefig(self.plot_name)
-        plt.close()
+                indxs = np.where(non_split_ct > split_time)[0]  
+                indxslab =  np.where(non_split_lt > split_time_lab)[0]
+          
+            combined_time[i] = non_split_ct[indxs]
+            labels_comb[i] = non_split_lc[indxslab]
+            labels_times[i] = non_split_lt[indxslab ]
+            combined_loads[i] = {'Tirific':{'CPU': non_split_cl['Tirific']['CPU'][indxs],\
+                                            'MEM': non_split_cl['Tirific']['MEM'][indxs] },\
+                                'FAT': {'CPU': non_split_cl['FAT']['CPU'][indxs],\
+                                        'MEM': non_split_cl['FAT']['MEM'][indxs] }}
+           
+    else:
+        combined_time = [combined_time ]
+        combined_loads = [combined_loads]
+        labels_times = [labels_times]
+        labels_comb = [labels_comb ]
+
+    return combined_time, combined_loads, labels_times, labels_comb
+
+create_plot_stats.__doc__ =f'''
+ NAME:
+    create_plot_stats(
+
+ PURPOSE:
+    create the lists and dictionaries that are required to plot a single frame in the usage plot
+    from the over loads and times dictionaries
+        
+ CATEGORY:
+    write_functions
+
+ INPUTS:
+    Configuration = is the standard FAT configuration
+    loads = is the overall loads dictionary
+    labels = the overall labels
+
+
+ OPTIONAL INPUTS:
+
+
+ OUTPUTS:
+    combined_time = list with all times for individual axis object
+    combined_loads = dictionary with all loads  for individual axis object
+    labels_times = list with all label times  for individual axis object
+    labels_comb = liast with all labels  for individual axis object
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+
+ NOTE:
+'''
 
 def make_overview_plot(Configuration,Fits_Files ):
     fit_type = Configuration['USED_FITTING']
-    sf.print_log(f'''MAKE_OVERVIEW_PLOT: We are starting the overview plot.
+    print_log(f'''MAKE_OVERVIEW_PLOT: We are starting the overview plot.
 ''',Configuration,case=['debug_start'])
 
     with warnings.catch_warnings():
@@ -362,9 +401,10 @@ def make_overview_plot(Configuration,Fits_Files ):
         moment2 = fits.open(f"{Configuration['FITTING_DIR']}{Fits_Files['MOMENT2']}")
         channels_map = fits.open(f"{Configuration['FITTING_DIR']}{Fits_Files['CHANNEL_MAP']}")
         im_wcs = WCS(moment0[0].header).celestial
+   
 
     # Open the model info
-    sf.print_log(f'''MAKE_OVERVIEW_PLOT: Reading the variables from the final model
+    print_log(f'''MAKE_OVERVIEW_PLOT: Reading the variables from the final model
 ''',Configuration,case=['debug_add'])
     Vars_to_plot_short= ['RADI','XPOS','YPOS','VSYS','VROT','INCL','PA','SDIS',\
                     'SBR','Z0']
@@ -377,22 +417,23 @@ def make_overview_plot(Configuration,Fits_Files ):
             Vars_to_plot.append(f'# {x}_2_ERR')
     FAT_Model = sf.load_tirific(Configuration,\
         f"{Configuration['FITTING_DIR']}Finalmodel/Finalmodel.def",\
-        Variables= Vars_to_plot,array=True )
+        Variables= Vars_to_plot,array=True ,brightness_check=True)
     Extra_Model_File = f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}_Iteration_{Configuration['ITERATIONS']}.def"
 
     if os.path.exists(Extra_Model_File):
         Extra_Model = sf.load_tirific(Configuration,Extra_Model_File,\
-            Variables= Vars_to_plot,array=True )
+            Variables= Vars_to_plot,array=True ,brightness_check=True)
+        
     else:
         Extra_Model = []
-    sf.print_log(f'''MAKE_OVERVIEW_PLOT: We find the following model values.
+    print_log(f'''MAKE_OVERVIEW_PLOT: We find the following model values.
 {'':8s}{[f"{x} = {FAT_Model[i,:]}" for i,x in enumerate(Vars_to_plot)]}
 ''',Configuration,case=['debug_add'])
 
     if os.path.exists(f"{Configuration['FITTING_DIR']}ModelInput.def"):
         Input_Model = sf.load_tirific(Configuration,\
             f"{Configuration['FITTING_DIR']}ModelInput.def",\
-            Variables= Vars_to_plot,array=True )
+            Variables= Vars_to_plot,array=True,brightness_check=False )
     else:
         Input_Model = []
     sof_basic_ra,sof_basic_dec, sof_basic_vsys,sof_basic_maxrot,sof_basic_pa,sof_basic_inclination,sof_basic_extent = load_basicinfo(Configuration,
@@ -400,7 +441,7 @@ def make_overview_plot(Configuration,Fits_Files ):
 
 
     #Let's start plotting
-    ysize = 23.2
+    ysize = 23.2/2.
     xsize = 0.7*ysize
     Overview = plt.figure(2, figsize=(xsize, ysize), dpi=300, facecolor='w', edgecolor='k')
 
@@ -447,16 +488,15 @@ def make_overview_plot(Configuration,Fits_Files ):
 
 #-----------------------------------------------------------------Moment 0 ------------------------------------------------------
     ax_moment0 = Overview.add_subplot(gs[2:8,0:6], projection=im_wcs)
-    ax_moment0.set_label('Intensity Map')
-    #Comp_ax1.set_facecolor('black')
     # we need contour levels and
     min_color = 0.
     max_color = np.nanmax(moment0[0].data)*0.8
-    moment0_plot = ax_moment0.imshow(moment0[0].data, origin='lower', alpha=1, vmin = min_color, vmax = max_color,cmap='hot_r' )
+    moment0_plot = ax_moment0.imshow(moment0[0].data, origin='lower', alpha=1,\
+        vmin = min_color, vmax = max_color,cmap='hot_r',transform=ax_moment0.get_transform(im_wcs) )
     moment0_plot.set_label('Intensity Map')
-    plt.ylabel('DEC (J2000)')
+    plt.ylabel('DEC')
     #Stupid python suddenly finds its own labels
-    plt.xlabel('RA J2000')
+    plt.xlabel('RA')
 
     median_noise_in_map = np.sqrt(np.nanmedian(channels_map[0].data[channels_map[0].data > 0.]))*Configuration['NOISE']*Configuration['CHANNEL_WIDTH']
     mindism0 = median_noise_in_map
@@ -491,27 +531,25 @@ def make_overview_plot(Configuration,Fits_Files ):
                levels=momlevel, colors='white',linewidths=1.2*size_factor , zorder =7)
     ax_moment0.contour(moment0_mod[0].data, transform=ax_moment0.get_transform(im_wcs),
               levels=momlevel, colors='r',zorder=8, linewidths=0.9*size_factor)
-    xmin, xmax = ax_moment0.get_xlim()
-    ymin, ymax = ax_moment0.get_ylim()
-    if xmax > ymax:
-        diff = int(xmax-ymax)/2.
-        ax_moment0.set_ylim(ymin-diff,ymax+diff)
-        ymin, ymax = ax_moment0.get_ylim()
-    else:
-        diff = int(ymax-xmax)/2.
-        ax_moment0.set_xlim(xmin-diff,xmax+diff)
-        xmin, xmax = ax_moment0.get_xlim()
-    ghxloc, ghyloc = im_wcs.wcs_pix2world(float(xmin+(xmax-xmin)/18.), float(ymin+(ymax-ymin)/18.), 1.)
-    localoc = [float(ghxloc),float(ghyloc) ]
-    widthb = moment0[0].header['BMIN']
-    heightb = moment0[0].header['BMAJ']
-    try:
-        angleb  = moment0[0].header['BPA']
-    except KeyError:
-        angleb = 0.
-    beam = Ellipse(xy=localoc, width=widthb, height=heightb, angle=angleb, transform=ax_moment0.get_transform('fk4'),
-           edgecolor='k', lw=1, facecolor='none', hatch='/////',zorder=15)
+  
+    square_plot(ax_moment0)
+    ax_moment0.grid()    
+    beam = beam_artist(ax_moment0,moment0[0].header,im_wcs)
     ax_moment0.add_patch(beam)
+    #center_x,center_y = im_wcs.wcs_world2pix(FAT_Model[Vars_to_plot.index('XPOS'),0],\
+    #                    FAT_Model[Vars_to_plot.index('YPOS'),0], 1.)
+
+    center_x = float(FAT_Model[Vars_to_plot.index('XPOS'),0])
+    center_y = float(FAT_Model[Vars_to_plot.index('YPOS'),0])
+   
+    ax_moment0.text(center_x,center_y,'X', size= 5.,va='center',ha='center', \
+                    color='white',zorder=17, transform=ax_moment0.get_transform('world'))
+    #ax_moment0.text(center_x,center_y,'X', size= 7.,va='center',ha='center', \
+     #               color='black',zorder=16, transform=ax_moment0.get_transform('world'))
+
+
+    #                ,transform = ax_moment0.transAxes,zorder=7)
+    #
     # colorbar
     divider = make_axes_locatable(ax_moment0)
     cax = divider.append_axes("top", size="5%", pad=0.05, axes_class=maxes.Axes)
@@ -566,9 +604,9 @@ def make_overview_plot(Configuration,Fits_Files ):
     min_color= FAT_Model[Vars_to_plot.index('VSYS'),0]-velocity_width
 
     moment1_plot = ax_moment1.imshow(moment1[0].data, cmap='rainbow', origin='lower', alpha=1, vmin = min_color, vmax = max_color )
-    plt.ylabel('DEC (J2000)')
+    plt.ylabel('DEC')
     #Stupid python suddenly finds its own labels
-    plt.xlabel('RA J2000')
+    plt.xlabel('RA')
 
     # contours
     velocity_step=sf.set_limits(int((int(max_color-min_color)*0.9)/20.),1.,30.)
@@ -582,27 +620,11 @@ def make_overview_plot(Configuration,Fits_Files ):
                levels=momlevel, colors='white',linewidths=1.2*size_factor , zorder =7)
     #ax_moment1.contour(moment1_mod[0].data, transform=ax_moment1.get_transform(im_wcs),
     #          levels=momlevel, colors='r',zorder=8, linewidths=0.9)
-    xmin, xmax = ax_moment1.get_xlim()
-    ymin, ymax = ax_moment1.get_ylim()
-    if xmax > ymax:
-        diff = int(xmax-ymax)/2.
-        ax_moment1.set_ylim(ymin-diff,ymax+diff)
-        ymin, ymax = ax_moment1.get_ylim()
-        xmin, xmax = ax_moment1.get_xlim()
-    else:
-        diff = int(ymax-xmax)/2.
-        ax_moment1.set_xlim(xmin-diff,xmax+diff)
-    ghxloc, ghyloc = im_wcs.wcs_pix2world(float(xmin+(xmax-xmin)/18.), float(ymin+(ymax-ymin)/18.), 1.)
-    localoc = [float(ghxloc),float(ghyloc) ]
-    widthb = moment1[0].header['BMIN']
-    heightb = moment1[0].header['BMAJ']
-    try:
-        angleb  = moment1[0].header['BPA']
-    except KeyError:
-        angleb = 0.
-    beam = Ellipse(xy=localoc, width=widthb, height=heightb, angle=angleb, transform=ax_moment1.get_transform('fk4'),
-           edgecolor='k', lw=1, facecolor='none', hatch='/////',zorder=15)
+   
+    square_plot(ax_moment1)
+    beam = beam_artist(ax_moment1,moment1[0].header,im_wcs)
     ax_moment1.add_patch(beam)
+    ax_moment1.grid()
     # colorbar
     divider = make_axes_locatable(ax_moment1)
     cax = divider.append_axes("top", size="5%", pad=0.05, axes_class=maxes.Axes)
@@ -633,9 +655,9 @@ def make_overview_plot(Configuration,Fits_Files ):
     min_color= 0.
 
     moment2_plot = ax_moment2.imshow(moment2[0].data, cmap='rainbow' ,origin='lower', alpha=1, vmin = min_color, vmax = max_color )
-    plt.ylabel('DEC (J2000)')
+    plt.ylabel('DEC')
     #Stupid python suddenly finds its own labels
-    plt.xlabel('RA J2000')
+    plt.xlabel('RA')
 
     # contours
 
@@ -648,30 +670,11 @@ def make_overview_plot(Configuration,Fits_Files ):
     ax_moment2.contour(moment2_mod[0].data, transform=ax_moment2.get_transform(im_wcs),
                levels=momlevel, colors='white',linewidths=1.2*size_factor , zorder =7)
 
-    xmin, xmax = ax_moment2.get_xlim()
-    ymin, ymax = ax_moment2.get_ylim()
-    if xmax > ymax:
-        diff = int(xmax-ymax)/2.
-        ax_moment2.set_ylim(ymin-diff,ymax+diff)
-        ymin, ymax = ax_moment2.get_ylim()
-    else:
-        diff = int(ymax-xmax)/2.
-        ax_moment2.set_xlim(xmin-diff,xmax+diff)
-        xmin, xmax = ax_moment2.get_xlim()
-
-    ghxloc, ghyloc = im_wcs.wcs_pix2world(float(xmin+(xmax-xmin)/18.), float(ymin+(ymax-ymin)/18.), 1.)
-    localoc = [float(ghxloc),float(ghyloc) ]
-    widthb = moment2[0].header['BMIN']
-    heightb = moment2[0].header['BMAJ']
-    try:
-        angleb  = moment2[0].header['BPA']
-    except KeyError:
-        angleb = 0.
-
-    beam = Ellipse(xy=localoc, width=widthb, height=heightb, angle=angleb, transform = ax_moment2.get_transform('fk4'),
-           edgecolor='k', lw=1, facecolor='none', hatch='/////',zorder=15)
+   
+    square_plot(ax_moment2)
+    beam = beam_artist(ax_moment2,moment2[0].header,im_wcs)
     ax_moment2.add_patch(beam)
-
+    ax_moment2.grid()
 
     # colorbar
     divider = make_axes_locatable(ax_moment2)
@@ -704,91 +707,34 @@ def make_overview_plot(Configuration,Fits_Files ):
 #__________________------------------------------------------------------------PV Diagram
 
     extract_angle = np.mean(FAT_Model[Vars_to_plot.index('PA'),0:round(len(FAT_Model[Vars_to_plot.index('PA'),:])/2.)])
-    PV = extract_pv(Configuration,cube,extract_angle, \
-                    center = [float(FAT_Model[Vars_to_plot.index('XPOS'),0]),float(FAT_Model[Vars_to_plot.index('YPOS'),0]),float(FAT_Model[Vars_to_plot.index('VSYS'),0]*1000.)], \
-                    convert=1000.)
-    if not os.path.exists(f"{Configuration['FITTING_DIR']}/Finalmodel/{Configuration['BASE_NAME']}_final_xv.fits"):
-        fits.writeto(f"{Configuration['FITTING_DIR']}/Finalmodel/{Configuration['BASE_NAME']}_final_xv.fits",PV[0].data,PV[0].header)
-    PV_model = extract_pv(Configuration,cube_mod,extract_angle, \
-                    center = [float(FAT_Model[Vars_to_plot.index('XPOS'),0]),float(FAT_Model[Vars_to_plot.index('YPOS'),0]),float(FAT_Model[Vars_to_plot.index('VSYS'),0]*1000.)], \
-                    convert=1000.)
-    if not os.path.exists(f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel_xv.fits"):
-        fits.writeto(f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel_xv.fits",PV_model[0].data,PV_model[0].header)
-    ratio=PV[0].header['NAXIS2']/PV[0].header['NAXIS1']
-    # Then we want to plot our PV-Diagram
-    '''
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        #As astropy is the dumbest piece of software ever invented and it cannot separate stray keywords from extra dimensions
-        # we need to specify we want the first two axes.
-        xv_proj = WCS(PV[0].header,naxis=[0,1])
-        xv_model_proj = WCS(PV_model[0].header,naxis=[0,1])
-    # As astropy is really a dumb piece of shit using a WCS messes up the the axes modifications
-    #ax_PV = Overview.add_subplot(gs[2:8,8:14], projection=xv_proj)
-    '''
-    ax_PV = Overview.add_subplot(gs[2:8,8:14])
-    #Comp_ax2.set_title('PV-Diagram')
 
-    maxint= np.nanmax(PV[0].data)*0.85
-    minint= np.nanmin(PV[0].data)/3.
+    messages = extract_pv(cube = cube,\
+                overwrite = False,PA=extract_angle,\
+                center=  [float(FAT_Model[Vars_to_plot.index('XPOS'),0]),\
+                        float(FAT_Model[Vars_to_plot.index('YPOS'),0]),\
+                        float(FAT_Model[Vars_to_plot.index('VSYS'),0]*1000.)],\
+                map_velocity_unit= 'km/s',log = True,silent = True,\
+                output_directory = f"{Configuration['FITTING_DIR']}Finalmodel",\
+                output_name =f"{Configuration['BASE_NAME']}_final_xv.fits")
+    print_log(messages,Configuration,case=["verbose"])
+    PV = fits.open(f"{Configuration['FITTING_DIR']}/Finalmodel/{Configuration['BASE_NAME']}_final_xv.fits")
+   
+    messages = extract_pv(cube = cube_mod,\
+                overwrite = False,PA=extract_angle,\
+                center=  [float(FAT_Model[Vars_to_plot.index('XPOS'),0]),\
+                        float(FAT_Model[Vars_to_plot.index('YPOS'),0]),\
+                        float(FAT_Model[Vars_to_plot.index('VSYS'),0]*1000.)],\
+                cube_velocity_unit='m/s',\
+                map_velocity_unit= 'km/s',log = True,silent = True,\
+                output_directory = f"{Configuration['FITTING_DIR']}/Finalmodel/",\
+                output_name =f"Finalmodel_xv.fits")
+    print_log(messages,Configuration,case=["verbose"])
+    PV_model = fits.open(f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel_xv.fits")
 
 
-    PV_plot = ax_PV.imshow(PV[0].data,  cmap='hot_r', origin='lower', alpha=1, vmin=minint, vmax=maxint,aspect='auto')
-
-    xaxis = [PV[0].header['CRVAL1'] + (i - PV[0].header['CRPIX1'] + 1) * (PV[0].header['CDELT1']) for i in
-             range(PV[0].header['NAXIS1'])]
-    yaxis = [PV[0].header['CRVAL2'] + (i - PV[0].header['CRPIX2'] + 1) * (PV[0].header['CDELT2']) for i in
-             range(PV[0].header['NAXIS2'])]
-    #something is going wrong here, Fixed as usual astropy was fucking thing up
-    ax_PV.set_xticks(range(len(xaxis))[0:-1:int(len(xaxis) / 5)])
-    ax_PV.set_yticks(range(len(yaxis))[0:-1:int(len(yaxis) / 5)])
-    ax_PV.set_xticklabels(['{:10.1f}'.format(i) for i in xaxis[0:-1:int(len(xaxis) / 5)]])
-    ax_PV.set_yticklabels(['{:10.1f}'.format(i) for i in yaxis[0:-1:int(len(yaxis) / 5)]])
-
-    #Add some contours
-    neg_cont = np.array([-3,-1.5],dtype=float)*Configuration['NOISE']
-    if  np.nanmax(PV[0].data) * 0.95 < 96*Configuration['NOISE']:
-        pos_cont =  np.array([1.5,3.,6,12,24,48,96],dtype=float)*Configuration['NOISE']
-    else:
-        pos_cont =  np.array([0,1,2,3,4,5,6,7],dtype=float)*(np.nanmax(PV[0].data) * 0.95-3.*Configuration['NOISE'])/7. +3.*Configuration['NOISE']
-    pos_cont = np.array([x for x in pos_cont if x <= np.nanmax(PV[0].data) * 0.95],dtype=float)
-    sf.print_log(f'''MAKE_OVERVIEW_PLOT: postive {pos_cont}, negative {neg_cont}, noise {Configuration['NOISE']}
-''',Configuration,case=['debug_add'] )
-    if pos_cont.size == 0:
-        pos_cont = 0.5 * np.nanmax(PV[0].data) * 0.95
-
-    #ax_PV.contour(PV[0].data, levels=pos_cont, colors='k',transform=ax_PV.get_transform(xv_proj))
-    #ax_PV.contour(PV[0].data, levels=neg_cont, colors='grey',linestyles='--',transform=ax_PV.get_transform(xv_proj))
-    #ax_PV.contour(PV_model[0].data, levels=pos_cont, colors='b',transform=ax_PV.get_transform(xv_model_proj),linewidths=1.)
-    ax_PV.contour(PV[0].data, levels=pos_cont,linewidths=1.*size_factor, colors='k')
-    ax_PV.contour(PV[0].data, levels=neg_cont,linewidths=1.*size_factor, colors='grey',linestyles='--')
-    ax_PV.contour(PV_model[0].data, levels=pos_cont, colors='b',linewidths=1.*size_factor)
-
-    momlevel = np.hstack((neg_cont,pos_cont))
-    column_levels = ', '.join(["{:.1f}".format(x*1000.) for x in momlevel])
-    if len(momlevel) < 4:
-        info_string = f"The contours are at {column_levels} mJy/beam"
-    else:
-        info_string = f"The contours are at {', '.join(['{:.1f}'.format(x*1000.) for x in momlevel[0:4]])}"
-        counter = 5
-        while counter < len(momlevel):
-            info_string = info_string+f"\n {', '.join(['{:.1f}'.format(x*1000.) for x in momlevel[counter:counter+7]])}"
-            counter += 7
-        info_string = info_string+" mJy/beam."
-
-    divider = make_axes_locatable(ax_PV)
-    cax = divider.append_axes("top", size="5%", pad=0.05, axes_class=maxes.Axes)
-    cbar = plt.colorbar(PV_plot, cax=cax, orientation='horizontal')
-    cax.xaxis.set_ticks_position('top')
-    cbar.set_ticks([minint, maxint])
-    cbar.ax.set_title(f"{PV[0].header['BUNIT']}", y= 0.2*size_factor**2)
-
-    ax_PV.text(-0.1,-0.2,info_string, va='top',ha='left', color='black',transform = ax_PV.transAxes,
-          bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7)
-
-    #cf.plot_fits(filename, Comp_ax2, cmap='hot_r', aspect=ratio, cbar ='horizontal')
-    ax_PV.set_xlabel("Offset (arcsec)")
-    ax_PV.set_ylabel("Velocity (km s$^{-1}$)")
+    ax_PV = plot_PV(Configuration,image=PV, model = PV_model, figure = Overview, \
+        location = gs[2:8,8:14],size_factor = size_factor,
+        tirific_model = f"{Configuration['FITTING_DIR']}Finalmodel/Finalmodel.def")
     PV.close()
     PV_model.close()
 
@@ -831,29 +777,30 @@ def make_overview_plot(Configuration,Fits_Files ):
     ax_RC = plot_parameters(Configuration,Vars_to_plot,FAT_Model,gs[19:22,3:9],\
                             Overview,'VROT',Input_Model = Input_Model,initial_extent= sof_basic_extent[0], \
                             initial = sof_basic_maxrot[0],Extra_Model = Extra_Model)
-    ymin =np.min([FAT_Model[Vars_to_plot.index('VROT'),1:],FAT_Model[Vars_to_plot.index('VROT_2'),1:]])
+    ymin =np.nanmin([FAT_Model[Vars_to_plot.index('VROT'),1:],FAT_Model[Vars_to_plot.index('VROT_2'),1:]])
+    ymax =np.nanmax([FAT_Model[Vars_to_plot.index('VROT'),1:],FAT_Model[Vars_to_plot.index('VROT_2'),1:]])
+
     if len(Extra_Model) > 0:
-        ymin2 =np.min([Extra_Model[Vars_to_plot.index('VROT'),1:],Extra_Model[Vars_to_plot.index('VROT_2'),1:]])
-        ymax2 =np.max([Extra_Model[Vars_to_plot.index('VROT'),1:],Extra_Model[Vars_to_plot.index('VROT_2'),1:]])
+        ymin2 =np.nanmin([Extra_Model[Vars_to_plot.index('VROT'),1:],Extra_Model[Vars_to_plot.index('VROT_2'),1:]])
+        ymax2 =np.nanmax([Extra_Model[Vars_to_plot.index('VROT'),1:],Extra_Model[Vars_to_plot.index('VROT_2'),1:]])
     else:
         ymin2 = ymin
         ymax2 = ymax
-    ymax =np.max([FAT_Model[Vars_to_plot.index('VROT'),1:],FAT_Model[Vars_to_plot.index('VROT_2'),1:]])
-
+  
     if len(Input_Model) > 0:
-        ymin3 =np.min([Input_Model[Vars_to_plot.index('VROT'),1:],Input_Model[Vars_to_plot.index('VROT_2'),1:]])
-        ymax3 =np.max([Input_Model[Vars_to_plot.index('VROT'),1:],Input_Model[Vars_to_plot.index('VROT_2'),1:]])
+        ymin3 =np.nanmin([Input_Model[Vars_to_plot.index('VROT'),1:],Input_Model[Vars_to_plot.index('VROT_2'),1:]])
+        ymax3 =np.nanmax([Input_Model[Vars_to_plot.index('VROT'),1:],Input_Model[Vars_to_plot.index('VROT_2'),1:]])
     else:
         ymin3=ymin
         ymax3= ymax
-    ymin = np.min([ymin,ymin2,ymin3])
-    ymax = np.max([ymax,ymax2,ymax3])
+    ymin = np.nanmin([ymin,ymin2,ymin3])
+    ymax = np.nanmax([ymax,ymax2,ymax3])
 
-    buffer = np.mean([ymin,ymax])/20.
+    buffer = np.nanmean([ymin,ymax])/20.
     ymin= ymin-buffer
     ymax = ymax+buffer
-
-    ax_RC.set_ylim(ymin,ymax)
+    if not np.isnan(ymin) and not np.isnan(ymax):
+        ax_RC.set_ylim(ymin,ymax)
 
     plt.tick_params(
         axis='x',          # changes apply to the x-axis
@@ -998,7 +945,7 @@ def make_overview_plot(Configuration,Fits_Files ):
     sec_ax.set_xlim(sf.convertskyangle(Configuration,arcmin),sf.convertskyangle(Configuration,arcmax))
     sec_ax.figure.canvas.draw()
 
-
+#
 #----------------------------------------------Distance vs VSYS -----------------------------------------
     ax_VSYS = Overview.add_subplot(gs[2:6,16:20])
     plt.xlabel('Sys. Vel. (km s$^{-1}$)',**labelfont)
@@ -1053,6 +1000,8 @@ def make_overview_plot(Configuration,Fits_Files ):
     cube_mod.close()
     cube.close()
     channels_map.close()
+
+    #
     plt.savefig(f"{Configuration['FITTING_DIR']}Overview.png", bbox_inches='tight')
     #plt.savefig(f"Overview_Test.png", bbox_inches='tight')
     plt.close()
@@ -1094,14 +1043,14 @@ def plot_parameters(Configuration,Vars_to_plot,FAT_Model,location,Figure,\
         Extra_Model = []
     if legend is None:
         legend = ['Empty','Empty','Empty','Empty']
-    sf.print_log(f'''PLOT_PARAMETERS: We are starting to plot {parameter}
+    print_log(f'''PLOT_PARAMETERS: We are starting to plot {parameter}
 ''', Configuration,case=['debug_start'])
     ax = Figure.add_subplot(location)
     try:
         yerr = FAT_Model[Vars_to_plot.index(f'# {parameter}_ERR'),:]
     except ValueError:
         yerr =np.zeros(len(FAT_Model[Vars_to_plot.index('RADI'),:]))
-    sf.print_log(f'''PLOT_PARAMETERS: We found these errors {yerr}
+    print_log(f'''PLOT_PARAMETERS: We found these errors {yerr}
 ''', Configuration,case=['debug_add'])
 
     ax.errorbar(FAT_Model[Vars_to_plot.index('RADI'),:],FAT_Model[Vars_to_plot.index(f'{parameter}'),:],yerr= yerr, c ='k', label=f'{legend[0]}',zorder=3)
@@ -1196,14 +1145,211 @@ plot_parameters.__doc__ =f'''
      NOTE:
 '''
 
+def plot_PV(Configuration,image=None, model = None, figure = None, \
+    location = [0.1,0.1,0.8,0.8], tirific_model=None, size_factor = 1.):
+    if image == None:
+        print('plot_PV will not work witout an image.')
+        return 'Empty'
+    else:
+        try:
+            hdr = image[0].header
+            data = image[0].data
+        except:
+            hdr = image.header
+            data = image.data
 
+    ratio=hdr['NAXIS2']/hdr['NAXIS1']
+    # Then we want to plot our PV-Diagram
+    if figure == None:
+        figure = plt.figure(2, figsize=(8, 8), dpi=300, facecolor='w', edgecolor='k')
+
+    ax = figure.add_subplot(location)
+    #Comp_ax2.set_title('PV-Diagram')
+
+    maxint= np.nanmax(data)*0.85
+    minint= np.nanmin(data)/3.
+    PV_plot = ax.imshow(data,  cmap='hot_r', origin='lower', alpha=1, \
+                            vmin=minint, vmax=maxint,aspect='auto')
+    xaxis = [hdr['CRVAL1'] + (i - hdr['CRPIX1'] + 1) \
+        * (hdr['CDELT1']) for i in range(hdr['NAXIS1'])]
+    yaxis = [hdr['CRVAL2'] + (i - hdr['CRPIX2'] + 1) * (hdr['CDELT2']) for i in
+         range(hdr['NAXIS2'])]
+    #something is going wrong here, Fixed as usual astropy was fucking thing up
+    step = int(abs((xaxis[-1]-xaxis[0])/7))
+    ticks = np.array([-3*step,-2*step,-1*step,0.,step,2*step,3*step],dtype=float)+hdr['CRVAL1']
+    pix_ticks =(ticks - hdr['CRVAL1'])/hdr['CDELT1']+(hdr['CRPIX1']-1)
+    ax.set_xticks(pix_ticks)
+    ax.set_xticklabels([f'{int(i):d}' for i in ticks],size=5,ha='center')
+    ax.set_yticks(range(len(yaxis))[0:-1:int(len(yaxis) / 5)])
+    ax.set_yticklabels(['{:.1f}'.format(i) for i in yaxis[0:-1:int(len(yaxis) / 5)]])
+    ax.grid()
+   
+    #Add some contours
+    neg_cont = np.array([-3,-1.5],dtype=float)*Configuration['NOISE']
+    if  np.nanmax(data) * 0.95 < 96*Configuration['NOISE']:
+        pos_cont =  np.array([1.5,3.,6,12,24,48,96],dtype=float)*Configuration['NOISE']
+    else:
+        pos_cont =  np.array([0,1,2,3,4,5,6,7],dtype=float)*(np.nanmax(data) * 0.95-3.*Configuration['NOISE'])/7. +3.*Configuration['NOISE']
+    pos_cont = np.array([x for x in pos_cont if x <= np.nanmax(data) * 0.95],dtype=float)
+    print_log(f'''PV_PLOT: postive {pos_cont}, negative {neg_cont}, noise {Configuration['NOISE']}
+''',Configuration,case=['debug_add'] )
+    if pos_cont.size == 0:
+        pos_cont = 0.5 * np.nanmax(data) * 0.95
+
+#ax_PV.contour(PV[0].data, levels=pos_cont, colors='k',transform=ax_PV.get_transform(xv_proj))
+#ax_PV.contour(PV[0].data, levels=neg_cont, colors='grey',linestyles='--',transform=ax_PV.get_transform(xv_proj))
+#ax_PV.contour(PV_model[0].data, levels=pos_cont, colors='b',transform=ax_PV.get_transform(xv_model_proj),linewidths=1.)
+    ax.contour(data, levels=pos_cont,linewidths=1.*size_factor, colors='k')
+    ax.contour(data, levels=neg_cont,linewidths=1.*size_factor, colors='grey',linestyles='--')
+    if model != None:
+        try:
+            model_data = model[0].data
+        except:
+            model_data = model.data
+        ax.contour(model_data, levels=pos_cont, colors='b',linewidths=1.*size_factor)
+
+    momlevel = np.hstack((neg_cont,pos_cont))
+    column_levels = ', '.join(["{:.1f}".format(x*1000.) for x in momlevel])
+    if len(momlevel) < 4:
+        info_string = f"The contours are at {column_levels} mJy/beam"
+    else:
+        info_string = f"The contours are at {', '.join(['{:.1f}'.format(x*1000.) for x in momlevel[0:4]])}"
+        counter = 5
+        while counter < len(momlevel):
+            info_string = info_string+f"\n {', '.join(['{:.1f}'.format(x*1000.) for x in momlevel[counter:counter+7]])}"
+            counter += 7
+    info_string = info_string+" mJy/beam."
+
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("top", size="5%", pad=0.05, axes_class=maxes.Axes)
+    cbar = plt.colorbar(PV_plot, cax=cax, orientation='horizontal')
+    cax.xaxis.set_ticks_position('top')
+    cbar.set_ticks([minint, maxint])
+    cbar.ax.set_title(f"{hdr['BUNIT']}", y= 0.2*size_factor**2)
+
+    ax.text(-0.1,-0.2,info_string, va='top',ha='left', color='black',transform = ax.transAxes,
+          bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7)
+    if tirific_model != None:
+        parameters = sf.load_tirific(Configuration,tirific_model,\
+            Variables= ['RADI','VROT','VROT_2','INCL','INCL_2','VSYS','VSYS_2']\
+                ,array=True ,brightness_check=True)
+        if np.sum(parameters[2]) == 0.:
+            parameters[2] =   parameters[1]
+            parameters[4] =   parameters[3]
+            parameters[6] =   parameters[5]
+        if 'DRVAL1' in hdr:
+            center = [float(x) for x in hdr['DRVAL1'].split('+')]
+            model_center = [float(x[0]) for x in sf.load_tirific(Configuration,tirific_model,\
+            Variables= ['XPOS','XPOS_2','YPOS','YPOS_2'],array=True ) ]
+        if 'DRVAL2' in hdr:
+            vsys = float(hdr['DRVAL2'])
+            model_vsys = [float(x[0]) for x in sf.load_tirific(Configuration,tirific_model,\
+            Variables= ['VSYS','VSYS_2'],array=True ) ]
+
+    
+     
+                            
+        plotrc  = np.array([-1.*x*np.sin(np.radians(y))+parameters[5][0] for x,y \
+            in zip(parameters[1],parameters[3])],dtype=float)
+        plotrc2  = np.array([x*np.sin(np.radians(y))+parameters[6][0] for x,y in\
+            zip(parameters[2],parameters[4])],dtype=float)
+        # As python is a piece of shit that only does things half we need to convert to pixels
+
+        plotrc= (plotrc - hdr['CRVAL2'])/hdr['CDELT2']+(hdr['CRPIX2']-1)
+        radius = (-1.*parameters[0]-hdr['CRVAL1'])/hdr['CDELT1']+(hdr['CRPIX1']-1)
+        plotrc2= (plotrc2 - hdr['CRVAL2'])/hdr['CDELT2']+(hdr['CRPIX2']-1)
+        radius2 = (parameters[0]-hdr['CRVAL1'])/hdr['CDELT1']+(hdr['CRPIX1']-1)
+        ax.plot(radius,plotrc,'o',c='r')
+        ax.plot(radius2,plotrc2,'o',c='r')
+    #cf.plot_fits(filename, Comp_ax2, cmap='hot_r', aspect=ratio, cbar ='horizontal')
+    ax.set_xlabel("Offset (arcsec)")
+    ax.set_ylabel("Velocity (km s$^{-1}$)")
+    return ax
+plot_PV.__doc__ =f'''
+     NAME:
+        plot_PV
+
+     PURPOSE:
+        Plot the PV with th RC overlaid.
+
+     CATEGORY:
+        write_functions
+
+     INPUTS:
+        Configuration = Standard FAT configuration
+        image = fits object of the PV
+
+     OPTIONAL INPUTS:
+        model = fits object of model to overplot
+        figure = figure to plot the ax in if not defined it will be an 8 x 8 figure \
+        location = [0.1,0.1,0.8,0.8]
+            location of the ax
+        tirific_model=None
+            Model to obtain the RC from
+        size_factor = 1.
+            scaling factor for text and line widths
+
+
+
+     OUTPUTS:
+        ax object from matplot lib
+
+     OPTIONAL OUTPUTS:
+
+     PROCEDURES CALLED:
+        Unspecified
+
+     NOTE:
+'''
+
+def plot_individual_ax(Configuration,ax,combined_time,combined_loads):
+    ax.plot(combined_time,combined_loads['Tirific']['MEM'],'b-',lw=0.5)
+    ax.plot(combined_time,combined_loads['FAT']['MEM'],'b--',lw=0.5)
+    ax.set_ylim(0,np.max([combined_loads['Tirific']['MEM'],combined_loads['FAT']['MEM']]) \
+                      +np.max([combined_loads['Tirific']['MEM'],combined_loads['FAT']['MEM']])/10.)
+   
+   
+    ax2 = ax.twinx()
+    ax2.plot(combined_time,combined_loads['Tirific']['CPU'],'r-',lw=0.5)
+    ax2.plot(combined_time,combined_loads['FAT']['CPU'],'r--',lw=0.5)
+    return ax,ax2
+plot_individual_ax.__doc__ =f'''
+     NAME:
+        plot_individual_ax
+
+     PURPOSE:
+        setup a double plot with 2 axes 
+
+     CATEGORY:
+        write_functions
+
+     INPUTS:
+        Configuration = Standard FAT configuration
+        ax = the axis object to hold the double plot
+        combined_time = list containing the x axis
+        combined_load = dictionary that that contains the Memory (blue) and CPU (red) loads split
+                         according to tirific (solid line)  and FAT (dashed line)
+
+     OPTIONAL INPUTS:
+
+
+     OUTPUTS:
+        ax = axis object with the memory plot
+        ax2 = axis object with the CPU plot
+
+     OPTIONAL OUTPUTS:
+
+     PROCEDURES CALLED:
+        Unspecified
+
+     NOTE:
+'''
 
 def plot_usage_stats(Configuration ):
     with open(f"{Configuration['LOG_DIRECTORY']}Usage_Statistics.txt") as file:
         lines = file.readlines()
 
-    labels = {'FAT': {'label':[], 'Time':[]}, 'Tirific':{'label':[], 'Time':[]}}
-    loads = {'FAT':{'CPU':[],'MEM':[],'Time':[]},'Tirific':{'CPU':[],'MEM':[],'Time': []}}
+    
     try:
         mpl_fm.fontManager.addfont(Configuration['FONT_FILE'])
         font_name = mpl_fm.FontProperties(fname=Configuration['FONT_FILE']).get_name()
@@ -1212,174 +1358,50 @@ def plot_usage_stats(Configuration ):
     labelfont = {'family': font_name,
              'weight': 'normal',
              'size': 4}
-    current_stage = 'Not_Found'
-    current_module = 'Unknown'
-    startdate = 0
-    for line in lines:
-        line = line.strip()
-        tmp = line.split(' ')
-        if line[0] == '#':
-            date = extract_date(f"{tmp[-2]} {tmp[-1]}")
-        else:
-            date = extract_date(f"{tmp[0]} {tmp[1]}")
-        if startdate == 0:
-            startdate = date
-        diff = date - startdate
-        time = diff.total_seconds()/60.
-        if line[0] == '#':
-            if tmp[1] == 'TIRIFIC:':
-
-                if tmp[2].lower() == 'initializing':
-                    tmp2 = line.split('=')[1].split()
-                    current_stage = tmp2[0].strip()
-                    labels['Tirific']['label'].append(f'Initializing {current_stage}')
-                    labels['Tirific']['Time'].append(time)
-                elif tmp[2].lower() == 'finished':
-                    labels['Tirific']['label'].append(f'Ended {current_stage}')
-                    labels['Tirific']['Time'].append(time)
-                    #current_stage = 'No Tirific'
-                elif tmp[2].lower() == 'started':
-                    labels['Tirific']['label'].append(f'Started {current_stage}')
-                    labels['Tirific']['Time'].append(time)
-            else:
-                labels['FAT']['label'].append(f'Starting {tmp[1]}')
-                labels['FAT']['Time'].append(time)
-        else:
-            if tmp[-1].lower() == 'tirific':
-                loads['Tirific']['Time'].append(time)
-                loads['Tirific']['CPU'].append(tmp[4])
-                loads['Tirific']['MEM'].append(tmp[8])
-            else:
-                loads['FAT']['Time'].append(time)
-                loads['FAT']['CPU'].append(tmp[4])
-                loads['FAT']['MEM'].append(tmp[8])
-
+    loads,labels,maxCPU, maxMEM = read_statistics(Configuration)
+   
     # Below thanks to P. Serra
     # Make single-PID figures and total figure
     #print(loads['Tirific']['Time'],loads['FAT']['Time'])
     if len(loads['Tirific']['Time']) > 0.:
-        combined_time =  np.sort(np.array(loads['Tirific']['Time']+loads['FAT']['Time'],dtype=float))
-
-        combined_loads ={'Tirific':{'CPU':np.interp(combined_time,np.array(loads['Tirific']['Time'],dtype=float),np.array(loads['Tirific']['CPU'],dtype=float)),\
-                                    'MEM':np.interp(combined_time,np.array(loads['Tirific']['Time'],dtype=float),np.array(loads['Tirific']['MEM'],dtype=float))},\
-                        'FAT':{'CPU':np.interp(combined_time,np.array(loads['FAT']['Time'],dtype=float),np.array(loads['FAT']['CPU'],dtype=float)),\
-                                                    'MEM':np.interp(combined_time,np.array(loads['FAT']['Time'],dtype=float),np.array(loads['FAT']['MEM'],dtype=float))}
-
-        }
-        comb_list= labels['Tirific']['Time']+labels['FAT']['Time']
-        comb_label = labels['Tirific']['label']+labels['FAT']['label']
-
-        labels_times=np.array([x for x, _ in sorted(zip(comb_list, comb_label))],dtype=float)
-        labels_comb = [x for _, x in sorted(zip(comb_list, comb_label))]
-
-        fig, ax1 = plt.subplots(figsize = (8,6))
+        combined_time, combined_loads, labels_times, labels_comb = \
+                create_plot_stats(Configuration,loads,labels)
+          
+        if Configuration['MULTIPROCESSING']:
+            fig, ax = plt.subplots(1,2,sharey=True,figsize = (8,6))
+            ax[0].spines['right'].set_visible(False)
+            ax[1].spines['left'].set_visible(False)
+            ax[0].yaxis.tick_left()
+            ax[0].tick_params(labelright='off')
+            ax[1].yaxis.tick_right()
+          
+           
+            
+        else:
+            fig, ax = plt.subplots(figsize = (8,6))
+           
+            ax = [ax]
         fig.subplots_adjust(left = 0.1, right = 0.9, bottom = 0.3, top = 0.7)
-
-
-        ax1.plot(combined_time,combined_loads['Tirific']['MEM'],'b-',lw=0.5)
-        ax1.plot(combined_time,combined_loads['FAT']['MEM'],'b--',lw=0.5)
-        ax1.set_ylim(0,np.max([combined_loads['Tirific']['MEM'],combined_loads['FAT']['MEM']]) \
-                      +np.max([combined_loads['Tirific']['MEM'],combined_loads['FAT']['MEM']])/10.)
-        ax1.set_ylabel('RAM (Mb) ', color='b')
-        ax1.tick_params(axis='y', labelcolor='b')
-        ax1.set_xlabel('time (min)', color='k',zorder=5)
-        ax2 = ax1.twinx()
-        ax2.plot(combined_time,combined_loads['Tirific']['CPU'],'r-',lw=0.5)
-        ax2.plot(combined_time,combined_loads['FAT']['CPU'],'r--',lw=0.5)
-        #ax2.plot(combined_time,combined_loads['FAT']['CPU'],'r--',lw=0.5)
-        ax2.set_ylabel('CPUs (%)',color='r')
-        ax2miny,ax2maxy = ax2.get_ylim()
-        ax2.tick_params(axis='y', labelcolor='r')
-        last_label = -100
-        label_sep = combined_time[-1]/30.
-        color, linest = '0.5', '--'
-        labelfont = {'family': font_name,
-                 'weight': 'normal',
-                 'size': 6.5}
-        prev_label = ''
-
-        last_label_top = 0.
-        last_label_bottom = 0.
-        #for label,time in zip(labels['Tirific']['label'],labels['Tirific']['Time']):
-        for label,time in zip(labels_comb,labels_times):
-
-            if label in labels['Tirific']['label']:
-                offset = 20.
-                xoffset = 0.05
-                vertical_start = ax2maxy
-                va= 'bottom'
-                ha= 'left'
-                color = 'k'
-                linest = '-'
-            else:
-                offset=-50
-                xoffset = 0.025
-                vertical_start = ax2miny
-                va= 'top'
-                ha='right'
-                color = '0.5'
-                linest = '--'
-
-
-            if (prev_label == 'Initializing tmp_incl_check' or prev_label == 'Ended tmp_incl_check'):
-                if (label != 'Initializing tmp_incl_check' and label != 'Ended tmp_incl_check') or \
-                        time == labels_times[-1]    :
-
-                    if time != labels_times[-1]:
-                        ax2.axvline(x=prev_time, linestyle=linest, color=color, linewidth=0.05)
-                        if label in labels['Tirific']['label']:
-                            last_label = last_label_top = max(prev_time,last_label_top+label_sep)
-                        else:
-                            last_label = last_label_bottom = max(prev_time,last_label_bottom+label_sep)
-                        ax2.text(last_label,vertical_start+offset,prev_label, va=va,ha=ha,rotation= 60, color='black',
-                              bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7,fontdict = labelfont)
-                        ax2.plot([prev_time,last_label+xoffset],[vertical_start,vertical_start+offset],linest,color=color,linewidth=0.05,clip_on=False)
-                    ax2.axvline(x=time, linestyle=linest, color=color, linewidth=0.05)
-                    if label in labels['Tirific']['label']:
-                        last_label = last_label_top = max(time,last_label_top+label_sep)
-                    else:
-                        last_label = last_label_bottom = max(time,last_label_bottom+label_sep)
-                    ax2.text(last_label,vertical_start+offset,label, va=va,ha=ha,rotation= 60, color='black',
-                          bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7,fontdict = labelfont)
-                    ax2.plot([time,last_label+xoffset],[vertical_start,vertical_start+offset],linest,color=color,linewidth=0.05,clip_on=False)
-                else:
-                    prev_time = time
-            elif (prev_label == 'Initializing Error_Shaker' or prev_label == 'Ended Error_Shaker' or prev_label == 'Started Error_Shaker'):
-                if (label != 'Initializing Error_Shaker' and label != 'Ended Error_Shaker' and  label != 'Started Error_Shaker') or \
-                        time == labels_times[-1]:
-
-                    #ax2.axvline(x=prev_time, linestyle=linest, color=color, linewidth=0.05)
-                    #last_label = max(prev_time,last_label+label_sep)
-                    #ax2.text(last_label,ax2maxy+20.,prev_label, va='bottom',ha='left',rotation= 60, color='black',
-                    #      bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7,fontdict = labelfont)
-                    #ax2.plot([prev_time,last_label+0.1],[ax2maxy,ax2maxy+20.],linest,color=color,linewidth=0.05,clip_on=False)
-                    ax2.axvline(x=time, linestyle=linest, color=color, linewidth=0.05)
-                    if label in labels['Tirific']['label']:
-                        last_label = last_label_top = max(time,last_label_top+label_sep)
-                    else:
-                        last_label = last_label_bottom = max(time,last_label_bottom+label_sep)
-                    ax2.text(last_label,vertical_start+offset,label, va=va,ha=ha,rotation= 60, color='black',
-                          bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7,fontdict = labelfont)
-                    ax2.plot([time,last_label+xoffset],[vertical_start,vertical_start+offset],linest,color=color,linewidth=0.05,clip_on=False)
-                else:
-                    prev_label = label
-                    prev_time = time
-            else:
-                ax2.axvline(x=time, linestyle=linest, color=color, linewidth=0.05)
-                if label in labels['Tirific']['label']:
-                    last_label = last_label_top = max(time,last_label_top+label_sep)
-                else:
-                    last_label = last_label_bottom= max(time,last_label_bottom+label_sep)
-                ax2.text(last_label,vertical_start+offset,label,va=va,ha=ha,rotation= 60, color='black',
-                      bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7,fontdict = labelfont)
-                #This should be the line to the label
-                ax2.plot([time,last_label+xoffset],[vertical_start,vertical_start+offset],linest,color=color,linewidth=0.05,clip_on=False)
-            prev_label = label
-
-
-
-        #This is beyond stupid again, but hey it is python so needed to make things work.
-        ax2.set_ylim([ax2miny,ax2maxy])
+        left_bottom = 0.1
+        tot_time = 0.
+        for timeone in combined_time:
+            tot_time += timeone[-1]-timeone[0]
+        normalize = tot_time/0.8
+        lengths = [np.max([(x[-1]-x[0])/normalize,0.15]) for x in combined_time]
+        lengths = np.array(lengths,dtype=float) * 0.8/np.sum(lengths) 
+        for i,axplot in enumerate(ax):
+            normalize = (labels_times[i][-1]-labels_times[i][0])/lengths[i]
+            ax_MEM,ax_CPU = plot_individual_ax(Configuration,axplot,combined_time[i],combined_loads[i])
+            ax_MEM,ax_CPU,left_bottom = set_proper_edges(Configuration, i, ax, ax_MEM,\
+                                         ax_CPU,lengths[i],left_bottom)
+            ax_CPU.set_ylim(0.,maxCPU*1.05)
+            ax_MEM.set_ylim(0.,maxMEM*1.05)
+            ax_MEM.set_xlim(combined_time[i][0],combined_time[i][-1])
+            ax_CPU.set_xlim(combined_time[i][0],combined_time[i][-1])
+                
+            ax_CPU = set_timing_labels(Configuration,ax_CPU, labels_times[i],labels_comb[i],labels,labelfont,normalize)
+        fig.text(0.5,0.25,'time (min)', va='center',ha='center',rotation= 0, color='black',
+                          bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7)
         fig.savefig(f"{Configuration['LOG_DIRECTORY']}ram_cpu.pdf")
         plt.close()
 
@@ -1401,6 +1423,108 @@ plot_usage_stats.__doc__ =f'''
 
  OUTPUTS:
     ram_cpu.pdf in the Logs directory
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
+
+def read_statistics(Configuration):
+    labels = {'FAT': {'label':[], 'Time':[]}, 'Tirific':{'label':[], 'Time':[]}}
+    loads = {'FAT':{'CPU':[],'MEM':[],'Time':[]},'Tirific':{'CPU':[],'MEM':[],'Time': []}}
+    with open(f"{Configuration['LOG_DIRECTORY']}Usage_Statistics.txt") as file:
+        lines = file.readlines()
+    current_stage = 'Not_Found'
+    #current_module = 'Unknown'
+    startdate = 0
+    maxCPU = 0.
+    maxMEM= 0.
+    paused_time = 0.
+    gap_time= 0.
+    for line in lines:
+        line = line.strip()
+        tmp = line.split(' ')
+        if line[0] == '#':
+            date = extract_date(f"{tmp[-2]} {tmp[-1]}")
+        else:
+            date = extract_date(f"{tmp[0]} {tmp[1]}")
+        if startdate == 0:
+            startdate = date
+        diff = date - startdate
+        time = diff.total_seconds()/60.-gap_time
+    
+        if line[0] == '#':
+            if tmp[1] == 'TIRIFIC:':
+
+                if tmp[2].lower() == 'initializing':
+                    tmp2 = line.split('=')[1].split()
+                    current_stage = tmp2[0].strip()
+                    labels['Tirific']['label'].append(f'Initializing {current_stage}')
+                    labels['Tirific']['Time'].append(time)
+                elif tmp[2].lower() == 'finished':
+                    labels['Tirific']['label'].append(f'Ended {current_stage}')
+                    labels['Tirific']['Time'].append(time)
+                    #current_stage = 'No Tirific'
+                elif tmp[2].lower() == 'started':
+                    labels['Tirific']['label'].append(f'Started {current_stage}')
+                    labels['Tirific']['Time'].append(time)
+            elif tmp[1] == 'MP_FITTING_LOOP:':
+                labels['Tirific']['label'].append(f'Started {tmp[1]}')  
+                if Configuration['MULTIPROCESSING']:
+                    gap_time = time-paused_time
+                labels['Tirific']['Time'].append(time-gap_time)
+            else:
+                if tmp[2].lower() == 'pause':
+                    labels['FAT']['label'].append(f'Pausing FAT')
+                    labels['FAT']['Time'].append(time)
+                    if Configuration['MULTIPROCESSING']:
+                        '''If we are pausing due to splitting sofia and fit we subtract the pause time'''
+                        paused_time = time
+                else:
+                    labels['FAT']['label'].append(f'Starting {tmp[1]}')
+                    labels['FAT']['Time'].append(time)
+        else:
+            if tmp[-1].lower() == 'tirific':
+                loads['Tirific']['Time'].append(time)
+                loads['Tirific']['CPU'].append(tmp[4])
+               
+                loads['Tirific']['MEM'].append(tmp[8])
+            else:
+                loads['FAT']['Time'].append(time)
+                loads['FAT']['CPU'].append(tmp[4])
+                loads['FAT']['MEM'].append(tmp[8])
+            if float(tmp[4]) > maxCPU:
+                    maxCPU = float(tmp[4])
+            if float(tmp[8]) > maxMEM:
+                    maxMEM = float(tmp[8])
+    return loads,labels,maxCPU,maxMEM
+read_statistics.__doc__ =f'''
+ NAME:
+    read_statistics
+
+ PURPOSE:
+    Read the file Usage_Statistics.txt in the FAT log directory and transform the input into two 
+    dictionaries. In Multiprocessing the pool time is subtracted
+  
+
+ CATEGORY:
+    write_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    
+
+ OPTIONAL INPUTS:
+
+
+ OUTPUTS:
+    loads = dictionary with the times and Memory and CPU loads, split in system and tirific
+    labels = labels indicating specifics of what was happening at times
+    maxCPU = the max CPU load encountered
+    maxMEM = the maximum memory load encountered
 
  OPTIONAL OUTPUTS:
 
@@ -1432,9 +1556,6 @@ def reorder_output_catalogue(Configuration,Full_Catalogue):
             except IndexError:
                 pass
 
-
-
-
 reorder_output_catalogue.__doc__ =f'''
  NAME:
     reorder_output_catalogue
@@ -1464,17 +1585,198 @@ reorder_output_catalogue.__doc__ =f'''
  NOTE:
 '''
 
-def extract_date(string):
-    tmp = string.split(' ')
-    tmp2 = tmp[0].split('-')
-    if len(tmp2) == 3:
-        try:
-            date =  datetime.strptime(f"{tmp[0]} {tmp[1]}", '%Y-%m-%d %H:%M:%S.%f')
-        except ValueError:
-            date =  datetime.strptime(f"{tmp[0]} {tmp[1]}", '%Y-%m-%d %H:%M:%S')
+def set_proper_edges(Configuration,i,ax,ax_MEM,ax_CPU,length,left_bottom):
+    if i+1 == len(ax):
+        if i > 0:
+            ax_MEM.spines['left'].set_visible(False) 
+            ax_MEM.tick_params(axis='y', length = 0)    
+        ax_CPU.spines['left'].set_visible(False)
+        ax_CPU.set_ylabel('CPUs (%)',color='r')
+        ax_CPU.tick_params(axis='y', labelcolor='r')
     else:
-        raise ProgramError("There is no date in the provided string.")
-    return date
+        '''This currently only works with a single break'''
+        ax_CPU.spines['right'].set_visible(False)
+        ax_CPU.axis('off')    
+        ax_CPU.tick_params(labelleft='off')
+    if i == 0:
+        ax_MEM.set_ylabel('RAM (Mb) ', color='b')
+        ax_MEM.tick_params(axis='y', labelcolor='b')
+    ax_MEM.set_position([left_bottom,0.3,length,0.4])
+    ax_CPU.set_position([left_bottom,0.3,length,0.4])
+    left_bottom += length+0.01  
+
+    d =0.025
+    dx = d/(6*length)
+    kwargs = dict(transform=ax_MEM.transAxes, color='k', clip_on=False)
+    if i != 0:
+        ax_MEM.plot((-dx, dx), (1-d, 1+d), **kwargs)
+        ax_MEM.plot((-dx, dx), (-d, +d), **kwargs)
+    
+    if i+1 != len(ax):
+        ax_MEM.plot((1-dx, 1+dx), (-d, +d), **kwargs)
+        ax_MEM.plot((1-dx, 1+dx), (1-d, 1+d), **kwargs)   
+    return ax_MEM,ax_CPU,left_bottom
+set_proper_edges.__doc__ =f'''
+ NAME:
+    set_proper_edges
+
+ PURPOSE:
+    Set the proper edges form the timing plot  
+ 
+ CATEGORY:
+    write_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    i = index of current ax
+    ax = all axes
+    ax_MEM = the memory axis
+    ax_CPU = the CPU axis
+    length = size of the plot in fig coordinate
+    left_bottom = location of the right side of the plot in fig coordinate
+
+ OPTIONAL INPUTS:
+
+
+ OUTPUTS:
+    ax_MEM = updated memory axis object
+    ax_CPU = updated CPU axis object
+    left_bottom = right hand side for next axis object
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
+
+def set_timing_labels(Configuration,ax, labels_times,labels_comb,labels,labelfont,normalize):
+    labelfont['size'] = 6
+    miny, maxy = ax.get_ylim()
+    last_label = -100
+
+    label_sep = 0.015*normalize
+    #label_sep = 0.001
+    color, linest = '0.5', '--'
+   
+    prev_label = ''
+
+    last_label_top = -100.
+    last_label_bottom = -100.
+        #for label,time in zip(labels['Tirific']['label'],labels['Tirific']['Time']):
+    for label,time in zip(labels_comb,labels_times):
+        if label in labels['Tirific']['label']:
+            offset = 20.
+            xoffset = 0.005*normalize
+            vertical_start = maxy
+            va= 'bottom'
+            ha= 'left'
+            color = 'k'
+            linest = '-'
+        else:
+            offset=-50
+            xoffset = -0.005*normalize
+            vertical_start = miny
+            va= 'top'
+            ha='right'
+            color = '0.5'
+            linest = '--'
+
+
+        if (prev_label == 'Initializing tmp_incl_check' or prev_label == 'Ended tmp_incl_check'):
+            if (label != 'Initializing tmp_incl_check' and label != 'Ended tmp_incl_check') or \
+                    time == labels_times[-1]    :
+
+                if time != labels_times[-1]:
+                    ax.axvline(x=prev_time, linestyle=linest, color=color, linewidth=0.05)
+                    if label in labels['Tirific']['label']:
+                        last_label = last_label_top = max(prev_time,last_label_top+label_sep)
+                    else:
+                        last_label = last_label_bottom = max(prev_time,last_label_bottom+label_sep)
+                    ax.text(last_label,vertical_start+offset,prev_label, va=va,ha=ha,rotation= 60, color='black',
+                            bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7,fontdict = labelfont)
+                    ax.plot([prev_time,last_label+xoffset],[vertical_start,vertical_start+offset],linest,color=color,linewidth=0.05,clip_on=False)
+                ax.axvline(x=time, linestyle=linest, color=color, linewidth=0.05)
+                if label in labels['Tirific']['label']:
+                    last_label = last_label_top = max(time,last_label_top+label_sep)
+                else:
+                    last_label = last_label_bottom = max(time,last_label_bottom+label_sep)
+                ax.text(last_label,vertical_start+offset,label, va=va,ha=ha,rotation= 60, color='black',
+                        bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7,fontdict = labelfont)
+                ax.plot([time,last_label+xoffset],[vertical_start,vertical_start+offset],linest,color=color,linewidth=0.05,clip_on=False)
+            else:
+                prev_time = time
+        elif (prev_label == 'Initializing Error_Shaker' or prev_label == 'Ended Error_Shaker' or prev_label == 'Started Error_Shaker'):
+            if (label != 'Initializing Error_Shaker' and label != 'Ended Error_Shaker' and  label != 'Started Error_Shaker') or \
+                    time == labels_times[-1]:
+
+                    #ax2.axvline(x=prev_time, linestyle=linest, color=color, linewidth=0.05)
+                    #last_label = max(prev_time,last_label+label_sep)
+                    #ax2.text(last_label,ax2maxy+20.,prev_label, va='bottom',ha='left',rotation= 60, color='black',
+                    #      bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7,fontdict = labelfont)
+                    #ax2.plot([prev_time,last_label+0.1],[ax2maxy,ax2maxy+20.],linest,color=color,linewidth=0.05,clip_on=False)
+                ax.axvline(x=time, linestyle=linest, color=color, linewidth=0.05)
+                if label in labels['Tirific']['label']:
+                    last_label = last_label_top = max(time,last_label_top+label_sep)
+                else:
+                    last_label = last_label_bottom = max(time,last_label_bottom+label_sep)
+                ax.text(last_label,vertical_start+offset,label, va=va,ha=ha,rotation= 60, color='black',
+                          bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7,fontdict = labelfont)
+                ax.plot([time,last_label+xoffset],[vertical_start,vertical_start+offset],linest,color=color,linewidth=0.05,clip_on=False)
+            else:
+                prev_label = label
+                prev_time = time
+        else:
+            ax.axvline(x=time, linestyle=linest, color=color, linewidth=0.05)
+          
+            if label in labels['Tirific']['label']:
+                last_label = last_label_top = max(time,last_label_top+label_sep)
+            else:
+                last_label = last_label_bottom= max(time,last_label_bottom+label_sep)
+           
+            #exit()
+            ax.text(last_label,vertical_start+offset,label,va=va,ha=ha,rotation= 60, color='black',
+                      bbox=dict(facecolor='white',edgecolor='white',pad= 0.,alpha=0.),zorder=7,fontdict = labelfont)
+                #This should be the line to the label
+            ax.plot([time,last_label+xoffset],[vertical_start,vertical_start+offset],linest,color=color,linewidth=0.05,clip_on=False)
+        prev_label = label
+
+    ax.set_ylim(miny,maxy)    
+    return ax
+
+set_timing_labels.__doc__ =f'''
+NAME:
+set_timing_labels
+
+PURPOSE:
+Set the timing labels for the various accournces
+
+CATEGORY:
+write_functions
+
+INPUTS:
+Configuration = Standard FAT configuration
+ax = the axis object to attach the labels to
+labels_times = list of label times
+labels_comb = list of labels
+labels = dictionary with all labels split into upper and lower 
+labelfont = label font settings
+normalize = conversion factor from image coordinate to plot
+
+OPTIONAL INPUTS:
+
+
+OUTPUTS:
+ax = label axis object
+
+OPTIONAL OUTPUTS:
+
+PROCEDURES CALLED:
+Unspecified
+
+NOTE:
+'''
 
 def sofia(template,name):
     with open(name,'w') as file:
@@ -1485,25 +1787,61 @@ def sofia(template,name):
                 file.write(f"{key} = {template[key]}\n")
 
 sofia.__doc__ =f'''
+NAME:
+sofia
+PURPOSE:
+write a sofia2 dictionary into file
+CATEGORY:
+write_functions
+
+INPUTS:
+template = sofia template
+name = name of the file to write to
+
+OPTIONAL INPUTS:
+
+OUTPUTS:
+
+OPTIONAL OUTPUTS:
+
+PROCEDURES CALLED:
+Unspecified
+
+NOTE:
+'''
+
+def square_plot(ax):
+    xmin, xmax = ax.get_xlim()
+    ymin, ymax = ax.get_ylim()
+    if xmax > ymax:
+        diff = int(xmax-ymax)/2.
+        ax.set_ylim(ymin-diff,ymax+diff)
+        ymin, ymax = ax.get_ylim()
+    else:
+        diff = int(ymax-xmax)/2.
+        ax.set_xlim(xmin-diff,xmax+diff)
+        xmin, xmax = ax.get_xlim()
+square_plot.__doc__ =f'''
  NAME:
-    sofia
+    square_plot
+
  PURPOSE:
-    write a sofia2 dictionary into file
+    square the axes object
+        
  CATEGORY:
     write_functions
 
  INPUTS:
-    template = sofia template
-    name = name of the file to write to
-
+    ax = is the axes object to be squared
+        
  OPTIONAL INPUTS:
 
- OUTPUTS:
 
+ OUTPUTS:
+    square axes
  OPTIONAL OUTPUTS:
 
  PROCEDURES CALLED:
-    Unspecified
 
  NOTE:
 '''
@@ -1515,6 +1853,8 @@ def tirific(Configuration,Tirific_Template, name = 'tirific.def',\
     try:
         Tirific_Template['RESTARTID'] = str(int(Tirific_Template['RESTARTID'])+1)
     except ValueError:
+        Tirific_Template['RESTARTID'] = 0 
+    except KeyError:
         Tirific_Template['RESTARTID'] = 0
     if full_name:
         file_name = name

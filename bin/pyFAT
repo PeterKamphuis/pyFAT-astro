@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
+import warnings
+#Some issue in pip no longer using pkg_resources
 import pyFAT_astro.main as main
 import sys
 #from viztracer import VizTracer

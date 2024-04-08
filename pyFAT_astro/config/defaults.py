@@ -42,7 +42,7 @@ class Input:
     channel_dependency: str = 'independent'
     catalogue: Optional[str] = None
     tirific: str = "tirific"  # Command to call tirific
-    sofia2: str = "sofia2"  # Command to call sofia 2
+    sofia2: str = "sofia"  # Command to call sofia 2
     sofia_basename: Optional[str] = None
     # Directory of the existing Sofia output. Only used if the input catalogue is sofia or pre-processed sofia is somewhere
     sofia_dir: Optional[str] = None
@@ -81,6 +81,9 @@ class Advanced:
     unreliable_inclination: float = 10.  # If the final inclination is below this the fit is considered unreliable
     shaker_iterations: int = 20
     multiprocessing: bool = True
+    number_of_disks: int = 2
+    # The whole mechanism beheind the sbr_limits (which weigh the smoothing) is emperically determined. They are multiplied with this factor to allow optimization
+    limit_modifier_factor: float = 1.05
     #We do not want to use too many cores per galaxy.
     per_galaxy_ncpu: int = 4
     catalogue_split_character: str = '|'
@@ -106,16 +109,25 @@ class Advanced:
     # The brightest pixels need to have a SNR above this value
     source_max_snr: float = 2.5
     # The fraction of pixels in the source that need to be above max_snr
-    source_max_fraction: float = 0.1
+    source_max_fraction: float = 0.075
     # The mean SNR required in the source
     source_mean_snr: float = 0.75
-
+    sofia_threshold: int = 5
+    #option to bypass all initial checks on the intial sofia source and simply force the TRM fitting
+    force_fit: bool = False
     # Add the channel dependency, minimum inclination,
+    debug_function: List = field(default_factory=lambda: ['ALL'] )
 
+    # If we are using a sofia catalogue and want tor overwrite the create FAT Cubes
+    sofia_overwrite: bool = False
 
 @dataclass
 class defaults:
-    ncpu: int = len(psutil.Process().cpu_affinity())
+    try:
+        ncpu: int = len(psutil.Process().cpu_affinity())
+    except AttributeError:
+        ncpu: int = psutil.cpu_count()
+
     print_examples: bool = False
     installation_check: bool = False
     cube_name: Optional[str] = None
