@@ -761,7 +761,8 @@ def guess_orientation(Configuration,Fits_Files, vsys = -1 ,center = None, \
 
     # First we look for the kinematics center
 
-    vel_pa = sf.get_vel_pa(Configuration,map,center=center)
+    vel_pa,vel_pa_unreliable = sf.get_vel_pa(Configuration,map,center=center,\
+                                             Fits_Files=Fits_Files)
 
     maj_profile,maj_axis,maj_resolution = sf.get_profile(Configuration,map,pa[0], center=center)
     zeros = np.where(maj_profile == 0.)[0]
@@ -785,25 +786,25 @@ def guess_orientation(Configuration,Fits_Files, vsys = -1 ,center = None, \
 
     print_log(f'''GUESS_ORIENTATION: this is the pa {pa} and the vel_pa {vel_pa}
 ''' , Configuration,case= ['debug_add'])
-
-    if abs(pa[0]-vel_pa[0]) > 300.:
-        if pa[0] > 180.:
-            vel_pa[0] += 360.
+    if not vel_pa_unreliable:
+        if abs(pa[0]-vel_pa[0]) > 300.:
+            if pa[0] > 180.:
+                vel_pa[0] += 360.
+            else:
+                vel_pa[0] -= 360.
+        if abs(pa[0]-vel_pa[0]) > 25. and ~np.isnan(vel_pa[0])  :
+            # if the vel pa has a ridiculous error we use the normal pa
+            morph_pa=copy.deepcopy(pa)
+            if vel_pa[1] < 60.:
+                pa=vel_pa
+            #if the galaxy has a low inclination we do allow an error of the difference
+            if inclination[0] < 35.:
+                pa[1]=abs(morph_pa[0]-vel_pa[0])
         else:
-            vel_pa[0] -= 360.
-    if abs(pa[0]-vel_pa[0]) > 25. and ~np.isnan(vel_pa[0])  :
-        # if the vel pa has a ridiculous error we use the normal pa
-        morph_pa=copy.deepcopy(pa)
-        if vel_pa[1] < 60.:
-            pa=vel_pa
-        #if the galaxy has a low inclination we do allow an error of the difference
-        if inclination[0] < 35.:
-            pa[1]=abs(morph_pa[0]-vel_pa[0])
-    else:
-        if ~np.isnan(vel_pa[0]):
-            pa = [np.nansum([vel_pa[0]/vel_pa[1],\
-                pa[0]/pa[1]])/np.nansum([1./vel_pa[1],1./pa[1]]),\
-                2.*1./np.sqrt(np.nansum([1./vel_pa[1],1./pa[1]]))]
+            if ~np.isnan(vel_pa[0]):
+                pa = [np.nansum([vel_pa[0]/vel_pa[1],\
+                    pa[0]/pa[1]])/np.nansum([1./vel_pa[1],1./pa[1]]),\
+                    2.*1./np.sqrt(np.nansum([1./vel_pa[1],1./pa[1]]))]
     print_log(f'''GUESS_ORIENTATION: this is the final pa {pa}
 ''' , Configuration,case= ['debug_add'])
 

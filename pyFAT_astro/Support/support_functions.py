@@ -2370,22 +2370,31 @@ get_tirific_output_names.__doc__=f'''
  NOTE:
 '''
 
-def get_vel_pa(Configuration,velocity_field,center= [0.,0.] ):
+def get_vel_pa(Configuration,velocity_field,center= [0.,0.],Fits_Files =None ):
     print_log(f'''GET_VEL_PA: This is the center we use {center}
 ''',Configuration,case=['debug_start'])
+    unreliable =False
     if center == None:
         center = [x/2. for x in velocity_field.shape]
     else:
          # because python is stupid the ceneter should be reversed to match the map
         center.reverse()
+    fits.writeto(f'{Configuration["FITTING_DIR"]}/testvf_befor.fits',velocity_field,overwrite=True)
     sigma = [3.,3.]
     sm_velocity_field = ndimage.gaussian_filter(velocity_field, sigma=(sigma[1], sigma[0]), order=0)
-    while len(sm_velocity_field[~np.isnan(sm_velocity_field)]) < 10 and sigma[0] > 0.5:
-        sigma = [x-0.5 for x in sigma]
+    #if we have not enough points we load the original field and smooth it
+    if len(sm_velocity_field[~np.isnan(sm_velocity_field)]) < 10:
+        Image = fits.open(f"{Configuration['FITTING_DIR']}{Fits_Files['MOMENT1']}",\
+            uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
+        velocity_field = copy.deepcopy(Image[0].data)
+        unreliable =True
+        print_log(f'''GET_VEL_PA: We are starting from the origina moment 1
+''',Configuration,case=['debug_add'])
         sm_velocity_field = ndimage.gaussian_filter(velocity_field, sigma=(sigma[1], sigma[0]), order=0)
     if len(sm_velocity_field[~np.isnan(sm_velocity_field)]) < 10:
-        sm_velocity_field = copy.deepcopy(velocity_field)
-
+        return float('NaN'),True
+       
+    fits.writeto(f'{Configuration["FITTING_DIR"]}/testvf.fits',sm_velocity_field,overwrite=True)
     max_pos = np.where(np.nanmax(sm_velocity_field) == sm_velocity_field)
     #Python is a super weird language so make a decent list of np output
 
@@ -2448,7 +2457,7 @@ def get_vel_pa(Configuration,velocity_field,center= [0.,0.] ):
             else:
                 pa = np.radians(180.) - pa
     print_log(f'''GET_VEL_PA: This is the PA
-{'':8s} pa = {pa} pa_from_max = {pa_from_max} pa_from_min = {pa_from_min}
+{'':8s} pa = {np.degrees(pa)} pa_from_max = {np.degrees(pa_from_max)} pa_from_min = {np.degrees(pa_from_min)}
 ''',Configuration,case=['debug_add'])
     if np.degrees(abs(pa-pa_from_max)) > 170. or   np.degrees(abs(pa-pa_from_min)) > 170:
         pa = pa
@@ -2457,7 +2466,7 @@ def get_vel_pa(Configuration,velocity_field,center= [0.,0.] ):
     center.reverse()
     print_log(f'''GET_VEL_PA: This is the PA we extract from the velpa {np.degrees(pa)}
 ''',Configuration,case=['debug_add'])
-    return np.degrees([pa, np.nanstd([pa,pa_from_max,pa_from_min])])
+    return np.degrees([pa, np.nanstd([pa,pa_from_max,pa_from_min])]),unreliable
 get_vel_pa.__doc__ =f'''
  NAME:
     get_vel_pa

@@ -1587,6 +1587,9 @@ def get_error(Configuration,profile,sm_profile,key,min_error = 0.,\
         error = np.array(error,dtype=float)
     
     low = np.where(error < min_error)
+    print_log(f'''GET_ERROR: These are the errors below {min_error}
+{'':8s}{error}
+''',Configuration,case=['debug_add'])
     if np.sum(low) > 0.:
         error[low] =min_error[low]
 
