@@ -689,7 +689,7 @@ def mod_vrot_incl_err(profile,errors,incl,incl_errors):
     '''Error up and down have to be exactly the same'''
     vobs_up = np.sin(np.radians(incl+incl_errors))*\
                 (profile+errors)
-    errors = vobs_up/np.sin(np.radians(incl))-profile
+    errors = abs(vobs_up/np.sin(np.radians(incl))-profile)
     return errors
 
 def transfer_errors(Configuration,fit_type='Undefined'):
@@ -711,7 +711,18 @@ def transfer_errors(Configuration,fit_type='Undefined'):
             Variables=[parameter,f"{parameter}_2"],array=True)
         
         # As we can cut rings away during the smoothing we have to ensure the profiles have the same length
-        if len(profile[0,:]) != len(reg_profile[0,:]):
+        if len(reg_profile[0,:]) > len(profile[0,:]):
+            # This can happen if we switch from outer double to not. so we just intepolate
+            old_radii = sf.load_tirific(Configuration,\
+            f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}_Iteration_{Configuration['ITERATIONS']}.def",\
+                Variables=['RADI'],array=True)
+            radii = sf.load_tirific(Configuration,Tirific_Template,\
+                Variables=['RADI'],array=True)
+            tmp = [[],[]]    
+            for i in [0,1]:
+                tmp[i] = np.interp(np.array(radii,dtype=float),np.array(old_radii,dtype=float),np.array(profile[i],dtype=float))
+            profile=np.array(tmp,dtype=float)
+        elif len(reg_profile[0,:]) < len(profile[0,:]):
             tmp = [[],[]]    
             for i in [0,1]:
                 tmp[i] = profile[i,:len(reg_profile[i,:]-1)]

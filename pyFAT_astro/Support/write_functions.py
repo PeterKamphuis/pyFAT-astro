@@ -706,8 +706,8 @@ def make_overview_plot(Configuration,Fits_Files ):
 
 #__________________------------------------------------------------------------PV Diagram
 
-    extract_angle = np.mean(FAT_Model[Vars_to_plot.index('PA'),0:round(len(FAT_Model[Vars_to_plot.index('PA'),:])/2.)])
-
+    extract_angle = np.nanmean(FAT_Model[Vars_to_plot.index('PA'),0:round(len(FAT_Model[Vars_to_plot.index('PA'),:])/2.)])
+   
     messages = extract_pv(cube = cube,\
                 overwrite = False,PA=extract_angle,\
                 center=  [float(FAT_Model[Vars_to_plot.index('XPOS'),0]),\

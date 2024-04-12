@@ -338,10 +338,8 @@ linenumber.__doc__ =f'''
 def print_log(log_statement,Configuration, case = None):
    if case is None:
       case=['main']
-   
    debugging = False
    debug= 'empty'
-   
    if Configuration['DEBUG']:
       trig=False
       if 'ALL' in Configuration['DEBUG_FUNCTION']:
@@ -353,7 +351,7 @@ def print_log(log_statement,Configuration, case = None):
                current_function= f"{key[3]}"
                break
          if current_function.lower() in [x.lower() for x in  Configuration['DEBUG_FUNCTION']]:
-            trig=True             
+            trig=True      
       if trig:
          debugging=True    
          if 'debug_start' in case:
@@ -370,9 +368,10 @@ def print_log(log_statement,Configuration, case = None):
       or ('verbose' in case and (Configuration['VERBOSE_LOG'] or debugging))\
          or 'main' in case:
             print_statement = True
+   
    if print_statement:
       if Configuration['VERBOSE_SCREEN'] \
-         or not Configuration['OUTPUTLOG']  \
+         or Configuration['OUTPUTLOG'] is None  \
          or 'screen' in case \
          or (Configuration['VERBOSE_LOG'] and 'main' in case):
          print(log_statement)
