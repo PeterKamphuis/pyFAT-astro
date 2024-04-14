@@ -111,7 +111,7 @@ class Advanced:
     # The fraction of pixels in the source that need to be above max_snr
     source_max_fraction: float = 0.075
     # The mean SNR required in the source
-    source_mean_snr: float = 0.75
+    source_mean_snr: float = 0.5
     sofia_threshold: int = 5
     #option to bypass all initial checks on the intial sofia source and simply force the TRM fitting
     force_fit: bool = False
