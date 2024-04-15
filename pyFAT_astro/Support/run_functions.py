@@ -459,6 +459,7 @@ def check_source(Configuration, Fits_Files):
 
         #We use Max_SNR later on so it always has to be defined
         too_faint,Max_SNR = rf.check_source_brightness(Configuration,Fits_Files)
+        #If the source is too faint and we do not force the fit we  try with a lower threshold
         if too_faint and not Configuration['FORCE_FIT']:
             too_faint,Max_moment_SNR = rf.check_source_brightness(Configuration,Fits_Files,\
                 moment=True)
@@ -469,6 +470,7 @@ def check_source(Configuration, Fits_Files):
             elif too_faint:
                 raise BadSourceError(f'The selected source was deemed to be too faint to process')
             else:
+                #need to exit the while loop if all ok
                 source_not_ok = False
         else:
             source_not_ok = False
