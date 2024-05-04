@@ -3409,7 +3409,11 @@ def set_boundaries(Configuration,key,lower,upper,input=False):
 
     check=False
     key = key.upper()
+    print_log(f'''SET_BOUNDARIES: for {key} the input boundary is {Configuration[f'{key}_INPUT_BOUNDARY']}
+''',Configuration,case=['debug_add'])
     if np.sum(Configuration[f'{key}_INPUT_BOUNDARY']) != 0.:
+        print_log(f'''SET_BOUNDARIES: so we check against the input boundary
+''',Configuration,case=['debug_add'])
         check = True
     if input:
         boundary = f'{key}_INPUT_BOUNDARY'
@@ -3430,9 +3434,12 @@ def set_boundaries(Configuration,key,lower,upper,input=False):
         upper = upper*3
     for i in range(len(Configuration[boundary])):
         if check:
-            if lower[i] < Configuration[f'{key}_INPUT_BOUNDARY'][i][0]:
+            #As we allow individual parts as input we should check the total in one is not 0.
+            if lower[i] < Configuration[f'{key}_INPUT_BOUNDARY'][i][0] \
+                and np.sum(Configuration[f'{key}_INPUT_BOUNDARY'][i]):
                 lower[i] = Configuration[f'{key}_INPUT_BOUNDARY'][i][0]
-            if upper[i] > Configuration[f'{key}_INPUT_BOUNDARY'][i][1]:
+            if upper[i] > Configuration[f'{key}_INPUT_BOUNDARY'][i][1] \
+                and np.sum(Configuration[f'{key}_INPUT_BOUNDARY'][i]):
                 upper[i] = Configuration[f'{key}_INPUT_BOUNDARY'][i][1]
         Configuration[boundary][i][0] = float(lower[i])
         Configuration[boundary][i][1] = float(upper[i])
@@ -3674,17 +3681,19 @@ def setup_configuration(cfg):
     #If the input boundaries are unset we will set some reasonable limits
 
 
-# The parameters that need boundary limits are set here
+    # The parameters that need boundary limits are set here
     boundary_limit_keys = ['PA','INCL', 'SDIS', 'Z0','VSYS','XPOS','YPOS','VROT','SBR']
     for key in boundary_limit_keys:
-        if np.sum(Configuration[f"{key}_INPUT_BOUNDARY"]) == 0.:
-            if key == 'INCL':
-                Configuration[f"{key}_INPUT_BOUNDARY"] = [[5.,90.] for x in range(3)]
-            elif key == 'PA':
-                Configuration[f"{key}_INPUT_BOUNDARY"] = [[-10.,370.] for x in range(3)]
-            else:
-                #These are set when we have read the cube as they depend on it or the distance (Z0)
-                pass
+        #let's allow for only fixing 1 
+        for x in range(3):
+            if np.sum(Configuration[f"{key}_INPUT_BOUNDARY"][i]) == 0.:
+                if key == 'INCL':
+                    Configuration[f"{key}_INPUT_BOUNDARY"][i] = [5.,90.] 
+                elif key == 'PA':
+                    Configuration[f"{key}_INPUT_BOUNDARY"][i] = [-10.,370.]
+                else:
+                    #These are set when we have read the cube as they depend on it or the distance (Z0)
+                    pass
 
         Configuration[f"{key}_CURRENT_BOUNDARY"] = [[0.,0.],[0.,0.],[0.,0.]]
 

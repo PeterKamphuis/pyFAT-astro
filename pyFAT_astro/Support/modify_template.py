@@ -538,6 +538,73 @@ check_flat.__doc__ = '''
  NOTE:
 '''
 
+ #check that the key adheres to the settings
+def check_parameter_against_settings(Configuration,Tirific_Template\
+                                            ,key,fitting_settings): 
+    for x in range(len(fitting_settings['VARY'])):
+        part = fitting_settings['VARY'][x]
+        if part[0] == '!':
+            part = part[1:]
+        if part[-1] == ',':
+            part = part[:-1]
+        
+        minimum = fitting_settings['PARMIN'][x]
+        maximum = fitting_settings['PARMAX'][x]
+        buffer = (maximum-minimum)*0.05
+        blocks = find_parameters_and_rings(part)
+        for block in blocks:
+            values = sf.load_tirific(Configuration,Tirific_Template,array=True,\
+                                 Variables=[block['PARAMETER']],ensure_rings=True)
+          
+            #VROT starts with a 0 so we need to avoid it here
+            if key != 'VROT':
+                for x in values:
+                    if x == 0.:
+                        suplant = prev
+                        break
+                    prev = x
+            else:
+                suplant = 0.
+          
+            for ring in range(block['RINGS'][0],block['RINGS'][1]+1):
+                # if the value is 0 we set it to the previous ring
+                if values[ring] == 0.:
+                    values[ring] = suplant
+               
+                values[ring]= sf.set_limits(values[ring],minimum+buffer,maximum-buffer)
+               
+            Tirific_Template[block['PARAMETER']] =  f"{' '.join([f'{x:{sf.set_format(key)}}' for x in values])}"
+   
+check_parameter_against_settings.__doc__ = '''
+ NAME:
+    check_parameter_against_settings
+
+ PURPOSE:
+    Check that the values set for the key adhere to the fitting settings
+
+ CATEGORY:
+    modify_template
+
+ INPUTS:
+    Configuration  = Standard FAT configuration
+    Tirific_Template = standard Tirific_Template
+    key = parameter to check
+    fitting_settings = fitting settings for the key
+
+ OPTIONAL INPUTS:
+
+
+ OUTPUTS:
+       True if no variation is found false if variation is found
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+      zip(),np.std,np.mean,abs,print_log
+
+ NOTE:
+'''
+
 def check_size(Configuration,Tirific_Template, fit_type = 'Undefined', \
         stage = 'initial', Fits_Files= 'No Files' ,current_run='Not Initialized',
         no_apply=False):
@@ -729,6 +796,72 @@ cut_low_rings.__doc__  =f'''
     Unspecified
 
  NOTE: Very simple function only to be used after smoothing
+'''
+
+def find_parameters_and_rings(part):
+    blocks = []
+    y_block = -1
+    ind_parts = part.split()
+    y=0
+    while y < len(ind_parts):
+        parameter = ind_parts[y]
+        blocks.append({'PARAMETER':parameter,'RINGS':[-1,-1]})
+        y_block += 1 
+        count = 1
+        found =False
+        while not found:
+            if ind_parts[y+count].isnumeric():
+                ring = [int(ind_parts[y+count])-1,int(ind_parts[y+count])-1]
+            else:
+                test = ind_parts[y+count].split(':')
+                if len(test) == 2:
+                    ring = [int(test[0]),int(test[1])]
+                    ring = np.sort(ring)-1
+                else:
+                    y=y+count
+                    found = True
+            if not found:
+                count += 1 
+                if blocks[y_block]['RINGS'][0] == -1:
+                    blocks[y_block]['RINGS'][0] = ring[0]
+                elif blocks[y_block]['RINGS'][0] > ring[0]:
+                    blocks[y_block]['RINGS'][0] = ring[0]
+                
+                if blocks[y_block]['RINGS'][1] == -1:
+                    blocks[y_block]['RINGS'][1] = ring[1]
+                elif ring[1] > blocks[y_block]['RINGS'][1]:
+                    blocks[y_block]['RINGS'][1] = ring[1]
+                
+               
+                if y+count >= len(ind_parts):
+                    y = y+count
+                    found = True
+    return blocks
+find_parameters_and_rings.__doc__ = '''
+ NAME:
+     find_parameters_and_rings
+
+ PURPOSE:
+    Obtain the parameters and the rings that are set in a block of VArY
+
+ CATEGORY:
+    modify_template
+
+ INPUTS:
+    part = is the string to dissect
+
+ OPTIONAL INPUTS:
+
+
+ OUTPUTS:
+       
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+      zip(),np.std,np.mean,abs,print_log
+
+ NOTE:
 '''
 
 def fit_arc(Configuration,radii,sm_profile,error, function_to_fit,key ):
@@ -3076,6 +3209,10 @@ def set_fitting_parameters(Configuration, Tirific_Template, \
     #write the new parameters
     for key in parameters_to_adjust:
         if key in fitting_settings:
+            #check that the key adheres to the settings but skip VROT and SBR
+            check_parameter_against_settings(Configuration,Tirific_Template\
+                                            ,key,fitting_settings[key])
+
             for fit_key in fitting_keys:
                 if  fit_key in fitting_settings[key]:
                     format = sf.set_format(key)
@@ -3115,6 +3252,8 @@ def set_fitting_parameters(Configuration, Tirific_Template, \
                             format = '<10s'
                         else:
                             format = sf.set_format(key)
+                       
+                               
                         Tirific_Template[fit_key] = f"{Tirific_Template[fit_key]} {' '.join([f'{x:{format}}' for x in fitting_settings[key][fit_key]])}"
 set_fitting_parameters.__doc__ = '''
  NAME:
@@ -3883,9 +4022,9 @@ beamarea = {Configuration['BEAM_AREA']}, channelwidth = {Configuration['CHANNEL_
         # initialize
         for var in par_to_fill:
             sbr_input[var] = []
-
+    
         if Configuration['NUMBER_OF_DISKS'] == 2:
-            sbr_input['VARY'] = [f"SBR {inner_ring+1}:{last_ring_to_fit[0]+1}, SBR_2 {inner_ring+1}:{last_ring_to_fit[1]+1}"]
+            sbr_input['VARY'] = [f"SBR {inner_ring+1}:{last_ring_to_fit[0]+1}", f"SBR_2 {inner_ring+1}:{last_ring_to_fit[1]+1}"]
         else:
             sbr_input['VARY'] = [f"SBR {inner_ring+1}:{last_ring_to_fit[0]+1} SBR_2 {inner_ring+1}:{last_ring_to_fit[1]+1}"]
 
