@@ -387,10 +387,11 @@ def cleanup_final(Configuration,Fits_Files):
                     except FileNotFoundError:
                         pass
     stage_dirs = []
-    if os.path.isdir(f"{Configuration['FITTING_DIR']}tmp_incl_check"):
-        stage_dirs.append('tmp_incl_check')
-    if 'tirshaker' in Configuration['FITTING_STAGES']:
-        stage_dirs.append('Error_Shaker')
+    if not Configuration['DEBUG']:
+        if os.path.isdir(f"{Configuration['FITTING_DIR']}tmp_incl_check"):
+            stage_dirs.append('tmp_incl_check')
+        if 'tirshaker' in Configuration['FITTING_STAGES']:
+            stage_dirs.append('Error_Shaker')
 
     for dirs in stage_dirs:
         if 5 > Configuration['OUTPUT_QUANTITY'] >= 1:
