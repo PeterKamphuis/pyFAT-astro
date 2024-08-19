@@ -1379,6 +1379,7 @@ def set_trm_template(Configuration):
    
     trm_template = OmegaConf.load(f'{directory}/FAT_conf.yml')
     parameters = [x for x in Configuration['MIN_ERROR']]
+    trm_template.tirshaker.iterations= Configuration['SHAKER_ITERATIONS']
     for parameter in parameters:
         setattr(trm_template.min_errors,parameter,float(Configuration['MIN_ERROR'][parameter][0]))
     if Configuration['INSTALLATION_CHECK']:
@@ -1526,7 +1527,7 @@ def tirshaker_call(Configuration,Fits_Files):
     #setup a yaml file for TRM_errors
     set_trm_template(Configuration)
    
-
+    #Then call the TRM  main function
     errors_main([f'configuration_file={Configuration["FITTING_DIR"]}/Error_Shaker/FAT_conf.yml'])
     update_statistics(Configuration, message= "After the Tirshaker call run")
 
