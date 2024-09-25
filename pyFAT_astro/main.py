@@ -19,7 +19,7 @@ from omegaconf import OmegaConf
 from pyFAT_astro.FAT_Galaxy_Loop import FAT_Galaxy_Loop,MP_initialize_sofia,\
                                         MP_Fitting_Loop
 from pyFAT_astro.config.defaults import defaults
-from pyFAT_astro.Support.fat_errors import ProgramError,BadCatalogueError
+from pyFAT_astro.Support.fat_errors import ProgramError,BadCatalogueError,InputError
 from pyFAT_astro.Support.write_functions import reorder_output_catalogue
 from pyFAT_astro.Support.log_functions import full_system_tracking
 
@@ -161,8 +161,8 @@ def main(argv):
         #First we check for sofia and TiRiFiC
         Original_Configuration['SOFIA2'] = sf.find_program(Original_Configuration['SOFIA2'], "SoFiA 2")
         Original_Configuration['TIRIFIC'] = sf.find_program(Original_Configuration['TIRIFIC'], "TiRiFiC")
-
-        if cfg.cube_name:
+        print(f'{cfg.cube_name}')
+        if not cfg.cube_name is None:
             Full_Catalogue = sf.Proper_Dictionary({})
             Full_Catalogue['ENTRIES'] = ['ENTRIES','ID','DISTANCE','DIRECTORYNAME','CUBENAME']
             Full_Catalogue['ID'] = [f"{os.path.splitext(cfg.cube_name.split('/')[-1])[0]}"]
@@ -171,8 +171,18 @@ def main(argv):
             Full_Catalogue['CUBENAME'] = [f"{os.path.splitext(cfg.cube_name.split('/')[-1])[0]}"]
         elif 'sofia_catalogue' in Original_Configuration['FITTING_STAGES']:
             Full_Catalogue = rf.sofia_input_catalogue(Original_Configuration)
-        else:
+        elif not Original_Configuration['CATALOGUE'] is None:
             Full_Catalogue = rf.catalogue(Original_Configuration['CATALOGUE'],split_char= cfg.advanced.catalogue_split_character)
+        else:
+            raise InputError(f'''
+                             
+{'':8s}We could not find any of the following input: 
+{'':8s}cube_name= (We found {cfg.cube_name})
+{'':8s}input.catalogue= (We found { Original_Configuration['CATALOGUE']})
+{'':8s}and 'sofia_catalogue' was not in the fitting stages (We found { Original_Configuration['FITTING_STAGES']})
+{'':8s}Please add any of these when calling pyFAT or at them in the correct manner to the yml configuration file.
+''')                        
+        
         # Get the longest directory name to format the output directory properlyFit_Tirific_OSC
         for directory in Full_Catalogue['DIRECTORYNAME']:
             if directory == './':
@@ -281,6 +291,14 @@ def main(argv):
             pass
         pass
     except KeyboardInterrupt:
+        traceback.print_exception(*sys.exc_info())
+        try:
+            system_monitor.stop_monitoring()
+            fst.join()
+        except:
+            pass
+        pass
+    except InputError:
         traceback.print_exception(*sys.exc_info())
         try:
             system_monitor.stop_monitoring()
