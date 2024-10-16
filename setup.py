@@ -15,14 +15,14 @@ requirements = [
     'matplotlib',
     'future-fstrings',
     'psutil',
-    'make-moments>=1.0.6',
+    'make-moments>=1.0.7',
     'importlib_resources>=3.3.0',
     'importlib_metadata',
     'TRM_errors>=0.0.5',
 ]
 
 PACKAGE_NAME = 'pyFAT_astro'
-__version__ = 'v0.1.7'
+__version__ = 'v0.1.8'
 
 
 #with open("README.md", "r") as fh:
