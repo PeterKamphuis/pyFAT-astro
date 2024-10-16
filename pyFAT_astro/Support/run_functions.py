@@ -525,7 +525,7 @@ def check_source(Configuration, Fits_Files):
     pa, inclination, SBR_initial,x_new,y_new,new_vsys,VROT_initial =\
         rf.guess_orientation(Configuration,Fits_Files, vsys= v_app, \
             smooth = smooth_field,center = [x,y])
-
+   
     if x_new != x or y_new != y or new_vsys != v_app:
         x,y,z_new=cube_wcs.wcs_world2pix(ra,dec,new_vsys*1000.,1)
         x=float(x_new)
@@ -556,8 +556,7 @@ def check_source(Configuration, Fits_Files):
 
         raise BadSourceError("No initial estimates. Likely the source is too faint.")
      # Determine whether the centre is blanked or not
-
-
+   
     print_log(f'''CHECK_SOURCE: In the center we find the vsys {new_vsys} km/s around the location:
 {"":8s}CHECK_SOURCE: x,y,z = {int(round(x))}, {int(round(y))}, {int(round(z))}.
 {'':8s}CHECK_SOURCE: we will use a systemic velocity of {v_app}
@@ -615,7 +614,7 @@ Checking the central flux in a box with size of {Configuration['BEAM_IN_PIXELS']
 {"":8s}CHECK_SOURCE: SoFiA found a W50 of {w50:.2f} km/s
 {"":8s}CHECK_SOURCE: We will use {2.*(Configuration['NO_RINGS']-1)} rings for the model with a ring size of {Configuration['RING_SIZE']}.
 ''',Configuration)
-
+   
 
 
 
@@ -651,16 +650,9 @@ Checking the central flux in a box with size of {Configuration['BEAM_IN_PIXELS']
                 finalsize = [int(round(Configuration['SIZE_IN_BEAMS'][0]*Configuration['BEAM'][0]/np.mean([abs(header['CDELT1']),abs(header['CDELT2'])])*1.25+header['NAXIS1']*0.2)),
                                     int(round(z_max-z_min)+10.)],   
                 output_directory = f"{Configuration['FITTING_DIR']}Sofia_Output",\
-                output_name =f"{Configuration['SOFIA_BASENAME']}_sofia_xv.fits")
+                output_name =f"{Configuration['SOFIA_BASENAME']}_sofia")
     print_log(messages,Configuration,case=["verbose"])
-    #PV = fits.open(f"{Configuration['FITTING_DIR']}/Sofia_Output/{Configuration['SOFIA_BASENAME']}_sofia_xv.fits")
-    '''
-    if not os.path.exists(f"{Configuration['FITTING_DIR']}/Sofia_Output/{Configuration['SOFIA_BASENAME']}_sofia_xv.fits"):
-        PV =extract_pv(Configuration,Cube, pa[0], center=[ra,dec,v_app*1000.], convert = 1000.,
-                       finalsize = [int(round(Configuration['SIZE_IN_BEAMS'][0]*Configuration['BEAM'][0]/np.mean([abs(header['CDELT1']),abs(header['CDELT2'])])*1.25+header['NAXIS1']*0.2)),
-                                    int(round(z_max-z_min)+10.)])
-        fits.writeto(f"{Configuration['FITTING_DIR']}/Sofia_Output/{Configuration['BASE_NAME']}_sofia_xv.fits",PV[0].data,PV[0].header)
-    '''
+  
     Cube.close()
     Initial_Parameters = {}
     Initial_Parameters['XPOS'] = [ra,sf.set_limits(abs(err_x*header['CDELT1']),0.1/3600.*Configuration['BEAM'][0],3./3600.*Configuration['BEAM'][0] )]
@@ -687,9 +679,7 @@ Checking the central flux in a box with size of {Configuration['BEAM_IN_PIXELS']
         for parameter in ['INCL','Z0','SDIS','PA']:
             if parameter not in Configuration['FIXED_PARAMETERS'][0]:
                 Configuration['FIXED_PARAMETERS'][0].append(parameter)
-
     Initial_Parameters = check_initial_boundaries(Configuration, Initial_Parameters)
-
     Configuration['INITIAL_GUESSES_TIME'][1] = datetime.now()
     return Initial_Parameters
 check_source.__doc__='''
@@ -742,6 +732,7 @@ def check_initial_boundaries(Configuration, Initial_Parameters):
             length=1
             error = sf.set_limits(abs(Initial_Parameters[parameter][1]/10.),0.,\
                 abs(Configuration[f'{stripped_parameter}_INPUT_BOUNDARY'][0][0])*1.05)
+      
         if np.sum(Configuration[f'{stripped_parameter}_INPUT_BOUNDARY']) != 0.:
             print_log(f'''CHECK_INITIAL_BOUNDARIES: Checking {parameter}
 {'':8s} stripped_parameter = {stripped_parameter}
@@ -754,7 +745,7 @@ def check_initial_boundaries(Configuration, Initial_Parameters):
                     Initial_Parameters[parameter][i],\
                     Configuration[f'{stripped_parameter}_INPUT_BOUNDARY'][0][0]+error,\
                     Configuration[f'{stripped_parameter}_INPUT_BOUNDARY'][0][1]-error)
-
+      
 
 
     return Initial_Parameters

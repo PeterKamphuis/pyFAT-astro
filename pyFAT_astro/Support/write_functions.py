@@ -174,7 +174,7 @@ def create_tirific_run_cube(Configuration,Fits_Files):
 # Function to write the first def file for a galaxy
 def initialize_def_file(Configuration, Fits_Files,Tirific_Template,\
         Initial_Parameters = None, fit_type = 'Undefined' ):
-
+ 
     if Initial_Parameters is None:
         Initial_Parameters = {}
 
@@ -199,12 +199,14 @@ def initialize_def_file(Configuration, Fits_Files,Tirific_Template,\
     elif fit_type in ['Extent_Convergence','Fit_Tirific_OSC']:
         #if 'VSYS' in Initial_Parameters and fit_type == 'Fit_Tirific_OSC':
         #    Initial_Parameters['VSYS'] = [x/1000. for x in Initial_Parameters['VSYS']]
+       
         set_overall_parameters(Configuration, Fits_Files,Tirific_Template ,\
             fit_type=fit_type)
-        Vars_to_Set =  ['XPOS','YPOS','VSYS','VROT','INCL','PA','SDIS','SBR','SBR_2','Z0']
+        
+        #Vars_to_Set =  ['XPOS','YPOS','VSYS','VROT','INCL','PA','SDIS','SBR','SBR_2','Z0']
         if fit_type == 'Fit_Tirific_OSC':
             set_model_parameters(Configuration, Tirific_Template,Initial_Parameters,stage='initialize_def_file' )
-
+       
         # Finally we set how these parameters are fitted.
         sf.set_limit_modifier(Configuration,Tirific_Template )
         #get_inner_fix(Configuration,Tirific_Template )
@@ -715,9 +717,9 @@ def make_overview_plot(Configuration,Fits_Files ):
                         float(FAT_Model[Vars_to_plot.index('VSYS'),0]*1000.)],\
                 map_velocity_unit= 'km/s',log = True,silent = True,\
                 output_directory = f"{Configuration['FITTING_DIR']}Finalmodel",\
-                output_name =f"{Configuration['BASE_NAME']}_final_xv.fits")
+                output_name =f"{Configuration['BASE_NAME']}_final")
     print_log(messages,Configuration,case=["verbose"])
-    PV = fits.open(f"{Configuration['FITTING_DIR']}/Finalmodel/{Configuration['BASE_NAME']}_final_xv.fits")
+    PV = fits.open(f"{Configuration['FITTING_DIR']}/Finalmodel/{Configuration['BASE_NAME']}_final_PV.fits")
    
     messages = extract_pv(cube = cube_mod,\
                 overwrite = False,PA=extract_angle,\
@@ -727,9 +729,9 @@ def make_overview_plot(Configuration,Fits_Files ):
                 cube_velocity_unit='m/s',\
                 map_velocity_unit= 'km/s',log = True,silent = True,\
                 output_directory = f"{Configuration['FITTING_DIR']}/Finalmodel/",\
-                output_name =f"Finalmodel_xv.fits")
+                output_name =f"Finalmodel")
     print_log(messages,Configuration,case=["verbose"])
-    PV_model = fits.open(f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel_xv.fits")
+    PV_model = fits.open(f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel_PV.fits")
 
 
     ax_PV = plot_PV(Configuration,image=PV, model = PV_model, figure = Overview, \

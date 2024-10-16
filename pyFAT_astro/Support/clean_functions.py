@@ -237,7 +237,7 @@ def cleanup(Configuration,Fits_Files):
 
     if 'run_sofia' in Configuration['FITTING_STAGES'] or 'external_sofia' in Configuration['FITTING_STAGES']:
         dir =f'{Configuration["FITTING_DIR"]}Sofia_Output/'
-        file_ext=['_mask.fits','_mom0.fits','_mom1.fits','_mom2.fits','_chan.fits','_cat.txt','_sofia_xv.fits']
+        file_ext=['_mask.fits','_mom0.fits','_mom1.fits','_mom2.fits','_chan.fits','_cat.txt','_sofia_PV.fits']
         print_log(f'''CLEANUP: We are cleaning the following files in the directory {dir}:
 {"":8s}CLEANUP: sofia_input.par,{','.join([f'{Configuration["SOFIA_BASENAME"]}{x}' for x in file_ext])}
 ''',Configuration,case = ['verbose'])
@@ -265,7 +265,7 @@ def cleanup(Configuration,Fits_Files):
 
 
         ext=['.fits','_Prev.fits','.log','.ps','.def']
-        moments = ['mom0','mom1','mom2', 'xv']
+        moments = ['mom0','mom1','mom2', 'PV']
         #then specific files in the working directory
         #os.chdir(Configuration['FITTING_DIR'])
         #for configuration purposes we remove the old dirs
@@ -297,7 +297,7 @@ def cleanup(Configuration,Fits_Files):
                         pass
                 if dir == 'Finalmodel':
                     try:
-                        os.remove(f'{Configuration["FITTING_DIR"]}{dir}/{Configuration["BASE_NAME"]}_final_xv.fits')
+                        os.remove(f'{Configuration["FITTING_DIR"]}{dir}/{Configuration["BASE_NAME"]}_final_PV.fits')
                     except FileNotFoundError:
                         pass
 

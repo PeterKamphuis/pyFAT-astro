@@ -39,7 +39,13 @@ except ImportError:
 
 #from memory_profiler import profile
 #@profile
-def main(argv):
+def main_trace():
+    from viztracer import VizTracer
+    with VizTracer(output_file="FAT_Run_Viztracer.json",min_duration=1000) as tracer:
+        main()
+
+def main():
+    argv = sys.argv[1:]
     try:
         #Get default settings
         print(f"This is version {pyFAT_astro.__version__} of pyFAT.")
@@ -161,7 +167,6 @@ def main(argv):
         #First we check for sofia and TiRiFiC
         Original_Configuration['SOFIA2'] = sf.find_program(Original_Configuration['SOFIA2'], "SoFiA 2")
         Original_Configuration['TIRIFIC'] = sf.find_program(Original_Configuration['TIRIFIC'], "TiRiFiC")
-        print(f'{cfg.cube_name}')
         if not cfg.cube_name is None:
             Full_Catalogue = sf.Proper_Dictionary({})
             Full_Catalogue['ENTRIES'] = ['ENTRIES','ID','DISTANCE','DIRECTORYNAME','CUBENAME']

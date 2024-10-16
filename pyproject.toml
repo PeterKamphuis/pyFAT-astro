@@ -1,0 +1,51 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pyFAT_astro"
+dynamic = ["version"]
+description = "Development Status :: 4 - Beta"
+readme = "README.md"
+license = "GPL-3.0-or-later"
+requires-python = ">=3.8"
+authors = [
+    { name = "P. Kamphuis", email = "peterkamphuisastronomy@gmail.com" },
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Astronomy",
+]
+dependencies = [  'numpy>=1.14',
+    'scipy',
+    'astropy',
+    'omegaconf>=2.2.2',
+    'matplotlib',
+    'future-fstrings',
+    'psutil',
+    'make-moments>=1.0.7',
+    'importlib_resources>=3.3.0',
+    'importlib_metadata',
+    'TRM_errors>=0.0.5',
+]
+
+[project.urls]
+Homepage = "https://github.com/PeterKamphuis/pyFAT-astro"
+
+[project.scripts]
+pyFAT = "pyFAT_astro.main:main"
+
+
+[tool.hatch.version]
+path = "version.py"
+
+
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/pyFAT_astro",
+]

@@ -6,7 +6,9 @@
 import copy
 
 from pyFAT_astro.Support.fat_errors import InitializeError,CfluxError,\
-    FunctionCallError,BadConfigurationError,FittingError,FaintSourceError
+    FunctionCallError,BadConfigurationError,FittingError,FaintSourceError,\
+    ProgramError
+    
 from pyFAT_astro.Support.log_functions import print_log
 
 import pyFAT_astro.Support.support_functions as sf
@@ -557,15 +559,22 @@ def check_parameter_against_settings(Configuration,Tirific_Template\
                                  Variables=[block['PARAMETER']],ensure_rings=True)
           
             #VROT starts with a 0 so we need to avoid it here
+            prev = values[0]
             if key != 'VROT':
+                if values[0] == 0.:
+                    raise ProgramError(f'''While checking the fit settings the first value of {key} was 0. 
+This should never happen and indicates an error while setting up the template.''')
                 for x in values:
+                    #prev is not assigned before starting this loop but
+                    #  except for VROT the first value should never be exactly 0.
+                    # So the 
                     if x == 0.:
                         suplant = prev
                         break
                     prev = x
             else:
                 suplant = 0.
-          
+         
             for ring in range(block['RINGS'][0],block['RINGS'][1]+1):
                 # if the value is 0 we set it to the previous ring
                 if values[ring] == 0.:
@@ -574,6 +583,7 @@ def check_parameter_against_settings(Configuration,Tirific_Template\
                 values[ring]= sf.set_limits(values[ring],minimum+buffer,maximum-buffer)
                
             Tirific_Template[block['PARAMETER']] =  f"{' '.join([f'{x:{sf.set_format(key)}}' for x in values])}"
+        
    
 check_parameter_against_settings.__doc__ = '''
  NAME:
@@ -3210,8 +3220,10 @@ def set_fitting_parameters(Configuration, Tirific_Template, \
     for key in parameters_to_adjust:
         if key in fitting_settings:
             #check that the key adheres to the settings but skip VROT and SBR
+           
             check_parameter_against_settings(Configuration,Tirific_Template\
                                             ,key,fitting_settings[key])
+           
 
             for fit_key in fitting_keys:
                 if  fit_key in fitting_settings[key]:
@@ -3475,8 +3487,6 @@ def set_generic_moderate(Configuration,key):
 def set_model_parameters(Configuration, Tirific_Template,Model_Values, \
         stage = 'initial'):
     parameters_to_set = ['RADI','VROT_profile','Z0','SBR_profile','INCL','PA','XPOS','YPOS','VSYS','SDIS']
-
-
     check_parameters = []
     if 'VSYS' in Model_Values:
         vsys = Model_Values['VSYS']

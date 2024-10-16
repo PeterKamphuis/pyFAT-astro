@@ -3684,19 +3684,17 @@ def setup_configuration(cfg):
     # The parameters that need boundary limits are set here
     boundary_limit_keys = ['PA','INCL', 'SDIS', 'Z0','VSYS','XPOS','YPOS','VROT','SBR']
     for key in boundary_limit_keys:
-        #let's allow for only fixing 1 
-        for x in range(3):
-            if np.sum(Configuration[f"{key}_INPUT_BOUNDARY"][i]) == 0.:
-                if key == 'INCL':
-                    Configuration[f"{key}_INPUT_BOUNDARY"][i] = [5.,90.] 
-                elif key == 'PA':
-                    Configuration[f"{key}_INPUT_BOUNDARY"][i] = [-10.,370.]
-                else:
-                    #These are set when we have read the cube as they depend on it or the distance (Z0)
-                    pass
-
+        #let's allow for only fixing 1
+        if np.sum(Configuration[f"{key}_INPUT_BOUNDARY"][i]) == 0.:
+            if key == 'INCL':
+                set_boundaries(Configuration,'INCL',5.,90.,input=True)    
+            elif key == 'PA':
+                set_boundaries(Configuration,'PA',-10.,370.,input=True)
+            else:
+                #These are set when we have read the cube as they depend on it or the distance (Z0)
+                pass
         Configuration[f"{key}_CURRENT_BOUNDARY"] = [[0.,0.],[0.,0.],[0.,0.]]
-
+   
     #Make the input idiot safe
     if Configuration['MAIN_DIRECTORY'][-1] != '/':
         Configuration['MAIN_DIRECTORY'] = f"{Configuration['MAIN_DIRECTORY']}/"

@@ -38,7 +38,10 @@ class full_system_tracking:
          resources.write("# This file contains an estimate of all resources used for a pyFAT run. \n")
          resources.write(f"# {'Time':20s} {'Sys CPU':>10s} {'Sys RAM':>10s} {'FAT CPU':>10s} {'FAT RAM':>10s} \n")
          resources.write(f"# {'YYYY-MM-DD hh:mm:ss':20s} {'%':>10s} {'Gb':>10s} {'%':>10s} {'Gb':>10s} \n")
-      self.interval = 30 # amount of second when to do new monitor
+      if Configuration['DEBUG']:
+         self.interval = 1
+      else:
+         self.interval = 30 # amount of second when to do new monitor
 
    def start_monitoring(self):
       while not self.stop:
