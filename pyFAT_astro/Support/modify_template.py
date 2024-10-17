@@ -560,7 +560,7 @@ def check_parameter_against_settings(Configuration,Tirific_Template\
           
             #VROT starts with a 0 so we need to avoid it here
             prev = values[0]
-            if key != 'VROT':
+            if not key in ['VROT']:
                 if values[0] == 0.:
                     raise ProgramError(f'''While checking the fit settings the first value of {key} was 0. 
 This should never happen and indicates an error while setting up the template.''')
@@ -1122,11 +1122,27 @@ def fit_polynomial(Configuration,radii,profile,error, key, \
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore",message="All-NaN axis encountered"\
                             ,category=RuntimeWarning)
+            
+
+
+            if any([np.isnan(x) for x in reduced_chi]):
+                if key in ['SBR','INCL','PA']:
+                    pass
+                else:
+                    if not np.isnan(np.nanmin(reduced_chi)):
+                        found = True 
+            else:
+                found = True
+            if not found is True:
+                    error = error/2.
+                    count += 1    
+            '''        
             if not np.isnan(np.nanmin(reduced_chi)):
                 found = True
             else:
                 error = error/2.
                 count += 1
+            '''
         if count > 100 or np.sum(error) == 0.:
             print_log(f'''FIT_POLYNOMIAL: we failed to fit a polynomial
 ''',Configuration,case = ['debug_add'])
@@ -2998,7 +3014,7 @@ def set_fitting_parameters(Configuration, Tirific_Template, \
                 parameters_to_adjust = ['VSYS','XPOS','YPOS','SBR','VROT','PA','INCL','SDIS']
         elif stage in ['initialize_ec','run_ec','after_ec']:
             parameters_to_adjust = ['INCL','PA','VROT','SDIS','SBR','Z0','XPOS','YPOS','VSYS']
-        elif stage in  ['initialize_os','run_os','after_os']:
+        elif stage in  ['initialize_os','run_os','after_os''simple_transfer']:
             if Configuration['ITERATIONS'] == 0:
                 parameters_to_adjust = ['VSYS','XPOS','YPOS','SBR','VROT','SDIS','INCL','PA','Z0']
             else:
@@ -3220,8 +3236,8 @@ def set_fitting_parameters(Configuration, Tirific_Template, \
     for key in parameters_to_adjust:
         if key in fitting_settings:
             #check that the key adheres to the settings but skip VROT and SBR
-           
-            check_parameter_against_settings(Configuration,Tirific_Template\
+            if stage != 'simple_transfer':
+                check_parameter_against_settings(Configuration,Tirific_Template\
                                             ,key,fitting_settings[key])
            
 
@@ -3861,18 +3877,20 @@ def set_sbr_fitting(Configuration,Tirific_Template, stage = 'no_stage'):
             Configuration['SIZE_IN_BEAMS'][i]*Configuration['BEAM'][0])[0][-1])
         
   
-
-    if stage in ['initial','run_cc','initialize_ec','run_ec','initialize_os','run_os']:
-        sbr_ring_limits = sf.sbr_limits(Configuration,Tirific_Template)
-        if stage in ['run_ec','run_os']:
-            sbr_ring_limits[-4:]=[x/5 for x in sbr_ring_limits[-4:]]
-        print_log(f'''SET_SBR_FITTING: Using these SBR limits.
+    sbr_ring_limits = sf.sbr_limits(Configuration,Tirific_Template)
+    if stage in ['run_ec','run_os','simple_transfer']:
+        sbr_ring_limits[-4:]=[x/5 for x in sbr_ring_limits[-4:]]
+    print_log(f'''SET_SBR_FITTING: Using these SBR limits.
 {'':8s} limits = {sbr_ring_limits}
 {'':8s} no of limits = {len(sbr_ring_limits)}
 ''',Configuration,case=['debug_add'])
+    if stage in ['initial','run_cc','initialize_ec','run_ec',\
+                 'initialize_os','run_os','simple_transfer']:
+     
         if stage in ['initial','run_cc']:
             max_size = 4
-        elif stage in ['initialize_ec','run_ec','initialize_os','run_os']:
+        elif stage in ['initialize_ec','run_ec','initialize_os','run_os',\
+                       'simple_transfer']:
             max_size = 2.
         #Make sure the SBR profile is not dropping below the minimum we are setting
 
@@ -3987,21 +4005,7 @@ beamarea = {Configuration['BEAM_AREA']}, channelwidth = {Configuration['CHANNEL_
                         sbr_input['MINDELTA'].append(sbr_ring_limits[x]/20.)
             for key in input_variables:
                 sbr_input[key] =np.array(sbr_input[key]) 
-            '''           
-            sbr_input['VARY'] =  np.array([[f"SBR {x+1}",f"SBR_2 {x+1}"] for x in range(extend,inner_ring-1,-1)],dtype=str).reshape((len(radii)-inner_ring)*2)
-            #pmax = np.array([np.full(2,sf.set_limits(sbr_av_smoothed[x-1]*20.,sbr_ring_limits[x]*30.,1.)) for x in range(len(radii)-1,inner_ring-1,-1)], dtype=float)
-            sbr_input['PARMAX'] = np.array([[pmax[0,x],pmax[1,x]] for x in range(len(radii)-1,inner_ring-1,-1)],dtype=float).reshape((len(radii)-inner_ring)*2)
-            #sbr_input['PARMAX'] = np.array([[sf.set_limits(sbr_smoothed_profile[0,x-1]*20.,sbr_ring_limits[x]*30.,1.),sf.set_limits(sbr_smoothed_profile[1,x-1]*20.,sbr_ring_limits[x]*30.,1.)] for x in range(len(radii)-1,inner_ring-1,-1)],dtype=float).reshape((len(radii)-inner_ring)*2)
-        #if stage in ['initial','run_cc']:
-            #    sbr_input['PARMIN'] = np.array([[sbr_ring_limits[x]/2.,sbr_ring_limits[x]/2.] if x <= (3./4.)*len(radii) else [0.,0.] for x in range(len(radii)-1,inner_ring-1,-1)]).reshape((len(radii)-inner_ring)*2)
-            #elif stage in ['initialize_ec','run_ec']:
-            sbr_input['PARMIN']  = np.array([[pmin[0,x],pmin[1,x]] for x in range(len(radii)-1,inner_ring-1,-1)],dtype=float).reshape((len(radii)-inner_ring)*2)
-            #sbr_input['PARMIN'] = np.array([[sbr_ring_limits[x]/fact[0],sbr_ring_limits[x]/fact[1]] for x in range(len(radii)-1,inner_ring-1,-1)],dtype=float).reshape((len(radii)-inner_ring)*2)
-            sbr_input['MODERATE'] = np.array([[5,5] for x in range(len(radii)-1,inner_ring-1,-1)],dtype=float).reshape((len(radii)-inner_ring)*2) #How many steps from del start to del end
-            sbr_input['DELSTART'] = np.array([[1e-4,1e-4] for x in range(len(radii)-1,inner_ring-1,-1)],dtype=float).reshape((len(radii)-inner_ring)*2) # Starting step
-            sbr_input['DELEND'] = np.array([[sbr_ring_limits[x]/20.,sbr_ring_limits[x]/20.] for x in range(len(radii)-1,inner_ring-1,-1)],dtype=float).reshape((len(radii)-inner_ring)*2)
-            sbr_input['MINDELTA'] = np.array([[sbr_ring_limits[x]/20.,sbr_ring_limits[x]/20.] for x in range(len(radii)-1,inner_ring-1,-1)],dtype=float).reshape((len(radii)-inner_ring)*2)
-            '''
+
         sbr_input['VARY'] = np.concatenate((sbr_input['VARY'],\
             [f"SBR {' '.join([str(int(x)) for x in range(1,inner_ring+1)])} SBR_2 {' '.join([str(int(x)) for x in range(1,inner_ring+1)])}"]\
             ),axis=0)
@@ -4023,7 +4027,46 @@ beamarea = {Configuration['BEAM_AREA']}, channelwidth = {Configuration['CHANNEL_
         sbr_input['DELSTART'] = np.concatenate((sbr_input['DELSTART'],[1e-5]))
         sbr_input['DELEND'] = np.concatenate((sbr_input['DELEND'],[1e-6]))
         sbr_input['MINDELTA'] = np.concatenate((sbr_input['MINDELTA'],[2e-6]))
-    elif stage in ['after_cc','after_ec','after_os'] :
+    elif stage in ['after_os']:
+        #The outer rings should be be flexible from the main Gauss else 
+        # we try to get rid of excess flux in the RC so we allow variations
+        # Let's fit the rings but interpolate over every second ring
+         #Used in Fit_Smoothed_Check
+        # Initialize the parameters
+        par_to_fill = ['PARMAX','PARMIN','MODERATE','DELSTART',\
+                'DELEND','MINDELTA']
+
+        min_limit = np.nanmin(sbr_ring_limits)        
+        value = [np.max(sbr_profile[0,2:])*3., 0., 5., 10.*min_limit,\
+                2.*min_limit,5.*min_limit]
+        # initialize
+        for var in par_to_fill:
+            sbr_input[var] = []
+    
+        if Configuration['NUMBER_OF_DISKS'] == 2:
+            sbr_input['VARY'] =\
+                [f"!SBR {inner_ring+1}:{last_ring_to_fit[0]+1}",\
+                f"!SBR_2 {inner_ring+1}:{last_ring_to_fit[1]+1}"]
+        else:
+            sbr_input['VARY'] =\
+                [f"!SBR {inner_ring+1}:{last_ring_to_fit[0]+1} SBR_2 {inner_ring+1}:{last_ring_to_fit[1]+1}"]
+        
+        skiprings = [[],[]]
+        for j in [0,1]:
+            for i in range(last_ring_to_fit[j]+1,inner_ring+1,-2):
+                skiprings[j].append(f'{i:d}')
+       
+           
+        sbr_input['VARINDX'] =\
+            [f"SBR {' '.join(skiprings[0])} SBR_2 {' '.join(skiprings[1])}"]
+
+        for i in range(Configuration['NUMBER_OF_DISKS']):
+            for i,var in enumerate(par_to_fill):
+                sbr_input[var].append(value[i])
+        for var in par_to_fill:
+            sbr_input[var] = np.array(sbr_input[var])
+
+    elif stage in ['after_cc','after_ec'] :
         #Used in Fit_Smoothed_Check
         # Initialize the parameters
         par_to_fill = ['PARMAX','PARMIN','MODERATE','DELSTART',\
@@ -4043,6 +4086,8 @@ beamarea = {Configuration['BEAM_AREA']}, channelwidth = {Configuration['CHANNEL_
                 sbr_input[var].append(value[i])
         for var in par_to_fill:
             sbr_input[var] = np.array(sbr_input[var])
+    else:
+        raise ProgramError(f'The stage {stage} is not recognized in set_sbr_fitting we will stop the fitting.')
 
     return sbr_input
 set_sbr_fitting.__doc__ =f'''

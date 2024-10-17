@@ -531,7 +531,8 @@ def finish_galaxy(Configuration,current_run = 'Not initialized',\
 {'':8s} {Fits_Files}
 ''',Configuration,case = ['debug_start','verbose'])
     if Configuration['DEBUG']:
-        write_config(f'{Configuration["LOG_DIRECTORY"]}CFG_At_Finish.txt',Configuration)
+        write_config(f'{Configuration["LOG_DIRECTORY"]}CFG_At_Finish.txt',\
+            Configuration,Fits_Files=Fits_Files)
 
     #make sure we are not leaving stuff
     sf.finish_current_run(Configuration,current_run)
@@ -601,6 +602,11 @@ def finish_galaxy(Configuration,current_run = 'Not initialized',\
         if any([True if 'fit_' in x else False for x in Configuration['FITTING_STAGES']]):
             if not 'Fit_Make_Your_Own' in  Configuration['USED_FITTING']:
                 sf.create_directory('Finalmodel',Configuration['FITTING_DIR'])
+                from shutil import copyfile
+
+                source = sf.get_system_string(f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def")
+                target = sf.get_system_string(f"{Configuration['FITTING_DIR']}/Before_finalTransfer.def")
+                copyfile(source, target )
                 if 'tirshaker' not in Configuration['FITTING_STAGES']:
                     transfer_errors(Configuration,fit_type=Configuration['USED_FITTING'])
                     #Also transfer the last fitting settings
@@ -608,7 +614,9 @@ def finish_galaxy(Configuration,current_run = 'Not initialized',\
                 linkname = f"../{Configuration['USED_FITTING']}/{Configuration['USED_FITTING']}"
                 os.symlink(f"{linkname}.fits",f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel.fits")
                 os.symlink(f"{linkname}.def",f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel.def")
-
+                source = sf.get_system_string(f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def")
+                target = sf.get_system_string(f"{Configuration['FITTING_DIR']}/Before_Overview.def")
+                copyfile(source, target )
                 # We need to produce a FinalModel Directory with moment maps and an XV-Diagram of the model.
                 if Fits_Files and os.path.exists(f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel.fits"):
                     # we do not mask the model as it is also important where the model extends and there is no data.  
@@ -784,7 +792,7 @@ def transfer_fitting_parameters(Configuration):
     Tirific_Template = sf.tirific_template(filename = \
         f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def")
     
-    set_fitting_parameters(Configuration, Tirific_Template,stage = 'run_os')
+    set_fitting_parameters(Configuration, Tirific_Template,stage = 'simple_transfer')
    
     # write back to the File
     tirific(Configuration,Tirific_Template, name = f"{fit_type}/{fit_type}.def")

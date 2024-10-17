@@ -1028,7 +1028,7 @@ def fit_smoothed(Configuration, Fits_Files,Tirific_Template,current_run, stage =
     enter_recovery_point(Configuration, Fits_Files = Fits_Files, Tirific_Template= Tirific_Template,
                          message = 'Start of fit_smoothed.',point_ID='Start_Fit_Smoothed')
 
-  
+    Tirific_Template['INTY'] = 2
     #if we have only a few rings we only smooth. else we fit a polynomial to the RC and smooth the SBR
     #smoothed_sbr = smooth_profile(Configuration,Tirific_Template,'SBR',hdr, min_error= np.max([float(Tirific_Template['CFLUX']),float(Tirific_Template['CFLUX_2'])]))
     fix_sbr(Configuration,Tirific_Template,smooth = True)
@@ -1167,6 +1167,9 @@ def make_full_resolution(Configuration,Tirific_Template,Fits_Files,\
         accepted,current_run = sf.run_tirific(Configuration,'Not zed', \
             stage = 'full_res', fit_type=fit_type,\
             max_ini_time= int(300*(int(Tirific_Template['INIMODE'])+1)))
+        source = sf.get_system_string(f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def")
+        target = sf.get_system_string(f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}theFRoutput.def")
+        copyfile(source, target )
     except TirificOutputError:
         accepted,current_run = failed_fit(Configuration,Tirific_Template,\
             'Not Zed', Fits_Files,stage='full_res', fit_type=fit_type)

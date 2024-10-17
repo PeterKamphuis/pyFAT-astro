@@ -2370,15 +2370,17 @@ get_tirific_output_names.__doc__=f'''
  NOTE:
 '''
 
-def get_vel_pa(Configuration,velocity_field,center= [0.,0.],Fits_Files =None ):
+def get_vel_pa(Configuration,velocity_field,center_in=\
+        np.array([None,None],dtype=float),Fits_Files =None ):
+    center = copy.deepcopy(center_in)
     print_log(f'''GET_VEL_PA: This is the center we use {center}
 ''',Configuration,case=['debug_start'])
     unreliable =False
-    if center == None:
-        center = [x/2. for x in velocity_field.shape]
+    if center[0] is None:
+        center = np.array([x/2. for x in velocity_field.shape],dtype=float)
     else:
-         # because python is stupid the ceneter should be reversed to match the map
-        center.reverse()
+        # because python is stupid the ceneter should be reversed to match the map
+        center = np.flip(center)
     fits.writeto(f'{Configuration["FITTING_DIR"]}/testvf_befor.fits',velocity_field,overwrite=True)
     sigma = [3.,3.]
     sm_velocity_field = ndimage.gaussian_filter(velocity_field, sigma=(sigma[1], sigma[0]), order=0)
@@ -2463,7 +2465,7 @@ def get_vel_pa(Configuration,velocity_field,center= [0.,0.],Fits_Files =None ):
         pa = pa
     else:
         pa = np.nanmean([pa,pa_from_max,pa_from_min])
-    center.reverse()
+   
     print_log(f'''GET_VEL_PA: This is the PA we extract from the velpa {np.degrees(pa)}
 ''',Configuration,case=['debug_add'])
     return np.degrees([pa, np.nanstd([pa,pa_from_max,pa_from_min])]),unreliable

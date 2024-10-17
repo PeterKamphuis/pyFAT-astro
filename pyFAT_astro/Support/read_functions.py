@@ -466,8 +466,10 @@ def guess_orientation(Configuration,Fits_Files, vsys = -1 ,center = None, \
         mom0_wcs = WCS(hdr)
     Image.close()
 
-    if not center:
-        center = [hdr['NAXIS1']/2.-1,hdr['NAXIS2']/2.-1]
+    if center is None:
+        center = np.array([hdr['NAXIS1']/2.-1,hdr['NAXIS2']/2.-1],dtype=float)
+    else:
+        center = np.array(center,dtype=float)
     Image = fits.open(f"{Configuration['FITTING_DIR']}{Fits_Files['CHANNEL_MAP']}",\
             uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
     noise_map = np.sqrt(Image[0].data)*Configuration['NOISE']*Configuration['CHANNEL_WIDTH']
@@ -760,11 +762,12 @@ def guess_orientation(Configuration,Fits_Files, vsys = -1 ,center = None, \
     noise_map = []
 
     # First we look for the kinematics center
-
-    vel_pa,vel_pa_unreliable = sf.get_vel_pa(Configuration,map,center=center,\
+   
+    vel_pa,vel_pa_unreliable = sf.get_vel_pa(Configuration,map,center_in=center,\
                                              Fits_Files=Fits_Files)
-
+  
     maj_profile,maj_axis,maj_resolution = sf.get_profile(Configuration,map,pa[0], center=center)
+   
     zeros = np.where(maj_profile == 0.)[0]
     maj_profile[zeros] = float('NaN')
     if all(np.isnan(maj_profile)):
@@ -848,6 +851,7 @@ def guess_orientation(Configuration,Fits_Files, vsys = -1 ,center = None, \
     print_log(f'''GUESS_ORIENTATION: We found the following initial rotation curve:
 {'':8s}GUESS_ORIENTATION: RC = {VROT_initial}
 ''',Configuration,case= ['debug_add'])
+  
     return np.array(pa,dtype=float),np.array(inclination,dtype=float),SBR_initial,center[0],center[1],map_vsys,VROT_initial
 guess_orientation.__doc__ =f'''
  NAME:
