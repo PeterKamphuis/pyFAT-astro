@@ -370,6 +370,13 @@ Advanced Keywords
   Bypass all initial checks on the source and force pyFAT to fit a TRM regardless of the size of the source.
   !!!!!!!!!!!!Not fully functional yet!!!!!!!!!!!!!!!
 
+**recovery_point**
+
+  *str, optional, default='Start'*
+
+  filename of a pickle file of where to restart the pyFAT fitting. The default starts at the start.
+  This only works for individual galaxies being fitted. If corresponding to an actual file name in the set log directory the code will restart the fitting from this point. 
+  !!!!!!!!!!!!Not fully functional yet!!!!!!!!!!!!!!!
 
 
 Individual Keywords

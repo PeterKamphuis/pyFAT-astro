@@ -3014,7 +3014,7 @@ def set_fitting_parameters(Configuration, Tirific_Template, \
                 parameters_to_adjust = ['VSYS','XPOS','YPOS','SBR','VROT','PA','INCL','SDIS']
         elif stage in ['initialize_ec','run_ec','after_ec']:
             parameters_to_adjust = ['INCL','PA','VROT','SDIS','SBR','Z0','XPOS','YPOS','VSYS']
-        elif stage in  ['initialize_os','run_os','after_os''simple_transfer']:
+        elif stage in  ['initialize_os','run_os','after_os','simple_transfer']:
             if Configuration['ITERATIONS'] == 0:
                 parameters_to_adjust = ['VSYS','XPOS','YPOS','SBR','VROT','SDIS','INCL','PA','Z0']
             else:
@@ -4055,7 +4055,8 @@ beamarea = {Configuration['BEAM_AREA']}, channelwidth = {Configuration['CHANNEL_
         for j in [0,1]:
             for i in range(last_ring_to_fit[j]+1,inner_ring+1,-2):
                 skiprings[j].append(f'{i:d}')
-       
+            for i in range(inner_ring,1):
+                skiprings[j].append(f'{i:d}')
            
         sbr_input['VARINDX'] =\
             [f"SBR {' '.join(skiprings[0])} SBR_2 {' '.join(skiprings[1])}"]

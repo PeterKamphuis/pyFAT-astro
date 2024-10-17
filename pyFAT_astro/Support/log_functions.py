@@ -3,6 +3,7 @@
 # logging process
 import numpy as np
 import os
+import pickle
 import psutil as psu
 import sys
 import time
@@ -160,13 +161,13 @@ PURPOSE:
 
 def enter_recovery_point(Configuration, Fits_Files = None, Tirific_Template= None,
                          message = 'You should have specified a message',point_ID='Random'):
-    
     update_statistics(Configuration, message= message)
     print_log(f'''ENTER_RECOVERY_POINT: Creating a recovery point.
 {message}              
 ''',Configuration,case= ['debug_start','main'])
-    write_config(f'{Configuration["LOG_DIRECTORY"]}CFG_{point_ID}.txt', Configuration, Fits_Files=Fits_Files,\
+    write_config(f"{Configuration['LOG_DIRECTORY']}CFG_RP_{Configuration['RP_SECTION']}_COUNT_{Configuration['RP_COUNTER']}.pkl", Configuration, Fits_Files=Fits_Files,\
                  Tirific_Template=Tirific_Template,message=message )
+    Configuration['RP_COUNTER'] += 1
 enter_recovery_point.__doc__ =f'''
  NAME:
    enter_recovery_point
@@ -462,40 +463,23 @@ update_statistics.__doc__ =f'''
 
 
 def write_config(file,Configuration, Fits_Files = None, Tirific_Template = None,message=None ):
-    #be clear we are pickle dumping
-    tmp = os.path.splitext(file)
-    file = f'{tmp[0]}_RP_{Configuration["RP_COUNTER"]}.pkl'
-    print_log(f'''WRITE_CONFIG: writing the configuration to {file}
+   print_log(f'''WRITE_CONFIG: writing the configuration to {file}
 ''',Configuration,case=['debug_start'])
-    # Separate the keyword names
-    #Proper dictionaries are not pickable
-
-    Pick_Configuration = {}
-    for key in Configuration:
-        Pick_Configuration[key] = Configuration[key]
-        if key == 'FAT_PSUPROCESS':
-            Pick_Configuration[key] = None
-    
-    if Fits_Files != None:
-         Pick_Configuration['Fits_Files'] = Fits_Files
-    if Tirific_Template != None:
-         Pick_Configuration['Tirific_Template'] = Tirific_Template
-    if message != None:
-         Pick_Configuration['Message'] = message
-    
-    pythonv = sys.version_info
-    if pythonv[0] > 3 or (pythonv[0] == 3 and pythonv[1] > 6.): 
-        import pickle
-        with open(file,'wb') as tmp:
-            pickle.dump(Pick_Configuration,tmp) 
-            Configuration['RP_COUNTER'] +=1
-    else:
-        print_log(f'''WRITE_CONFIG: This function is unfortunately not surported for python < 3.6 
-''',Configuration,case=['main'])
-  
-    
-
-
+   # Separate the keyword names
+   #Proper dictionaries are not pickable
+   Pick_Configuration = {}
+   for key in Configuration:
+      Pick_Configuration[key] = Configuration[key]
+      if key == 'FAT_PSUPROCESS':
+         Pick_Configuration[key] = None
+   if Fits_Files != None:
+      Pick_Configuration['Fits_Files'] = Fits_Files
+   if Tirific_Template != None:
+      Pick_Configuration['Tirific_Template'] = Tirific_Template
+   if message != None:
+      Pick_Configuration['Message'] = message
+   with open(file,'wb') as tmp:
+      pickle.dump(Pick_Configuration,tmp) 
 write_config.__doc__ =f'''
  NAME:
     write_config
@@ -525,3 +509,16 @@ write_config.__doc__ =f'''
 This Could be used to pickup the fitting from where we left of
 
 '''
+
+def recover_entry_point_conf(Configuration_In):
+   #first check that the file exists
+   conf = f"{Configuration_In['LOG_DIRECTORY']}/{Configuration_In['RECOVERY']}"
+   if os.path.isfile(conf):
+      with open(conf,'rb') as file:
+         Configuration = pickle.load(file)
+      return Configuration
+   else:
+      raise FileExistsError(f'''We could not find {Configuration_In['LOG_DIRECTORY']}/{Configuration_In['RECOVERY']}.FileExistsError
+We will start from the beginning''',Configuration_In,case=['main']) 
+     
+        

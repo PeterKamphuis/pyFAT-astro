@@ -12,7 +12,7 @@ from make_moments.functions import moments
 from pyFAT_astro.Support.modify_template import get_error,\
     set_fitting_parameters,get_ring_weights
 from pyFAT_astro.Support.write_functions import make_overview_plot,plot_usage_stats,tirific
-from pyFAT_astro.Support.log_functions import print_log,write_config
+from pyFAT_astro.Support.log_functions import print_log,enter_recovery_point
 import pyFAT_astro.Support.support_functions as sf
 
 
@@ -530,9 +530,6 @@ def finish_galaxy(Configuration,current_run = 'Not initialized',\
     print_log(f'''FINISH_GALAXY: These fits files are used:
 {'':8s} {Fits_Files}
 ''',Configuration,case = ['debug_start','verbose'])
-    if Configuration['DEBUG']:
-        write_config(f'{Configuration["LOG_DIRECTORY"]}CFG_At_Finish.txt',\
-            Configuration,Fits_Files=Fits_Files)
 
     #make sure we are not leaving stuff
     sf.finish_current_run(Configuration,current_run)
@@ -544,10 +541,6 @@ def finish_galaxy(Configuration,current_run = 'Not initialized',\
 {"":8s}If you want to continue to fit with tirific please use the cube marked _tirific , we have kept the correct conversion in the FAT cube
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ''',Configuration, case = ['main','screen'])
-        
-
-
-
     # We need to check if the final output is legit
     if Configuration['USED_FITTING'] == 'Fit_Tirific_OSC':
         check_legitimacy_osc(Configuration)
@@ -604,7 +597,7 @@ def finish_galaxy(Configuration,current_run = 'Not initialized',\
                 sf.create_directory('Finalmodel',Configuration['FITTING_DIR'])
                 from shutil import copyfile
 
-                source = sf.get_system_string(f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def")
+                source = sf.get_system_string(f"{Configuration['FITTING_DIR']}{Configuration['USED_FITTING']}/{Configuration['USED_FITTING']}.def")
                 target = sf.get_system_string(f"{Configuration['FITTING_DIR']}/Before_finalTransfer.def")
                 copyfile(source, target )
                 if 'tirshaker' not in Configuration['FITTING_STAGES']:
@@ -614,7 +607,7 @@ def finish_galaxy(Configuration,current_run = 'Not initialized',\
                 linkname = f"../{Configuration['USED_FITTING']}/{Configuration['USED_FITTING']}"
                 os.symlink(f"{linkname}.fits",f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel.fits")
                 os.symlink(f"{linkname}.def",f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel.def")
-                source = sf.get_system_string(f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def")
+                source = sf.get_system_string(f"{Configuration['FITTING_DIR']}{Configuration['USED_FITTING']}/{Configuration['USED_FITTING']}.def")
                 target = sf.get_system_string(f"{Configuration['FITTING_DIR']}/Before_Overview.def")
                 copyfile(source, target )
                 # We need to produce a FinalModel Directory with moment maps and an XV-Diagram of the model.

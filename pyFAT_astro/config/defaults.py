@@ -117,9 +117,10 @@ class Advanced:
     force_fit: bool = False
     # Add the channel dependency, minimum inclination,
     debug_function: List = field(default_factory=lambda: ['ALL'] )
-
     # If we are using a sofia catalogue and want tor overwrite the create FAT Cubes
     sofia_overwrite: bool = False
+    #We want to be able to start at a given point in the code.
+    recovery_point: str = 'Start'
 
 @dataclass
 class defaults:

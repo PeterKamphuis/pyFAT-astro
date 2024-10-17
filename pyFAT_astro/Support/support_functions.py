@@ -5,7 +5,8 @@ from pyFAT_astro.Support.fat_errors import SupportRunError,SmallSourceError,\
                                               InputError,ProgramError,DefFileError,\
                                               BadHeaderError,FittingError,TirificOutputError,\
                                               SofiaMissingError
-from pyFAT_astro.Support.log_functions import print_log,get_usage_statistics,write_config
+from pyFAT_astro.Support.log_functions import print_log,get_usage_statistics,\
+    recover_entry_point_conf
 from pyFAT_astro import Templates as templates
 from collections import OrderedDict #used in Proper_Dictionary
 from numpy.linalg import LinAlgError
@@ -3239,11 +3240,7 @@ We are in in stage {stage} and fit_type {fit_type} and have done {Configuration[
 
     # First move the previous fits
     rename_fit_products(Configuration,fit_type = fit_type, stage=stage )
-    #If we are debug let's write the config file
-    if Configuration['DEBUG']:
-        if stage == 'run_os':
-            write_config(
-                f'{Configuration["LOG_DIRECTORY"]}CFG_Before_Iteration_{Configuration["ITERATIONS"]}.txt', Configuration)
+   
     if fit_type == 'Error_Shaker':
         work_dir = os.getcwd()
         restart_file = f"restart_Error_Shaker.txt"
@@ -3593,9 +3590,15 @@ def setup_configuration(cfg):
         else:
             Configuration[str(key).upper()] = input_key
 
-
+    #if we have a recovery ppoint we will try to start everything from there
+    if Configuration['RECOVERY_POINT'] != 'Start':
+        try:
+            Rec_Configuration = recover_entry_point_conf(Configuration)
+            return Rec_Configuration
+        except FileExistsError:
+            Configuration['RECOVERY_POINT'] = 'Start'
+            pass     
     # None cfg additions, that is additions that should be reset for every galaxy
-
     boolean_keys = ['OPTIMIZED', # Are we fitting an optimized cube
                 'TIRIFIC_RUNNING', # Is there a tirific initialized
                 'OUTER_RINGS_DOUBLED', #Do the outer rings have twice the size of the inner rings
