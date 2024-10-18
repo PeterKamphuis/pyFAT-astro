@@ -22,7 +22,7 @@ from pyFAT_astro.Support.log_functions import print_log,enter_recovery_point\
 def FAT_Galaxy_Loop(Configuration):
 
     try:
-        if Configuration['RP_Counter'] == 1:
+        if Configuration['RP_COUNTER'] == 1:
             registered_exception = None
             current_run = 'Not Initialized'
             Fits_Files = initialize_loop(Configuration)
