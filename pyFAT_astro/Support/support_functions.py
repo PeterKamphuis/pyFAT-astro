@@ -3639,9 +3639,9 @@ def setup_configuration(cfg):
                'TIRSHAKER_TIME': ['Not started','Not completed'],
                'OUTPUTLOG': None,
                'RUN_COUNTER': 0,
-               'RUN_SECTION': 'initialize',
                'CENTRAL_CONVERGENCE_COUNTER': 1.,
                'RP_COUNTER': 1,
+               'RP_SECTION': 'initialize',
                'ITERATIONS': 0,
                'CURRENT_STAGE': 'initial', #Current stage of the fitting process, set at switiching stages
                'USED_FITTING': None,
