@@ -3639,7 +3639,7 @@ def setup_configuration(cfg):
                'TIRSHAKER_TIME': ['Not started','Not completed'],
                'OUTPUTLOG': None,
                'RUN_COUNTER': 0,
-               'RUN_SECTION': 'Start',
+               'RUN_SECTION': 'initialize',
                'CENTRAL_CONVERGENCE_COUNTER': 1.,
                'RP_COUNTER': 1,
                'ITERATIONS': 0,
