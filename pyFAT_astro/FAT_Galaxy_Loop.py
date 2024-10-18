@@ -16,16 +16,17 @@ import pyFAT_astro.Support.write_functions as wf
 
 from datetime import datetime
 from pyFAT_astro.Support.fat_errors import BadCatalogueError
-from pyFAT_astro.Support.log_functions import print_log,write_config,update_statistics
+from pyFAT_astro.Support.log_functions import print_log,enter_recovery_point\
+    ,update_statistics
 
 def FAT_Galaxy_Loop(Configuration):
 
     try:
-
-        registered_exception = None
-        current_run = 'Not Initialized'
-        Fits_Files = initialize_loop(Configuration)
-        loop_sofia(Configuration,Fits_Files)
+        if Configuration['RP_Counter'] == 1:
+            registered_exception = None
+            current_run = 'Not Initialized'
+            Fits_Files = initialize_loop(Configuration)
+            loop_sofia(Configuration,Fits_Files)
 
         # If you add any make sure that the fitstage  starts with 'Fit_'
         if Configuration['USED_FITTING']:
@@ -37,10 +38,7 @@ def FAT_Galaxy_Loop(Configuration):
             #sf.sofia_output_exists(Configuration,Fits_Files)
             print_log(f'''FAT_GALAXY_LOOPS: The source is well defined and we will now setup the initial tirific file
 ''', Configuration)
-            #Add your personal fitting types here
-            if Configuration['DEBUG']:
-                write_config(
-                    f'{Configuration["LOG_DIRECTORY"]}CFG_Before_Fitting.txt', Configuration)
+            
         # then we want to read the template
       
 
@@ -218,10 +216,6 @@ def loop_sofia(Configuration,Fits_Files):
      
     Configuration['SOFIA_TIME'][0] = datetime.now()
     #If we have Sofia Preprocessed Output request make sure it all exists
-    if Configuration['DEBUG']:
-        write_config(
-            f'{Configuration["LOG_DIRECTORY"]}CFG_Before_Sofia.txt', Configuration)
-
     if 'external_sofia' in Configuration['FITTING_STAGES']:
         sf.copy_homemade_sofia(
             Configuration)
@@ -293,9 +287,6 @@ def MP_Fitting_Loop(input,timing_lock,catalogue_lock):
        
             # If you add any make sure that the fitstage  starts with 'Fit_'
 
-        if Configuration['DEBUG']:
-            write_config(
-                f'{Configuration["LOG_DIRECTORY"]}CFG_Before_Fitting.txt', Configuration)
 
         if 'fit_tirific_osc' in Configuration['FITTING_STAGES']:   
             current_run,Tirific_Template = runf.fitting_osc(
