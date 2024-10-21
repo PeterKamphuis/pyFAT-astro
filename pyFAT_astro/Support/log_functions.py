@@ -122,6 +122,7 @@ class full_system_tracking:
          ax2.set_ylim(0,np.max(np.array(loads['SCPU']+loads['FCPU'],dtype=float))*1.1)
          ax2.set_ylabel('CPUs (%)',color='r')
          ax2.tick_params(axis='y', labelcolor='r')
+         ax1.legend(bbox_to_anchor=(0.9, 0.705),loc='lower right')
          fig.savefig(self.plot_name)
          plt.close()
       except Exception as e:
