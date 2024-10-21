@@ -447,15 +447,7 @@ get_totflux.__doc__ =f'''
  NOTE:
 '''
 
-# Function to get the PA and inclination from the moment 0 for initial estimates
-def guess_orientation(Configuration,Fits_Files, vsys = -1 ,center = None, \
-            smooth = False):
-    #open the moment 0
-
-    print_log(f'''GUESS_ORIENTATION: starting extraction of initial parameters.
-''',Configuration, case=['debug_start','verbose'])
-    update_statistics(Configuration, message= "Starting the guess orientation run")
-
+def load_intensity_map_and_noise(Configuration,Fits_Files, center = None):
     Image = fits.open(f"{Configuration['FITTING_DIR']}{Fits_Files['MOMENT0']}",\
             uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
     map = Image[0].data
@@ -473,11 +465,13 @@ def guess_orientation(Configuration,Fits_Files, vsys = -1 ,center = None, \
     Image = fits.open(f"{Configuration['FITTING_DIR']}{Fits_Files['CHANNEL_MAP']}",\
             uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
     noise_map = np.sqrt(Image[0].data)*Configuration['NOISE']*Configuration['CHANNEL_WIDTH']
-
+ 
     #these guesses get thrown off for very large galaxies so smooth when we have those:
-    if smooth:
-        sigma = sf.set_limits(Configuration['BEAM_IN_PIXELS'][0]*Configuration['MAX_SIZE_IN_BEAMS']/12.*2.,Configuration['BEAM_IN_PIXELS'][0],Configuration['BEAM_IN_PIXELS'][0]*5)
-        print_log(f'''GUESS_ORIENTATION: We are smoothing the maps with {sigma} pixels
+    if Configuration['MAX_SIZE_IN_BEAMS'] > 20.:
+        sigma = sf.set_limits(Configuration['BEAM_IN_PIXELS'][0]*\
+            Configuration['MAX_SIZE_IN_BEAMS']/12.*2.,\
+            Configuration['BEAM_IN_PIXELS'][0],Configuration['BEAM_IN_PIXELS'][0]*5)
+        print_log(f'''LOAD_MAPS_AND_NOISE: We are smoothing the maps with {sigma} pixels
 ''',Configuration,case= ['debug_add'])
         tmp =  ndimage.gaussian_filter(map, sigma=(sigma, sigma), order=0)
         tmp[map <= 0.] = 0.
@@ -490,9 +484,7 @@ def guess_orientation(Configuration,Fits_Files, vsys = -1 ,center = None, \
         if Configuration['DEBUG']:
             fits.writeto(f"{Configuration['LOG_DIRECTORY']}smooth_noise_map.fits",noise_map,hdr,overwrite = True)
 
-
-    SNR = np.nanmean(map[noise_map > 0.]/noise_map[noise_map > 0.])
-    Configuration['SNR'] = SNR
+    Configuration['SNR'] = np.nanmean(map[noise_map > 0.]/noise_map[noise_map > 0.])
     noise_hdr = Image[0].header
     Image.close()
     noise_map [0. > map ] =0.
@@ -508,33 +500,54 @@ def guess_orientation(Configuration,Fits_Files, vsys = -1 ,center = None, \
     mom0[0].data= map
 
 
-    scale_factor = sf.set_limits(SNR/3.*minimum_noise_in_map/median_noise_in_map, 0.05, 1.)
-    print_log(f'''GUESS_ORIENTATION: We find SNR = {SNR} and a scale factor {scale_factor} and the noise median {median_noise_in_map}
+    scale_factor = sf.set_limits(Configuration['SNR']/3.*minimum_noise_in_map/median_noise_in_map, 0.05, 1.)
+    print_log(f'''LOAD_MAPS_AND_NOISE: We find SNR = {Configuration["SNR"]} and a scale factor {scale_factor} and the noise median {median_noise_in_map}
 {'':8s} minimum {minimum_noise_in_map}
 ''',Configuration,case= ['debug_add'])
-    '''
-    if np.mean(Configuration['SIZE_IN_BEAMS']) >10:
-        beam_check=[Configuration['BEAM_IN_PIXELS'][0],Configuration['BEAM_IN_PIXELS'][0]/2.]
-    else:
-    '''
+    return mom0,noise_map,minimum_noise_in_map,median_noise_in_map,scale_factor
+
+def get_profile_average(Configuration,map,angle,center=None):
+    maj_profile,maj_axis,maj_resolution = sf.get_profile(Configuration,map, angle,center)
+    # let's get an intensity weighted center for the extracted profile.
+    center_of_profile = np.sum(maj_profile*maj_axis)/np.sum(maj_profile)
+    neg_index = np.where(maj_axis < 0.)[0]
+    pos_index = np.where(maj_axis > 0.)[0]
+    avg_profile = []
+    neg_profile = []
+    pos_profile = []
+    diff = 0.
+    for i in range(np.nanmin([neg_index.size,pos_index.size])):
+        avg_profile.append(np.nanmean([maj_profile[neg_index[neg_index.size-i-1]],maj_profile[pos_index[i]]]))
+        neg_profile.append(maj_profile[neg_index[neg_index.size-i-1]])
+        pos_profile.append(maj_profile[pos_index[i]])
+        #diff = diff+abs(avg_profile[i]-neg_profile[i])+abs(avg_profile[i]-pos_profile[i])
+        diff = diff+abs(pos_profile[-1]-neg_profile[-1])*abs(np.mean([pos_profile[-1],neg_profile[-1]]))
+    diff = diff/np.nanmin([neg_index.size,pos_index.size])
+    print_log(f'''GET_PROFILE_AVERAGE:'BMAJ in pixels, center of the profile, current center, difference between pos and neg
+{'':8s}{Configuration['BEAM_IN_PIXELS'][0]} {center_of_profile} {center} {diff}
+''',Configuration,case= ['debug_add'])
+    return avg_profile,center_of_profile,diff,maj_resolution,maj_axis
+
+
+def moment0_orientation(Configuration,Fits_Files,mom0,scale_factor=None,median_noise_in_map=None):
     beam_check=[Configuration['BEAM_IN_PIXELS'][0]/2.]
     center_stable = False
     checked_center = False
     center_counter = 0.
-    original_center = copy.deepcopy(center)
-    print_log(f'''GUESS_ORIENTATION: Looking for the center, pa and inclination
+    new_center = False
+    #original_center = copy.deepcopy(center)
+    print_log(f'''MOMENT0_ORIENTATION: Looking for the center, pa and inclination
 ''',Configuration, case= ['verbose'])
-
     update_statistics(Configuration, message= "Starting the initial search for the pa, inclination and center.")
-
-    while not center_stable:
+    while center_stable is False:
         inclination_av, pa_av, maj_extent_av =\
-            sf.get_inclination_pa(Configuration, mom0, center, cutoff = scale_factor* median_noise_in_map)
+            sf.get_inclination_pa(Configuration, mom0, center, \
+            cutoff = scale_factor* median_noise_in_map)
         inclination_av = [inclination_av]
         int_weight = [2.]
         pa_av = [pa_av]
         maj_extent_av = [maj_extent_av]
-        print_log(f'''GUESS_ORIENTATION: From the the initial guess with center {center}.
+        print_log(f'''MOMENT0_ORIENTATION: From the the initial guess with center {center}.
 {'':8s} We get pa = {pa_av}, inclination = {inclination_av}, maj_extent_av {maj_extent_av}
 ''',Configuration,case= ['debug_add'])
         for mod in beam_check:
@@ -542,7 +555,7 @@ def guess_orientation(Configuration,Fits_Files, vsys = -1 ,center = None, \
             for i in [[-1,-1],[-1,1],[1,-1],[1,1]]:
                 center_tmp = [center[0]+mod*i[0],center[1]+mod*i[1]]
 
-                print_log(f'''GUESS_ORIENTATION: Checking at location RA = {center_tmp[0]} pix, DEC = {center_tmp[1]} pix
+                print_log(f'''MOMENT0_ORIENTATION: Checking at location RA = {center_tmp[0]} pix, DEC = {center_tmp[1]} pix
 ''',Configuration,case= ['debug_add'])
 
                 inclination_tmp, pa_tmp, maj_extent_tmp= \
@@ -554,7 +567,7 @@ def guess_orientation(Configuration,Fits_Files, vsys = -1 ,center = None, \
                 maj_extent_av.append(maj_extent_tmp)
 
         if np.isnan(np.array(inclination_av,dtype=float)).all():
-            print_log(f'''GUESS_ORIENTATION: We are unable to find an  inclination.
+            print_log(f'''MOMENT0_ORIENTATION: We are unable to find an  inclination.
 ''',Configuration,case= ['main','screen'])
             raise BadSourceError(f'We are unable to find an initial inclination.')
 
@@ -566,11 +579,11 @@ def guess_orientation(Configuration,Fits_Files, vsys = -1 ,center = None, \
 
 
         if np.isnan(np.array(inclination_av,dtype=float)).all():
-            print_log(f'''GUESS_ORIENTATION: We are unable to find an PA.
+            print_log(f'''MOMENT0_ORIENTATION: We are unable to find an PA.
 ''',Configuration,case=['main','screen'])
             raise BadSourceError(f'We are unable to find an initial PA.')
         weight = np.array([1./x[1] for x in pa_av],dtype= float)
-        print_log(f'''GUESS_ORIENTATION: We find these pa and inclination
+        print_log(f'''MOMENT0_ORIENTATION: We find these pa and inclination
 {'':8s} pa = {' '.join([f'{float(x[0]):.2f}' for x in pa_av])}
 {'':8s} inclination = {' '.join([f'{float(x[0]):.2f}' for x in inclination_av])}
 {'':8s} int_weights = {' '.join([f'{float(x):.2f}' for x in int_weight])}
@@ -597,32 +610,19 @@ def guess_orientation(Configuration,Fits_Files, vsys = -1 ,center = None, \
         if maj_extent/Configuration['BEAM'][0]/3600. > 3.:
             maj_extent = maj_extent+(Configuration['BEAM'][0]/3600.*0.2/scale_factor)
 
-        print_log(f'''GUESS_ORIENTATION: From the maps we find
+        print_log(f'''MOMENT0_ORIENTATION: From the maps we find
 {'':8s} inclination = {inclination}
 {'':8s} pa = {pa}
 {'':8s} size in beams = {maj_extent/(Configuration['BEAM'][0]/3600.)}
 ''',Configuration,case= ['debug_add'])
+        Configuration['SIZE_IN_BEAMS'] = np.full(2,sf.set_limits(\
+            maj_extent/(Configuration['BEAM'][0]/3600.),1.0,Configuration['MAX_SIZE_IN_BEAMS']))
+   
                 #map[3*minimum_noise_in_map > noise_map] = 0.
         # From these estimates we also get an initial SBR
-        maj_profile,maj_axis,maj_resolution = sf.get_profile(Configuration,map, pa[0],center)
-     
-        # let's get an intensity weighted center for the extracted profile.
-
-        center_of_profile = np.sum(maj_profile*maj_axis)/np.sum(maj_profile)
-        neg_index = np.where(maj_axis < 0.)[0]
-        pos_index = np.where(maj_axis > 0.)[0]
-        avg_profile = []
-        neg_profile = []
-        pos_profile = []
-        diff = 0.
-        for i in range(np.nanmin([neg_index.size,pos_index.size])):
-            avg_profile.append(np.nanmean([maj_profile[neg_index[neg_index.size-i-1]],maj_profile[pos_index[i]]]))
-            neg_profile.append(maj_profile[neg_index[neg_index.size-i-1]])
-            pos_profile.append(maj_profile[pos_index[i]])
-            #diff = diff+abs(avg_profile[i]-neg_profile[i])+abs(avg_profile[i]-pos_profile[i])
-            diff = diff+abs(pos_profile[-1]-neg_profile[-1])*abs(np.mean([pos_profile[-1],neg_profile[-1]]))
-        diff = diff/np.nanmin([neg_index.size,pos_index.size])
-        print_log(f'''GUESS_ORIENTATION:'BMAJ in pixels, center of the profile, current center, difference between pos and neg
+        avg_profile,center_of_profile,diff,maj_resolution,maj_axis =\
+            get_profile_average(Configuration,mom0[0].data, pa[0],center=center)
+        print_log(f'''MOMENT0_ORIENTATION:'BMAJ in pixels, center of the profile, current center, difference between pos and neg
 {'':8s}{Configuration['BEAM_IN_PIXELS'][0]} {center_of_profile} {center} {diff}
 ''',Configuration,case= ['debug_add'])
 
@@ -630,7 +630,7 @@ def guess_orientation(Configuration,Fits_Files, vsys = -1 ,center = None, \
         #if False:
         if (abs(center_of_profile/(2.*np.sin(np.radians(pa[0])))*maj_resolution) > Configuration['BEAM_IN_PIXELS'][0]*0.5 \
             or abs(center_of_profile/(2.*np.cos(np.radians(pa[0])))*maj_resolution) > Configuration['BEAM_IN_PIXELS'][0]*0.5) and SNR > 3. and not checked_center:
-            print_log(f'''GUESS_ORIENTATION: The SoFiA center and that of the SBR profile are separated by more than half a beam.
+            print_log(f'''MOMENT0_ORIENTATION: The SoFiA center and that of the SBR profile are separated by more than half a beam.
 {'':8s}GUESS_ORIENTATION: Determining the more symmetric profile.
 ''',Configuration,case= ['debug_add'])
             # let's check against a central absorption
@@ -643,25 +643,153 @@ def guess_orientation(Configuration,Fits_Files, vsys = -1 ,center = None, \
             if np.count_nonzero(np.isnan(central))/central.size < 0.1:
                 center,checked_center,center_stable = sf.get_new_center(Configuration,map,inclination=inclination[0],pa=pa[0],noise=median_noise_in_map)
                 center_counter += 1
-                print_log(f'''GUESS_ORIENTATION: We calculated a new center {center}.
+                new_center = True
+                print_log(f'''MOMENT0_ORIENTATION: We calculated a new center {center}.
 ''',Configuration,case= ['debug_add'])
             else:
                 center_stable = True
-                print_log(f'''GUESS_ORIENTATION: There appears to be a central absorption source. We are relying on sofia
+                print_log(f'''MOMENT0_ORIENTATION: There appears to be a central absorption source. We are relying on sofia
 ''',Configuration,case= ['debug_add'])
 
         else:
-            print_log(f'''GUESS_ORIENTATION: The previous center and that of the SBR profile are not separated by more than half a beam.
-{'':8s}GUESS_ORIENTATION: Keeping the last center
+            print_log(f'''MOMENT0_ORIENTATION: The previous center and that of the SBR profile are not separated by more than half a beam.
+{'':8s}MOMENT0_ORIENTATION: Keeping the last center
 ''',Configuration,case= ['debug_add'])
             center_stable = True
+    
+    return pa,inclination,center,new_center
 
-    print_log(f'''GUESS_ORIENTATION: Looking for the Initial surface brightness profile.
-''',Configuration, case= ['verbose'])
-    update_statistics(Configuration, message= "Starting the initial search for the SBR and VROT.")
-    Configuration['SIZE_IN_BEAMS'] = np.full(2,sf.set_limits(maj_extent/(Configuration['BEAM'][0]/3600.),1.0,Configuration['MAX_SIZE_IN_BEAMS']))
 
+def get_map_vsys(Configuration,map,center=None,vsys=None, new_center=False):
+    if vsys is None:
+        #As python is utterly moronic the center goes in back wards to the map
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore",message="Mean of empty slice"\
+                            ,category=RuntimeWarning)
+            map_vsys = np.nanmean(map[int(round(center[1]-buffer)):int(round(center[1]+buffer)),\
+                int(round(center[0]-buffer)):int(round(center[0]+buffer))])
+    elif new_center:
+        if np.mean(Configuration['SIZE_IN_BEAMS']) < 10. and not vsys is None:
+            map_vsys = (vsys+map_vsys)/2.
+    else:
+        map_vsys = vsys
+
+
+def load_velmap(Configuration,Fits_Files,noise_map,minimum_noise_in_map=0.,\
+                center=None, vsys =None, new_center = False):
+    #Load the image
+    Image = fits.open(f"{Configuration['FITTING_DIR']}{Fits_Files['MOMENT1']}",\
+            uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
+    map = copy.deepcopy(Image[0].data)
+
+    print_log(f'''LOAD_VELMAP: This is the amount of values we find initially {len(map[noise_map > 0.])}
+''',Configuration,case= ['debug_add']) 
+    map[3.*minimum_noise_in_map > noise_map] = float('NaN')
+    print_log(f'''LOAD_VELMAP: This is the amount of values we find after blanking low SNR {len(map[~np.isnan(map)])}
+''',Configuration,case= ['debug_add'])
+    map_vsys  = get_map_vsys(Configuration,map,center=center,vsys=vsys,\
+            new_center=new_center)
+  
+
+
+    if len(map[~np.isnan(map)]) < 10 or np.isnan(map_vsys):
+        no_values  = True
+        noise_level = 2.5
+        sigma = [0.5,0.5]
+        while no_values:
+            print_log(f'''LOAD_VELMAP: We smooth the velocity field to use a lower Noise threshold
+''',Configuration,case= ['debug_add'])
+            tmp = copy.deepcopy(Image[0].data)
+            tmp =  ndimage.gaussian_filter(Image[0].data, sigma=(sigma[1], sigma[0]), order=0)
+            tmp[noise_level*minimum_noise_in_map > noise_map] =  float('NaN')
+            map_vsys  = get_map_vsys(Configuration,tmp,center=center,vsys=vsys,\
+                new_center=new_center)
+            print_log(f'''LOAD_VELMAP: We used the threshold {noise_level} and sigma = {sigma}
+{'':8s}We find the len {len(tmp[~np.isnan(tmp)])} and the central velocity {map_vsys}
+''',Configuration,case= ['debug_add'])
+            if len(tmp[~np.isnan(tmp)]) < 10 or np.isnan(map_vsys):
+                sigma = [sigma[0]+0.5,sigma[0]+0.5]
+                noise_level -= 0.5
+            else:
+                no_values = False
+                map = tmp
+            if noise_level < 1. and no_values:
+                raise BadSourceError(f'LOAD_VELMAP: We failed to find a central velocity in the velocity map.')
+    Image[0].data = map
+    return Image, map_vsys
+
+
+#Check wether the pa obtained from the intensity needs to be rotated
+def check_intensity_pa(Configuration,map,pa, center=None):
+    maj_profile,maj_axis,maj_resolution = sf.get_profile(Configuration,map\
+        ,pa[0], center=center)
+    zeros = np.where(maj_profile == 0.)[0]
+    maj_profile[zeros] = float('NaN')
+    if all(np.isnan(maj_profile)):
+        raise BadSourceError(f'''CHECK_INTENSITY_PA: The RC extracted from the VF is all NaN's, this means something has gone very wrong.
+{'':8s} Raising an error.
+''')
+    loc_max = np.mean(maj_axis[np.where(maj_profile == np.nanmax(maj_profile))[0]])
+    loc_min = np.mean(maj_axis[np.where(maj_profile == np.nanmin(maj_profile))[0]])
+    print_log(f'''CHECK_INTENSITY_PA: this is the max location {loc_max} and the minimum {loc_min}
+''' , Configuration,case= ['debug_add'])
+    if loc_max > loc_min:
+        pa[0] = pa[0]+180
+        print_log(f'''CHECK_INTENSITY_PA: We have modified the pa by 180 deg as we found the maximum velocity west of the minimum.
+''' , Configuration)
+    return pa
+
+def combine_pa(Configuration,pa,vel_pa,sofia_pa,vel_pa_unreliable=False,\
+               inclination=[60.,0.]):
+    print_log(f'''COMBINE_PA: Combining the intensity (pa={pa}), the kinematic pa (pa={vel_pa}, reliable = {vel_pa_unreliable}) and sofias estimate (pa ={sofia_pa})
+''' , Configuration,case= ['debug_add'])
+    
+    #if we do not have a vel pa we use the the sofia estimate
+    if np.isnan(vel_pa[0]):
+        vel_pa= sofia_pa
+    elif abs(vel_pa[0]-sofia_pa[0]) < 15.:
+        #If the difference is less than 15 deg
+        for i in [0,1]:
+            vel_pa[i] = np.mean(vel_pa[i],sofia_pa[i])
+    else:
+        #Putting in here ensures averages in case of small differences
+        if vel_pa_unreliable:
+            vel_pa = sofia_pa
+
+  
+    if abs(pa[0]-vel_pa[0]) > 300.:
+        if pa[0] > 180.:
+            vel_pa[0] += 360.
+        else:
+            vel_pa[0] -= 360.
+    if abs(pa[0]-vel_pa[0]) > 25.:
+        # if the vel pa has a ridiculous error we use the normal pa
+        morph_pa=copy.deepcopy(pa)
+        if vel_pa[1] < 60.:
+            pa=vel_pa
+        #if the galaxy has a low inclination we do allow an error of the difference
+        if inclination[0] < 35.:
+            pa[1]=abs(morph_pa[0]-vel_pa[0])
+    else:
+        pa = [np.nansum([vel_pa[0]/vel_pa[1],\
+            pa[0]/pa[1]])/np.nansum([1./vel_pa[1],1./pa[1]]),\
+            2.*1./np.sqrt(np.nansum([1./vel_pa[1],1./pa[1]]))]
+    
+    print_log(f'''COMBINE_PA:: this is the final pa {pa}
+''' , Configuration,case= ['debug_add'])
+    return pa
+
+def extract_SBR(Configuration,mom0,pa,inclination, center=None):
+    pas = [pa[0],pa[0]-pa[1],pa[0]+pa[1]]
+    weights = [0.5,0.25,0.25]
+
+
+    maj_profile,maj_axis,maj_resolution = sf.get_profile(Configuration,mom0[0].data\
+        ,pa[0], center=center)
+    
     ring_size_req = Configuration['BEAM_IN_PIXELS'][0]/maj_resolution*Configuration['RING_SIZE']
+
+
 
     SBR_initial = avg_profile[0::int(ring_size_req)]/(np.pi*Configuration['BEAM'][0]*Configuration['BEAM'][1]/(4.*np.log(2.))) # Jy*km/s
     #deproject the SBR
@@ -678,80 +806,7 @@ def guess_orientation(Configuration,Fits_Files, vsys = -1 ,center = None, \
          SBR_initial.pop()
     SBR_initial = np.array(SBR_initial,dtype=float)
     #We need to know which is the approaching side and which is receding
-
-
-    print_log(f'''GUESS_ORIENTATION: Looking for the Initial Rotation Curve.
-''',Configuration,case= ['verbose'])
-    Image = fits.open(f"{Configuration['FITTING_DIR']}{Fits_Files['MOMENT1']}",\
-            uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
-    map = copy.deepcopy(Image[0].data)
-
-    hdr = Image[0].header
-    print_log(f'''GUESS_ORIENTATION: This is the amount of values we find initially {len(map[noise_map > 0.])}
-''',Configuration,case= ['debug_add'])
-    #Image.close()
-    #map[3*minimum_noise_in_map > noise_map] = float('NaN')
-
-    map[3.*minimum_noise_in_map > noise_map] = float('NaN')
-    print_log(f'''GUESS_ORIENTATION: This is the amount of values we find after blanking low SNR {len(map[~np.isnan(map)])}
-''',Configuration,case= ['debug_add'])
-    if vsys == -1 or center_counter > 0.:
-        #As python is utterly moronic the center goes in back wards to the map
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore",message="Mean of empty slice"\
-                            ,category=RuntimeWarning)
-            map_vsys = np.nanmean(map[int(round(center[1]-buffer)):int(round(center[1]+buffer)),int(round(center[0]-buffer)):int(round(center[0]+buffer))])
-        if np.mean(Configuration['SIZE_IN_BEAMS']) < 10.:
-            map_vsys = (vsys+map_vsys)/2.
-    else:
-        map_vsys = vsys
-
-
-    if len(map[~np.isnan(map)]) < 10 or np.isnan(map_vsys):
-        no_values  = True
-        noise_level = 2.5
-        sigma = [0.5,0.5]
-        while no_values:
-            print_log(f'''GUESS_ORIENTATION: We smooth the velocity field to use a lower Noise threshold
-''',Configuration,case= ['debug_add'])
-            tmp = copy.deepcopy(Image[0].data)
-            tmp =  ndimage.gaussian_filter(Image[0].data, sigma=(sigma[1], sigma[0]), order=0)
-            tmp[noise_level*minimum_noise_in_map > noise_map] =  float('NaN')
-            #We need the cnter to be found else we get a crash
-            if vsys == -1 or center_counter > 0.:
-                #As python is utterly moronic the center goes in back wards to the map
-                with warnings.catch_warnings():
-                    warnings.filterwarnings("error",message="Mean of empty slice"\
-                            ,category=RuntimeWarning)
-                    try:
-                        map_vsys = np.nanmean(tmp[int(round(center[1]-buffer)):int(round(center[1]+buffer)),int(round(center[0]-buffer)):int(round(center[0]+buffer))])
-                    except RuntimeWarning:
-                        map_vsys = vsys
-
-                if np.mean(Configuration['SIZE_IN_BEAMS']) < 10.:
-                    map_vsys = (vsys+map_vsys)/2.
-
-
-            print_log(f'''GUESS_ORIENTATION: We used the threshold {noise_level} and sigma = {sigma}
-{'':8s}We find the len {len(tmp[~np.isnan(tmp)])} and the central velocity {map_vsys}
-''',Configuration,case= ['debug_add'])
-            if len(tmp[~np.isnan(tmp)]) < 10 or np.isnan(map_vsys):
-                sigma = [sigma[0]+0.5,sigma[0]+0.5]
-                noise_level -= 0.5
-            else:
-                no_values = False
-                map = tmp
-            if noise_level < 1. and no_values:
-                VROT_initial = [0]
-                SBR_initial = [0]
-                Image.close()
-                return np.array(pa,dtype=float),np.array(inclination,dtype=float),SBR_initial,center[0],center[1],float('NaN'),VROT_initial
-
-    Image.close()
-    #we want to make sure the SBr is gaussian
-    # We want to make this is sure this is a decent profile and thus we fit it with the gaussian
-    #Configuration['SIZE_IN_BEAMS'] = len(SBR_initial)-1
-    format = sf.set_format('SBR')
+     format = sf.set_format('SBR')
     Temp_template = {'SBR':' '.join([f'{float(x):{format}}' for x in SBR_initial])\
                         ,'SBR_2':' '.join([f'{float(x):{format}}' for x in SBR_initial]),\
                         'VSYS':' '.join([f'{float(x):{sf.set_format("VSYS")}}' for x in [vsys,vsys]])}
@@ -759,57 +814,62 @@ def guess_orientation(Configuration,Fits_Files, vsys = -1 ,center = None, \
                         smooth = True,initial=True)
     SBR_initial = np.array([float(x) for x in Temp_template['SBR'].split()],dtype=float)
 
-    noise_map = []
+
+# Function to get the PA and inclination from the moment 0 for initial estimates
+def guess_orientation(Configuration,Fits_Files, vsys = -1 ,center = None,\
+        sofia_pa = None):
+    #open the moment 0
+    print_log(f'''GUESS_ORIENTATION: starting extraction of initial parameters.
+''',Configuration, case=['debug_start','verbose'])
+    update_statistics(Configuration, message= "Starting the guess orientation run")
+    #load in the moment 0 and prepare for processing
+    mom0,noise_map,minimum_noise_in_map,median_noise_in_map, scale_factor =\
+        load_intensity_map_and_noise(Configuration,Fits_Files,center=center)
+  
+    #Estimate the inclination center and pa from the Moment 0
+    pa,inclination,center,new_center = moment0_orientation(Configuration,Fits_Files\
+        mom0,scale_factor=scale_factor,median_noise_in_map=median_noise_in_map)
+    # Then we load and process the velocity map 
+  
+    mom1, map_vsys = load_velmap (Configuration,Fits_Files, noise_map,\
+        minimum_noise_in_map=minimum_noise_in_map,center=center,vsys=vsys,\
+        new_center=new_center)
+    #After loading the velocity we check wether we need to rotate the pa by 180 deg
+    pa = check_intensity_pa(Configuration,mom1[0].data,pa,center=center)
 
     # First we look for the kinematics center
+    vel_pa,vel_pa_unreliable = sf.get_vel_pa(Configuration,mom1[0].data\
+        ,center_in=center,Fits_Files=Fits_Files)
+    # and then we combine these to the actual PA
+    pa = combine_pa(Configuration,pa,vel_pa,sofia_pa,\
+                vel_pa_unreliable=vel_pa_unreliable,inclination=inclination)
+
+    print_log(f'''GUESS_ORIENTATION: Looking for the Initial surface brightness profile.
+''',Configuration, case= ['verbose'])
+    update_statistics(Configuration, message= "Starting the initial search for the SBR and VROT.")
+
+    #Extrcat the inititial SBR
+
+    SBR_initial = extract_SBR(Configuration,mom0,pa,inclination)
    
-    vel_pa,vel_pa_unreliable = sf.get_vel_pa(Configuration,map,center_in=center,\
-                                             Fits_Files=Fits_Files)
+
+    print_log(f'''GUESS_ORIENTATION: Looking for the Initial Rotation Curve.
+''',Configuration,case= ['verbose'])
   
-    maj_profile,maj_axis,maj_resolution = sf.get_profile(Configuration,map,pa[0], center=center)
    
-    zeros = np.where(maj_profile == 0.)[0]
-    maj_profile[zeros] = float('NaN')
-    if all(np.isnan(maj_profile)):
-        print_log(f'''GUESS_ORIENTATION: The RC extracted from the VF is all NaN's, this means something has gone very wrong.
-{'':8s} Raising an error.
-''' , Configuration,case= ['main','screen'])
-        VROT_initial = [0]
-        SBR_initial = [0]
-        Image.close()
-        return np.array(pa,dtype=float),np.array(inclination,dtype=float),SBR_initial,center[0],center[1],float('NaN'),VROT_initial
+    #we want to make sure the SBr is gaussian
+    # We want to make this is sure this is a decent profile and thus we fit it with the gaussian
+    #Configuration['SIZE_IN_BEAMS'] = len(SBR_initial)-1
+   
+    noise_map = []
 
-    loc_max = np.mean(maj_axis[np.where(maj_profile == np.nanmax(maj_profile))[0]])
-    loc_min = np.mean(maj_axis[np.where(maj_profile == np.nanmin(maj_profile))[0]])
+   
+   
 
-    if loc_max > loc_min:
-        pa[0] = pa[0]+180
-        print_log(f'''GUESS_ORIENTATION: We have modified the pa by 180 deg as we found the maximum velocity west of the minimum.
-''' , Configuration)
+  
+    
 
-    print_log(f'''GUESS_ORIENTATION: this is the pa {pa} and the vel_pa {vel_pa}
-''' , Configuration,case= ['debug_add'])
-    if not vel_pa_unreliable:
-        if abs(pa[0]-vel_pa[0]) > 300.:
-            if pa[0] > 180.:
-                vel_pa[0] += 360.
-            else:
-                vel_pa[0] -= 360.
-        if abs(pa[0]-vel_pa[0]) > 25. and ~np.isnan(vel_pa[0])  :
-            # if the vel pa has a ridiculous error we use the normal pa
-            morph_pa=copy.deepcopy(pa)
-            if vel_pa[1] < 60.:
-                pa=vel_pa
-            #if the galaxy has a low inclination we do allow an error of the difference
-            if inclination[0] < 35.:
-                pa[1]=abs(morph_pa[0]-vel_pa[0])
-        else:
-            if ~np.isnan(vel_pa[0]):
-                pa = [np.nansum([vel_pa[0]/vel_pa[1],\
-                    pa[0]/pa[1]])/np.nansum([1./vel_pa[1],1./pa[1]]),\
-                    2.*1./np.sqrt(np.nansum([1./vel_pa[1],1./pa[1]]))]
-    print_log(f'''GUESS_ORIENTATION: this is the final pa {pa}
-''' , Configuration,case= ['debug_add'])
+   
 
     if smooth:
         buffer = int(Configuration['BEAM_IN_PIXELS'][0]*5.)

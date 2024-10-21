@@ -517,14 +517,14 @@ def check_source(Configuration, Fits_Files):
                 /(Configuration['BEAM_IN_PIXELS'][0])+5.))
     print_log(f'''CHECK_SOURCE: From Sofia we find a max extend of {Configuration['MAX_SIZE_IN_BEAMS']}
 ''', Configuration,case= ['verbose'])
-    if Configuration['MAX_SIZE_IN_BEAMS'] > 20.:
-        smooth_field = True
-    else:
-        smooth_field = False
+    #if Configuration['MAX_SIZE_IN_BEAMS'] > 20.:
+    #    smooth_field = True
+    #else:
+    #    smooth_field = False
 
     pa, inclination, SBR_initial,x_new,y_new,new_vsys,VROT_initial =\
         rf.guess_orientation(Configuration,Fits_Files, vsys= v_app, \
-            smooth = smooth_field,center = [x,y])
+           center = [x,y], sofia_pa = kin_pa)
    
     if x_new != x or y_new != y or new_vsys != v_app:
         x,y,z_new=cube_wcs.wcs_world2pix(ra,dec,new_vsys*1000.,1)

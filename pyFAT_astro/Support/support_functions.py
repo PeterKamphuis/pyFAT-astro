@@ -2374,6 +2374,7 @@ get_tirific_output_names.__doc__=f'''
 def get_vel_pa(Configuration,velocity_field,center_in=\
         np.array([None,None],dtype=float),Fits_Files =None ):
     center = copy.deepcopy(center_in)
+    original_velocity_field = copy.deepcopy(velocity_field)
     print_log(f'''GET_VEL_PA: This is the center we use {center}
 ''',Configuration,case=['debug_start'])
     unreliable =False
@@ -2382,19 +2383,21 @@ def get_vel_pa(Configuration,velocity_field,center_in=\
     else:
         # because python is stupid the ceneter should be reversed to match the map
         center = np.flip(center)
-    fits.writeto(f'{Configuration["FITTING_DIR"]}/testvf_befor.fits',velocity_field,overwrite=True)
+    if Configuration['DEBUG']:
+        fits.writeto(f'{Configuration["FITTING_DIR"]}/testvf_befor.fits',velocity_field,overwrite=True)
     sigma = [3.,3.]
     sm_velocity_field = ndimage.gaussian_filter(velocity_field, sigma=(sigma[1], sigma[0]), order=0)
     #if we have not enough points we load the original field and smooth it
     if len(sm_velocity_field[~np.isnan(sm_velocity_field)]) < 10:
-        Image = fits.open(f"{Configuration['FITTING_DIR']}{Fits_Files['MOMENT1']}",\
-            uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
-        velocity_field = copy.deepcopy(Image[0].data)
+        sigma = [2.,2.]
         unreliable =True
-        print_log(f'''GET_VEL_PA: We are starting from the origina moment 1
+        print_log(f'''GET_VEL_PA: We are starting from the original moment 1 and using a smaller smoothing.
 ''',Configuration,case=['debug_add'])
         sm_velocity_field = ndimage.gaussian_filter(velocity_field, sigma=(sigma[1], sigma[0]), order=0)
+    
     if len(sm_velocity_field[~np.isnan(sm_velocity_field)]) < 10:
+        print_log(f'''GET_VEL_PA: Our smoothed velocity field has less than 10 pixels (pixels ={ len(sm_velocity_field[~np.isnan(sm_velocity_field)])})
+''',Configuration,case=['debug_add'])
         return float('NaN'),True
        
     fits.writeto(f'{Configuration["FITTING_DIR"]}/testvf.fits',sm_velocity_field,overwrite=True)
