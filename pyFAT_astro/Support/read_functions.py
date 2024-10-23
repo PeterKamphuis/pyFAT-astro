@@ -513,11 +513,13 @@ def get_profile_average(Configuration,map,angle,center=None):
     neg_index = np.where(maj_axis < 0.)[0]
     pos_index = np.where(maj_axis > 0.)[0]
     avg_profile = []
+    ax_profile = []
     neg_profile = []
     pos_profile = []
     diff = 0.
     for i in range(np.nanmin([neg_index.size,pos_index.size])):
         avg_profile.append(np.nanmean([maj_profile[neg_index[neg_index.size-i-1]],maj_profile[pos_index[i]]]))
+        ax_profile.append(np.nanmean([-1.*maj_profile[neg_index[neg_index.size-i-1]],maj_profile[pos_index[i]]]))
         neg_profile.append(maj_profile[neg_index[neg_index.size-i-1]])
         pos_profile.append(maj_profile[pos_index[i]])
         #diff = diff+abs(avg_profile[i]-neg_profile[i])+abs(avg_profile[i]-pos_profile[i])
@@ -529,7 +531,8 @@ def get_profile_average(Configuration,map,angle,center=None):
     return avg_profile,center_of_profile,diff,maj_resolution,maj_axis
 
 
-def moment0_orientation(Configuration,Fits_Files,mom0,scale_factor=None,median_noise_in_map=None):
+def moment0_orientation(Configuration,Fits_Files,mom0,scale_factor=None,
+                        median_noise_in_map=None,center=None):
     beam_check=[Configuration['BEAM_IN_PIXELS'][0]/2.]
     center_stable = False
     checked_center = False
@@ -629,9 +632,11 @@ def moment0_orientation(Configuration,Fits_Files,mom0,scale_factor=None,median_n
         # if the center of the profile is more than half a beam off from the Sofia center let's see which on provides a more symmetric profile
         #if False:
         if (abs(center_of_profile/(2.*np.sin(np.radians(pa[0])))*maj_resolution) > Configuration['BEAM_IN_PIXELS'][0]*0.5 \
-            or abs(center_of_profile/(2.*np.cos(np.radians(pa[0])))*maj_resolution) > Configuration['BEAM_IN_PIXELS'][0]*0.5) and SNR > 3. and not checked_center:
+            or abs(center_of_profile/(2.*np.cos(np.radians(pa[0])))*maj_resolution) \
+                > Configuration['BEAM_IN_PIXELS'][0]*0.5) and\
+                Configuration['SNR'] > 3. and not checked_center:
             print_log(f'''MOMENT0_ORIENTATION: The SoFiA center and that of the SBR profile are separated by more than half a beam.
-{'':8s}GUESS_ORIENTATION: Determining the more symmetric profile.
+{'':8s}MOMENT0_ORIENTATION: Determining the more symmetric profile.
 ''',Configuration,case= ['debug_add'])
             # let's check against a central absorption
 
@@ -641,7 +646,9 @@ def moment0_orientation(Configuration,Fits_Files,mom0,scale_factor=None,median_n
             central = cube[0].data[:,int(round(center[1]-buffer)):int(round(center[1]+buffer)),int(round(center[0]-buffer)):int(round(center[0]+buffer))]
 
             if np.count_nonzero(np.isnan(central))/central.size < 0.1:
-                center,checked_center,center_stable = sf.get_new_center(Configuration,map,inclination=inclination[0],pa=pa[0],noise=median_noise_in_map)
+                center,checked_center,center_stable = sf.get_new_center(\
+                    Configuration,mom0[0].data,inclination=inclination[0],pa=pa[0],\
+                    noise=median_noise_in_map)
                 center_counter += 1
                 new_center = True
                 print_log(f'''MOMENT0_ORIENTATION: We calculated a new center {center}.
@@ -659,20 +666,26 @@ def moment0_orientation(Configuration,Fits_Files,mom0,scale_factor=None,median_n
     
     return pa,inclination,center,new_center
 
+ 
 
 def get_map_vsys(Configuration,map,center=None,vsys=None, new_center=False):
-    if vsys is None:
+    if Configuration['MAX_SIZE_IN_BEAMS'] > 20.:
+        buffer = int(Configuration['BEAM_IN_PIXELS'][0]*5.)
+    else:
+        buffer = int(round(np.mean(Configuration['BEAM_IN_PIXELS'][:2])/2.))
+
+    if vsys is None or new_center:
         #As python is utterly moronic the center goes in back wards to the map
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore",message="Mean of empty slice"\
                             ,category=RuntimeWarning)
             map_vsys = np.nanmean(map[int(round(center[1]-buffer)):int(round(center[1]+buffer)),\
                 int(round(center[0]-buffer)):int(round(center[0]+buffer))])
-    elif new_center:
         if np.mean(Configuration['SIZE_IN_BEAMS']) < 10. and not vsys is None:
             map_vsys = (vsys+map_vsys)/2.
     else:
         map_vsys = vsys
+    return map_vsys
 
 
 def load_velmap(Configuration,Fits_Files,noise_map,minimum_noise_in_map=0.,\
@@ -689,9 +702,6 @@ def load_velmap(Configuration,Fits_Files,noise_map,minimum_noise_in_map=0.,\
 ''',Configuration,case= ['debug_add'])
     map_vsys  = get_map_vsys(Configuration,map,center=center,vsys=vsys,\
             new_center=new_center)
-  
-
-
     if len(map[~np.isnan(map)]) < 10 or np.isnan(map_vsys):
         no_values  = True
         noise_level = 2.5
@@ -745,12 +755,13 @@ def combine_pa(Configuration,pa,vel_pa,sofia_pa,vel_pa_unreliable=False,\
 ''' , Configuration,case= ['debug_add'])
     
     #if we do not have a vel pa we use the the sofia estimate
+    print(vel_pa,sofia_pa)
     if np.isnan(vel_pa[0]):
         vel_pa= sofia_pa
     elif abs(vel_pa[0]-sofia_pa[0]) < 15.:
         #If the difference is less than 15 deg
         for i in [0,1]:
-            vel_pa[i] = np.mean(vel_pa[i],sofia_pa[i])
+            vel_pa[i] = np.mean([vel_pa[i],sofia_pa[i]])
     else:
         #Putting in here ensures averages in case of small differences
         if vel_pa_unreliable:
@@ -779,18 +790,38 @@ def combine_pa(Configuration,pa,vel_pa,sofia_pa,vel_pa_unreliable=False,\
 ''' , Configuration,case= ['debug_add'])
     return pa
 
-def extract_SBR(Configuration,mom0,pa,inclination, center=None):
+def extract_SBR(Configuration,mom0,pa,inclination, center=None,vsys=None):
     pas = [pa[0],pa[0]-pa[1],pa[0]+pa[1]]
     weights = [0.5,0.25,0.25]
+    hdr = mom0[0].header
+    if center is None:
+        center = np.array([hdr['NAXIS1']/2.-1,hdr['NAXIS2']/2.-1],dtype=float)
+    else:
+        center = np.array(center,dtype=float)
+    print(pas,pa)
+    avg_profiles = []
+    maj_resolutions = []
+    for i,angle in enumerate(pas):
+        tmp_avg_profile,center_of_profile,diff,tmp_maj_resolution,tmp_maj_axis =\
+            get_profile_average(Configuration,mom0[0].data, angle,center=center)
+        
+        avg_profiles.append([x*weights[i] for x in tmp_avg_profile])
+        maj_resolutions.append(tmp_maj_resolution)
+    length = len(avg_profiles[0])
+    for i in [1,2]:
+        while len(avg_profiles[i]) != length:
+            if len(avg_profiles[i]) < length:
+                avg_profiles[i].append(0.)
+            else:
+                avg_profiles[i] =avg_profiles[i][:-1]
 
-
-    maj_profile,maj_axis,maj_resolution = sf.get_profile(Configuration,mom0[0].data\
-        ,pa[0], center=center)
-    
+              
+                
+    #We sum these as we weighted them already when producing
+    avg_profile= np.nansum(np.array(avg_profiles,dtype=float),0)
+    maj_resolution = np.mean(maj_resolutions)
+   
     ring_size_req = Configuration['BEAM_IN_PIXELS'][0]/maj_resolution*Configuration['RING_SIZE']
-
-
-
     SBR_initial = avg_profile[0::int(ring_size_req)]/(np.pi*Configuration['BEAM'][0]*Configuration['BEAM'][1]/(4.*np.log(2.))) # Jy*km/s
     #deproject the SBR
     SBR_initial = SBR_initial*np.cos(np.radians(inclination[0]))
@@ -806,14 +837,54 @@ def extract_SBR(Configuration,mom0,pa,inclination, center=None):
          SBR_initial.pop()
     SBR_initial = np.array(SBR_initial,dtype=float)
     #We need to know which is the approaching side and which is receding
-     format = sf.set_format('SBR')
+    format = sf.set_format('SBR')
     Temp_template = {'SBR':' '.join([f'{float(x):{format}}' for x in SBR_initial])\
                         ,'SBR_2':' '.join([f'{float(x):{format}}' for x in SBR_initial]),\
                         'VSYS':' '.join([f'{float(x):{sf.set_format("VSYS")}}' for x in [vsys,vsys]])}
+    # We want to make this is sure this is a decent profile and thus we fit it with the gaussian
     SBR_initial = fix_sbr(Configuration,Temp_template,\
                         smooth = True,initial=True)
     SBR_initial = np.array([float(x) for x in Temp_template['SBR'].split()],dtype=float)
+    return SBR_initial
+extract_SBR.__doc__ =f'''
+ NAME:
+    extract_SBR(Configuration,mom0,pa,inclination, center=None):
 
+ PURPOSE:
+    Obtain the initial estimates for the SBR from the final pa and its errors
+
+ CATEGORY:
+    read_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    mom0 = the moment 0 image (masked)
+    pa = final pa and error
+    inclination = final inclination and error
+   
+
+ OPTIONAL INPUTS:
+
+
+    center = None
+    Will assume the center of the map provided when unset.
+    In pixel coordinates
+ OUTPUTS:
+
+ OPTIONAL OUTPUTS:
+    np.array(pa) = [pa, pa errors]
+    np.array(inclination) = [inc, inc error]
+    SBR_initial = Initial guess of the SBR profile from the moment 0 map
+    maj_extent = Initial guess of the extend of the galaxy
+    center[0] = RA in pixels
+    center[1] = DEC in pixels
+    VROT_initial = initial RC
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
 
 # Function to get the PA and inclination from the moment 0 for initial estimates
 def guess_orientation(Configuration,Fits_Files, vsys = -1 ,center = None,\
@@ -827,11 +898,12 @@ def guess_orientation(Configuration,Fits_Files, vsys = -1 ,center = None,\
         load_intensity_map_and_noise(Configuration,Fits_Files,center=center)
   
     #Estimate the inclination center and pa from the Moment 0
-    pa,inclination,center,new_center = moment0_orientation(Configuration,Fits_Files\
-        mom0,scale_factor=scale_factor,median_noise_in_map=median_noise_in_map)
+    pa,inclination,center,new_center = moment0_orientation(Configuration,Fits_Files,\
+        mom0,scale_factor=scale_factor,median_noise_in_map=median_noise_in_map,\
+        center=center)
     # Then we load and process the velocity map 
   
-    mom1, map_vsys = load_velmap (Configuration,Fits_Files, noise_map,\
+    mom1, vsys = load_velmap (Configuration,Fits_Files, noise_map,\
         minimum_noise_in_map=minimum_noise_in_map,center=center,vsys=vsys,\
         new_center=new_center)
     #After loading the velocity we check wether we need to rotate the pa by 180 deg
@@ -850,36 +922,15 @@ def guess_orientation(Configuration,Fits_Files, vsys = -1 ,center = None,\
 
     #Extrcat the inititial SBR
 
-    SBR_initial = extract_SBR(Configuration,mom0,pa,inclination)
-   
-
+    SBR_initial = extract_SBR(Configuration,mom0,pa,inclination,center=center\
+        ,vsys=vsys)
+    mom0.close()
     print_log(f'''GUESS_ORIENTATION: Looking for the Initial Rotation Curve.
 ''',Configuration,case= ['verbose'])
-  
-   
-    #we want to make sure the SBr is gaussian
-    # We want to make this is sure this is a decent profile and thus we fit it with the gaussian
-    #Configuration['SIZE_IN_BEAMS'] = len(SBR_initial)-1
-   
-    noise_map = []
-
-   
-   
-
-  
-    
-
-   
-
-    if smooth:
-        buffer = int(Configuration['BEAM_IN_PIXELS'][0]*5.)
-    else:
-        buffer = int(round(np.mean(Configuration['BEAM_IN_PIXELS'][:2])/2.))
-    print_log(f'''GUESS_ORIENTATION: We start with vsys = {vsys:.2f} km/s
-{'':8s}GUESS_ORIENTATION:We subtract {map_vsys:.2f} km/s from the moment 1 map to get the VROT
+    print_log(f'''GUESS_ORIENTATION: We have vsys = {vsys:.2f} km/s
 ''' , Configuration,case= ['debug_add'])
 
-    map = map  - map_vsys
+    map = mom1[0].data  - vsys
     VROT_initial = extract_vrot(Configuration,map ,pa[0],center)
     min_RC_length= len(VROT_initial)
     if pa[1] < 10.:
@@ -912,7 +963,7 @@ def guess_orientation(Configuration,Fits_Files, vsys = -1 ,center = None,\
 {'':8s}GUESS_ORIENTATION: RC = {VROT_initial}
 ''',Configuration,case= ['debug_add'])
   
-    return np.array(pa,dtype=float),np.array(inclination,dtype=float),SBR_initial,center[0],center[1],map_vsys,VROT_initial
+    return np.array(pa,dtype=float),np.array(inclination,dtype=float),SBR_initial,center[0],center[1],vsys,VROT_initial
 guess_orientation.__doc__ =f'''
  NAME:
     guess_orientation
@@ -1154,7 +1205,7 @@ def sofia_catalogue(Configuration,Fits_Files, Variables = None ,no_edge_limit=Fa
     if Variables is None:
         Variables =['id','x','x_min','x_max','y','y_min','y_max','z','z_min',\
                     'z_max','ra','dec','v_app','f_sum','kin_pa','w50',\
-                    'err_f_sum','err_x','err_y','err_z','rms','n_pix']
+                    'err_f_sum','err_x','err_y','err_z','rms','n_pix','ell_pa']
         strip_npix =True
     print_log(f'''SOFIA_CATALOGUE: Reading the source from the catalogue.
 ''',Configuration,case= ['debug_start'])
@@ -1322,6 +1373,8 @@ In principle your cube is too small.
     print_log(f'''SOFIA_CATALOGUE: we found these values:
 {chr(10).join([f'{"":8s}{x} = {y}' for x,y in zip(Variables,outlist)])}
 ''',Configuration,case= ['debug_add'])
+    
+   
     if strip_npix:
         outlist.pop(Variables.index('n_pix'))
     return outlist

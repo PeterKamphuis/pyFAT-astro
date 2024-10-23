@@ -414,17 +414,21 @@ def check_source(Configuration, Fits_Files):
     no_edge_limit=False
     while source_not_ok:
         name,x,x_min,x_max,y,y_min,y_max,z,z_min,z_max,ra,dec,v_app,f_sum,kin_pa, \
-            w50,err_f_sum, err_x,err_y,err_z,source_rms= \
+            w50,err_f_sum, err_x,err_y,err_z,source_rms,ell_pa= \
             rf.sofia_catalogue(Configuration,Fits_Files,no_edge_limit=no_edge_limit)
 
         x_min,x_max,y_min,y_max,z_min,z_max = \
             sf.convert_type([x_min,x_max,y_min,y_max,z_min,z_max], type = 'int')
-        x,y,z,ra,dec,v_app,f_sum,kin_pa,f_sum_err , err_x,err_y,err_z= \
-            sf.convert_type([x,y,z,ra,dec,v_app,f_sum,kin_pa,err_f_sum, err_x,err_y,err_z])
+        x,y,z,ra,dec,v_app,f_sum,kin_pa,f_sum_err , err_x,err_y,err_z,ell_pa= \
+            sf.convert_type([x,y,z,ra,dec,v_app,f_sum,kin_pa,err_f_sum, err_x,err_y,err_z,ell_pa])
         #How does sofia 2 deal with the fully flagged channels?
         v_app = v_app/1000.
-
-
+        #Let'change the pa in a kinpa with error
+        if abs(kin_pa-ell_pa)  < 300.:
+            diff_PA =  abs(kin_pa-ell_pa)
+        else:
+            diff_PA =  abs(kin_pa+ell_pa-360)
+        kin_pa = np.array([kin_pa,diff_PA],dtype=float)
         # Need to check for that here if NaNs are included
         if f_sum < 0.:
             print_log(f'''CHECK_SOURCE: This galaxy has negative total flux. That will not work. Aborting.
@@ -609,7 +613,7 @@ Checking the central flux in a box with size of {Configuration['BEAM_IN_PIXELS']
 {"":8s}CHECK_SOURCE: The maximum diameter we will allow  is  {2.*Configuration['MAX_SIZE_IN_BEAMS']} beams. This is based on a SNR range of {SNR_range}
 {"":8s}CHECK_SOURCE: The minimum diameter we will allow  is  {2.*Configuration['MIN_SIZE_IN_BEAMS']} beams.
 {"":8s}CHECK_SOURCE: We start with a diameter of {np.sum(Configuration['SIZE_IN_BEAMS'])} beams in the model.
-{"":8s}CHECK_SOURCE: SoFiA found a PA of {kin_pa:.2f} and we use a PA = {pa[0]:.2f} +/- {pa[1]:.2f}
+{"":8s}CHECK_SOURCE: SoFiA found a PA of {kin_pa[0]:.2f} +/-  {kin_pa[1]:.2f} and we use a PA = {pa[0]:.2f} +/- {pa[1]:.2f}
 {"":8s}CHECK_SOURCE: We start with an inclination of {inclination[0]:.2f} +/- {inclination[1]:.2f}{"":8s}
 {"":8s}CHECK_SOURCE: SoFiA found a W50 of {w50:.2f} km/s
 {"":8s}CHECK_SOURCE: We will use {2.*(Configuration['NO_RINGS']-1)} rings for the model with a ring size of {Configuration['RING_SIZE']}.
