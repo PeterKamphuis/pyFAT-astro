@@ -319,6 +319,21 @@ def combine_pa(Configuration,pa,vel_pa,sofia_pa,vel_pa_unreliable=False,\
     print_log(f'''COMBINE_PA: Combining the intensity (pa={pa}), the kinematic pa (pa={vel_pa}, reliable = {vel_pa_unreliable}) and sofias estimate (pa ={sofia_pa})
 ''' , Configuration,case= ['debug_add'])
     
+    collected_pas = []
+    if ~np.isnan(pa[0]):
+        collected_pas.append(pa)
+        #if low inclination we inrease the error
+        if inclination[0] < 35.:
+            collected_pas[-1][1] *= 2.
+    if ~np.isnan(vel_pa[0]):
+        collected_pas.append(vel_pa)
+        #if the vel pa is unreliable we increase the error
+        if vel_pa_unreliable:
+            collected_pas[-1][1] *= 2.
+    if ~np.isnan(sofia_pa[0]):
+        collected_pas.append(sofia_pa) 
+    pa = sf.obtain_weighted_mean(collected_pas)
+    '''
     #if we do not have a vel pa we use the the sofia estimate
     if np.isnan(vel_pa[0]):
         vel_pa= sofia_pa
@@ -349,7 +364,7 @@ def combine_pa(Configuration,pa,vel_pa,sofia_pa,vel_pa_unreliable=False,\
         pa = [np.nansum([vel_pa[0]/vel_pa[1],\
             pa[0]/pa[1]])/np.nansum([1./vel_pa[1],1./pa[1]]),\
             2.*1./np.sqrt(np.nansum([1./vel_pa[1],1./pa[1]]))]
-    
+    '''
     print_log(f'''COMBINE_PA:: this is the final pa {pa}
 ''' , Configuration,case= ['debug_add'])
     return pa
@@ -412,18 +427,17 @@ def extract_SBR(Configuration,mom0,pa,inclination, center=None,vsys=None):
         tmp_avg_profile,center_of_profile,diff,tmp_maj_resolution,tmp_maj_axis =\
             get_profile_average(Configuration,mom0[0].data, angle,center=center)
         
-        avg_profiles.append([x*weights[i] for x in tmp_avg_profile])
+        avg_profiles.append([float(x)*weights[i] for x in tmp_avg_profile])
         maj_resolutions.append(tmp_maj_resolution)
     
     #ensure same lengths for all profiles
     length = len(avg_profiles[0])
-    for i in [1,2]:
+    for i in range(1,len(pas)):
         while len(avg_profiles[i]) != length:
             if len(avg_profiles[i]) < length:
                 avg_profiles[i].append(0.)
             else:
                 avg_profiles[i] =avg_profiles[i][:-1]
-
     #We sum these as we weighted them already when producing
     avg_profile= np.nansum(np.array(avg_profiles,dtype=float),0)
     maj_resolution = np.mean(maj_resolutions)
@@ -971,7 +985,33 @@ def load_velmap(Configuration,Fits_Files,noise_map,minimum_noise_in_map=0.,\
                 raise BadSourceError(f'LOAD_VELMAP: We failed to find a central velocity in the velocity map.')
     Image[0].data = map
     return Image, map_vsys
+load_velmap.__doc__ =f'''
+ NAME:
+    get_totflux
 
+ PURPOSE:
+    Get the total flux from a intensity map
+
+ CATEGORY:
+    read_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    map_name = name of the intensity fits file
+
+ OPTIONAL INPUTS:
+
+
+ OUTPUTS:
+    total flux in the map in Jy*km/s
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
 
 
 
@@ -993,7 +1033,7 @@ def guess_orientation(Configuration,Fits_Files, vsys = -1 ,center = None,\
         center=center)
     # Then we load and process the velocity map 
   
-    mom1, vsys = load_velmap (Configuration,Fits_Files, noise_map,\
+    mom1, vsys = load_velmap(Configuration,Fits_Files, noise_map,\
         minimum_noise_in_map=minimum_noise_in_map,center=center,vsys=vsys,\
         new_center=new_center)
     #After loading the velocity we check wether we need to rotate the pa by 180 deg

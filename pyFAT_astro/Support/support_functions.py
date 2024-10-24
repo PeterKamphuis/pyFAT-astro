@@ -2388,17 +2388,23 @@ def get_vel_pa(Configuration,velocity_field,center_in=\
     sigma = [3.,3.]
     sm_velocity_field = ndimage.gaussian_filter(velocity_field, sigma=(sigma[1], sigma[0]), order=0)
     #if we have not enough points we load the original field and smooth it
+    not_enough_points = False 
     if len(sm_velocity_field[~np.isnan(sm_velocity_field)]) < 10:
-        sigma = [2.,2.]
+        not_enough_points = True
+    while not_enough_points:
+        sigma = [sigma[0]-0.5,sigma[1]-0.5]
         unreliable =True
         print_log(f'''GET_VEL_PA: We are starting from the original moment 1 and using a smaller smoothing.
 ''',Configuration,case=['debug_add'])
         sm_velocity_field = ndimage.gaussian_filter(velocity_field, sigma=(sigma[1], sigma[0]), order=0)
-    
+        if len(sm_velocity_field[~np.isnan(sm_velocity_field)]) > 10 or\
+            sigma[0] <=1.5:
+            not_enough_points = False
+
     if len(sm_velocity_field[~np.isnan(sm_velocity_field)]) < 10:
         print_log(f'''GET_VEL_PA: Our smoothed velocity field has less than 10 pixels (pixels ={ len(sm_velocity_field[~np.isnan(sm_velocity_field)])})
 ''',Configuration,case=['debug_add'])
-        return float('NaN'),True
+        return [float('NaN'),float('NaN')],True
        
     fits.writeto(f'{Configuration["FITTING_DIR"]}/testvf.fits',sm_velocity_field,overwrite=True)
     max_pos = np.where(np.nanmax(sm_velocity_field) == sm_velocity_field)
@@ -3037,6 +3043,41 @@ obtain_ratios.__doc__ = '''
 
  PROCEDURES CALLED:
       np.mean, ndimage.map_coordinates, np.linspace, np.vstack, np.cos, np.radians, np.sin
+
+ NOTE:
+'''
+
+
+def obtain_weighted_mean(input_list):
+    #splite errors and values
+    values = [x[0] for x in input_list]
+    weights = [1./x[1] for x in input_list]
+    errors = [x[1] for x in input_list]
+    denominator = np.sum(weights)
+    mean = np.sum([x*y for x,y in zip(values,weights)])/denominator
+    error = np.sqrt(np.sum([x**2*y**2 for x,y in zip(weights,errors)]))/denominator
+    return np.array([mean,error],dtype=float)
+
+obtain_weighted_mean.__doc__ = '''
+NAME:
+    obtain_weighted_mean
+
+ PURPOSE:
+    get the error weighted mean and the error of a list of values
+ CATEGORY:
+    support_functions
+
+ INPUTS:
+     input_list = list of value with [[value,error]]
+
+ OPTIONAL INPUTS:
+
+ OUTPUTS:
+    [mean,error]
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+      np.sqrt, np.sum
 
  NOTE:
 '''
