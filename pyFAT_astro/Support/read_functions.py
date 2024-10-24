@@ -163,6 +163,70 @@ check_edge_limits.__doc__ =f'''
 
  NOTE:
 '''
+
+#Check wether the pa obtained from the intensity needs to be rotated
+def check_orientation_pa(Configuration,vel_map,pa, center=None):
+    #First take an estimate rc
+    maj_profile,maj_axis,maj_resolution = sf.get_profile(Configuration,vel_map\
+        ,pa[0], center=center)
+    
+    #Take out the zero from the profile
+    zeros = np.where(maj_profile == 0.)[0]
+    maj_profile[zeros] = float('NaN')
+
+    #If all values are NaN then we raise an error
+    if all(np.isnan(maj_profile)):
+        raise BadSourceError(f'''CHECK_INTENSITY_PA: The RC extracted from the VF is all NaN's, this means something has gone very wrong.
+{'':8s} Raising an error.
+''')
+    # Deterimen the loaction of the minimum and the maximum in the velocity profile
+    loc_max = np.mean(maj_axis[np.where(maj_profile == np.nanmax(maj_profile))[0]])
+    loc_min = np.mean(maj_axis[np.where(maj_profile == np.nanmin(maj_profile))[0]])
+    print_log(f'''CHECK_INTENSITY_PA: this is the max location {loc_max} and the minimum {loc_min}
+''' , Configuration,case= ['debug_add'])
+
+    # if the maximum is in the west we need to add 180. degree
+    if loc_max > loc_min:
+        pa[0] = pa[0]+180
+        print_log(f'''CHECK_INTENSITY_PA: We have modified the pa by 180 deg as we found the maximum velocity west of the minimum.
+''' , Configuration)
+    return pa
+check_orientation_pa.__doc__ =f'''
+ NAME:
+    check_orientation_pa
+
+ PURPOSE:
+    Check wether the pa obtained from the intensity needs to be rotated
+
+ CATEGORY:
+    read_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    vel_map = the velocity field
+    pa = the input pa
+
+    Configuration,vel_map,pa, center=None
+    pa = the pa estimated from the moment 0
+    vel_pa = the pa determined from velocity field
+    sofia_pa = The kinematic pa from sofia with the error the difference 
+               between the ell_pa and kinematic pa
+  
+ OPTIONAL INPUTS:
+    center = None
+    The input center, transfers directly to sf.get_profile no default
+
+ OUTPUTS:
+    pa = is the intensity pa adapted for 360. based on the receding side.
+
+ OPTIONAL OUTPUTS:
+    
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
+
 def check_source_brightness(Configuration,Fits_Files,moment= False):
 
     if not moment:
@@ -250,7 +314,187 @@ check_source_brightness.__doc__ =f'''
  NOTE:
 '''
 
+def combine_pa(Configuration,pa,vel_pa,sofia_pa,vel_pa_unreliable=False,\
+               inclination=[60.,0.]):
+    print_log(f'''COMBINE_PA: Combining the intensity (pa={pa}), the kinematic pa (pa={vel_pa}, reliable = {vel_pa_unreliable}) and sofias estimate (pa ={sofia_pa})
+''' , Configuration,case= ['debug_add'])
+    
+    #if we do not have a vel pa we use the the sofia estimate
+    if np.isnan(vel_pa[0]):
+        vel_pa= sofia_pa
+    elif abs(vel_pa[0]-sofia_pa[0]) < 15.:
+        #If the difference is less than 15 deg
+        for i in [0,1]:
+            vel_pa[i] = np.mean([vel_pa[i],sofia_pa[i]])
+    else:
+        #Putting in here ensures averages in case of small differences
+        if vel_pa_unreliable:
+            vel_pa = sofia_pa
 
+  
+    if abs(pa[0]-vel_pa[0]) > 300.:
+        if pa[0] > 180.:
+            vel_pa[0] += 360.
+        else:
+            vel_pa[0] -= 360.
+    if abs(pa[0]-vel_pa[0]) > 25.:
+        # if the vel pa has a ridiculous error we use the normal pa
+        morph_pa=copy.deepcopy(pa)
+        if vel_pa[1] < 60.:
+            pa=vel_pa
+        #if the galaxy has a low inclination we do allow an error of the difference
+        if inclination[0] < 35.:
+            pa[1]=abs(morph_pa[0]-vel_pa[0])
+    else:
+        pa = [np.nansum([vel_pa[0]/vel_pa[1],\
+            pa[0]/pa[1]])/np.nansum([1./vel_pa[1],1./pa[1]]),\
+            2.*1./np.sqrt(np.nansum([1./vel_pa[1],1./pa[1]]))]
+    
+    print_log(f'''COMBINE_PA:: this is the final pa {pa}
+''' , Configuration,case= ['debug_add'])
+    return pa
+combine_pa.__doc__ =f'''
+ NAME:
+    combine_pa
+
+ PURPOSE:
+    Combine the moment0 pa, the kinematic pa and the sofia pa into an final pa estimate
+
+ CATEGORY:
+    read_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    pa = the pa estimated from the moment 0
+    vel_pa = the pa determined from velocity field
+    sofia_pa = The kinematic pa from sofia with the error the difference 
+               between the ell_pa and kinematic pa
+    Configuration,pa,vel_pa,sofia_pa,vel_pa_unreliable=False,\
+               inclination=[60.,0.]
+    Fits_Files = Standard FAT dictionary with filenames
+
+ OPTIONAL INPUTS:
+    vel_pa_unreliable = False
+    A trigger to indicate wether we have faith in our kinematic angle or not
+
+    inclination = [60.,0.]
+    The estimate inclination 
+
+ OUTPUTS:
+    pa = is the final pa for the initial estimates
+
+ OPTIONAL OUTPUTS:
+    
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
+
+
+def extract_SBR(Configuration,mom0,pa,inclination, center=None,vsys=None): 
+    if vsys is None:
+        vsys = 100.
+    #Define the set of pa's and weights
+    pas = [pa[0],pa[0]-pa[1]/2.,pa[0]+pa[1]/2.,pa[0]-pa[1],pa[0]+pa[1]]
+    weights = [0.4,0.2,0.2,0.1,0.1]
+    #if the center is unset take the center of the image
+    hdr = mom0[0].header
+    if center is None:
+        center = np.array([hdr['NAXIS1']/2.-1,hdr['NAXIS2']/2.-1],dtype=float)
+    else:
+        center = np.array(center,dtype=float)
+  
+    #get the profiles at every angle and weight
+    avg_profiles = []
+    maj_resolutions = []
+    for i,angle in enumerate(pas):
+        tmp_avg_profile,center_of_profile,diff,tmp_maj_resolution,tmp_maj_axis =\
+            get_profile_average(Configuration,mom0[0].data, angle,center=center)
+        
+        avg_profiles.append([x*weights[i] for x in tmp_avg_profile])
+        maj_resolutions.append(tmp_maj_resolution)
+    
+    #ensure same lengths for all profiles
+    length = len(avg_profiles[0])
+    for i in [1,2]:
+        while len(avg_profiles[i]) != length:
+            if len(avg_profiles[i]) < length:
+                avg_profiles[i].append(0.)
+            else:
+                avg_profiles[i] =avg_profiles[i][:-1]
+
+    #We sum these as we weighted them already when producing
+    avg_profile= np.nansum(np.array(avg_profiles,dtype=float),0)
+    maj_resolution = np.mean(maj_resolutions)
+    
+    #match the rings to the beam size
+    ring_size_req = Configuration['BEAM_IN_PIXELS'][0]/maj_resolution*Configuration['RING_SIZE']
+    SBR_initial = avg_profile[0::int(ring_size_req)]/(np.pi*Configuration['BEAM'][0]*Configuration['BEAM'][1]/(4.*np.log(2.))) # Jy*km/s
+    
+    #deproject the SBR
+    SBR_initial = SBR_initial*np.cos(np.radians(inclination[0]))
+    SBR_initial =np.hstack((SBR_initial[0],SBR_initial,SBR_initial[-1]))
+    
+    # unclear why we have this extra correction on the inner 3 points
+    SBR_initial[0:3] = SBR_initial[0:3] * (1.2 -float(inclination[0])/90.)
+    
+    # make sure it is the right size
+    number_of_rings = sf.calc_rings(Configuration)
+    SBR_initial = list(SBR_initial)
+    while len(SBR_initial) < number_of_rings:
+         SBR_initial.append(SBR_initial[-1])
+    while len(SBR_initial) > number_of_rings:
+         SBR_initial.pop()
+    SBR_initial = np.array(SBR_initial,dtype=float)
+    
+    #We need to know which is the approaching side and which is receding
+    format = sf.set_format('SBR')
+    Temp_template = {'SBR':' '.join([f'{float(x):{format}}' for x in SBR_initial])\
+                        ,'SBR_2':' '.join([f'{float(x):{format}}' for x in SBR_initial]),\
+                        'VSYS':' '.join([f'{float(x):{sf.set_format("VSYS")}}' for x in [vsys,vsys]])}
+    
+    # We want to make this is sure this is a decent profile and thus we fit it with the gaussian
+    SBR_initial = fix_sbr(Configuration,Temp_template,\
+                        smooth = True,initial=True)
+    SBR_initial = np.array([float(x) for x in Temp_template['SBR'].split()],dtype=float)
+    return SBR_initial
+extract_SBR.__doc__ =f'''
+ NAME:
+    extract_SBR(Configuration,mom0,pa,inclination, center=None):
+
+ PURPOSE:
+    Obtain the initial estimates for the SBR from the final pa and its errors
+
+ CATEGORY:
+    read_functions
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    mom0 = the moment 0 image (masked)
+    pa = final pa and error
+    inclination = final inclination and error
+   
+
+ OPTIONAL INPUTS:
+    center = None
+    Will assume the center of the map provided when unset.
+    In pixel coordinates
+    vsys = None
+    Will assume 100 km/s is unset only used in fix_sbr
+
+
+ OUTPUTS:
+    SBR_initial
+    The intial estimate for SBR distribution from the provided pa and angles
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
 
 def extract_vrot(Configuration,map ,angle,center):
     print_log(f'''EXTRACT_VROT: starting extraction of initial VROT.
@@ -729,162 +973,8 @@ def load_velmap(Configuration,Fits_Files,noise_map,minimum_noise_in_map=0.,\
     return Image, map_vsys
 
 
-#Check wether the pa obtained from the intensity needs to be rotated
-def check_intensity_pa(Configuration,map,pa, center=None):
-    maj_profile,maj_axis,maj_resolution = sf.get_profile(Configuration,map\
-        ,pa[0], center=center)
-    zeros = np.where(maj_profile == 0.)[0]
-    maj_profile[zeros] = float('NaN')
-    if all(np.isnan(maj_profile)):
-        raise BadSourceError(f'''CHECK_INTENSITY_PA: The RC extracted from the VF is all NaN's, this means something has gone very wrong.
-{'':8s} Raising an error.
-''')
-    loc_max = np.mean(maj_axis[np.where(maj_profile == np.nanmax(maj_profile))[0]])
-    loc_min = np.mean(maj_axis[np.where(maj_profile == np.nanmin(maj_profile))[0]])
-    print_log(f'''CHECK_INTENSITY_PA: this is the max location {loc_max} and the minimum {loc_min}
-''' , Configuration,case= ['debug_add'])
-    if loc_max > loc_min:
-        pa[0] = pa[0]+180
-        print_log(f'''CHECK_INTENSITY_PA: We have modified the pa by 180 deg as we found the maximum velocity west of the minimum.
-''' , Configuration)
-    return pa
-
-def combine_pa(Configuration,pa,vel_pa,sofia_pa,vel_pa_unreliable=False,\
-               inclination=[60.,0.]):
-    print_log(f'''COMBINE_PA: Combining the intensity (pa={pa}), the kinematic pa (pa={vel_pa}, reliable = {vel_pa_unreliable}) and sofias estimate (pa ={sofia_pa})
-''' , Configuration,case= ['debug_add'])
-    
-    #if we do not have a vel pa we use the the sofia estimate
-    print(vel_pa,sofia_pa)
-    if np.isnan(vel_pa[0]):
-        vel_pa= sofia_pa
-    elif abs(vel_pa[0]-sofia_pa[0]) < 15.:
-        #If the difference is less than 15 deg
-        for i in [0,1]:
-            vel_pa[i] = np.mean([vel_pa[i],sofia_pa[i]])
-    else:
-        #Putting in here ensures averages in case of small differences
-        if vel_pa_unreliable:
-            vel_pa = sofia_pa
-
-  
-    if abs(pa[0]-vel_pa[0]) > 300.:
-        if pa[0] > 180.:
-            vel_pa[0] += 360.
-        else:
-            vel_pa[0] -= 360.
-    if abs(pa[0]-vel_pa[0]) > 25.:
-        # if the vel pa has a ridiculous error we use the normal pa
-        morph_pa=copy.deepcopy(pa)
-        if vel_pa[1] < 60.:
-            pa=vel_pa
-        #if the galaxy has a low inclination we do allow an error of the difference
-        if inclination[0] < 35.:
-            pa[1]=abs(morph_pa[0]-vel_pa[0])
-    else:
-        pa = [np.nansum([vel_pa[0]/vel_pa[1],\
-            pa[0]/pa[1]])/np.nansum([1./vel_pa[1],1./pa[1]]),\
-            2.*1./np.sqrt(np.nansum([1./vel_pa[1],1./pa[1]]))]
-    
-    print_log(f'''COMBINE_PA:: this is the final pa {pa}
-''' , Configuration,case= ['debug_add'])
-    return pa
-
-def extract_SBR(Configuration,mom0,pa,inclination, center=None,vsys=None):
-    pas = [pa[0],pa[0]-pa[1],pa[0]+pa[1]]
-    weights = [0.5,0.25,0.25]
-    hdr = mom0[0].header
-    if center is None:
-        center = np.array([hdr['NAXIS1']/2.-1,hdr['NAXIS2']/2.-1],dtype=float)
-    else:
-        center = np.array(center,dtype=float)
-    print(pas,pa)
-    avg_profiles = []
-    maj_resolutions = []
-    for i,angle in enumerate(pas):
-        tmp_avg_profile,center_of_profile,diff,tmp_maj_resolution,tmp_maj_axis =\
-            get_profile_average(Configuration,mom0[0].data, angle,center=center)
-        
-        avg_profiles.append([x*weights[i] for x in tmp_avg_profile])
-        maj_resolutions.append(tmp_maj_resolution)
-    length = len(avg_profiles[0])
-    for i in [1,2]:
-        while len(avg_profiles[i]) != length:
-            if len(avg_profiles[i]) < length:
-                avg_profiles[i].append(0.)
-            else:
-                avg_profiles[i] =avg_profiles[i][:-1]
-
-              
-                
-    #We sum these as we weighted them already when producing
-    avg_profile= np.nansum(np.array(avg_profiles,dtype=float),0)
-    maj_resolution = np.mean(maj_resolutions)
-   
-    ring_size_req = Configuration['BEAM_IN_PIXELS'][0]/maj_resolution*Configuration['RING_SIZE']
-    SBR_initial = avg_profile[0::int(ring_size_req)]/(np.pi*Configuration['BEAM'][0]*Configuration['BEAM'][1]/(4.*np.log(2.))) # Jy*km/s
-    #deproject the SBR
-    SBR_initial = SBR_initial*np.cos(np.radians(inclination[0]))
-    SBR_initial =np.hstack((SBR_initial[0],SBR_initial,SBR_initial[-1]))
-    # unclear why we have this extra correction on the inner 3 points
-    SBR_initial[0:3] = SBR_initial[0:3] * (1.2 -float(inclination[0])/90.)
-    # make sure it is the right size
-    number_of_rings = sf.calc_rings(Configuration)
-    SBR_initial = list(SBR_initial)
-    while len(SBR_initial) < number_of_rings:
-         SBR_initial.append(SBR_initial[-1])
-    while len(SBR_initial) > number_of_rings:
-         SBR_initial.pop()
-    SBR_initial = np.array(SBR_initial,dtype=float)
-    #We need to know which is the approaching side and which is receding
-    format = sf.set_format('SBR')
-    Temp_template = {'SBR':' '.join([f'{float(x):{format}}' for x in SBR_initial])\
-                        ,'SBR_2':' '.join([f'{float(x):{format}}' for x in SBR_initial]),\
-                        'VSYS':' '.join([f'{float(x):{sf.set_format("VSYS")}}' for x in [vsys,vsys]])}
-    # We want to make this is sure this is a decent profile and thus we fit it with the gaussian
-    SBR_initial = fix_sbr(Configuration,Temp_template,\
-                        smooth = True,initial=True)
-    SBR_initial = np.array([float(x) for x in Temp_template['SBR'].split()],dtype=float)
-    return SBR_initial
-extract_SBR.__doc__ =f'''
- NAME:
-    extract_SBR(Configuration,mom0,pa,inclination, center=None):
-
- PURPOSE:
-    Obtain the initial estimates for the SBR from the final pa and its errors
-
- CATEGORY:
-    read_functions
-
- INPUTS:
-    Configuration = Standard FAT configuration
-    mom0 = the moment 0 image (masked)
-    pa = final pa and error
-    inclination = final inclination and error
-   
-
- OPTIONAL INPUTS:
 
 
-    center = None
-    Will assume the center of the map provided when unset.
-    In pixel coordinates
- OUTPUTS:
-
- OPTIONAL OUTPUTS:
-    np.array(pa) = [pa, pa errors]
-    np.array(inclination) = [inc, inc error]
-    SBR_initial = Initial guess of the SBR profile from the moment 0 map
-    maj_extent = Initial guess of the extend of the galaxy
-    center[0] = RA in pixels
-    center[1] = DEC in pixels
-    VROT_initial = initial RC
-
- PROCEDURES CALLED:
-    Unspecified
-
- NOTE:
-'''
 
 # Function to get the PA and inclination from the moment 0 for initial estimates
 def guess_orientation(Configuration,Fits_Files, vsys = -1 ,center = None,\
@@ -907,7 +997,7 @@ def guess_orientation(Configuration,Fits_Files, vsys = -1 ,center = None,\
         minimum_noise_in_map=minimum_noise_in_map,center=center,vsys=vsys,\
         new_center=new_center)
     #After loading the velocity we check wether we need to rotate the pa by 180 deg
-    pa = check_intensity_pa(Configuration,mom1[0].data,pa,center=center)
+    pa = check_orientation_pa(Configuration,mom1[0].data,pa,center=center)
 
     # First we look for the kinematics center
     vel_pa,vel_pa_unreliable = sf.get_vel_pa(Configuration,mom1[0].data\
