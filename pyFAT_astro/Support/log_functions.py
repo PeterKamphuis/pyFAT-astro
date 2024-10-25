@@ -12,7 +12,7 @@ import warnings
 
 from datetime import datetime
 from inspect import stack
-from pyFAT_astro.Support.fat_errors import ProgramError
+from pyFAT_astro.Support.fat_errors import ProgramError,InputError
 
 with warnings.catch_warnings():
    warnings.simplefilter("ignore")
@@ -122,7 +122,7 @@ class full_system_tracking:
          ax2.set_ylim(0,np.max(np.array(loads['SCPU']+loads['FCPU'],dtype=float))*1.1)
          ax2.set_ylabel('CPUs (%)',color='r')
          ax2.tick_params(axis='y', labelcolor='r')
-         ax1.legend(bbox_to_anchor=(0.9, 0.705),loc='lower right')
+         fig.legend(bbox_to_anchor=(0.9, 0.705),loc='lower right')
          fig.savefig(self.plot_name)
          plt.close()
       except Exception as e:
@@ -160,15 +160,18 @@ PURPOSE:
 '''
 
 
-def enter_recovery_point(Configuration, Fits_Files = None, Tirific_Template= None,
-                         message = 'You should have specified a message',point_ID='Random'):
-    update_statistics(Configuration, message= message)
-    print_log(f'''ENTER_RECOVERY_POINT: Creating a recovery point.
+def enter_recovery_point(Configuration, Fits_Files = None, Tirific_Template= None,\
+                         IP= None,
+                         message = 'You should have specified a message',point_ID='RANDOM'):
+   update_statistics(Configuration, message= message)
+   print_log(f'''ENTER_RECOVERY_POINT: Creating a recovery point.
 {message}              
 ''',Configuration,case= ['debug_start','main'])
-    write_config(f"{Configuration['LOG_DIRECTORY']}CFG_RP_{Configuration['RP_SECTION']}_COUNT_{Configuration['RP_COUNTER']}.pkl", Configuration, Fits_Files=Fits_Files,\
+   Configuration['RP_COUNTER'] += 1
+   Configuration['RP_SECTION'] = point_ID
+   write_config(f"{Configuration['LOG_DIRECTORY']}RP_{Configuration['RP_SECTION']}_{Configuration['RP_COUNTER']}.pkl",\
+      Configuration, Fits_Files=Fits_Files, IP = IP,\
                  Tirific_Template=Tirific_Template,message=message )
-    Configuration['RP_COUNTER'] += 1
 enter_recovery_point.__doc__ =f'''
  NAME:
    enter_recovery_point
@@ -463,7 +466,8 @@ update_statistics.__doc__ =f'''
 '''
 
 
-def write_config(file,Configuration, Fits_Files = None, Tirific_Template = None,message=None ):
+def write_config(file,Configuration, Fits_Files = None, \
+      Tirific_Template = None, IP=None,message=None ):
    print_log(f'''WRITE_CONFIG: writing the configuration to {file}
 ''',Configuration,case=['debug_start'])
    # Separate the keyword names
@@ -473,12 +477,14 @@ def write_config(file,Configuration, Fits_Files = None, Tirific_Template = None,
       Pick_Configuration[key] = Configuration[key]
       if key == 'FAT_PSUPROCESS':
          Pick_Configuration[key] = None
-   if Fits_Files != None:
+   if not Fits_Files is None:
       Pick_Configuration['Fits_Files'] = Fits_Files
-   if Tirific_Template != None:
+   if not Tirific_Template is None:
       Pick_Configuration['Tirific_Template'] = Tirific_Template
-   if message != None:
+   if not message is None:
       Pick_Configuration['Message'] = message
+   if not IP is None:
+      Pick_Configuration['Initial_Parameters'] = IP
    with open(file,'wb') as tmp:
       pickle.dump(Pick_Configuration,tmp) 
 write_config.__doc__ =f'''
@@ -511,15 +517,18 @@ This Could be used to pickup the fitting from where we left of
 
 '''
 
-def recover_entry_point_conf(Configuration_In):
+def recover_recovery_point_conf(Configuration_In):
    #first check that the file exists
-   conf = f"{Configuration_In['LOG_DIRECTORY']}/{Configuration_In['RECOVERY']}"
+   conf = f"{Configuration_In['LOG_DIRECTORY']}/RP_{Configuration_In['RECOVERY_POINT']}"
    if os.path.isfile(conf):
       with open(conf,'rb') as file:
          Configuration = pickle.load(file)
+      if Configuration['MULTIPROCESSING']:
+          print(f'We cannot recover and do multiprocessing, turning multiprocessing off. ')
+          Configuration['MULTIPROCESSING'] = False
       return Configuration
    else:
-      raise FileExistsError(f'''We could not find {Configuration_In['LOG_DIRECTORY']}/{Configuration_In['RECOVERY']}.FileExistsError
-We will start from the beginning''',Configuration_In,case=['main']) 
+      raise InputError(f'''We failed to locate the file {conf}
+Please give a legit recovery point (Note that the default log is by date.)''')
      
         

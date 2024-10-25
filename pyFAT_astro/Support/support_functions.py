@@ -6,7 +6,7 @@ from pyFAT_astro.Support.fat_errors import SupportRunError,SmallSourceError,\
                                               BadHeaderError,FittingError,TirificOutputError,\
                                               SofiaMissingError
 from pyFAT_astro.Support.log_functions import print_log,get_usage_statistics,\
-    recover_entry_point_conf
+    recover_recovery_point_conf
 from pyFAT_astro import Templates as templates
 from collections import OrderedDict #used in Proper_Dictionary
 from numpy.linalg import LinAlgError
@@ -3635,12 +3635,13 @@ def setup_configuration(cfg):
             Configuration[str(key).upper()] = input_key
 
     #if we have a recovery ppoint we will try to start everything from there
-    if Configuration['RECOVERY_POINT'] != 'Start':
+    if Configuration['RECOVERY_POINT'] != 'START_0':
         try:
             Rec_Configuration = recover_entry_point_conf(Configuration)
             return Rec_Configuration
         except FileExistsError:
-            Configuration['RECOVERY_POINT'] = 'Start'
+            raise InputError(f'''We failed to locate the file {Configuration['LOG_DIRECTORY']}RP_{ Configuration['RECOVERY_POINT']}.pkl
+Please give a legit recevery point (Note that the default log is by date.)''')
             pass     
     # None cfg additions, that is additions that should be reset for every galaxy
     boolean_keys = ['OPTIMIZED', # Are we fitting an optimized cube
@@ -3684,8 +3685,8 @@ def setup_configuration(cfg):
                'OUTPUTLOG': None,
                'RUN_COUNTER': 0,
                'CENTRAL_CONVERGENCE_COUNTER': 1.,
-               'RP_COUNTER': 1,
-               'RP_SECTION': 'initialize',
+               'RP_COUNTER': 0,
+               'RP_SECTION': 'START',
                'ITERATIONS': 0,
                'CURRENT_STAGE': 'initial', #Current stage of the fitting process, set at switiching stages
                'USED_FITTING': None,

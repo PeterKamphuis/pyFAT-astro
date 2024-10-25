@@ -526,6 +526,8 @@ installation_check.__doc__ =f'''
 def finish_galaxy(Configuration,current_run = 'Not initialized',\
         timing_lock= DummyLock(), catalogue_lock = DummyLock(),
         Fits_Files= {'ORIGINAL_CUBE': "Unset.fits"},exiting = None):
+    enter_recovery_point(Configuration,Fits_Files=Fits_Files,\
+        message=f'At the start of cleanup',point_ID='FINAL_RP')
     Configuration['FULL_TIME'][1] = datetime.now()
     print_log(f'''FINISH_GALAXY: These fits files are used:
 {'':8s} {Fits_Files}

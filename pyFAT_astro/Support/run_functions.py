@@ -685,6 +685,10 @@ Checking the central flux in a box with size of {Configuration['BEAM_IN_PIXELS']
                 Configuration['FIXED_PARAMETERS'][0].append(parameter)
     Initial_Parameters = check_initial_boundaries(Configuration, Initial_Parameters)
     Configuration['INITIAL_GUESSES_TIME'][1] = datetime.now()
+    enter_recovery_point(Configuration,Fits_Files=Fits_Files,IP=Initial_Parameters,\
+                        message='Creating the entry point at the end of check source.',\
+                        point_ID='AFTER-PREPARATIONS')
+
     return Initial_Parameters
 check_source.__doc__='''
  NAME:
@@ -937,54 +941,69 @@ failed_fit.__doc__ =f'''
  NOTE:
 '''
 def fitting_osc(Configuration,Fits_Files,Initial_Parameters):
-    # First we want to read the template
-    Tirific_Template = sf.tirific_template()
-    # if the CTYPE3 is not 'VELO' we want to make a copy of the fitting cube that is used in tirific
-    if Configuration['HDR_VELOCITY'] != 'VELO':
-        Fits_Files = wf.create_tirific_run_cube(Configuration,Fits_Files)
-    current_run = 'Not Initialized'
-    Configuration['FIT_TIME'][0] = datetime.now()
-    sf.create_directory(Configuration['USED_FITTING'],Configuration['FITTING_DIR'])
-    wf.initialize_def_file(Configuration, Fits_Files,Tirific_Template, \
+    if Configuration['RP_SECTION'] =='AFTER-PREPARATIONS':
+        # First we want to read the template
+        Tirific_Template = sf.tirific_template()
+        # if the CTYPE3 is not 'VELO' we want to make a copy of the fitting cube that is used in tirific
+        if Configuration['HDR_VELOCITY'] != 'VELO':
+            Fits_Files = wf.create_tirific_run_cube(Configuration,Fits_Files)
+        current_run = 'Not Initialized'
+        Configuration['FIT_TIME'][0] = datetime.now()
+        sf.create_directory(Configuration['USED_FITTING'],Configuration['FITTING_DIR'])
+        wf.initialize_def_file(Configuration, Fits_Files,Tirific_Template, \
                            Initial_Parameters= Initial_Parameters, \
                            fit_type=Configuration['USED_FITTING'])
-    print_log(f'''FITTING_OSC: The initial def file is written and we will now start fitting.
+        print_log(f'''FITTING_OSC: The initial def file is written and we will now start fitting.
 ''' ,Configuration)
-
+        enter_recovery_point(Configuration,Fits_Files=Fits_Files,Tirific_Template=Tirific_Template,\
+                        message='Starting the Iterations.',\
+                        point_ID='ITERATION')
+    else:
+        Tirific_Template = Configuration['Tirific_Template']
         # If we have no directory to put the output we create it
 
     while not Configuration['ACCEPTED'] and Configuration['ITERATIONS'] <  Configuration['MAX_ITERATIONS']:
-        Configuration['ITERATIONS'] = Configuration['ITERATIONS']+1
-        # Run the step
-        current_run = one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run)
+        if Configuration['RP_SECTION'] =='ITERATION':
+            Configuration['ITERATIONS'] = Configuration['ITERATIONS']+1
+            # Run the step
+            current_run = one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run)
 
-        if (Configuration['ITERATIONS'] == 1  and np.sum(Configuration['SIZE_IN_BEAMS']) < 10.6) or  (Configuration['ACCEPTED'] and np.sum(Configuration['SIZE_IN_BEAMS']) < 6.6):
-            print_log(f'''FITTING_OSC: Checking the inclination due to small galaxy size.
-{'':8s}PA = {Tirific_Template['PA']}
-{'':8s}INCL = {Tirific_Template['INCL']}
-''',Configuration,case= ['debug_add'])
-            check_inclination(Configuration,Tirific_Template,Fits_Files, fit_type =Configuration['USED_FITTING'])
-
-    if Configuration['ACCEPTED']:
-        print_log(f'''FITTING_OSC: The model has converged in center and extent and we make a smoothed version.
-''',Configuration)
-        current_run = fit_smoothed(Configuration, Fits_Files,\
-            Tirific_Template,current_run,stage = 'after_os',\
-            fit_type = Configuration['USED_FITTING'])
-        if Configuration['OPTIMIZED']:
-            make_full_resolution(Configuration,Tirific_Template,Fits_Files,\
-                current_run = current_run,fit_type = Configuration['USED_FITTING'])
-    elif Configuration['INSTALLATION_CHECK']:
-        print_log(f'''FITTING_OSC: The Installation_check has run a fit successfully.
-''',Configuration)
-        fit_type = Configuration['USED_FITTING']
-        source = sf.get_system_string(f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def")
-        target = sf.get_system_string(f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}_Iteration_1.def")
-        copyfile(source, target )
-    else:
-        Configuration['FINAL_COMMENT'] = 'We could not converge on the extent or centre of the galaxy'
-        Configuration['OUTPUT_QUANTITY'] = 5
-    Configuration['FIT_TIME'][1] = datetime.now()
+            if (Configuration['ITERATIONS'] == 1  and np.sum(Configuration['SIZE_IN_BEAMS']) < 10.6) or  (Configuration['ACCEPTED'] and np.sum(Configuration['SIZE_IN_BEAMS']) < 6.6):
+                print_log(f'''FITTING_OSC: Checking the inclination due to small galaxy size.
+    {'':8s}PA = {Tirific_Template['PA']}
+    {'':8s}INCL = {Tirific_Template['INCL']}
+    ''',Configuration,case= ['debug_add'])
+                check_inclination(Configuration,Tirific_Template,Fits_Files, fit_type =Configuration['USED_FITTING'])
+            enter_recovery_point(Configuration,Fits_Files=Fits_Files,Tirific_Template=Tirific_Template,\
+                        message=f'After Iteration { Configuration["ITERATIONS"]}',\
+                        point_ID='ITERATION')
+        else:
+            current_run = 'Not Zed'
+    enter_recovery_point(Configuration,Fits_Files=Fits_Files,Tirific_Template=Tirific_Template,\
+        message=f'Before we apply the smoothing',point_ID='BEFORE-SMOOTHING')
+    if Configuration['RP_SECTION'] =='BEFORE-SMOOTHING':
+        if Configuration['ACCEPTED']:
+            print_log(f'''FITTING_OSC: The model has converged in center and extent and we make a smoothed version.
+    ''',Configuration)
+            current_run = fit_smoothed(Configuration, Fits_Files,\
+                Tirific_Template,current_run,stage = 'after_os',\
+                fit_type = Configuration['USED_FITTING'])
+            if Configuration['OPTIMIZED']:
+                make_full_resolution(Configuration,Tirific_Template,Fits_Files,\
+                    current_run = current_run,fit_type = Configuration['USED_FITTING'])
+        elif Configuration['INSTALLATION_CHECK']:
+            print_log(f'''FITTING_OSC: The Installation_check has run a fit successfully.
+    ''',Configuration)
+            fit_type = Configuration['USED_FITTING']
+            source = sf.get_system_string(f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}.def")
+            target = sf.get_system_string(f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}_Iteration_1.def")
+            copyfile(source, target )
+        else:
+            Configuration['FINAL_COMMENT'] = 'We could not converge on the extent or centre of the galaxy'
+            Configuration['OUTPUT_QUANTITY'] = 5
+        Configuration['FIT_TIME'][1] = datetime.now()
+    enter_recovery_point(Configuration,Fits_Files=Fits_Files,Tirific_Template=Tirific_Template,\
+        message=f'After we apply the smoothing',point_ID='AFTER-SMOOTHING')
     return current_run,Tirific_Template
 fitting_osc.__doc__ =f'''
  NAME:

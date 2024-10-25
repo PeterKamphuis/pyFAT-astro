@@ -376,7 +376,7 @@ Advanced Keywords
 
   filename of a pickle file of where to restart the pyFAT fitting. The default starts at the start.
   This only works for individual galaxies being fitted. If corresponding to an actual file name in the set log directory the code will restart the fitting from this point. 
-  !!!!!!!!!!!!Not fully functional yet!!!!!!!!!!!!!!!
+  !!!!!!!!!!!!Untested for Now!!!!!!!!!!!!!!!
 
 
 Individual Keywords

@@ -22,14 +22,20 @@ from pyFAT_astro.Support.log_functions import print_log,enter_recovery_point\
 def FAT_Galaxy_Loop(Configuration):
 
     try:
-        if Configuration['RP_SECTION'] == 'initialize':
+        if Configuration['RECOVERY_POINT'] == 'START_0':
             registered_exception = None
             current_run = 'Not Initialized'
             Fits_Files = initialize_loop(Configuration)
+        else:
+            Fits_Files = copy.deepcopy(Configuration['Fits_Files'])
+        if Configuration['RP_SECTION'] == 'AFTER-INITIALIZATION':
             loop_sofia(Configuration,Fits_Files)
+        else:
+            Initial_Parameters = copy.deepcopy(Configuration['Initial_Parameters'])
 
-        # If you add any make sure that the fitstage  starts with 'Fit_'
-        if Configuration['USED_FITTING']:
+        # If you add any make sure that the fitstage  starts with 'Fit_' if Configuration['RP_SECTION'] == 'AFTER-INITIALIZATION':
+        if (not Configuration['USED_FITTING'] is None) and \
+            (Configuration['RP_SECTION'] == 'AFTER-SOFIA'):
             # Process the found source in sofia to set up the proper fitting and make sure source can be fitted
 
             Initial_Parameters = runf.check_source(
@@ -38,13 +44,19 @@ def FAT_Galaxy_Loop(Configuration):
             #sf.sofia_output_exists(Configuration,Fits_Files)
             print_log(f'''FAT_GALAXY_LOOPS: The source is well defined and we will now setup the initial tirific file
 ''', Configuration)
-            
+        else:
+            try:
+                Initial_Parameters = Configuration['Initial_Parameters']
+            except:
+                pass
         # then we want to read the template
       
 
-        if 'fit_tirific_osc' in Configuration['FITTING_STAGES']: 
-            current_run,Tirific_Template = runf.fitting_osc(
-                Configuration, Fits_Files,  Initial_Parameters)
+        if 'fit_tirific_osc' in Configuration['FITTING_STAGES']:
+            if  Configuration['RP_SECTION'] in ['ITERATION',\
+                'AFTER-PREPARATIONS','BEFORE-SMOOTHING']:
+                current_run,Tirific_Template = runf.fitting_osc(
+                    Configuration, Fits_Files,  Initial_Parameters)
         elif 'fit_make_your_own' in Configuration['FITTING_STAGES']:
             print_log(f'''FAT_GALAXY_LOOPS: If you add any fitting routine make sure that the fit stage  starts with Fit_
 ''',Configuration)
@@ -58,14 +70,14 @@ def FAT_Galaxy_Loop(Configuration):
             return catalogue_line
 
         #if all the fitting has gone properly we create nice errors
+        if  Configuration['RP_SECTION'] in ['AFTER-SMOOTHING']:
+            if Configuration['OUTPUT_QUANTITY'] != 5:
+                if 'tirshaker' in Configuration['FITTING_STAGES']:
+                    runf.tirshaker_call(
+                        Configuration,Fits_Files)
 
-        if Configuration['OUTPUT_QUANTITY'] != 5:
-            if 'tirshaker' in Configuration['FITTING_STAGES']:
-                runf.tirshaker_call(
-                    Configuration,Fits_Files)
-
-            Configuration['FINAL_COMMENT'] = 'The fit has converged succesfully'
-
+                Configuration['FINAL_COMMENT'] = 'The fit has converged succesfully'
+        
 
         catalogue_line = cf.finish_galaxy(Configuration, current_run=current_run,
                          Fits_Files=Fits_Files,exiting=registered_exception)
@@ -210,6 +222,10 @@ Therefore we remove the Create_FAT_Cube stages from the loop.
     rf.read_cube(
         Configuration, Fits_Files['FITTING_CUBE'])
     Configuration['INITIALIZATION_TIME'][1] = datetime.now()
+    enter_recovery_point(Configuration,Fits_Files=Fits_Files,\
+                        message='Creating the entry point at the end of the initialization.',\
+                        point_ID='AFTER-INITIALIZATION')
+
     return Fits_Files
 
 def loop_sofia(Configuration,Fits_Files):
@@ -225,6 +241,10 @@ def loop_sofia(Configuration,Fits_Files):
         sf.sofia_output_exists(
             Configuration, Fits_Files)
     Configuration['SOFIA_TIME'][1] = datetime.now()
+    enter_recovery_point(Configuration,Fits_Files=Fits_Files,\
+                        message='Creating the entry point after running sofia.',\
+                        point_ID='AFTER-SOFIA')
+
 
 def MP_initialize_sofia(Configuration,timing_lock,catalogue_lock):
     registered_exception = None
@@ -235,17 +255,31 @@ def MP_initialize_sofia(Configuration,timing_lock,catalogue_lock):
     Fits_Files = {}
     try:
         Fits_Files = initialize_loop(Configuration)
-        loop_sofia(Configuration,Fits_Files)
-        if Configuration['USED_FITTING']:
-            Initial_Parameters = runf.check_source(Configuration, Fits_Files)
-            succes =True
+        if Configuration['RP_SECTION'] == 'AFTER-INITIALIZATION':
+            loop_sofia(Configuration,Fits_Files)
+        else:
+            Initial_Parameters = copy.deepcopy(Configuration['Initial_Parameters'])
+
+        if (not Configuration['USED_FITTING'] is None) and \
+            (Configuration['RP_SECTION'] == 'AFTER-SOFIA'):
+            # Process the found source in sofia to set up the proper fitting and make sure source can be fitted
+
+            Initial_Parameters = runf.check_source(Configuration,\
+                Fits_Files)
+            succes = True
+            #sf.sofia_output_exists(Configuration,Fits_Files)
             print_log(f'''FAT_GALAXY_LOOPS: The source is well defined and we will now setup the initial tirific file
 ''', Configuration)
         else:
-            catalogue_line = cf.finish_galaxy(Configuration,
-                          current_run=current_run,Fits_Files=Fits_Files,
-                          timing_lock=timing_lock, catalogue_lock = catalogue_lock,
-                          exiting=registered_exception)
+            try:
+                Initial_Parameters = Configuration['Initial_Parameters']
+            except:
+                pass
+            if Configuration['USED_FITTING'] is None:
+                catalogue_line = cf.finish_galaxy(Configuration,
+                            current_run=current_run,Fits_Files=Fits_Files,
+                            timing_lock=timing_lock, catalogue_lock = catalogue_lock,
+                            exiting=registered_exception)
     except Exception as e:
         print(f"What going on {e}, {e.__class__.__name__} ")
         succes =False

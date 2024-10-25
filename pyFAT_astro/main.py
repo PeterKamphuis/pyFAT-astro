@@ -163,78 +163,77 @@ def main():
 
         if cfg.output.debug:
             warnings.showwarning = warn_with_traceback
-
-        #First we check for sofia and TiRiFiC
-        Original_Configuration['SOFIA2'] = sf.find_program(Original_Configuration['SOFIA2'], "SoFiA 2")
-        Original_Configuration['TIRIFIC'] = sf.find_program(Original_Configuration['TIRIFIC'], "TiRiFiC")
-        if not cfg.cube_name is None:
-            Full_Catalogue = sf.Proper_Dictionary({})
-            Full_Catalogue['ENTRIES'] = ['ENTRIES','ID','DISTANCE','DIRECTORYNAME','CUBENAME']
-            Full_Catalogue['ID'] = [f"{os.path.splitext(cfg.cube_name.split('/')[-1])[0]}"]
-            Full_Catalogue['DISTANCE'] = [-1.]
-            Full_Catalogue['DIRECTORYNAME'] = ['./']
-            Full_Catalogue['CUBENAME'] = [f"{os.path.splitext(cfg.cube_name.split('/')[-1])[0]}"]
-        elif 'sofia_catalogue' in Original_Configuration['FITTING_STAGES']:
-            Full_Catalogue = rf.sofia_input_catalogue(Original_Configuration)
-        elif not Original_Configuration['CATALOGUE'] is None:
-            Full_Catalogue = rf.catalogue(Original_Configuration['CATALOGUE'],split_char= cfg.advanced.catalogue_split_character)
-        else:
-            raise InputError(f'''
-                             
-{'':8s}We could not find any of the following input: 
-{'':8s}cube_name= (We found {cfg.cube_name})
-{'':8s}input.catalogue= (We found { Original_Configuration['CATALOGUE']})
-{'':8s}and 'sofia_catalogue' was not in the fitting stages (We found { Original_Configuration['FITTING_STAGES']})
-{'':8s}Please add any of these when calling pyFAT or at them in the correct manner to the yml configuration file.
-''')                        
+        if Original_Configuration['RP_SECTION'] == 'START':
+            #First we check for sofia and TiRiFiC
+            Original_Configuration['SOFIA2'] = sf.find_program(Original_Configuration['SOFIA2'], "SoFiA 2")
+            Original_Configuration['TIRIFIC'] = sf.find_program(Original_Configuration['TIRIFIC'], "TiRiFiC")
+            if not cfg.cube_name is None:
+                Full_Catalogue = sf.Proper_Dictionary({})
+                Full_Catalogue['ENTRIES'] = ['ENTRIES','ID','DISTANCE','DIRECTORYNAME','CUBENAME']
+                Full_Catalogue['ID'] = [f"{os.path.splitext(cfg.cube_name.split('/')[-1])[0]}"]
+                Full_Catalogue['DISTANCE'] = [-1.]
+                Full_Catalogue['DIRECTORYNAME'] = ['./']
+                Full_Catalogue['CUBENAME'] = [f"{os.path.splitext(cfg.cube_name.split('/')[-1])[0]}"]
+            elif 'sofia_catalogue' in Original_Configuration['FITTING_STAGES']:
+                Full_Catalogue = rf.sofia_input_catalogue(Original_Configuration)
+            elif not Original_Configuration['CATALOGUE'] is None:
+                Full_Catalogue = rf.catalogue(Original_Configuration['CATALOGUE'],split_char= cfg.advanced.catalogue_split_character)
+            else:
+                raise InputError(f'''
+                                
+    {'':8s}We could not find any of the following input: 
+    {'':8s}cube_name= (We found {cfg.cube_name})
+    {'':8s}input.catalogue= (We found { Original_Configuration['CATALOGUE']})
+    {'':8s}and 'sofia_catalogue' was not in the fitting stages (We found { Original_Configuration['FITTING_STAGES']})
+    {'':8s}Please add any of these when calling pyFAT or at them in the correct manner to the yml configuration file.
+    ''')                        
         
-        # Get the longest directory name to format the output directory properlyFit_Tirific_OSC
-        for directory in Full_Catalogue['DIRECTORYNAME']:
-            if directory == './':
-                directory = Original_Configuration['MAIN_DIRECTORY'].split('/')[-2]
-            if len(directory) > Original_Configuration['MAXIMUM_DIRECTORY_LENGTH']:
-                Original_Configuration['MAXIMUM_DIRECTORY_LENGTH'] = len(directory)
+            # Get the longest directory name to format the output directory properlyFit_Tirific_OSC
+            for directory in Full_Catalogue['DIRECTORYNAME']:
+                if directory == './':
+                    directory = Original_Configuration['MAIN_DIRECTORY'].split('/')[-2]
+                if len(directory) > Original_Configuration['MAXIMUM_DIRECTORY_LENGTH']:
+                    Original_Configuration['MAXIMUM_DIRECTORY_LENGTH'] = len(directory)
 
-        # Create a file to write the results to if if required
-        if Original_Configuration['OUTPUT_CATALOGUE']:
-            if not os.path.exists(Original_Configuration['OUTPUT_CATALOGUE']) or Original_Configuration['NEW_OUTPUT']:
-                if os.path.exists(Original_Configuration['OUTPUT_CATALOGUE']) and Original_Configuration['NEW_OUTPUT']:
-                    os.rename(Original_Configuration['OUTPUT_CATALOGUE'],f"{os.path.splitext(Original_Configuration['OUTPUT_CATALOGUE'])[0]}_Prev.txt")
-                with open(Original_Configuration['OUTPUT_CATALOGUE'],'w') as output_catalogue:
-                    comment = 'Comments on Fit Result'
-                    AC1 = 'OS'
-                    output_catalogue.write(f"{'Directory Name':<{Original_Configuration['MAXIMUM_DIRECTORY_LENGTH']}s} {AC1:>6s} {comment}\n")
+            # Create a file to write the results to if if required
+            if Original_Configuration['OUTPUT_CATALOGUE']:
+                if not os.path.exists(Original_Configuration['OUTPUT_CATALOGUE']) or Original_Configuration['NEW_OUTPUT']:
+                    if os.path.exists(Original_Configuration['OUTPUT_CATALOGUE']) and Original_Configuration['NEW_OUTPUT']:
+                        os.rename(Original_Configuration['OUTPUT_CATALOGUE'],f"{os.path.splitext(Original_Configuration['OUTPUT_CATALOGUE'])[0]}_Prev.txt")
+                    with open(Original_Configuration['OUTPUT_CATALOGUE'],'w') as output_catalogue:
+                        comment = 'Comments on Fit Result'
+                        AC1 = 'OS'
+                        output_catalogue.write(f"{'Directory Name':<{Original_Configuration['MAXIMUM_DIRECTORY_LENGTH']}s} {AC1:>6s} {comment}\n")
 
-        if Original_Configuration['TIMING']:
+            if Original_Configuration['TIMING']:
 
-            with open(Original_Configuration['MAIN_DIRECTORY']+'Timing_Result.txt','w') as timing_result:
-                timing_result.write("Timing results for every section of the fit process for all galaxies.  \n")
-            # If we do this we should have 1 cpu to keep going
-            Original_Configuration['NCPU'] -= 1
-            system_monitor = full_system_tracking(Original_Configuration)
-            fst = threading.Thread(target=system_monitor.start_monitoring)
-            fst.start()
+                with open(Original_Configuration['MAIN_DIRECTORY']+'Timing_Result.txt','w') as timing_result:
+                    timing_result.write("Timing results for every section of the fit process for all galaxies.  \n")
+                # If we do this we should have 1 cpu to keep going
+                Original_Configuration['NCPU'] -= 1
+                system_monitor = full_system_tracking(Original_Configuration)
+                fst = threading.Thread(target=system_monitor.start_monitoring)
+                fst.start()
 
-            print(f"We are using {Original_Configuration['NCPU']} cpus for fitting and 1 for timing.")
-        else:
-            print(f"We are using {Original_Configuration['NCPU']} cpus.")
-        #if start_galaxy not negative then it is catalogue ID
-        if Original_Configuration['CATALOGUE_START_ID'] in ['-1','-1.']:
-            Original_Configuration['CATALOGUE_START_ID'] = int(0)
-        else:
-            Original_Configuration['CATALOGUE_START_ID'] = int(np.where(Original_Configuration['CATALOGUE_START_ID'] == np.array(Full_Catalogue['ID'],dtype=str))[0][0])
-        # If the end galaxy is -1 fit the whole catalogue
-        if Original_Configuration['CATALOGUE_END_ID'] in ['-1','-1.']:
-            Original_Configuration['CATALOGUE_END_ID'] = int(len(Full_Catalogue['ID']))
-            if Original_Configuration['CATALOGUE_END_ID'] == 0:
-                Original_Configuration['CATALOGUE_END_ID'] = 1
-        else:
-            Original_Configuration['CATALOGUE_END_ID'] = int(np.where(Original_Configuration['CATALOGUE_END_ID'] == np.array(Full_Catalogue['ID'],dtype=str))[0][0])+1
-        # start the main fitting loop
-        if float(Original_Configuration['CATALOGUE_START_ID']) > float(Original_Configuration['CATALOGUE_END_ID']):
-            raise BadCatalogueError(f''' Your starting galaxy (Line nr = {Original_Configuration['CATALOGUE_START_ID']}) is listed after your ending galaxy (Line nr = {Original_Configuration['CATALOGUE_END_ID']}), maybe you have double catalogue ids?''')
-            sys.exit(1)
-
+                print(f"We are using {Original_Configuration['NCPU']} cpus for fitting and 1 for timing.")
+            else:
+                print(f"We are using {Original_Configuration['NCPU']} cpus.")
+            #if start_galaxy not negative then it is catalogue ID
+            if Original_Configuration['CATALOGUE_START_ID'] in ['-1','-1.']:
+                Original_Configuration['CATALOGUE_START_ID'] = int(0)
+            else:
+                Original_Configuration['CATALOGUE_START_ID'] = int(np.where(Original_Configuration['CATALOGUE_START_ID'] == np.array(Full_Catalogue['ID'],dtype=str))[0][0])
+            # If the end galaxy is -1 fit the whole catalogue
+            if Original_Configuration['CATALOGUE_END_ID'] in ['-1','-1.']:
+                Original_Configuration['CATALOGUE_END_ID'] = int(len(Full_Catalogue['ID']))
+                if Original_Configuration['CATALOGUE_END_ID'] == 0:
+                    Original_Configuration['CATALOGUE_END_ID'] = 1
+            else:
+                Original_Configuration['CATALOGUE_END_ID'] = int(np.where(Original_Configuration['CATALOGUE_END_ID'] == np.array(Full_Catalogue['ID'],dtype=str))[0][0])+1
+            # start the main fitting loop
+            if float(Original_Configuration['CATALOGUE_START_ID']) > float(Original_Configuration['CATALOGUE_END_ID']):
+                raise BadCatalogueError(f''' Your starting galaxy (Line nr = {Original_Configuration['CATALOGUE_START_ID']}) is listed after your ending galaxy (Line nr = {Original_Configuration['CATALOGUE_END_ID']}), maybe you have double catalogue ids?''')
+        #if we do recovery multiprocessing is turned off but the points should still be written       
         if Original_Configuration['MULTIPROCESSING']:
             Original_Configuration['VERBOSE_SCREEN'] = False
             #output_catalogue = copy.deepcopy(Original_Configuration['OUTPUT_CATALOGUE'])
@@ -279,9 +278,13 @@ def main():
             #        catalogue.writelines(x)
 
         else:
+            # as in recovery we might be switching from MP to single reset PER_GALAXY_NCPU
             Original_Configuration['PER_GALAXY_NCPU'] = sf.set_limits(Original_Configuration['NCPU'],1,20)
             for current_galaxy_index in range(Original_Configuration['CATALOGUE_START_ID'], Original_Configuration['CATALOGUE_END_ID']):
-                Configuration = sf.set_individual_configuration(current_galaxy_index,Full_Catalogue,Original_Configuration)
+                if Original_Configuration['RECOVERY_POINT'] == 'START_0':
+                    Configuration = sf.set_individual_configuration(current_galaxy_index,Full_Catalogue,Original_Configuration)
+                else:
+                    Configuration = Original_Configuration
                 catalogue_line = FAT_Galaxy_Loop(Configuration)
         
         if Original_Configuration['TIMING']:

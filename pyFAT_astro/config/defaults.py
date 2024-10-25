@@ -120,7 +120,7 @@ class Advanced:
     # If we are using a sofia catalogue and want tor overwrite the create FAT Cubes
     sofia_overwrite: bool = False
     #We want to be able to start at a given point in the code.
-    recovery_point: str = 'Start'
+    recovery_point: str = 'START_0'
 
 @dataclass
 class defaults:
