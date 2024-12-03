@@ -133,7 +133,7 @@ class defaults:
     installation_check: bool = False
     cube_name: Optional[str] = None
     configuration_file: Optional[str] = None
-    input: Input = Input()
-    output: Output = Output()
-    fitting: Fitting = Fitting()
-    advanced: Advanced = Advanced()
+    input: Input = field(default_factory = Input)
+    output: Output = field(default_factory = Output)
+    fitting: Fitting = field(default_factory = Fitting)
+    advanced: Advanced = field(default_factory = Advanced)
