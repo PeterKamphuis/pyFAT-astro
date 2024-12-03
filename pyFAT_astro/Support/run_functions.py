@@ -941,13 +941,14 @@ failed_fit.__doc__ =f'''
  NOTE:
 '''
 def fitting_osc(Configuration,Fits_Files,Initial_Parameters):
+    current_run = 'Not Initialized'
     if Configuration['RP_SECTION'] =='AFTER-PREPARATIONS':
         # First we want to read the template
         Tirific_Template = sf.tirific_template()
         # if the CTYPE3 is not 'VELO' we want to make a copy of the fitting cube that is used in tirific
         if Configuration['HDR_VELOCITY'] != 'VELO':
             Fits_Files = wf.create_tirific_run_cube(Configuration,Fits_Files)
-        current_run = 'Not Initialized'
+      
         Configuration['FIT_TIME'][0] = datetime.now()
         sf.create_directory(Configuration['USED_FITTING'],Configuration['FITTING_DIR'])
         wf.initialize_def_file(Configuration, Fits_Files,Tirific_Template, \
@@ -959,7 +960,9 @@ def fitting_osc(Configuration,Fits_Files,Initial_Parameters):
                         message='Starting the Iterations.',\
                         point_ID='ITERATION')
     else:
+
         Tirific_Template = Configuration['Tirific_Template']
+        wf.tirific(Configuration,Tirific_Template,name = f"{Configuration['USED_FITTING']}_In.def")
         # If we have no directory to put the output we create it
 
     while not Configuration['ACCEPTED'] and Configuration['ITERATIONS'] <  Configuration['MAX_ITERATIONS']:
@@ -977,6 +980,7 @@ def fitting_osc(Configuration,Fits_Files,Initial_Parameters):
             enter_recovery_point(Configuration,Fits_Files=Fits_Files,Tirific_Template=Tirific_Template,\
                         message=f'After Iteration { Configuration["ITERATIONS"]}',\
                         point_ID='ITERATION')
+            
         else:
             current_run = 'Not Zed'
     enter_recovery_point(Configuration,Fits_Files=Fits_Files,Tirific_Template=Tirific_Template,\

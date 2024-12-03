@@ -1,6 +1,7 @@
 # -*- coding: future_fstrings -*-
 # This module  contains (eventually all) functions that relate to the 
 # logging process
+import copy
 import numpy as np
 import os
 import pickle
@@ -167,9 +168,12 @@ def enter_recovery_point(Configuration, Fits_Files = None, Tirific_Template= Non
    print_log(f'''ENTER_RECOVERY_POINT: Creating a recovery point.
 {message}              
 ''',Configuration,case= ['debug_start','main'])
-   Configuration['RP_COUNTER'] += 1
    Configuration['RP_SECTION'] = point_ID
-   write_config(f"{Configuration['LOG_DIRECTORY']}RP_{Configuration['RP_SECTION']}_{Configuration['RP_COUNTER']}.pkl",\
+   name = copy.deepcopy(point_ID)
+   if Configuration['RP_SECTION'] == 'ITERATION':
+      Configuration['RP_COUNTER'] += 1
+      name = f'{name}_{Configuration["RP_COUNTER"]}'
+   write_config(f"{Configuration['LOG_DIRECTORY']}RP_{name}.pkl",\
       Configuration, Fits_Files=Fits_Files, IP = IP,\
                  Tirific_Template=Tirific_Template,message=message )
 enter_recovery_point.__doc__ =f'''
@@ -422,7 +426,7 @@ def update_statistics(Configuration,process= None,message = None ):
     if Configuration['TIMING']:
         function = traceback.format_stack()[-2].split('\n')
         function = function[0].split()[-1].strip()
-        if not process:
+        if process is None:
             process = Configuration['FAT_PSUPROCESS']
             program = 'pyFAT'
         else:
@@ -519,7 +523,7 @@ This Could be used to pickup the fitting from where we left of
 
 def recover_recovery_point_conf(Configuration_In):
    #first check that the file exists
-   conf = f"{Configuration_In['LOG_DIRECTORY']}/RP_{Configuration_In['RECOVERY_POINT']}"
+   conf = f"{Configuration_In['MAIN_DIRECTORY']}/{Configuration_In['LOG_DIRECTORY']}/RP_{Configuration_In['RECOVERY_POINT']}.pkl"
    if os.path.isfile(conf):
       with open(conf,'rb') as file:
          Configuration = pickle.load(file)

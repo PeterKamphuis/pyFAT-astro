@@ -3637,7 +3637,10 @@ def setup_configuration(cfg):
     #if we have a recovery ppoint we will try to start everything from there
     if Configuration['RECOVERY_POINT'] != 'START_0':
         try:
-            Rec_Configuration = recover_entry_point_conf(Configuration)
+            Rec_Configuration = recover_recovery_point_conf(Configuration)
+            Rec_Configuration['RECOVERY_POINT'] = Configuration['RECOVERY_POINT']
+            Rec_Configuration['FAT_PID'] = os.getpid()
+            Rec_Configuration['TIRIFIC_RUNNING'] = False
             return Rec_Configuration
         except FileExistsError:
             raise InputError(f'''We failed to locate the file {Configuration['LOG_DIRECTORY']}RP_{ Configuration['RECOVERY_POINT']}.pkl

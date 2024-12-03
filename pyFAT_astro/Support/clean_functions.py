@@ -171,7 +171,7 @@ clean_after_sofia.__doc__ =f'''
 '''
 
 # cleanup dirty files before starting fitting
-def cleanup(Configuration,Fits_Files):
+def cleanup(Configuration,Fits_Files, recovery = False):
     print_log(f'''CLEANUP: Starting clean
 ''',Configuration,case = ['debug_start'])
         #Move any existing output to the Log directory
@@ -180,79 +180,86 @@ def cleanup(Configuration,Fits_Files):
             os.remove(f"{Configuration['LOG_DIRECTORY']}ram_cpu_prev.pdf")
         os.rename( f"{Configuration['LOG_DIRECTORY']}ram_cpu.pdf",f"{Configuration['LOG_DIRECTORY']}ram_cpu_prev.pdf")
     #Move any existing Overview.png to the Log directory well
-    if os.path.exists(f"{Configuration['FITTING_DIR']}Overview.png"):
-        if os.path.exists(f"{Configuration['LOG_DIRECTORY']}Overview_prev.png"):
-            os.remove(f"{Configuration['LOG_DIRECTORY']}Overview_prev.png")
-            print_log(f'''CLEANUP: Removing an old Overview_prev.png from {Configuration['LOG_DIRECTORY']}
-''',Configuration,case = ['debug_add'])
-        os.rename( f"{Configuration['FITTING_DIR']}Overview.png",f"{Configuration['LOG_DIRECTORY']}Overview_prev.png")
-        print_log(f'''CLEANUP: We moved an old Overview.png to {Configuration['LOG_DIRECTORY']}Overview_prev.png
-''',Configuration,case = ['debug_add'])
+    if not recovery:
+        if os.path.exists(f"{Configuration['FITTING_DIR']}Overview.png"):
+            if os.path.exists(f"{Configuration['LOG_DIRECTORY']}Overview_prev.png"):
+                os.remove(f"{Configuration['LOG_DIRECTORY']}Overview_prev.png")
+                print_log(f'''CLEANUP: Removing an old Overview_prev.png from {Configuration['LOG_DIRECTORY']}
+    ''',Configuration,case = ['debug_add'])
+            os.rename( f"{Configuration['FITTING_DIR']}Overview.png",f"{Configuration['LOG_DIRECTORY']}Overview_prev.png")
+            print_log(f'''CLEANUP: We moved an old Overview.png to {Configuration['LOG_DIRECTORY']}Overview_prev.png
+    ''',Configuration,case = ['debug_add'])
     #clean the log directory of all files except those named Prev_ and not the Log as it is already moved if existing
-    files_in_log = ['restart_One_Step_Convergence.txt','restart_Centre_Convergence.txt',f"restart_{Configuration['USED_FITTING']}.txt",\
+
+        files_in_log = ['restart_One_Step_Convergence.txt','restart_Centre_Convergence.txt',f"restart_{Configuration['USED_FITTING']}.txt",\
                     'restart_Extent_Convergence.txt','Usage_Statistics.txt', 'clean_map_0.fits','clean_map_1.fits','clean_map.fits',\
                     'dep_map_0.fits','minimum_map_0.fits','rot_map_0.fits','dep_map.fits','minimum_map.fits','rot_map.fits',\
                     'dep_map_1.fits','minimum_map_1.fits','rot_map_1.fits','Convolved_Cube_FAT_opt.fits']
+    
+        #add all CFG files:
+        for file in os.listdir(Configuration['LOG_DIRECTORY']):
+            split_file = os.path.splitext(file)
+            if split_file[-1] in ['.pkl', '.txt'] and 'CFG' in file:
+                files_in_log.append(file)
 
-    #add all CFG files:
-    for file in os.listdir(Configuration['LOG_DIRECTORY']):
-        split_file = os.path.splitext(file)
-        if split_file[-1] in ['.pkl', '.txt'] and 'CFG' in file:
-            files_in_log.append(file)
-
-    for file in files_in_log:
-        try:
-            os.remove(f"{Configuration['LOG_DIRECTORY']}{file}")
-        except FileNotFoundError:
-            pass
-    #            !!!!!!!!!!!!!!! The Directories cleanup should be removed before release
-    Directories = ['Extent_Convergence', 'Centre_Convergence','tmp_incl_check','One_Step_Convergence']
-    for dir in Directories:
-        try:
-            for f in os.listdir(f"{Configuration['FITTING_DIR']}{dir}"):
-                os.remove(os.path.join(f"{Configuration['FITTING_DIR']}{dir}", f))
-        except FileNotFoundError:
-            pass
-        try:
-            os.rmdir(f"{Configuration['FITTING_DIR']}{dir}")
-        except FileNotFoundError:
-            pass
-
-    files_in_main = ['dep_map_0.0.fits','minimum_map_0.0.fits','clean_map_0.0.fits','rot_map_0.0.fits','tmp_incl_check_In.def']
-
-    for file in files_in_main:
-        try:
-            os.remove(f"{Configuration['FITTING_DIR']}{file}")
-        except FileNotFoundError:
-            pass
-    directories = []
-    files = [Configuration['BASE_NAME']+'-Basic_Info.txt',Fits_Files['OPTIMIZED_CUBE']]
-    if Configuration['USED_FITTING']:
-        directories.append('Finalmodel')
-        directories.append(Configuration['USED_FITTING'])
-        files.append(f'{Configuration["USED_FITTING"]}_In.def')
-
-    if 'create_fat_cube' in Configuration['FITTING_STAGES']:
-        files.append(Fits_Files['FITTING_CUBE'])
-
-    if 'run_sofia' in Configuration['FITTING_STAGES'] or 'external_sofia' in Configuration['FITTING_STAGES']:
-        dir =f'{Configuration["FITTING_DIR"]}Sofia_Output/'
-        file_ext=['_mask.fits','_mom0.fits','_mom1.fits','_mom2.fits','_chan.fits','_cat.txt','_sofia_PV.fits']
-        print_log(f'''CLEANUP: We are cleaning the following files in the directory {dir}:
-{"":8s}CLEANUP: sofia_input.par,{','.join([f'{Configuration["SOFIA_BASENAME"]}{x}' for x in file_ext])}
-''',Configuration,case = ['verbose'])
-        for extension in file_ext:
+        for file in files_in_log:
             try:
-                os.remove(f'{dir}{Configuration["BASE_NAME"]}{extension}')
+                os.remove(f"{Configuration['LOG_DIRECTORY']}{file}")
             except FileNotFoundError:
                 pass
-        try:
-            os.remove(f'{dir}sofia_input.par')
-        except FileNotFoundError:
-            pass
-    if 'tirshaker' in Configuration['FITTING_STAGES']:
-        directories.append('Error_Shaker')
-    # Existing_Sofia
+        #            !!!!!!!!!!!!!!! The Directories cleanup should be removed before release
+    if not recovery:
+        Directories = ['Extent_Convergence', 'Centre_Convergence','tmp_incl_check','One_Step_Convergence']
+   
+        for dir in Directories:
+            try:
+                for f in os.listdir(f"{Configuration['FITTING_DIR']}{dir}"):
+                    os.remove(os.path.join(f"{Configuration['FITTING_DIR']}{dir}", f))
+            except FileNotFoundError:
+                pass
+            try:
+                os.rmdir(f"{Configuration['FITTING_DIR']}{dir}")
+            except FileNotFoundError:
+                pass
+
+        files_in_main = ['dep_map_0.0.fits','minimum_map_0.0.fits','clean_map_0.0.fits','rot_map_0.0.fits','tmp_incl_check_In.def']
+        for file in files_in_main:
+            try:
+                os.remove(f"{Configuration['FITTING_DIR']}{file}")
+            except FileNotFoundError:
+                pass
+    directories = []
+    files = []
+    if not recovery:
+        files.append(Configuration['BASE_NAME']+'-Basic_Info.txt')
+        files.append( Fits_Files['OPTIMIZED_CUBE'])
+    if Configuration['USED_FITTING']:
+        directories.append('Finalmodel')
+        if not recovery:
+            directories.append(Configuration['USED_FITTING'])
+        files.append(f'{Configuration["USED_FITTING"]}_In.def')
+    if not recovery:
+        if 'create_fat_cube' in Configuration['FITTING_STAGES']:
+            files.append(Fits_Files['FITTING_CUBE'])
+
+        if 'run_sofia' in Configuration['FITTING_STAGES'] or 'external_sofia' in Configuration['FITTING_STAGES']:
+            dir =f'{Configuration["FITTING_DIR"]}Sofia_Output/'
+            file_ext=['_mask.fits','_mom0.fits','_mom1.fits','_mom2.fits','_chan.fits','_cat.txt','_sofia_PV.fits']
+            print_log(f'''CLEANUP: We are cleaning the following files in the directory {dir}:
+    {"":8s}CLEANUP: sofia_input.par,{','.join([f'{Configuration["SOFIA_BASENAME"]}{x}' for x in file_ext])}
+    ''',Configuration,case = ['verbose'])
+            for extension in file_ext:
+                try:
+                    os.remove(f'{dir}{Configuration["BASE_NAME"]}{extension}')
+                except FileNotFoundError:
+                    pass
+            try:
+                os.remove(f'{dir}sofia_input.par')
+            except FileNotFoundError:
+                pass
+        if 'tirshaker' in Configuration['FITTING_STAGES']:
+            directories.append('Error_Shaker')
+        # Existing_Sofia
 
 
 

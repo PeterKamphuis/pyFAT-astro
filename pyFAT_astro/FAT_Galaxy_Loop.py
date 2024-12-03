@@ -22,17 +22,20 @@ from pyFAT_astro.Support.log_functions import print_log,enter_recovery_point\
 def FAT_Galaxy_Loop(Configuration):
 
     try:
-        if Configuration['RECOVERY_POINT'] == 'START_0':
-            registered_exception = None
+        registered_exception = None
+        if Configuration['RP_SECTION'] == 'START':
             current_run = 'Not Initialized'
             Fits_Files = initialize_loop(Configuration)
         else:
+            if Configuration['TIMING']:
+                Configuration['FAT_PSUPROCESS'] = psu.Process(
+                    Configuration['FAT_PID'])
             Fits_Files = copy.deepcopy(Configuration['Fits_Files'])
+            cf.cleanup(Configuration,Fits_Files, recovery = True)
+
         if Configuration['RP_SECTION'] == 'AFTER-INITIALIZATION':
             loop_sofia(Configuration,Fits_Files)
-        else:
-            Initial_Parameters = copy.deepcopy(Configuration['Initial_Parameters'])
-
+        
         # If you add any make sure that the fitstage  starts with 'Fit_' if Configuration['RP_SECTION'] == 'AFTER-INITIALIZATION':
         if (not Configuration['USED_FITTING'] is None) and \
             (Configuration['RP_SECTION'] == 'AFTER-SOFIA'):
@@ -48,8 +51,16 @@ def FAT_Galaxy_Loop(Configuration):
             try:
                 Initial_Parameters = Configuration['Initial_Parameters']
             except:
+                Initial_Parameters = None
                 pass
-        # then we want to read the template
+            if (not Configuration['USED_FITTING'] is None) and \
+                Configuration['OPTIMIZED']:
+
+                 #We want to check if the cube has a decent number of pixels per beam.
+              
+                if not os.path.exists(f"{Configuration['FITTING_DIR']}/{Fits_Files['OPTIMIZED_CUBE']}"):
+                    ff.optimized_cube(Configuration, Fits_Files)
+              
       
 
         if 'fit_tirific_osc' in Configuration['FITTING_STAGES']:
