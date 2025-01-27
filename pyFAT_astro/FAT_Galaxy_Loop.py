@@ -68,6 +68,9 @@ def FAT_Galaxy_Loop(Configuration):
                 'AFTER-PREPARATIONS','BEFORE-SMOOTHING']:
                 current_run,Tirific_Template = runf.fitting_osc(
                     Configuration, Fits_Files,  Initial_Parameters)
+            else:
+                current_run = 'Not set'
+                Tirific_Template = copy.deepcopy(Configuration['Tirific_Template'])
         elif 'fit_make_your_own' in Configuration['FITTING_STAGES']:
             print_log(f'''FAT_GALAXY_LOOPS: If you add any fitting routine make sure that the fit stage  starts with Fit_
 ''',Configuration)

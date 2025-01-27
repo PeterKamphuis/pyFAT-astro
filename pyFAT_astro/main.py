@@ -153,9 +153,10 @@ def main():
                 cfg.ncpu  = psutil.cpu_count()
 
         #Let's write and input example to the main directory
-        if cfg.output.debug:
-            with open(f'{cfg.input.main_directory}/FAT_Inputs-Run_{datetime.now().strftime("%d-%m-%Y")}.yml','w') as default_write:
-                default_write.write(OmegaConf.to_yaml(cfg))
+     
+        inputyml =  f'{cfg.input.main_directory}/FAT_Inputs-Run_{datetime.now().strftime("%H:%M:%S_%d-%m-%Y")}.yml'
+        with open(inputyml,'w') as default_write:
+            default_write.write(OmegaConf.to_yaml(cfg))
 
 
         #Transform all to a Configuration dictionary
@@ -165,29 +166,31 @@ def main():
             warnings.showwarning = warn_with_traceback
         if Original_Configuration['RP_SECTION'] == 'START':
             #First we check for sofia and TiRiFiC
-            Original_Configuration['SOFIA2'] = sf.find_program(Original_Configuration['SOFIA2'], "SoFiA 2")
-            Original_Configuration['TIRIFIC'] = sf.find_program(Original_Configuration['TIRIFIC'], "TiRiFiC")
+            Original_Configuration['SOFIA2'] = \
+                sf.find_program(Original_Configuration['SOFIA2'], "SoFiA 2")
+            Original_Configuration['TIRIFIC'] =\
+                sf.find_program(Original_Configuration['TIRIFIC'], "TiRiFiC")
             if not cfg.cube_name is None:
                 Full_Catalogue = sf.Proper_Dictionary({})
-                Full_Catalogue['ENTRIES'] = ['ENTRIES','ID','DISTANCE','DIRECTORYNAME','CUBENAME']
+                Full_Catalogue['ENTRIES'] =\
+                    ['ENTRIES','ID','DISTANCE','DIRECTORYNAME','CUBENAME']
                 Full_Catalogue['ID'] = [f"{cfg.cube_name.split('/')[-1]}"]
                 Full_Catalogue['DISTANCE'] = [-1.]
                 Full_Catalogue['DIRECTORYNAME'] = ['./']
-                #Full_Catalogue['CUBENAME'] = [f"{os.path.splitext(cfg.cube_name.split('/')[-1])[0]}"]
                 Full_Catalogue['CUBENAME'] = [cfg.cube_name.split('/')[-1]]
             elif 'sofia_catalogue' in Original_Configuration['FITTING_STAGES']:
                 Full_Catalogue = rf.sofia_input_catalogue(Original_Configuration)
             elif not Original_Configuration['CATALOGUE'] is None:
-                Full_Catalogue = rf.catalogue(Original_Configuration['CATALOGUE'],split_char= cfg.advanced.catalogue_split_character)
+                Full_Catalogue = rf.catalogue(Original_Configuration['CATALOGUE']\
+                    ,split_char= cfg.advanced.catalogue_split_character)
             else:
-                raise InputError(f'''
-                                
-    {'':8s}We could not find any of the following input: 
-    {'':8s}cube_name= (We found {cfg.cube_name})
-    {'':8s}input.catalogue= (We found { Original_Configuration['CATALOGUE']})
-    {'':8s}and 'sofia_catalogue' was not in the fitting stages (We found { Original_Configuration['FITTING_STAGES']})
-    {'':8s}Please add any of these when calling pyFAT or at them in the correct manner to the yml configuration file.
-    ''')                        
+                raise InputError(f'''                             
+{'':8s}We could not find any of the following input: 
+{'':8s}cube_name= (We found {cfg.cube_name})
+{'':8s}input.catalogue= (We found { Original_Configuration['CATALOGUE']})
+{'':8s}and 'sofia_catalogue' was not in the fitting stages (We found { Original_Configuration['FITTING_STAGES']})
+{'':8s}Please add any of these when calling pyFAT or at them in the correct manner to the yml configuration file.
+''')                        
         
             # Get the longest directory name to format the output directory properlyFit_Tirific_OSC
             for directory in Full_Catalogue['DIRECTORYNAME']:

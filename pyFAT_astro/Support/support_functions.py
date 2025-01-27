@@ -3658,10 +3658,15 @@ def setup_configuration(cfg):
             Rec_Configuration['RECOVERY_POINT'] = Configuration['RECOVERY_POINT']
             Rec_Configuration['FAT_PID'] = os.getpid()
             Rec_Configuration['TIRIFIC_RUNNING'] = False
+            initial_log = os.path.splitext(Rec_Configuration['OUTPUTLOG'])[0]
+            Rec_Configuration['OUTPUTLOG']= f'{initial_log}_RP_{Rec_Configuration["RECOVERY_POINT"]}.txt'
+            with open(Rec_Configuration['OUTPUTLOG'],'w') as file:
+                file.write(f'This is a restart of the original fitting at recovery point {Rec_Configuration["RECOVERY_POINT"]}. \n')
+    
             return Rec_Configuration
         except FileExistsError:
             raise InputError(f'''We failed to locate the file {Configuration['LOG_DIRECTORY']}RP_{ Configuration['RECOVERY_POINT']}.pkl
-Please give a legit recevery point (Note that the default log is by date.)''')
+Please give a legit recovery point (Note that the default log is by date.)''')
             pass     
     # None cfg additions, that is additions that should be reset for every galaxy
     boolean_keys = ['OPTIMIZED', # Are we fitting an optimized cube
@@ -3688,7 +3693,6 @@ Please give a legit recevery point (Note that the default log is by date.)''')
                'SUB_DIR': 'Unset', # Name of the directory in which galaxy resides, set from the catalogue at start of loop
                'FITTING_DIR': 'Unset', # Full path of the directory in which the fitting takes place, set at start of loop
                'BASE_NAME': 'Unset', #Basename for FAT products, typically {input_cube}_FAT, set at start of loop
-               'LOG_DIR': 'Unset', #Directory to put log files from run, set at start of loop
                'INPUT_CUBE': 'Unset', # Name of the input cube as listed in full catalogue
                'STOP_INDIVIDUAL_ERRORS': ['SmallSourceError','BadSourceError'\
                                         ,'FaintSourceError','BadHeaderError',\

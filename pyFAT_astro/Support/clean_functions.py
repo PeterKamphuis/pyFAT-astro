@@ -201,6 +201,8 @@ def cleanup(Configuration,Fits_Files, recovery = False):
             split_file = os.path.splitext(file)
             if split_file[-1] in ['.pkl', '.txt'] and 'CFG' in file:
                 files_in_log.append(file)
+            if split_file[-1] in ['.pkl', '.txt'] and 'RP' in file:
+                files_in_log.append(file)
 
         for file in files_in_log:
             try:
