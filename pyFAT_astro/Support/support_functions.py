@@ -3526,7 +3526,23 @@ def set_individual_configuration(current_galaxy_index,Full_Catalogue,\
     if Full_Catalogue['DISTANCE'][current_galaxy_index] != -1.:
         Configuration['DISTANCE'] = Full_Catalogue['DISTANCE'][current_galaxy_index]
     Configuration['SUB_DIR'] = Full_Catalogue['DIRECTORYNAME'][current_galaxy_index]
-    Configuration['BASE_NAME'] = Full_Catalogue['CUBENAME'][current_galaxy_index]+'_FAT'
+    #if we skip the create_fat_cube stage people could give the fat cube itself
+    if Full_Catalogue['CUBENAME'][current_galaxy_index][-9:] == '_FAT.fits':
+        if 'create_fat_cube' in Configuration['FITTING_STAGES']:
+            print_log(f'''FAT_GALAXY_LOOPS: Your input cube ends in _FAT.fits indicating it is a FAT processed cube.
+Therefore we remove the Create_FAT_Cube stages from the loop.
+''', Configuration)
+            Configuration['FITTING_STAGES'].remove('create_fat_cube')
+        fat_ext = ''
+    else:
+        fat_ext = '_FAT'
+   
+    #allow for the input to be zipped
+    if os.path.splitext(Full_Catalogue['CUBENAME'][current_galaxy_index])[-1] == '.gz':
+        first =  os.path.splitext(Full_Catalogue['CUBENAME'][current_galaxy_index])[0]
+    else:
+        first = Full_Catalogue['CUBENAME'][current_galaxy_index]
+    Configuration['BASE_NAME'] = f'{os.path.splitext(first)[0]}{fat_ext}'
     if not Configuration['SOFIA_BASENAME']:
         if 'BASENAME' in Full_Catalogue['ENTRIES']:
             Configuration['SOFIA_BASENAME'] = Full_Catalogue['BASENAME'][current_galaxy_index]
@@ -3538,10 +3554,11 @@ def set_individual_configuration(current_galaxy_index,Full_Catalogue,\
         Configuration['FITTING_DIR'] = f"{Configuration['MAIN_DIRECTORY']}"
     else:
         Configuration['FITTING_DIR'] = f"{Configuration['MAIN_DIRECTORY']}{Full_Catalogue['DIRECTORYNAME'][current_galaxy_index]}/"
+  
     if 'sofia_catalogue' in Configuration['FITTING_STAGES']:
         Configuration['INPUT_CUBE']= f"{Full_Catalogue['CUBENAME'][current_galaxy_index]}_FAT.fits"
     else:        
-        Configuration['INPUT_CUBE']= f"{Full_Catalogue['CUBENAME'][current_galaxy_index]}.fits"
+        Configuration['INPUT_CUBE']= f"{Full_Catalogue['CUBENAME'][current_galaxy_index]}"
     return(Configuration)
 set_individual_configuration.__doc__ =f'''
  NAME:

@@ -2469,8 +2469,8 @@ def regularise_warp(Configuration,Tirific_Template, min_error = None, \
     if 'PA' in Configuration['FIXED_PARAMETERS'][0] and 'INCL' in \
           Configuration['FIXED_PARAMETERS'][0]:
         profile = np.array(sf.load_tirific(Configuration,Tirific_Template, [f"PA",f"PA_2",f"INCL",f"INCL_2"]),dtype=float)
-        for i in [0,1,2,3]:
-            profile[i][:]=np.mean(profile[i])
+        for i in [0,2]:
+            profile[i:i+2][:]=np.mean(profile[i:i+2,:])
         for i,key in enumerate(['PA','INCL']):  
             set_errors(Configuration,Tirific_Template,key,min_error=min_error[i])
         return profile
@@ -2490,7 +2490,11 @@ def regularise_warp(Configuration,Tirific_Template, min_error = None, \
     
         incl_both_sides = regularise_profile(Configuration,Tirific_Template,\
                         'INCL',warp=True,no_apply=True) 
-    
+    if 'PA' in Configuration['FIXED_PARAMETERS'][0]:
+        pa_both_sides[:,:] = np.mean(pa_both_sides)
+    if 'INCL' in Configuration['FIXED_PARAMETERS'][0]:
+        incl_both_sides[:,:] = np.mean(incl_both_sides)
+           
     profile= np.concatenate((pa_both_sides,incl_both_sides))  
     diff = abs(np.sum(profile[0]-profile[1]))+abs(np.sum(profile[2]-profile[3]))  #Check that we have two profiles
     if diff < 1e-8:

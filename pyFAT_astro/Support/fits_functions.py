@@ -25,8 +25,11 @@ def check_mask(Configuration,id,Fits_Files,SNR= 5.):
 and to have decent signal noise
 ''',Configuration, case =['debug_start','verbose'])
     if Configuration['DEBUG']:
-        copyfile(f"{Configuration['FITTING_DIR']}/{Fits_Files['MASK']}",f"{Configuration['FITTING_DIR']}/Sofia_Output/{Configuration['BASE_NAME']}_Original_Mask.fits")
-    mask = fits.open(f"{Configuration['FITTING_DIR']}/{Fits_Files['MASK']}",uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
+        copyfile(f"{Configuration['FITTING_DIR']}/{Fits_Files['MASK']}",\
+            f"{Configuration['FITTING_DIR']}/Sofia_Output/{Configuration['BASE_NAME']}_Original_Mask.fits")
+    mask = fits.open(f"{Configuration['FITTING_DIR']}/{Fits_Files['MASK']}"\
+        ,uint = False, do_not_scale_image_data=True,ignore_blank = True,\
+        output_verify= 'ignore')
     mask = check_mask_sources(Configuration,id,mask)
 
     if SNR < 3.:
@@ -101,9 +104,9 @@ def check_mask_sources(Configuration,id,mask):
             mask[0].data = data
 
 
-    mask[0].data[mask[0].data> 0.5] = 1.
+    mask[0].data[mask[0].data> 0.5] = 1
 
-    mask[0].header['BITPIX'] = -32
+    mask[0].header['BITPIX'] = 16
     return mask
 check_mask_sources.__doc__ =f'''
  NAME:

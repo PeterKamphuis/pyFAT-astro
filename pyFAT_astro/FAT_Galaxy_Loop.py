@@ -164,22 +164,10 @@ def initialize_loop(Configuration):
     with open(Configuration['OUTPUTLOG'], 'w') as log:
         log.write(log_statement)
 
-
-    #if we skip the create_fat _cube stage peaople could give the fat cube itself
   
-    if Fits_Files['ORIGINAL_CUBE'][-9:] == '_FAT.fits':
-        if 'create_fat_cube' in Configuration['FITTING_STAGES']:
-            print_log(f'''FAT_GALAXY_LOOPS: Your input cube ends in _FAT.fits indicating it is a FAT processed cube.
-Therefore we remove the Create_FAT_Cube stages from the loop.
-''', Configuration)
-            Configuration['FITTING_STAGES'].remove('create_fat_cube')
-        fat_ext = ''
-    else:
-        fat_ext = '_FAT'
-    stripped_file_name = os.path.splitext(Configuration['INPUT_CUBE'])[0]
-    
-    Fits_Files['FITTING_CUBE'] = f"{stripped_file_name}{fat_ext}.fits"
-    Fits_Files['OPTIMIZED_CUBE'] = f"{stripped_file_name}{fat_ext}_opt.fits"
+
+    Fits_Files['FITTING_CUBE'] = f"{Configuration['BASE_NAME']}.fits"
+    Fits_Files['OPTIMIZED_CUBE'] = f"{Configuration['BASE_NAME']}_opt.fits"
     Fits_Files['MOMENT0'] = f"Sofia_Output/{Configuration['BASE_NAME']}_mom0.fits"
     Fits_Files['MOMENT1'] = f"Sofia_Output/{Configuration['BASE_NAME']}_mom1.fits"
     Fits_Files['MOMENT2'] = f"Sofia_Output/{Configuration['BASE_NAME']}_mom2.fits"
@@ -203,6 +191,8 @@ Therefore we remove the Create_FAT_Cube stages from the loop.
         from numpy import __version__ as npversion
         from scipy import __version__ as spversion
         from astropy import __version__ as apversion
+        from make_moments import __version__ as mmversion
+        from TRM_errors import __version__ as teversion
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             from matplotlib import __version__ as mpversion
@@ -213,6 +203,9 @@ Therefore we remove the Create_FAT_Cube stages from the loop.
 {'':8s}SciPy {spversion}
 {'':8s}AstroPy {apversion}
 {'':8s}Matplotlib {mpversion}
+{'':8s}make_moments {mmversion}
+{'':8s}TRM_errors {teversion}
+
 ''', Configuration)
 
     log_statement = f'''We are starting the catalogue entry {Configuration['ID']} in the directory {Configuration['SUB_DIR']}.\n'''

@@ -88,7 +88,7 @@ def main():
 
         All config parameters can be set directly from the command e.g:
 
-            pyFAT file_name=Input_Cube.fits fitting.ring_size=1.5 'fitting.fixed_parameters=[INCL,SDIS]'
+            pyFAT cube_name=Input_Cube.fits fitting.ring_size=1.5 'fitting.fixed_parameters=[INCL,SDIS]'
 
         You can test your installation with:
 
@@ -139,7 +139,7 @@ def main():
 
 
         cfg = OmegaConf.merge(cfg,inputconf)
-
+       
         if not any([cfg.cube_name, cfg.configuration_file, cfg.installation_check\
                     ,cfg.print_examples,cfg.input.catalogue]):
             print(help_message)
@@ -170,10 +170,11 @@ def main():
             if not cfg.cube_name is None:
                 Full_Catalogue = sf.Proper_Dictionary({})
                 Full_Catalogue['ENTRIES'] = ['ENTRIES','ID','DISTANCE','DIRECTORYNAME','CUBENAME']
-                Full_Catalogue['ID'] = [f"{os.path.splitext(cfg.cube_name.split('/')[-1])[0]}"]
+                Full_Catalogue['ID'] = [f"{cfg.cube_name.split('/')[-1]}"]
                 Full_Catalogue['DISTANCE'] = [-1.]
                 Full_Catalogue['DIRECTORYNAME'] = ['./']
-                Full_Catalogue['CUBENAME'] = [f"{os.path.splitext(cfg.cube_name.split('/')[-1])[0]}"]
+                #Full_Catalogue['CUBENAME'] = [f"{os.path.splitext(cfg.cube_name.split('/')[-1])[0]}"]
+                Full_Catalogue['CUBENAME'] = [cfg.cube_name.split('/')[-1]]
             elif 'sofia_catalogue' in Original_Configuration['FITTING_STAGES']:
                 Full_Catalogue = rf.sofia_input_catalogue(Original_Configuration)
             elif not Original_Configuration['CATALOGUE'] is None:
