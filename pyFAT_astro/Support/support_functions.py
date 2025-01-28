@@ -2383,8 +2383,8 @@ def get_vel_pa(Configuration,velocity_field,center_in=\
     else:
         # because python is stupid the ceneter should be reversed to match the map
         center = np.flip(center)
-    if Configuration['DEBUG']:
-        fits.writeto(f'{Configuration["FITTING_DIR"]}/testvf_befor.fits',velocity_field,overwrite=True)
+    #if Configuration['DEBUG']:
+    #    fits.writeto(f'{Configuration["FITTING_DIR"]}/testvf_befor.fits',velocity_field,overwrite=True)
     sigma = [3.,3.]
     sm_velocity_field = ndimage.gaussian_filter(velocity_field, sigma=(sigma[1], sigma[0]), order=0)
     #if we have not enough points we load the original field and smooth it
@@ -2406,7 +2406,7 @@ def get_vel_pa(Configuration,velocity_field,center_in=\
 ''',Configuration,case=['debug_add'])
         return [float('NaN'),float('NaN')],True
        
-    fits.writeto(f'{Configuration["FITTING_DIR"]}/testvf.fits',sm_velocity_field,overwrite=True)
+    #fits.writeto(f'{Configuration["FITTING_DIR"]}/testvf.fits',sm_velocity_field,overwrite=True)
     max_pos = np.where(np.nanmax(sm_velocity_field) == sm_velocity_field)
     #Python is a super weird language so make a decent list of np output
 
@@ -3538,11 +3538,21 @@ Therefore we remove the Create_FAT_Cube stages from the loop.
         fat_ext = '_FAT'
    
     #allow for the input to be zipped
-    if os.path.splitext(Full_Catalogue['CUBENAME'][current_galaxy_index])[-1] == '.gz':
-        first =  os.path.splitext(Full_Catalogue['CUBENAME'][current_galaxy_index])[0]
+    cube_extension = os.path.splitext(Full_Catalogue['CUBENAME'][current_galaxy_index])[1]
+    zipped = False
+    if cube_extension == '.gz':
+        cube_name =  os.path.splitext(Full_Catalogue['CUBENAME'][current_galaxy_index])[0]
+        zipped = True
     else:
-        first = Full_Catalogue['CUBENAME'][current_galaxy_index]
-    Configuration['BASE_NAME'] = f'{os.path.splitext(first)[0]}{fat_ext}'
+        cube_name = Full_Catalogue['CUBENAME'][current_galaxy_index]
+    extension =  list(os.path.splitext(cube_name))
+    if extension[1] == '.fits':
+        base = extension[0]
+    else:
+        base = cube_name
+        extension[1] = '.fits'
+    Configuration['BASE_NAME'] = f'{base}{fat_ext}'
+
     if not Configuration['SOFIA_BASENAME']:
         if 'BASENAME' in Full_Catalogue['ENTRIES']:
             Configuration['SOFIA_BASENAME'] = Full_Catalogue['BASENAME'][current_galaxy_index]
@@ -3557,8 +3567,11 @@ Therefore we remove the Create_FAT_Cube stages from the loop.
   
     if 'sofia_catalogue' in Configuration['FITTING_STAGES']:
         Configuration['INPUT_CUBE']= f"{Full_Catalogue['CUBENAME'][current_galaxy_index]}_FAT.fits"
-    else:        
-        Configuration['INPUT_CUBE']= f"{Full_Catalogue['CUBENAME'][current_galaxy_index]}"
+    else:
+        Configuration['INPUT_CUBE']= f"{base}{extension[1]}"
+        if zipped:
+            Configuration['INPUT_CUBE'] += '.gz'
+
     return(Configuration)
 set_individual_configuration.__doc__ =f'''
  NAME:
@@ -3593,6 +3606,9 @@ set_individual_configuration.__doc__ =f'''
 
 #Function to read FAT configuration file into a dictionary
 def setup_configuration(cfg):
+    Configuration = Proper_Dictionary({})
+    Configuration['ORIGINAL_CONFIGURATION'] = cfg
+ 
     if cfg.installation_check:
         cfg.fitting.fixed_parameters=['INCL','PA','SDIS']
         cfg.advanced.max_iterations= 1
@@ -3626,8 +3642,7 @@ def setup_configuration(cfg):
         cfg.fitting.catalogue_start_id= '-1'
         cfg.fitting.catalogue_end_id= '-1'
 
-    Configuration = Proper_Dictionary({})
-
+  
     for key in cfg._content:
         input_key = getattr(cfg,key)
 

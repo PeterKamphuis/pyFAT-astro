@@ -152,12 +152,7 @@ def main():
             if cfg.ncpu > psutil.cpu_count():
                 cfg.ncpu  = psutil.cpu_count()
 
-        #Let's write and input example to the main directory
-     
-        inputyml =  f'{cfg.input.main_directory}/FAT_Inputs-Run_{datetime.now().strftime("%H:%M:%S_%d-%m-%Y")}.yml'
-        with open(inputyml,'w') as default_write:
-            default_write.write(OmegaConf.to_yaml(cfg))
-
+    
 
         #Transform all to a Configuration dictionary
         Original_Configuration = sf.setup_configuration(cfg)

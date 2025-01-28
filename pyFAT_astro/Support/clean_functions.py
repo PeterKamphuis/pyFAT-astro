@@ -606,11 +606,11 @@ def finish_galaxy(Configuration,current_run = 'Not initialized',\
         if any([True if 'fit_' in x else False for x in Configuration['FITTING_STAGES']]):
             if not 'Fit_Make_Your_Own' in  Configuration['USED_FITTING']:
                 sf.create_directory('Finalmodel',Configuration['FITTING_DIR'])
-                from shutil import copyfile
+                #from shutil import copyfile
 
-                source = sf.get_system_string(f"{Configuration['FITTING_DIR']}{Configuration['USED_FITTING']}/{Configuration['USED_FITTING']}.def")
-                target = sf.get_system_string(f"{Configuration['FITTING_DIR']}/Before_finalTransfer.def")
-                copyfile(source, target )
+                #source = sf.get_system_string(f"{Configuration['FITTING_DIR']}{Configuration['USED_FITTING']}/{Configuration['USED_FITTING']}.def")
+                #target = sf.get_system_string(f"{Configuration['FITTING_DIR']}/Before_finalTransfer.def")
+                #copyfile(source, target )
                 if 'tirshaker' not in Configuration['FITTING_STAGES']:
                     transfer_errors(Configuration,fit_type=Configuration['USED_FITTING'])
                     #Also transfer the last fitting settings
@@ -618,9 +618,9 @@ def finish_galaxy(Configuration,current_run = 'Not initialized',\
                 linkname = f"../{Configuration['USED_FITTING']}/{Configuration['USED_FITTING']}"
                 os.symlink(f"{linkname}.fits",f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel.fits")
                 os.symlink(f"{linkname}.def",f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel.def")
-                source = sf.get_system_string(f"{Configuration['FITTING_DIR']}{Configuration['USED_FITTING']}/{Configuration['USED_FITTING']}.def")
-                target = sf.get_system_string(f"{Configuration['FITTING_DIR']}/Before_Overview.def")
-                copyfile(source, target )
+                #source = sf.get_system_string(f"{Configuration['FITTING_DIR']}{Configuration['USED_FITTING']}/{Configuration['USED_FITTING']}.def")
+                #target = sf.get_system_string(f"{Configuration['FITTING_DIR']}/Before_Overview.def")
+                #copyfile(source, target )
                 # We need to produce a FinalModel Directory with moment maps and an XV-Diagram of the model.
                 if Fits_Files and os.path.exists(f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel.fits"):
                     # we do not mask the model as it is also important where the model extends and there is no data.  

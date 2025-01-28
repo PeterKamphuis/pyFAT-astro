@@ -15,6 +15,7 @@ import pyFAT_astro.Support.support_functions as sf
 import pyFAT_astro.Support.write_functions as wf
 
 from datetime import datetime
+from omegaconf import OmegaConf
 from pyFAT_astro.Support.fat_errors import BadCatalogueError
 from pyFAT_astro.Support.log_functions import print_log,enter_recovery_point\
     ,update_statistics
@@ -166,8 +167,11 @@ def initialize_loop(Configuration):
 
     with open(Configuration['OUTPUTLOG'], 'w') as log:
         log.write(log_statement)
+    #Save the original input file
+    inputyml =  f'{Configuration["LOG_DIRECTORY"]}/FAT_Inputs-Run_{datetime.now().strftime("%H:%M:%S_%d-%m-%Y")}.yml'
+    with open(inputyml,'w') as default_write:
+        default_write.write(OmegaConf.to_yaml( Configuration['ORIGINAL_CONFIGURATION']))
 
-  
 
     Fits_Files['FITTING_CUBE'] = f"{Configuration['BASE_NAME']}.fits"
     Fits_Files['OPTIMIZED_CUBE'] = f"{Configuration['BASE_NAME']}_opt.fits"
@@ -288,7 +292,7 @@ def MP_initialize_sofia(Configuration,timing_lock,catalogue_lock):
                             timing_lock=timing_lock, catalogue_lock = catalogue_lock,
                             exiting=registered_exception)
     except Exception as e:
-        print(f"What going on {e}, {e.__class__.__name__} ")
+        print(f"What is going on? {e}, {e.__class__.__name__} ")
         succes =False
         if e.__class__.__name__ in Configuration['STOP_INDIVIDUAL_ERRORS']:
             Configuration['OUTPUT_QUANTITY'] = 5
