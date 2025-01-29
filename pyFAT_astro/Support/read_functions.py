@@ -167,28 +167,29 @@ check_edge_limits.__doc__ =f'''
 #Check wether the pa obtained from the intensity needs to be rotated
 def check_orientation_pa(Configuration,vel_map,pa, center=None):
     #First take an estimate rc
+  
     maj_profile,maj_axis,maj_resolution = sf.get_profile(Configuration,vel_map\
         ,pa[0], center=center)
-    
+
     #Take out the zero from the profile
     zeros = np.where(maj_profile == 0.)[0]
     maj_profile[zeros] = float('NaN')
 
     #If all values are NaN then we raise an error
     if all(np.isnan(maj_profile)):
-        raise BadSourceError(f'''CHECK_INTENSITY_PA: The RC extracted from the VF is all NaN's, this means something has gone very wrong.
+        raise BadSourceError(f'''CHECK_ORIENTATION_PA: The RC extracted from the VF is all NaN's, this means something has gone very wrong.
 {'':8s} Raising an error.
 ''')
     # Deterimen the loaction of the minimum and the maximum in the velocity profile
     loc_max = np.mean(maj_axis[np.where(maj_profile == np.nanmax(maj_profile))[0]])
     loc_min = np.mean(maj_axis[np.where(maj_profile == np.nanmin(maj_profile))[0]])
-    print_log(f'''CHECK_INTENSITY_PA: this is the max location {loc_max} and the minimum {loc_min}
+    print_log(f'''CHECK_ORIENTATION_PA: this is the max location {loc_max} and the minimum {loc_min}
 ''' , Configuration,case= ['debug_add'])
 
     # if the maximum is in the west we need to add 180. degree
     if loc_max > loc_min:
         pa[0] = pa[0]+180
-        print_log(f'''CHECK_INTENSITY_PA: We have modified the pa by 180 deg as we found the maximum velocity west of the minimum.
+        print_log(f'''CHECK_ORIENTATION_PA: We have modified the pa by 180 deg as we found the maximum velocity west of the minimum.
 ''' , Configuration)
     return pa
 check_orientation_pa.__doc__ =f'''
@@ -1016,12 +1017,21 @@ def load_intensity_map_and_noise(Configuration,Fits_Files, center = None):
     Image = fits.open(f"{Configuration['FITTING_DIR']}{Fits_Files['CHANNEL_MAP']}",\
             uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
     noise_map = np.sqrt(Image[0].data)*Configuration['NOISE']*Configuration['CHANNEL_WIDTH']
- 
+    if Configuration['DEBUG']:
+        fits.writeto(f"{Configuration['LOG_DIRECTORY']}noise_map.fits",noise_map,hdr,overwrite = True)
     #these guesses get thrown off for very large galaxies so smooth when we have those:
-    if Configuration['MAX_SIZE_IN_BEAMS'] > 20.:
-        sigma = sf.set_limits(Configuration['BEAM_IN_PIXELS'][0]*\
-            Configuration['MAX_SIZE_IN_BEAMS']/12.*2.,\
-            Configuration['BEAM_IN_PIXELS'][0],Configuration['BEAM_IN_PIXELS'][0]*5)
+    # Also smoothe if we are close to the noise level where we get mask issues
+    noise_map [0. > map ] =0.
+    median_noise_in_map = np.nanmedian(noise_map[noise_map > 0.])
+    minimum_noise_in_map = np.nanmin(noise_map[noise_map > 0.])
+    if Configuration['MAX_SIZE_IN_BEAMS'] > 20. or\
+        2.4*minimum_noise_in_map > median_noise_in_map:
+        if Configuration['MAX_SIZE_IN_BEAMS'] > 20.:
+            sigma = sf.set_limits(Configuration['BEAM_IN_PIXELS'][0]*\
+                Configuration['MAX_SIZE_IN_BEAMS']/12.*2.,\
+                Configuration['BEAM_IN_PIXELS'][0],Configuration['BEAM_IN_PIXELS'][0]*5)
+        else:
+            sigma = Configuration['BEAM_IN_PIXELS'][1]/2.
         print_log(f'''LOAD_MAPS_AND_NOISE: We are smoothing the maps with {sigma} pixels
 ''',Configuration,case= ['debug_add'])
         tmp =  ndimage.gaussian_filter(map, sigma=(sigma, sigma), order=0)
@@ -1034,13 +1044,14 @@ def load_intensity_map_and_noise(Configuration,Fits_Files, center = None):
         noise_map = copy.deepcopy(tmp)
         if Configuration['DEBUG']:
             fits.writeto(f"{Configuration['LOG_DIRECTORY']}smooth_noise_map.fits",noise_map,hdr,overwrite = True)
+        noise_map [0. > map ] =0.
+        median_noise_in_map = np.nanmedian(noise_map[noise_map > 0.])
+        minimum_noise_in_map = np.nanmin(noise_map[noise_map > 0.])
 
     Configuration['SNR'] = np.nanmean(map[noise_map > 0.]/noise_map[noise_map > 0.])
     #noise_hdr = Image[0].header
     Image.close()
-    noise_map [0. > map ] =0.
-    median_noise_in_map = np.nanmedian(noise_map[noise_map > 0.])
-    minimum_noise_in_map = np.nanmin(noise_map[noise_map > 0.])
+    
 
     # if we have extended low level wings that are significant we do not really want to include then
     map[0.5*minimum_noise_in_map > noise_map] = 0.
@@ -1178,6 +1189,7 @@ def moment0_orientation(Configuration,Fits_Files,mom0,scale_factor=None,
 ''',Configuration, case= ['verbose'])
     update_statistics(Configuration, message= "Starting the initial search for the pa, inclination and center.")
     while center_stable is False:
+       
         inclination_av, pa_av, maj_extent_av =\
             sf.get_inclination_pa(Configuration, mom0, center, \
             cutoff = scale_factor* median_noise_in_map)

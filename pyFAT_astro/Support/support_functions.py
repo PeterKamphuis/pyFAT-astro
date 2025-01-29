@@ -1500,7 +1500,7 @@ def fit_center_ellipse(Configuration,map,inclination= -1, pa = -1):
         map_to_fit[map < el_out ] = 0.
         y,x = np.where(map_to_fit == 1.)
         cx,cy,a,b, orient = fit_ellipse(Configuration,x,y)
-        if np.isnan(cx) or np.isnan(cx):
+        if np.isnan(cx) or np.isnan(cy):
             continue
         else:
             if a < b:
@@ -1508,7 +1508,6 @@ def fit_center_ellipse(Configuration,map,inclination= -1, pa = -1):
                 a = copy.deepcopy(b)
                 b = copy.deepcopy(tmp)
                 orient = orient-90.
-
 
             ratio = float(set_limits(b/a,0.2,1.0))
             inc = np.degrees(np.arccos(np.sqrt((ratio**2-0.2**2)/0.96)))
@@ -1570,16 +1569,18 @@ def fit_ellipse(Configuration,x,y):
         return float('NaN'),float('NaN'),float('NaN'),float('NaN'),float('NaN')
     n= np.argmax(eigen)
     # if we have more then 3 arguments then we have complex numbers which is pointless for our center
-    if n > 3:
-        return float('NaN'),float('NaN'),float('NaN'),float('NaN'),float('NaN')
+    #if n > 3:
+    #    return float('NaN'),float('NaN'),float('NaN'),float('NaN'),float('NaN')
     a=vec[:,n]
-        #-------------------Fit ellipse-------------------
+     # if we have complex numbers it is  is pointless for our center
+    if np.iscomplexobj(a):
+        return float('NaN'),float('NaN'),float('NaN'),float('NaN'),float('NaN')
+    #-------------------Fit ellipse-------------------
     b,c,d,f,g,a=a[1]/2., a[2], a[3]/2., a[4]/2., a[5], a[0]
     bb=b**2
-    num=b**2-a*c
+    num=b**2-a*c 
     new_x=(c*d-b*f)/num
     new_y=(a*f-b*d)/num
-
     angle=0.5*np.arctan(2*b/(a-c))*180/np.pi+90.
     up = 2*(a*f**2+c*d**2+g*bb-2*b*d*f-a*c*g)
     down1=(bb-a*c)*( (c-a)*np.sqrt(1+4*bb/((a-c)*(a-c)))-(c+a))
@@ -1970,7 +1971,7 @@ def get_inclination_pa(Configuration, Image, center, cutoff = 0.):
 ''',Configuration,case=['debug_start'])
         # now we need to get profiles under many angles let's say 100
         #extract the profiles under a set of angles
-        angles = np.linspace(0, 360, 180)
+        angles = np.linspace(0, 360, 180)     
         ratios, maj_extent = obtain_ratios(Configuration,map, center, angles,noise = cutoff)
         if np.any(np.isnan(ratios)):
             return [float('NaN'),float('NaN')],  [float('NaN'),float('NaN')],float('NaN')
@@ -2253,13 +2254,14 @@ get_kinematical_center.__doc__=f'''
 
 
 def get_profile(Configuration,map,angle,center = None):
-
+   
     if center is None:
         center = [len(map[0,:])/2.,len(map[:,0])/2.]
     x1,x2,y1,y2 = obtain_border_pix(Configuration,angle,center )
     linex,liney = np.linspace(x1,x2,1000), np.linspace(y1,y2,1000)
     resolution = np.sqrt((x2-x1)**2+(y2-y1)**2)/1000.
     #maj_resolution = abs((abs(x2-x1)/1000.)*np.sin(np.radians(pa[0])))+abs(abs(y2-y1)/1000.*np.cos(np.radians(pa[0])))
+  
     profile = ndimage.map_coordinates(map, np.vstack((liney,linex)),order=1)
     axis =  np.linspace(0,1000*resolution,1000)- (abs((abs(center[0]))*np.sin(np.radians(angle)))+abs(abs(center[1])*np.cos(np.radians(angle))))
     return profile,axis,resolution
@@ -2931,6 +2933,7 @@ def obtain_border_pix(Configuration,angle,center):
     # if the orginal angle was > 180 we need to give the line 180 deg rotation
     x = [x1,x2]
     y = [y1,y2]
+   
     if rotate:
         x.reverse()
         y.reverse()
@@ -2971,6 +2974,7 @@ def obtain_ratios(Configuration, map, center, angles, noise = 0. ):
     max_extent = 0.
     for angle in angles:
         #major axis
+      
         maj_profile,maj_axis,maj_resolution = get_profile(Configuration,map,angle,center=center )
         tmp = np.where(maj_profile > noise)[0]
         if tmp.shape[0] == 0.:
