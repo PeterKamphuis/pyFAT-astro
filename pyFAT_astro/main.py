@@ -205,19 +205,9 @@ def main():
                         AC1 = 'OS'
                         output_catalogue.write(f"{'Directory Name':<{Original_Configuration['MAXIMUM_DIRECTORY_LENGTH']}s} {AC1:>6s} {comment}\n")
 
-            if Original_Configuration['TIMING']:
+          
 
-                with open(Original_Configuration['MAIN_DIRECTORY']+'Timing_Result.txt','w') as timing_result:
-                    timing_result.write("Timing results for every section of the fit process for all galaxies.  \n")
-                # If we do this we should have 1 cpu to keep going
-                Original_Configuration['NCPU'] -= 1
-                system_monitor = full_system_tracking(Original_Configuration)
-                fst = threading.Thread(target=system_monitor.start_monitoring)
-                fst.start()
-
-                print(f"We are using {Original_Configuration['NCPU']} cpus for fitting and 1 for timing.")
-            else:
-                print(f"We are using {Original_Configuration['NCPU']} cpus.")
+              
             #if start_galaxy not negative then it is catalogue ID
             if Original_Configuration['CATALOGUE_START_ID'] in ['-1','-1.']:
                 Original_Configuration['CATALOGUE_START_ID'] = int(0)
@@ -233,6 +223,21 @@ def main():
             # start the main fitting loop
             if float(Original_Configuration['CATALOGUE_START_ID']) > float(Original_Configuration['CATALOGUE_END_ID']):
                 raise BadCatalogueError(f''' Your starting galaxy (Line nr = {Original_Configuration['CATALOGUE_START_ID']}) is listed after your ending galaxy (Line nr = {Original_Configuration['CATALOGUE_END_ID']}), maybe you have double catalogue ids?''')
+       
+        if Original_Configuration['TIMING']:
+            if Original_Configuration['RP_SECTION'] == 'START':
+                with open(Original_Configuration['MAIN_DIRECTORY']+'Timing_Result.txt','w') as timing_result:
+                    timing_result.write("Timing results for every section of the fit process for all galaxies.  \n")
+                # If we do this we should have 1 cpu to keep going
+                Original_Configuration['NCPU'] -= 1
+            system_monitor = full_system_tracking(Original_Configuration)
+            fst = threading.Thread(target=system_monitor.start_monitoring)
+            fst.start()
+            print(f"We are using {Original_Configuration['NCPU']} cpus for fitting and 1 for timing.")
+        else:
+            print(f"We are using {Original_Configuration['NCPU']} cpus.")
+           
+        
         #if we do recovery multiprocessing is turned off but the points should still be written       
         if Original_Configuration['MULTIPROCESSING']:
             Original_Configuration['VERBOSE_SCREEN'] = False
@@ -281,7 +286,7 @@ def main():
             # as in recovery we might be switching from MP to single reset PER_GALAXY_NCPU
             Original_Configuration['PER_GALAXY_NCPU'] = sf.set_limits(Original_Configuration['NCPU'],1,20)
             for current_galaxy_index in range(Original_Configuration['CATALOGUE_START_ID'], Original_Configuration['CATALOGUE_END_ID']):
-                if Original_Configuration['RECOVERY_POINT'] == 'START_0':
+                if Original_Configuration['RP_SECTION'] == 'START':
                     Configuration = sf.set_individual_configuration(current_galaxy_index,Full_Catalogue,Original_Configuration)
                 else:
                     Configuration = Original_Configuration
