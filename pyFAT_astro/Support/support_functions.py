@@ -108,7 +108,7 @@ def calc_rings(Configuration,size_in_beams = 0., ring_size  = 0.):
     print_log(f'''CALC_RINGS: We started with ring size = {ring_size} and the size in beams {size_in_beams}.
 {'':8s}The model will have {no_rings} rings and the rings are {'doubled' if Configuration['OUTER_RINGS_DOUBLED'] else 'not doubled'}.
 ''',Configuration,case= ['debug_add'])
-    return int(no_rings)
+    return float_to_int(no_rings)
 
 calc_rings.__doc__ =f'''
  NAME:
@@ -587,12 +587,12 @@ def check_tiltogram(Configuration, tiltogram,inner_min=3):
             if ring_location.size > 1:
                 ring_location = ring_location[0]
             if theta_inner[ring_location] < 5. and theta_mutual[ring_location] > 15.:
-                Configuration['INNER_FIX'][i] = int(set_limits(ring_location-1,inner_min,Configuration['NO_RINGS']*3./4.-1))
+                Configuration['INNER_FIX'][i] = float_to_int(set_limits(ring_location-1,inner_min,Configuration['NO_RINGS']*3./4.-1))
                 rings_found = True
             else:
                 diff[ring_location] = 0.
             if np.nansum(diff) == 0.:
-                Configuration['INNER_FIX'][i] = int(Configuration['NO_RINGS']*3./4.-1)
+                Configuration['INNER_FIX'][i] = float_to_int(Configuration['NO_RINGS']*3./4.-1)
                 rings_found = True
 
 check_tiltogram.__doc__ =f'''
@@ -1048,7 +1048,7 @@ convertRADEC.__doc__ =f'''
 
 def convert_type(array, type = 'float'):
     if type =='int':
-        return  [int(x) for x in array]
+        return  [float_to_int(x) for x in array]
     elif type =='str':
         return  [str(x) for x in array]
     else:
@@ -1790,6 +1790,11 @@ fit_gaussian.__doc__ =f'''
 
  NOTE:
 '''
+def float_to_int(value):
+    '''Convert a float to integer ensuring a correct rounding'''
+    if type(value) is str:
+        value = float(value)
+    return int(np.round(value))
 
 def gaussian_function(axis,peak,center,sigma):
     return peak*np.exp(-(axis-center)**2/(2*sigma**2))
@@ -1866,7 +1871,7 @@ def get_fit_groups(Configuration,Tirific_Template):
                     if in_rings.sort():
                         in_rings.sort()
                     in_rings[1] += 1
-                    current = [int(x) for x in range(*in_rings)]
+                    current = [x for x in range(*in_rings)]
                 else:
                     current = [int(part)]
                 if len(found_rings) == 0:
@@ -1983,10 +1988,10 @@ def get_inclination_pa(Configuration, Image, center, cutoff = 0.):
 
         max_index = np.where(ratios == np.nanmax(ratios))[0]
         if max_index.size > 1:
-            max_index =int(max_index[0])
+            max_index = max_index[0]
         min_index = np.where(ratios == np.nanmin(ratios))[0]
         if min_index.size > 1:
-            min_index =int(min_index[0])
+            min_index = min_index[0]
         #From here we know it is 1 value so lets set it to an integer    
         max_index = set_limits(int(max_index),2,177)
         min_index = set_limits(int(min_index),2,177)
@@ -2206,13 +2211,13 @@ def get_kinematical_center(Configuration,map,angle,center = None ):
         angle = angle+90.
     else:
         angle= angle-90.
-    buffer = int(round(np.mean(Configuration['BEAM_IN_PIXELS'][:2])/3.))
+    buffer = float_to_int(np.mean(Configuration['BEAM_IN_PIXELS'][:2])/3.)
     min_axis_prof, min_axis, min_res = get_profile(Configuration,map,angle,center= center )
     found_vsys = [np.nanmean(min_axis_prof),0,0]
     found_diff=  abs(np.nanmin(min_axis_prof)-np.nanmax(min_axis_prof))+ np.nansum([abs(x-found_vsys[0]) for x in min_axis_prof])
     for x in range(-buffer,buffer):
         for y in range(-buffer,buffer):
-                var_center = [int(round(center[0]+x)),int(round(center[1]+y))]
+                var_center = [float_to_int(center[0]+x),float_to_int(center[1]+y)]
                 min_axis_prof, min_axis, min_res = get_profile(Configuration,map,angle,center= var_center )
                 var_diff=  abs(np.nanmin(min_axis_prof)-np.nanmax(min_axis_prof))+np.nansum([abs(x-np.nanmean(min_axis_prof)) for x in min_axis_prof])
                 if var_diff < found_diff:
@@ -3241,8 +3246,8 @@ rename_fit_products.__doc__ =f'''
 
 #function to rotate an image without losing info
 def rotateImage(Configuration,image, angle, pivot):
-    padX = [int(image.shape[1] - pivot[0]), int(pivot[0])]
-    padY = [int(image.shape[0] - pivot[1]), int(pivot[1])]
+    padX = [float_to_int(image.shape[1] - pivot[0]), float_to_int(pivot[0])]
+    padY = [float_to_int(image.shape[0] - pivot[1]), float_to_int(pivot[1])]
     imgP = np.pad(image, [padY, padX], 'constant')
     imgR = ndimage.rotate(imgP, angle, axes=(1, 0), reshape=False)
     return imgR[padY[0]: -padY[1], padX[0]: -padX[1]]
@@ -4193,9 +4198,9 @@ def set_ring_size(Configuration,requested_ring_size = 0., size_in_beams = 0., \
 {"":8s}SET_RING_SIZE: This is not enough for a fit.
 ''',Configuration,case=['main','screen'])
             raise SmallSourceError('This source is too small to reliably fit.')
-        Configuration['NO_RINGS'] = int(no_rings)
+        Configuration['NO_RINGS'] = no_rings
         Configuration['RING_SIZE'] = ring_size
-    return ring_size,int(no_rings)
+    return ring_size, no_rings
 
 set_ring_size.__doc__ =f'''
  NAME:

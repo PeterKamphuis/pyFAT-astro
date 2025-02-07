@@ -15,10 +15,10 @@ import threading
 
 from datetime import datetime
 from multiprocessing import Pool,get_context,Lock,Manager
-from omegaconf import OmegaConf
+
 from pyFAT_astro.FAT_Galaxy_Loop import FAT_Galaxy_Loop,MP_initialize_sofia,\
                                         MP_Fitting_Loop
-from pyFAT_astro.config.defaults import defaults
+from pyFAT_astro.config.defaults import process_input
 from pyFAT_astro.Support.fat_errors import ProgramError,BadCatalogueError,InputError
 from pyFAT_astro.Support.write_functions import reorder_output_catalogue
 from pyFAT_astro.Support.log_functions import full_system_tracking
@@ -27,12 +27,7 @@ def warn_with_traceback(message, category, filename, lineno, file=None, line=Non
     log = file if hasattr(file,'write') else sys.stderr
     traceback.print_stack(file=log)
     log.write(warnings.formatwarning(message, category, filename, lineno, line))
-try:
-    from importlib.resources import files as import_pack_files
-except ImportError:
-    # Try backported to PY<37 `importlib_resources`.
-    # For Py<3.9 files is not available
-    from importlib_resources import files as import_pack_files
+
 
 
 # String syntax ''' '''for multiline strings. " " for string without break and ' ' for indexing dictionaries
@@ -51,99 +46,8 @@ def main():
         print(f"This is version {pyFAT_astro.__version__} of pyFAT.")
         if pyFAT_astro.__branch__:
             print(f"This is a github distribution and we are on the branch {pyFAT_astro.__branch__}.")
-
-        if '-v' in argv or '--version' in argv:
-            #print(f"This is version {pyFAT_astro.__version__} of the program.")
-            #if pyFAT_astro.__branch__:
-            #    print(f"This is a github distribution and we are on the branch {pyFAT_astro.__branch__}.")
-            sys.exit()
-
-
-        help_message = '''
-        Use pyFAT in this way for batch fitting:
-
-            pyFAT configuration_file=FAT_Input.yml
-
-        where configuration_file specifies a yaml file with specific settings
-        such as the catalog.
-
-        For fitting use pyFAT in this way:
-
-            pyFAT cube_name=Input_Cube.fits
-
-        Where Input_Cube.fits is the observation to be fitted. In this mode
-        configuration_file can still be used to specify fit settings but
-        catalogue and location setting will be ignored.
-
-            pyFAT -h
-
-        prints this message.
-
-            pyFAT print_examples=True
-
-        prints a yaml file (FAT_defaults.yml)  with the default values for all
-        possible fitting parameters and an example input catalogue (FAT_Example_Catalogue.txt).
-        The files are printed in the current working directory. In the yaml
-        file values designated ??? indicated values without defaults.
-
-        All config parameters can be set directly from the command e.g:
-
-            pyFAT cube_name=Input_Cube.fits fitting.ring_size=1.5 'fitting.fixed_parameters=[INCL,SDIS]'
-
-        You can test your installation with:
-
-            pyFAT installation_check=True
-
-        '''
-
-        if '-h' in argv or '--help' in argv:
-            print(help_message)
-            sys.exit()
-
-        cfg = OmegaConf.structured(defaults)
-        if cfg.ncpu == psutil.cpu_count():
-            cfg.ncpu -= 1
-
-        # read command line arguments anything list input should be set in '' e.g. pyROTMOD 'rotmass.MD=[1.4,True,True]'
-        inputconf = OmegaConf.from_cli(argv)
-        cfg_input = OmegaConf.merge(cfg,inputconf)
-        if cfg_input.print_examples:
-            no_cube = OmegaConf.masked_copy(cfg, ['ncpu','input','output',\
-                'fitting','advanced'])
-            with open('FAT_defaults.yml','w') as default_write:
-                default_write.write(OmegaConf.to_yaml(no_cube))
-            my_resources = import_pack_files('pyFAT_astro.config')
-            data = (my_resources / 'FAT_Input_Catalogue.txt').read_bytes()
-            with open('FAT_Example_Catalogue.txt','w+b') as default_write:
-                default_write.write(data)
-
-            print(f'''We have printed the file FAT_defaults.yml FAT_Input_Catalogue.txt in {os.getcwd()}.
-''')
-            sys.exit()
-
-        if cfg_input.configuration_file:
-            succes = False
-            while not succes:
-                try:
-                    yaml_config = OmegaConf.load(cfg_input.configuration_file)
-            #merge yml file with defaults
-                    cfg = OmegaConf.merge(cfg,yaml_config)
-                    succes = True
-                except FileNotFoundError:
-                    cfg_input.configuration_file = input(f'''
-    You have provided a config file ({cfg_input.configuration_file}) but it can't be found.
-    If you want to provide a config file please give the correct name.
-    Else press CTRL-C to abort.
-    configuration_file = ''')
-
-
-
-        cfg = OmegaConf.merge(cfg,inputconf)
-       
-        if not any([cfg.cube_name, cfg.configuration_file, cfg.installation_check\
-                    ,cfg.print_examples,cfg.input.catalogue]):
-            print(help_message)
-            sys.exit()
+        cfg =process_input(argv)
+        
         # if we set more cpus than available we limit to the available cpus
         try:
             if cfg.ncpu > len(psutil.Process().cpu_affinity()):

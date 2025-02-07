@@ -83,7 +83,7 @@ def arc_tan_sdis_function(axis,center,length,amplitude,mean):
     # to prevent instant turnover
     c = axis[-1]*0.1
     #and the turnover has to be beyon 20*of the inner part
-    c2 = sf.set_limits(axis[-1]*0.2,axis[2],axis[int(len(axis)/1.5)])
+    c2 = sf.set_limits(axis[-1]*0.2,axis[2],axis[sf.float_to_int(len(axis)/1.5)])
     return -1*np.arctan((axis-(c2+abs(center)))/(c+abs(length)))*abs(amplitude)/np.pi + abs(mean)
 arc_tan_sdis_function.__doc__ =f'''
  NAME:
@@ -119,7 +119,7 @@ def arc_tan_function(axis,center,length,amplitude,mean):
     # to prevent instant turnover
     c = axis[-1]*0.2
     #and the turnover has to be beyon 20*of the inner part
-    c2 = sf.set_limits(axis[-1]*0.2,axis[2],axis[int(len(axis)/1.5)])
+    c2 = sf.set_limits(axis[-1]*0.2,axis[2],axis[sf.float_to_int(len(axis)/1.5)])
     return np.arctan((axis-(c2+abs(center)))/(c+abs(length)))*amplitude/np.pi + abs(mean)
 arc_tan_function.__doc__ =f'''
  NAME:
@@ -230,7 +230,7 @@ def calc_new_size(Configuration,Tirific_Template,radii,sbr_in,sbr_ring_limits ):
                 new_size[i]= copy.deepcopy(this_size)
         if Configuration['FIX_RING_SIZE']:
             real_size = new_size[i]-1./5.
-            rings = int(real_size/Configuration['RING_SIZE'])
+            rings = sf.float_to_int(real_size/Configuration['RING_SIZE'])
             new_size[i] = rings * Configuration['RING_SIZE']+1./5.
         if new_size[i] < Configuration['TOO_SMALL_GALAXY']:
              new_size[i] = Configuration['TOO_SMALL_GALAXY']
@@ -875,7 +875,7 @@ find_parameters_and_rings.__doc__ = '''
 '''
 
 def fit_arc(Configuration,radii,sm_profile,error, function_to_fit,key ):
-    c2 = sf.set_limits(radii[-1]*0.2,radii[2],radii[int(len(radii)/1.5)])
+    c2 = sf.set_limits(radii[-1]*0.2,radii[2],radii[sf.float_to_int(len(radii)/1.5)])
     est_center = radii[-1]/2.-c2
     est_length = radii[-1]*0.1
     if key in ['SDIS']:
@@ -892,7 +892,7 @@ def fit_arc(Configuration,radii,sm_profile,error, function_to_fit,key ):
     with warnings.catch_warnings():
         warnings.simplefilter("error")
         succes = False
-        maxfev= int(100*(len(radii)))
+        maxfev= 100*(len(radii))
 
         while not succes:
 
@@ -910,7 +910,7 @@ def fit_arc(Configuration,radii,sm_profile,error, function_to_fit,key ):
                 split_error = str(e)
                 if 'Optimal parameters not found: Number of calls to function has reached maxfev' in \
                     split_error:
-                    maxfev += 100*int(len(radii))
+                    maxfev += 100*len(radii)
                     print_log(f'''FIT_ARC: We failed to find an optimal fit due to the maximum number of evaluations. increasing maxfev to {maxfev}
 ''',Configuration,case= ['debug_add'])
                 else:
@@ -986,19 +986,19 @@ def fit_polynomial(Configuration,radii,profile,error, key, \
         fixed = 1
 
     if len(radii) > 10.:
-        start_order = int(len(radii)/5.)
+        start_order = sf.float_to_int(len(radii)/5.)
     else:
         start_order = 0
 
 
 
-    st_fit = int(0)
+    st_fit = 0
     if key in ['VROT']:
-        bound_fit = int(1)
+        bound_fit = 1
         if np.mean(profile[1:3]) > 120.:
             if zero_point == None:
                 zero_point = np.mean(profile[1:3])
-            st_fit = int(1)
+            st_fit = 1
 
         #This needs another -1 because the 0 and 1/5. ring are more or less 1 ring
         max_order = sf.set_limits(len(radii)-fixed-2,3,8)
@@ -1013,7 +1013,7 @@ def fit_polynomial(Configuration,radii,profile,error, key, \
         start_order = sf.set_limits(start_order,lower_limit,max_order)
 
     else:
-        bound_fit = int(0)
+        bound_fit = 0
         if key in ['PA']:
             max_order = sf.set_limits(len(radii)-2,4,8)
             start_order = 3  
@@ -1243,7 +1243,7 @@ def fix_outer_rotation(Configuration,profile):
     if Configuration['RC_UNRELIABLE'] < Configuration['NO_RINGS']-1 and np.mean(profile[1:3]) > 180.:
         profile[Configuration['RC_UNRELIABLE']:] = profile[Configuration['RC_UNRELIABLE']-1]
 
-    for i in range(int(Configuration['NO_RINGS']*3./4),Configuration['NO_RINGS']-1):
+    for i in range(sf.float_to_int(Configuration['NO_RINGS']*3./4),Configuration['NO_RINGS']-1):
         if profile[i+1] > profile[i]*1.3:
             profile[i+1] = profile[i]*1.3
 
@@ -1341,7 +1341,7 @@ def fix_profile(Configuration, key, profile, Tirific_Template = None,\
         if key == 'VROT':
             profile[i] =fix_outer_rotation(Configuration,profile[i])
         elif inner_fix[i] != 0:
-            xrange = sf.set_limits((int(round(len(profile[0])-5.)/4.)),1,4)
+            xrange = sf.set_limits(sf.float_to_int((len(profile[0])-5.)/4.),1,4)
         # need to make sure this connects smoothly
             for x in range(0,xrange):
                 if inner_fix[i]+x < len(profile[i,:]):
@@ -1353,7 +1353,7 @@ def fix_profile(Configuration, key, profile, Tirific_Template = None,\
 ''', Configuration,case=['debug_add'])
         #profile[:,:Configuration['INNER_FIX']] = np.nanmean(profile[:,:Configuration['INNER_FIX']])
         if key in ['SDIS']:
-            inner_max = np.nanmax(profile[i,:int(len(profile[i,:])/2.)])
+            inner_max = np.nanmax(profile[i,:sf.float_to_int(len(profile[i,:])/2.)])
             mean = np.nanmean(profile[i,:])
             if inner_mean < mean or inner_mean < np.nanmean(profile[i,-3:]):
                 ind = np.where(profile[i,:] == inner_max)[0]
@@ -1624,8 +1624,8 @@ def fix_vrot_for_incl_change(Configuration,Tirific_Template, \
         new_vrot[i] = np.array([x/np.sin(np.radians(y)) for x,y in zip(vobs,incl_modified[i])],dtype=float)
     vrot = np.array([np.mean([x,y]) for x,y in zip(new_vrot[0],new_vrot[1])],dtype=float)
     format = sf.set_format("VROT")
-    Tirific_Template["VROT"]= f"{' '.join([f'{x:{format}}' for x in vrot[:int(Configuration['NO_RINGS'])]])}"
-    Tirific_Template[f"VROT_2"]= f"{' '.join([f'{x:{format}}' for x in vrot[:int(Configuration['NO_RINGS'])]])}"
+    Tirific_Template["VROT"]= f"{' '.join([f'{x:{format}}' for x in vrot[:Configuration['NO_RINGS']]])}"
+    Tirific_Template[f"VROT_2"]= f"{' '.join([f'{x:{format}}' for x in vrot[:Configuration['NO_RINGS']]])}"
 
 fix_vrot_for_incl_change.__doc__ =f'''
  NAME:
@@ -1860,7 +1860,7 @@ def get_number_of_rings(Configuration,sbr,sbr_ring_limits ):
     if np.all(difference_with_limit[:,-1] < 0.):
         print_log(f'''GET_NUMBER_OF_RINGS: both last rings are below the limit
 ''',Configuration,case=['debug_start'])
-        for i in range(len(difference_with_limit[0,:])-1,int(new_rings/2.),-1):
+        for i in range(len(difference_with_limit[0,:])-1,sf.float_to_int(new_rings/2.),-1):
             print_log(f'''GET_NUMBER_OF_RINGS: Checking ring {i}
 ''',Configuration,case=['debug_add'])
             if np.all(difference_with_limit[:,i] < 0.):
@@ -2027,13 +2027,13 @@ def get_warp_slope(Configuration,Tirific_Template):
         if final < 2:
             final = 2
 
-        warp_slope[i] = int(final)
+        warp_slope[i] = final
     print_log(f'''GET_WARP_SLOPE: We find a slope of {warp_slope}.
 ''', Configuration,case=['debug_add'])
     Configuration['WARP_SLOPE'] = warp_slope
     incl = sf.load_tirific(Configuration,Tirific_Template,Variables=['INCL','INCL_2'],\
             array=True)
-    if np.mean(incl[:,:int(Configuration['NO_RINGS']/2.)]) < 35. :
+    if np.mean(incl[:,:sf.float_to_int(Configuration['NO_RINGS']/2.)]) < 35. :
         if 'INCL' not in Configuration['FIXED_PARAMETERS'][0]:
             Configuration['FIXED_PARAMETERS'][0].append('INCL')
     else:
@@ -2239,7 +2239,7 @@ def no_declining_vrot(Configuration, Tirific_Template, profile = None):
         print_log(f'''NO_DECLINING_VROT: We shan't adapt the RC
 ''',Configuration,case=['debug_add'])
     else:
-        for i in range(int(len(profile)/2.),len(profile)-1):
+        for i in range(sf.float_to_int(len(profile)/2.),len(profile)-1):
             if profile[i+1] < profile[i]:
                 profile[i:] =profile[i]
                 print_log(f'''NO_DECLINING_VROT: Flattening from ring {i} on.)
@@ -2250,7 +2250,7 @@ def no_declining_vrot(Configuration, Tirific_Template, profile = None):
     #and we check that the last parts are not declining too much in anycase
     # For galaxies with more than 10 rings let's make sure the last quarter is not declinining steeply
     if Configuration['NO_RINGS'] > 10:
-        for i in range(int(Configuration['NO_RINGS']*3./4),Configuration['NO_RINGS']-1):
+        for i in range(sf.float_to_int(Configuration['NO_RINGS']*3./4),Configuration['NO_RINGS']-1):
             if profile[i+1] < profile[i]*0.85:
                 profile[i+1] = profile[i]*0.85
     else:
@@ -2388,10 +2388,10 @@ def regularise_profile(Configuration,Tirific_Template, key,min_error= None, \
     format = sf.set_format(key)
 
     if not no_apply:
-        Tirific_Template[key]= f"{' '.join([f'{x:{format}}' for x in profile[0,:int(Configuration['NO_RINGS'])]])}"
-        Tirific_Template[f"{key}_2"]= f"{' '.join([f'{x:{format}}' for x in profile[1,:int(Configuration['NO_RINGS'])]])}"
-        Tirific_Template.insert(key,f"# {key}_ERR",f"{' '.join([f'{x:{format}}' for x in error[0,:int(Configuration['NO_RINGS'])]])}")
-        Tirific_Template.insert(f"{key}_2",f"# {key}_2_ERR",f"{' '.join([f'{x:{format}}' for x in error[1,:int(Configuration['NO_RINGS'])]])}")
+        Tirific_Template[key]= f"{' '.join([f'{x:{format}}' for x in profile[0,:Configuration['NO_RINGS']]])}"
+        Tirific_Template[f"{key}_2"]= f"{' '.join([f'{x:{format}}' for x in profile[1,:Configuration['NO_RINGS']]])}"
+        Tirific_Template.insert(key,f"# {key}_ERR",f"{' '.join([f'{x:{format}}' for x in error[0,:Configuration['NO_RINGS']]])}")
+        Tirific_Template.insert(f"{key}_2",f"# {key}_2_ERR",f"{' '.join([f'{x:{format}}' for x in error[1,:Configuration['NO_RINGS']]])}")
         #if key in ['INCL'] and np.mean( profile[:,int(Configuration['NO_RINGS']/2.):int(Configuration['NO_RINGS'])]) < 40.:
         #    fix_vrot_for_incl_change(Configuration,Tirific_Template,original,profile)
 
@@ -2669,10 +2669,10 @@ def regularise_warp(Configuration,Tirific_Template, min_error = None, \
                     min_error=min_error[i])
         format = sf.set_format(key)
         if not no_apply:
-            Tirific_Template[key]= f"{' '.join([f'{x:{format}}' for x in profile[2*i,:int(Configuration['NO_RINGS'])]])}"
-            Tirific_Template[f"{key}_2"]= f"{' '.join([f'{x:{format}}' for x in profile[2*i+1,:int(Configuration['NO_RINGS'])]])}"
-            Tirific_Template.insert(key,f"# {key}_ERR",f"{' '.join([f'{x:{format}}' for x in error[2*i,:int(Configuration['NO_RINGS'])]])}")
-            Tirific_Template.insert(f"{key}_2",f"# {key}_2_ERR",f"{' '.join([f'{x:{format}}' for x in error[2*i+1,:int(Configuration['NO_RINGS'])]])}")
+            Tirific_Template[key]= f"{' '.join([f'{x:{format}}' for x in profile[2*i,:Configuration['NO_RINGS']]])}"
+            Tirific_Template[f"{key}_2"]= f"{' '.join([f'{x:{format}}' for x in profile[2*i+1,:Configuration['NO_RINGS']]])}"
+            Tirific_Template.insert(key,f"# {key}_ERR",f"{' '.join([f'{x:{format}}' for x in error[2*i,:Configuration['NO_RINGS']]])}")
+            Tirific_Template.insert(f"{key}_2",f"# {key}_2_ERR",f"{' '.join([f'{x:{format}}' for x in error[2*i+1,:Configuration['NO_RINGS']]])}")
 
             print_log(f'''REGULARISE_WARP: This has gone to the template.
 {'':8s}{key} = {Tirific_Template[key]}
@@ -2923,10 +2923,10 @@ set_cflux.__doc__ =f'''
 '''
 
 def set_errors(Configuration,Tirific_Template,key,min_error = 0.):
-    error = np.full((2,int(Configuration['NO_RINGS'])),min_error)
+    error = np.full((2,Configuration['NO_RINGS']),min_error)
     format=sf.set_format(key)
-    Tirific_Template.insert(key,f"# {key}_ERR",f"{' '.join([f'{x:{format}}' for x in error[0,:int(Configuration['NO_RINGS'])]])}")
-    Tirific_Template.insert(f"{key}_2",f"# {key}_2_ERR",f"{' '.join([f'{x:{format}}' for x in error[1,:int(Configuration['NO_RINGS'])]])}")
+    Tirific_Template.insert(key,f"# {key}_ERR",f"{' '.join([f'{x:{format}}' for x in error[0,:Configuration['NO_RINGS']]])}")
+    Tirific_Template.insert(f"{key}_2",f"# {key}_2_ERR",f"{' '.join([f'{x:{format}}' for x in error[1,:Configuration['NO_RINGS']]])}")
 
     print_log(f'''SET_ERRORS: This has gone to the template.
 {'':8s}# {key}_ERR ={Tirific_Template[f"# {key}_ERR"]}
@@ -3202,14 +3202,14 @@ def set_fitting_parameters(Configuration, Tirific_Template, \
 
 
                 if stage in ['initialize_os']:
-                    inner = int(sf.set_limits(Configuration['NO_RINGS']*1./3., 3,Configuration['NO_RINGS']-2 ))
+                    inner = sf.float_to_int(sf.set_limits(Configuration['NO_RINGS']*1./3., 3,Configuration['NO_RINGS']-2 ))
                 else:
                     inner =  Configuration['INNER_FIX']
             elif key in ['SDIS']:
                 flat_slope = True
                 symmetric = True
-                inner = int(sf.set_limits(Configuration['NO_RINGS']*0.33,4,Configuration['NO_RINGS']*0.5))
-                slope = [int(Configuration['NO_RINGS']*0.66),int(Configuration['NO_RINGS']*0.66)]
+                inner = sf.float_to_int(sf.set_limits(Configuration['NO_RINGS']*0.33,4,Configuration['NO_RINGS']*0.5))
+                slope = [sf.float_to_int(Configuration['NO_RINGS']*0.66),sf.float_to_int(Configuration['NO_RINGS']*0.66)]
             else:
                 inner = 4
                 slope = [None ,None ]
@@ -3217,10 +3217,10 @@ def set_fitting_parameters(Configuration, Tirific_Template, \
             if key in ['SDIS','INCL']:
                 fact = sf.set_limits(float(initial_estimates['INCL'][0])/20.-2.5,1.,2.)
                 try:
-                    inner[0] = int(sf.set_limits(inner[0]*fact,4,Configuration['NO_RINGS']/2.))
-                    inner[1] = int(sf.set_limits(inner[1]*fact,4,Configuration['NO_RINGS']/2.))
+                    inner[0] = sf.float_to_int(sf.set_limits(inner[0]*fact,4,Configuration['NO_RINGS']/2.))
+                    inner[1] = sf.float_to_int(sf.set_limits(inner[1]*fact,4,Configuration['NO_RINGS']/2.))
                 except TypeError:
-                    inner = int(sf.set_limits(inner*fact,4,Configuration['NO_RINGS']/2.))
+                    inner = sf.float_to_int(sf.set_limits(inner*fact,4,Configuration['NO_RINGS']/2.))
             # set the moderate value
             moderate = set_generic_moderate(Configuration,key)
             #If we do a single disk then symmetric is always true
@@ -3525,7 +3525,7 @@ def set_model_parameters(Configuration, Tirific_Template,Model_Values, \
             if len(Model_Values[key]) == 2:
                 Tirific_Template[key_to_set]= f"{Model_Values[key][0]+scramble[parameters_to_set.index(key)]:{format}}"
             else:
-                Tirific_Template[key_to_set]= f"{' '.join([f'{x+scramble[parameters_to_set.index(key)]:{format}}' for x in Model_Values[key][:int(Configuration['NO_RINGS'])]])}"
+                Tirific_Template[key_to_set]= f"{' '.join([f'{x+scramble[parameters_to_set.index(key)]:{format}}' for x in Model_Values[key][:Configuration['NO_RINGS']]])}"
             if key_to_set != 'RADI':
                 key_write = f"{key_to_set}_2"
                 if f"{key}_2" in Model_Values:
@@ -3533,7 +3533,7 @@ def set_model_parameters(Configuration, Tirific_Template,Model_Values, \
                 if len(Model_Values[key]) == 2:
                     Tirific_Template[key_write]= f"{Model_Values[key][0]+scramble[parameters_to_set.index(key)]:{format}}"
                 else:
-                    Tirific_Template[key_write]= f"{' '.join([f'{x+scramble[parameters_to_set.index(key)]:{format}}' for x in Model_Values[key][:int(Configuration['NO_RINGS'])]])}"
+                    Tirific_Template[key_write]= f"{' '.join([f'{x+scramble[parameters_to_set.index(key)]:{format}}' for x in Model_Values[key][:Configuration['NO_RINGS']]])}"
 
             check_parameters.append(key)
         else:
@@ -3563,8 +3563,8 @@ def set_model_parameters(Configuration, Tirific_Template,Model_Values, \
                         Tirific_Template[key]= f"{Model_Values['RA'][0]:.8e}"
                         Tirific_Template[f"{key}_2"]= f"{Model_Values['RA'][0]:.8e}"
                     else:
-                        Tirific_Template[key]= f"{' '.join([f'{x:.8e}' for x in Model_Values['RA'][:int(Configuration['NO_RINGS'])]])}"
-                        Tirific_Template[f"{key}_2"]= f"{' '.join([f'{x:.8e}' for x in Model_Values['RA'][:int(Configuration['NO_RINGS'])]])}"
+                        Tirific_Template[key]= f"{' '.join([f'{x:.8e}' for x in Model_Values['RA'][:Configuration['NO_RINGS']]])}"
+                        Tirific_Template[f"{key}_2"]= f"{' '.join([f'{x:.8e}' for x in Model_Values['RA'][:Configuration['NO_RINGS']]])}"
                     check_parameters.append('XPOS')
             elif key == 'YPOS':
                 if 'DEC' in Model_Values:
@@ -3572,8 +3572,8 @@ def set_model_parameters(Configuration, Tirific_Template,Model_Values, \
                         Tirific_Template[key]= f"{Model_Values['DEC'][0]:.8e}"
                         Tirific_Template[f"{key}_2"]= f"{Model_Values['DEC'][0]:.8e}"
                     else:
-                        Tirific_Template[key]= f"{' '.join([f'{x:.8e}' for x in Model_Values['DEC'][:int(Configuration['NO_RINGS'])]])}"
-                        Tirific_Template[f"{key}_2"]=f"{' '.join([f'{x:.8e}' for x in Model_Values['DEC'][:int(Configuration['NO_RINGS'])]])}"
+                        Tirific_Template[key]= f"{' '.join([f'{x:.8e}' for x in Model_Values['DEC'][:Configuration['NO_RINGS']]])}"
+                        Tirific_Template[f"{key}_2"]=f"{' '.join([f'{x:.8e}' for x in Model_Values['DEC'][:Configuration['NO_RINGS']]])}"
                     check_parameters.append('YPOS')
 
 
@@ -3587,8 +3587,8 @@ def set_model_parameters(Configuration, Tirific_Template,Model_Values, \
     #make sure that the first value in VROT = 0
     vrot = Tirific_Template['VROT'].split()
     if float(vrot[0]) != 0.:
-        Tirific_Template['VROT']=f" 0. {' '.join([f'{x}' for x in vrot[:int(Configuration['NO_RINGS']-1)]])}"
-        Tirific_Template['VROT_2']=f" 0. {' '.join([f'{x}' for x in vrot[:int(Configuration['NO_RINGS']-1)]])}"
+        Tirific_Template['VROT']=f" 0. {' '.join([f'{x}' for x in vrot[:Configuration['NO_RINGS']-1]])}"
+        Tirific_Template['VROT_2']=f" 0. {' '.join([f'{x}' for x in vrot[:Configuration['NO_RINGS']-1]])}"
     no_declining_vrot(Configuration, Tirific_Template)
 set_model_parameters.__doc__ =f'''
  NAME:
@@ -3690,7 +3690,7 @@ def set_new_size(Configuration,Tirific_Template, fit_type = 'Undefined',
           
             if len(parameters[i]) > Configuration['NO_RINGS']-1:
                 # if we are cutting a ring it is likely the outer ring have done weird stuff so we flatten the curve
-                Tirific_Template[key] =f" {' '.join([f'{x:{format}}' for x in parameters[i][:int(Configuration['NO_RINGS'])]])}"
+                Tirific_Template[key] =f" {' '.join([f'{x:{format}}' for x in parameters[i][:Configuration['NO_RINGS']]])}"
 
             elif len(parameters[i]) <= Configuration['NO_RINGS']-1:
                 # We simply add the last value
@@ -4165,11 +4165,11 @@ def set_vrot_fitting(Configuration, stage = 'initial', rotation = None):
             forvarindex = 'VROT 2 VROT_2 2 '
         if Configuration['OUTER_SLOPE_START'] == NUR:
             if Configuration['NO_RINGS'] > 5:
-                inner_slope =  int(round(sf.set_limits(Configuration['RC_UNRELIABLE'],round(NUR/2.),NUR-1)))
+                inner_slope = sf.float_to_int(sf.set_limits(Configuration['RC_UNRELIABLE'],round(NUR/2.),NUR-1))
             else:
                 inner_slope = NUR
-            if Configuration['NO_RINGS'] > 15 and inner_slope > int(Configuration['NO_RINGS']*4./5.) :
-                inner_slope = int(Configuration['NO_RINGS']*4./5.)
+            if Configuration['NO_RINGS'] > 15 and inner_slope > sf.float_to_int(Configuration['NO_RINGS']*4./5.) :
+                inner_slope = sf.float_to_int(Configuration['NO_RINGS']*4./5.)
             Configuration['OUTER_SLOPE_START'] = inner_slope
         else:
             inner_slope = Configuration['OUTER_SLOPE_START']
@@ -4396,10 +4396,10 @@ def smooth_profile(Configuration,Tirific_Template,key,min_error = 0.  \
         else:
             singular_profile = savgol_filter(singular_profile, 9, 4)
         if fix_sbr_call:
-            below_zero = np.where(singular_profile[:int(len(profile)/2.)] < 0.)[0]
+            below_zero = np.where(singular_profile[:sf.float_to_int(len(profile)/2.)] < 0.)[0]
             if below_zero.size > 0.:
                 singular_profile[below_zero] = min_error[i,below_zero]
-            below_zero = np.where(singular_profile[int(len(profile)/2.):] < 0.)[0]+1
+            below_zero = np.where(singular_profile[sf.float_to_int(len(profile)/2.):] < 0.)[0]+1
             if below_zero.size > 0.:
                 singular_profile[below_zero] = singular_profile[below_zero-1]/2.
         if key in ['THETA_FACTOR','PHI_FACTOR']:
@@ -4436,10 +4436,10 @@ def smooth_profile(Configuration,Tirific_Template,key,min_error = 0.  \
             # Check whether it should be flat
             profile,errors =modify_flat(Configuration,profile,original_profile,errors,key,inner_fix=inner_fixed)
 
-        Tirific_Template[key]= f"{' '.join([f'{x:{format}}' for x in profile[0,:int(Configuration['NO_RINGS'])]])}"
+        Tirific_Template[key]= f"{' '.join([f'{x:{format}}' for x in profile[0,:Configuration['NO_RINGS']]])}"
         Tirific_Template[f"{key}_2"]= f"{' '.join([f'{x:{format}}' for x in profile[1,:int(Configuration['NO_RINGS'])]])}"
-        Tirific_Template.insert(key,f"# {key}_ERR",f"{' '.join([f'{x:{format}}' for x in errors[0,:int(Configuration['NO_RINGS'])]])}")
-        Tirific_Template.insert(f"{key}_2",f"# {key}_2_ERR",f"{' '.join([f'{x:{format}}' for x in errors[1,:int(Configuration['NO_RINGS'])]])}")
+        Tirific_Template.insert(key,f"# {key}_ERR",f"{' '.join([f'{x:{format}}' for x in errors[0,:Configuration['NO_RINGS']]])}")
+        Tirific_Template.insert(f"{key}_2",f"# {key}_2_ERR",f"{' '.join([f'{x:{format}}' for x in errors[1,:Configuration['NO_RINGS']]])}")
         #if key in ['INCL'] and np.mean( profile[:,int(Configuration['NO_RINGS']/2.):int(Configuration['NO_RINGS'])]) < 40.:
         #    fix_vrot_for_incl_change(Configuration,Tirific_Template,original_profile,profile)
 

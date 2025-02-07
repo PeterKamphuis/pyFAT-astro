@@ -98,7 +98,7 @@ class full_system_tracking:
                time = diff.total_seconds()/(3600.)
                loads['Time'].append(time)
                for i,key in enumerate(keys):
-                  loads[key].append(float(line[int(2+i)]))
+                  loads[key].append(float(line[2+i]))
          #Plot the parameters
          try:
                mpl_fm.fontManager.addfont(self.font_file)
@@ -283,7 +283,44 @@ get_usage_statistics.__doc__ =f'''
     error in the MB calculation.
 '''
 
+def return_help_message():
+   help_message = '''
+   Use pyFAT in this way for batch fitting:
 
+      pyFAT configuration_file=FAT_Input.yml
+
+   where configuration_file specifies a yaml file with specific settings
+   such as the catalog.
+
+   For fitting use pyFAT in this way:
+
+      pyFAT cube_name=Input_Cube.fits
+
+   Where Input_Cube.fits is the observation to be fitted. In this mode
+   configuration_file can still be used to specify fit settings but
+   catalogue and location setting will be ignored.
+
+      pyFAT -h
+
+   prints this message.
+
+      pyFAT print_examples=True
+
+   prints a yaml file (FAT_defaults.yml)  with the default values for all
+   possible fitting parameters and an example input catalogue (FAT_Example_Catalogue.txt).
+   The files are printed in the current working directory. In the yaml
+   file values designated ??? indicated values without defaults.
+
+   All config parameters can be set directly from the command e.g:
+
+      pyFAT cube_name=Input_Cube.fits fitting.ring_size=1.5 'fitting.fixed_parameters=[INCL,SDIS]'
+
+   You can test your installation with:
+
+      pyFAT installation_check=True
+
+   '''
+   return help_message
 
 # A simple function to return the line numbers in the stack from where
 # the functions are called.

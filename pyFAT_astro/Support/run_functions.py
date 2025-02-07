@@ -307,7 +307,7 @@ def check_inclination(Configuration,Tirific_Template,Fits_Files, \
 
         accepted,incl_run = sf.run_tirific(Configuration,incl_run, stage = 'incl_check',\
                                 fit_type=tmp_stage,\
-                                max_ini_time= int(300*(int(Check_Template['INIMODE'])+1)))
+                                max_ini_time= 300*(int(Check_Template['INIMODE'])+1))
         messages = moments(filename = f"{Configuration['FITTING_DIR']}{tmp_stage}/{tmp_stage}.fits",\
                             mask = f"{Configuration['FITTING_DIR']}/{Fits_Files['MASK']}", moments = [0],\
                             overwrite = True, map_velocity_unit= 'km/s',\
@@ -517,8 +517,8 @@ def check_source(Configuration, Fits_Files):
 ''', Configuration)
 
     #There is a factor of two missing here but this is necessary otherwise the maxima are far to small
-    Configuration['MAX_SIZE_IN_BEAMS'] = int(round(np.sqrt(((x_max-x_min)/2.)**2+((y_max-y_min)/2.)**2) \
-                /(Configuration['BEAM_IN_PIXELS'][0])+5.))
+    Configuration['MAX_SIZE_IN_BEAMS'] = sf.float_to_int(np.sqrt(((x_max-x_min)/2.)**2+((y_max-y_min)/2.)**2) \
+                /(Configuration['BEAM_IN_PIXELS'][0])+5.)
     print_log(f'''CHECK_SOURCE: From Sofia we find a max extend of {Configuration['MAX_SIZE_IN_BEAMS']}
 ''', Configuration,case= ['verbose'])
     #if Configuration['MAX_SIZE_IN_BEAMS'] > 20.:
@@ -562,16 +562,16 @@ def check_source(Configuration, Fits_Files):
      # Determine whether the centre is blanked or not
    
     print_log(f'''CHECK_SOURCE: In the center we find the vsys {new_vsys} km/s around the location:
-{"":8s}CHECK_SOURCE: x,y,z = {int(round(x))}, {int(round(y))}, {int(round(z))}.
+{"":8s}CHECK_SOURCE: x,y,z = {sf.float_to_int(x)}, {sf.float_to_int(y)}, {sf.float_to_int(z)}.
 {'':8s}CHECK_SOURCE: we will use a systemic velocity of {v_app}
 Checking the central flux in a box with size of {Configuration['BEAM_IN_PIXELS'][0]} in pixels around the central coordinates
 ''',Configuration,case= ['debug_add'])
-    Central_Flux = np.mean(data[int(round(z-1)):int(round(z+1)),\
-                                int(round(y-Configuration['BEAM_IN_PIXELS'][0]/2.)):int(round(y+Configuration['BEAM_IN_PIXELS'][0]/2.)),\
-                                int(round(x-Configuration['BEAM_IN_PIXELS'][0]/2.)):int(round(x+Configuration['BEAM_IN_PIXELS'][0]/2.))])
+    Central_Flux = np.mean(data[sf.float_to_int(z-1):sf.float_to_int(z+1),\
+        sf.float_to_int(y-Configuration['BEAM_IN_PIXELS'][0]/2.):sf.float_to_int(y+Configuration['BEAM_IN_PIXELS'][0]/2.),\
+        sf.float_to_int(x-Configuration['BEAM_IN_PIXELS'][0]/2.):sf.float_to_int(x+Configuration['BEAM_IN_PIXELS'][0]/2.)])
     del data
     print_log(f'''CHECK_SOURCE: In the center we find an average flux of  {Central_Flux} Jy/beam around the location:
-{"":8s}CHECK_SOURCE: x,y,z = {int(round(x))}, {int(round(y))}, {int(round(z))}.
+{"":8s}CHECK_SOURCE: x,y,z = {sf.float_to_int(x)}, {sf.float_to_int(y)}, {sf.float_to_int(z)}.
 ''',Configuration,case= ['debug_add'])
 
     if not np.isfinite(Central_Flux):
@@ -651,8 +651,11 @@ Checking the central flux in a box with size of {Configuration['BEAM_IN_PIXELS']
     messages = extract_pv(cube = Cube,\
                 overwrite = False,PA=pa[0],center=[ra,dec,v_app*1000.], map_velocity_unit ='km/s',\
                 log = True,silent = True,velocity_type = Configuration['HDR_VELOCITY'],\
-                finalsize = [int(round(Configuration['SIZE_IN_BEAMS'][0]*Configuration['BEAM'][0]/np.mean([abs(header['CDELT1']),abs(header['CDELT2'])])*1.25+header['NAXIS1']*0.2)),
-                                    int(round(z_max-z_min)+10.)],   
+                finalsize = [sf.float_to_int(Configuration['SIZE_IN_BEAMS'][0]\
+                    *Configuration['BEAM'][0]/\
+                    np.mean([abs(header['CDELT1']),abs(header['CDELT2'])])\
+                    *1.25+header['NAXIS1']*0.2),
+                    sf.float_to_int(z_max-z_min+10.)],   
                 output_directory = f"{Configuration['FITTING_DIR']}Sofia_Output",\
                 output_name =f"{Configuration['SOFIA_BASENAME']}_sofia")
     print_log(messages,Configuration,case=["verbose"])
@@ -809,14 +812,14 @@ check_vobs.__doc__='''
 def construct_kernels(Configuration,sofia_template):
     #we always want the unsmoothed cube
     spatial_kernels= [0]
-    if np.sum(Configuration['NAXES'][:2])/(2.*int(round(Configuration['BEAM_IN_PIXELS'][0])))  > 5:
-        spatial_kernels.append(int(round(Configuration['BEAM_IN_PIXELS'][0])))
-    if np.sum(Configuration['NAXES'][:2])/(2.*int(round(Configuration['BEAM_IN_PIXELS'][0])))  > 15:
-        spatial_kernels.append(int(round(Configuration['BEAM_IN_PIXELS'][0]*2.)))
-    if np.sum(Configuration['NAXES'][:2])/(2.*int(round(Configuration['BEAM_IN_PIXELS'][0])))  > 30:
-        spatial_kernels.append(int(round(Configuration['BEAM_IN_PIXELS'][0]))*3)
-    if np.sum(Configuration['NAXES'][:2])/(2.*int(round(Configuration['BEAM_IN_PIXELS'][0])))  > 45:
-        spatial_kernels.append(int(round(Configuration['BEAM_IN_PIXELS'][0]))*4)
+    if np.sum(Configuration['NAXES'][:2])/(2.*sf.float_to_int(Configuration['BEAM_IN_PIXELS'][0]))  > 5:
+        spatial_kernels.append(sf.float_to_int(Configuration['BEAM_IN_PIXELS'][0]))
+    if np.sum(Configuration['NAXES'][:2])/(2.*sf.float_to_int(Configuration['BEAM_IN_PIXELS'][0]))  > 15:
+        spatial_kernels.append(sf.float_to_int(Configuration['BEAM_IN_PIXELS'][0]*2.))
+    if np.sum(Configuration['NAXES'][:2])/(2.*sf.float_to_int(Configuration['BEAM_IN_PIXELS'][0]))  > 30:
+        spatial_kernels.append(sf.float_to_int(Configuration['BEAM_IN_PIXELS'][0]*3))
+    if np.sum(Configuration['NAXES'][:2])/(2.*sf.float_to_int(Configuration['BEAM_IN_PIXELS'][0]))  > 45:
+        spatial_kernels.append(sf.float_to_int(Configuration['BEAM_IN_PIXELS'][0]*4))
 
     print_log(f'''CONSTRUCT_KERNELS: We use the following spatial_kernels
 {'':8s} spatial kernels = {spatial_kernels}
@@ -827,7 +830,7 @@ def construct_kernels(Configuration,sofia_template):
     dispersion = [5.,10,15.,25. ,50.]
     fact = 5.
     for disp in dispersion:
-        kernel = int(disp/Configuration['CHANNEL_WIDTH'])
+        kernel = sf.float_to_int(disp/Configuration['CHANNEL_WIDTH'])
         if disp == 50:
             fact = 8.
         if kernel*fact < Configuration['NAXES'][2]:
@@ -910,7 +913,7 @@ we try once more else we break off the fitting. As this sometimes happens due to
             full_name=True)
     wf.tirific(Configuration,Tirific_Template,name = f'{fit_type}_In.def')
     accepted,current_run = sf.run_tirific(Configuration,current_run,stage = stage, fit_type = fit_type,\
-                                max_ini_time= int(300*(int(Tirific_Template['INIMODE'])+1)))
+                                max_ini_time= 300*(int(Tirific_Template['INIMODE'])+1))
     return accepted,current_run
 
 failed_fit.__doc__ =f'''

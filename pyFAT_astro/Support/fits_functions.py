@@ -229,10 +229,10 @@ def cut_cubes(Configuration, Fits_Files, galaxy_box):
     for i,limit in enumerate(galaxy_box):
         if limit[0] > cube_edge[i]:
             cut = True
-            new_cube[i,0] = limit[0]-int(cube_edge[i])
+            new_cube[i,0] = limit[0]-sf.float_to_int(cube_edge[i])
         if limit[1] < cube_size[i] - cube_edge[i]:
             cut = True
-            new_cube[i,1] = limit[1]+int(cube_edge[i])
+            new_cube[i,1] = limit[1]+sf.float_to_int(cube_edge[i])
     if 'restart_fitting' in [x.lower() for x in Configuration['FITTING_STAGES']]:
         if 'create_fat_cube' in [x.lower() for x in Configuration['FITTING_STAGES']]:
             files_to_cut = [Fits_Files['FITTING_CUBE']]
@@ -490,14 +490,14 @@ def prep_cube(Configuration,hdr,data):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         buffer=5.*hdr['BMAJ']/np.mean([abs(hdr['CDELT1']),abs(hdr['CDELT2'])])
-        central = data[:,int(hdr['NAXIS2']/2.-buffer):int(hdr['NAXIS2']/2.+buffer),\
-                        int(hdr['NAXIS1']/2.-buffer):int(hdr['NAXIS1']/2.+buffer)]
+        central = data[:,sf.float_to_int(hdr['NAXIS2']/2.-buffer):sf.float_to_int(hdr['NAXIS2']/2.+buffer),\
+                        sf.float_to_int(hdr['NAXIS1']/2.-buffer):sf.float_to_int(hdr['NAXIS1']/2.+buffer)]
 
         central_noise_indices = np.where(central < -10*noise_corner)
     if len(central_noise_indices) > 0.0001*4*buffer*hdr['NAXIS3']:
         central[central_noise_indices] = float('NaN')
-        data[:,int(hdr['NAXIS2']/2.-buffer):int(hdr['NAXIS2']/2.+buffer),\
-                        int(hdr['NAXIS1']/2.-buffer):int(hdr['NAXIS1']/2.+buffer)] =\
+        data[:,sf.float_to_int(hdr['NAXIS2']/2.-buffer):sf.float_to_int(hdr['NAXIS2']/2.+buffer),\
+                        sf.float_to_int(hdr['NAXIS1']/2.-buffer):sf.float_to_int(hdr['NAXIS1']/2.+buffer)] =\
                         central
         print_log(f'''PREPROCESSING: Your cube had a significant amount of values below -10*sigma. If you do not have a central absorption source there is something seriously wrong with the cube.
 {"":8s}PREPROCESSING: We blanked these values.
@@ -566,7 +566,7 @@ def optimized_cube(Configuration,Fits_Files):
 {"":8s}OPTIMIZED_CUBE: FAT cannot optimize your cube.
 ''', Configuration)
         cube.close()
-        required_cdelt = hdr['BMIN']/int(Configuration['OPT_PIXEL_BEAM'])
+        required_cdelt = hdr['BMIN']/Configuration['OPT_PIXEL_BEAM']
         ratio = required_cdelt/abs(hdr['CDELT2'])
         opt_data,opt_hdr = regrid_cube(data, hdr, ratio)
 
@@ -617,7 +617,7 @@ def regrid_cube(data,hdr,ratio):
     # First get the shape of the data
     shape = np.array(data.shape, dtype=float)
     #The new shape has to be integers
-    new_shape = [int(x/ratio) for x in shape]
+    new_shape = [sf.float_to_int(x/ratio) for x in shape]
     # Which means our real ratio is
     real_ratio = shape/new_shape
     #* np.ceil(shape / ratio).astype(int)

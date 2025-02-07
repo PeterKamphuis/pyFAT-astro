@@ -261,7 +261,7 @@ def check_source_brightness(Configuration,Fits_Files,moment= False):
     #The following should only be run if we ran sofia
     Too_Faint = False
     #Check that the source is bright enough
-    Max_SNR = snr[int(len(snr)*Configuration['SOURCE_MAX_FRACTION']*fact)]
+    Max_SNR = snr[sf.float_to_int(len(snr)*Configuration['SOURCE_MAX_FRACTION']*fact)]
 
     if Max_SNR < Configuration['SOURCE_MAX_SNR']:
         print_log(f'''CHECK_SOURCE_BRIGHTNESS: The SNR of brightest {Configuration['SOURCE_MAX_FRACTION']*100.*fact}% of selected pixels does not always exceed {Configuration['SOURCE_MAX_SNR']} in the {checking}.
@@ -445,7 +445,7 @@ def extract_SBR(Configuration,mom0,pa,inclination, center=None,vsys=None):
     
     #match the rings to the beam size
     ring_size_req = Configuration['BEAM_IN_PIXELS'][0]/maj_resolution*Configuration['RING_SIZE']
-    SBR_initial = avg_profile[0::int(ring_size_req)]/(np.pi*Configuration['BEAM'][0]*Configuration['BEAM'][1]/(4.*np.log(2.))) # Jy*km/s
+    SBR_initial = avg_profile[0::sf.float_to_int(ring_size_req)]/(np.pi*Configuration['BEAM'][0]*Configuration['BEAM'][1]/(4.*np.log(2.))) # Jy*km/s
     
     #deproject the SBR
     SBR_initial = SBR_initial*np.cos(np.radians(inclination[0]))
@@ -545,12 +545,12 @@ def extract_vrot(Configuration,map ,angle,center):
             if avg_profile[-1] < avg_profile[-2]:
                 avg_profile[-1] = avg_profile[-2]
         #correct for beam smearing in the center
-        beam_back = -1*int(Configuration['BEAM_IN_PIXELS'][0]/maj_resolution)
+        beam_back = -1*sf.float_to_int(Configuration['BEAM_IN_PIXELS'][0]/maj_resolution)
 
         if Configuration['BEAM_IN_PIXELS'][0]/maj_resolution < i < -2.*beam_back:
-            avg_profile[beam_back] = avg_profile[beam_back]+0.25*avg_profile[int(beam_back/2.)]+0.1*avg_profile[-1]
+            avg_profile[beam_back] = avg_profile[beam_back]+0.25*avg_profile[sf.float_to_int(beam_back/2.)]+0.1*avg_profile[-1]
         elif -2.*beam_back <= i < -3.*beam_back:
-            avg_profile[beam_back] = avg_profile[beam_back]+0.25/counter*avg_profile[int(beam_back/2.)]+0.1/counter*avg_profile[-1]
+            avg_profile[beam_back] = avg_profile[beam_back]+0.25/counter*avg_profile[sf.float_to_int(beam_back/2.)]+0.1/counter*avg_profile[-1]
             counter += 1
             #neg_profile[beam_back] = neg_profile[beam_back]+0.5*neg_profile[int(beam_back/2.)]+0.1*neg_profile[-1]
             #pos_profile[beam_back] = pos_profile[beam_back]+0.5*pos_profile[int(beam_back/2.)]+0.1*pos_profile[-1]
@@ -561,7 +561,7 @@ def extract_vrot(Configuration,map ,angle,center):
 {'':8s} ringsize= {ring_size_req}
 {'':8s} because bmaj in pixels  ={Configuration['BEAM_IN_PIXELS'][0]}  and the resolution of the profile = {maj_resolution} pixels
 ''',Configuration,case= ['debug_add'])
-    profile = np.array(avg_profile[0::int(ring_size_req)],dtype=float)
+    profile = np.array(avg_profile[0::sf.float_to_int(ring_size_req)],dtype=float)
 
     try:
         profile[np.isnan(profile)] = profile[~np.isnan(profile)][-1]
@@ -626,7 +626,7 @@ def get_DHI(Configuration, Model='Finalmodel'):
     sbr_msolar = sf.columndensity(Configuration,sbr*1000.,systemic=systemic[0],arcsquare=True,solar_mass_output=True)
     sbr_2_msolar = sf.columndensity(Configuration,sbr_2*1000.,systemic=systemic[0],arcsquare=True,solar_mass_output=True)
     # interpolate these to ~0.1 beam steps
-    new_radii = np.linspace(0,radi[-1],int(radi[-1]/(0.1*Configuration['BEAM'][0])+1))
+    new_radii = np.linspace(0,radi[-1],sf.float_to_int(radi[-1]/(0.1*Configuration['BEAM'][0])+1))
     new_sbr_msolar = np.interp(new_radii,radi,sbr_msolar)
     new_sbr_2_msolar = np.interp(new_radii,radi,sbr_2_msolar)
 
@@ -672,17 +672,17 @@ get_DHI.__doc__ =f'''
 
 def get_map_vsys(Configuration,map,center=None,vsys=None, new_center=False):
     if Configuration['MAX_SIZE_IN_BEAMS'] > 20.:
-        buffer = int(Configuration['BEAM_IN_PIXELS'][0]*5.)
+        buffer = sf.float_to_int(Configuration['BEAM_IN_PIXELS'][0]*5.)
     else:
-        buffer = int(round(np.mean(Configuration['BEAM_IN_PIXELS'][:2])/2.))
+        buffer = sf.float_to_int(np.mean(Configuration['BEAM_IN_PIXELS'][:2])/2.)
 
     if vsys is None or new_center:
         #As python is utterly moronic the center goes in back wards to the map
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore",message="Mean of empty slice"\
                             ,category=RuntimeWarning)
-            map_vsys = np.nanmean(map[int(round(center[1]-buffer)):int(round(center[1]+buffer)),\
-                int(round(center[0]-buffer)):int(round(center[0]+buffer))])
+            map_vsys = np.nanmean(map[sf.float_to_int(center[1]-buffer):sf.float_to_int(center[1]+buffer),\
+                sf.float_to_int(center[0]-buffer):sf.float_to_int(center[0]+buffer)])
         if np.mean(Configuration['SIZE_IN_BEAMS']) < 10. and not vsys is None:
             map_vsys = (vsys+map_vsys)/2.
     else:
@@ -1289,8 +1289,10 @@ def moment0_orientation(Configuration,Fits_Files,mom0,scale_factor=None,
 
             cube = fits.open(f"{Configuration['FITTING_DIR']}{Fits_Files['FITTING_CUBE']}",\
                     uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
-            buffer = int(round(np.mean(Configuration['BEAM_IN_PIXELS'][:2])/2.))
-            central = cube[0].data[:,int(round(center[1]-buffer)):int(round(center[1]+buffer)),int(round(center[0]-buffer)):int(round(center[0]+buffer))]
+            buffer = sf.float_to_int(np.mean(Configuration['BEAM_IN_PIXELS'][:2])/2.)
+            central = cube[0].data[:,\
+                sf.float_to_int(center[1]-buffer):sf.float_to_int(center[1]+buffer),\
+                sf.float_to_int(center[0]-buffer):sf.float_to_int(center[0]+buffer)]
 
             if np.count_nonzero(np.isnan(central))/central.size < 0.1:
                 center,checked_center,center_stable = sf.get_new_center(\
@@ -1784,9 +1786,9 @@ def sofia_input_catalogue(Configuration):
                     x,y,z =coordinate_frame.wcs_world2pix(float(outlist[input_columns.index('ra')]),\
                                                     float(outlist[input_columns.index('dec')]), \
                                                     float(outlist[input_columns.index(velocity)]), 1.)
-                shift = [int(float(outlist[input_columns.index('x')]) - x), \
-                        int(float(outlist[input_columns.index('y')]) - y),\
-                        int(float(outlist[input_columns.index('z')]) - z)]
+                shift = [sf.float_to_int(float(outlist[input_columns.index('x')]) - x), \
+                        sf.float_to_int(float(outlist[input_columns.index('y')]) - y),\
+                        sf.float_to_int(float(outlist[input_columns.index('z')]) - z)]
 
                 for i,coord in enumerate(['x','y','z']):
                     for chang in ['','_min','_max','_peak']:
@@ -1794,7 +1796,7 @@ def sofia_input_catalogue(Configuration):
                         if chang == '':
                             outlist[input_columns.index(val)] = f'{float(outlist[input_columns.index(val)])-shift[i]:.6f}'
                         else:
-                            outlist[input_columns.index(val)] = f'{int(outlist[input_columns.index(val)])-shift[i]:d}'
+                            outlist[input_columns.index(val)] = f'{sf.float_to_int(outlist[input_columns.index(val)])-shift[i]:d}'
 
 
                     
@@ -1818,7 +1820,7 @@ def sofia_input_catalogue(Configuration):
                         else:
                             start = column_locations[input_columns.index(col)-1]
                         end = column_locations[input_columns.index(col)]
-                        strlenfor = f'>{int(end-start)}s'
+                        strlenfor = f'>{sf.float_to_int(end-start)}s'
                         comline = f'{comline}{outlist[input_columns.index(col)]:{strlenfor}}'
                     cat.write(comline)
 

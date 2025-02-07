@@ -451,7 +451,7 @@ def make_overview_plot(Configuration,Fits_Files ):
     size_ratio = ysize/xsize
 
     #stupid pythonic layout for grid spec, which means it is yx instead of xy like for normal human beings
-    gs = Overview.add_gridspec(int(20*size_ratio),20)
+    gs = Overview.add_gridspec(sf.float_to_int(20*size_ratio),20)
     try:
         mpl_fm.fontManager.addfont(Configuration['FONT_FILE'])
         font_name = mpl_fm.FontProperties(fname=Configuration['FONT_FILE']).get_name()
@@ -611,7 +611,7 @@ def make_overview_plot(Configuration,Fits_Files ):
     plt.xlabel('RA')
 
     # contours
-    velocity_step=sf.set_limits(int((int(max_color-min_color)*0.9)/20.),1.,30.)
+    velocity_step=sf.set_limits(np.round(((max_color-min_color)*0.9)/20.),1.,30.)
     integer_array = np.linspace(0,20,21)-10
     momlevel = [FAT_Model[Vars_to_plot.index('VSYS'),0]+x*velocity_step for x in integer_array if min_color < FAT_Model[Vars_to_plot.index('VSYS'),0]+x*velocity_step < max_color]
     ax_moment1.contour(moment1[0].data, transform=ax_moment1.get_transform(im_wcs),
@@ -620,9 +620,7 @@ def make_overview_plot(Configuration,Fits_Files ):
               levels=momlevel, colors='k',zorder=6, linewidths=0.9*size_factor)
     ax_moment1.contour(moment1_mod[0].data, transform=ax_moment1.get_transform(im_wcs),
                levels=momlevel, colors='white',linewidths=1.2*size_factor , zorder =7)
-    #ax_moment1.contour(moment1_mod[0].data, transform=ax_moment1.get_transform(im_wcs),
-    #          levels=momlevel, colors='r',zorder=8, linewidths=0.9)
-   
+  
     square_plot(ax_moment1)
     beam = beam_artist(ax_moment1,moment1[0].header,im_wcs)
     ax_moment1.add_patch(beam)
@@ -717,7 +715,7 @@ def make_overview_plot(Configuration,Fits_Files ):
                         float(FAT_Model[Vars_to_plot.index('VSYS'),0]*1000.)],\
                 map_velocity_unit= 'km/s',log = True,silent = True,\
                 output_directory = f"{Configuration['FITTING_DIR']}Finalmodel",\
-                output_name =f"{Configuration['BASE_NAME']}_final")
+                output_name =f"{Configuration['BASE_NAME']}_final",debug=Configuration['DEBUG'])
     print_log(messages,Configuration,case=["verbose"])
     PV = fits.open(f"{Configuration['FITTING_DIR']}/Finalmodel/{Configuration['BASE_NAME']}_final_PV.fits")
    
@@ -729,7 +727,7 @@ def make_overview_plot(Configuration,Fits_Files ):
                 cube_velocity_unit='m/s',\
                 map_velocity_unit= 'km/s',log = True,silent = True,\
                 output_directory = f"{Configuration['FITTING_DIR']}/Finalmodel/",\
-                output_name =f"Finalmodel")
+                output_name =f"Finalmodel",debug=Configuration['DEBUG'])
     print_log(messages,Configuration,case=["verbose"])
     PV_model = fits.open(f"{Configuration['FITTING_DIR']}/Finalmodel/Finalmodel_PV.fits")
 
@@ -1160,7 +1158,7 @@ def plot_PV(Configuration,image=None, model = None, figure = None, \
             hdr = image.header
             data = image.data
 
-    ratio=hdr['NAXIS2']/hdr['NAXIS1']
+    #ratio=hdr['NAXIS2']/hdr['NAXIS1']
     # Then we want to plot our PV-Diagram
     if figure == None:
         figure = plt.figure(2, figsize=(8, 8), dpi=300, facecolor='w', edgecolor='k')
@@ -1172,18 +1170,27 @@ def plot_PV(Configuration,image=None, model = None, figure = None, \
     minint= np.nanmin(data)/3.
     PV_plot = ax.imshow(data,  cmap='hot_r', origin='lower', alpha=1, \
                             vmin=minint, vmax=maxint,aspect='auto')
-    xaxis = [hdr['CRVAL1'] + (i - hdr['CRPIX1'] + 1) \
+    #The fits header is one based but assumes that the value is in the middle of the pixel
+    #imshow seems to place the value at the edge
+    xaxis = [hdr['CRVAL1'] + (i - hdr['CRPIX1']+0.5) \
         * (hdr['CDELT1']) for i in range(hdr['NAXIS1'])]
-    yaxis = [hdr['CRVAL2'] + (i - hdr['CRPIX2'] + 1) * (hdr['CDELT2']) for i in
+    #for i in range(len(xaxis)):
+    #    print(f'pixel {i} has value {xaxis[i]}')
+    #exit()
+    yaxis = [hdr['CRVAL2'] + (i - hdr['CRPIX2']+0.5) * (hdr['CDELT2']) for i in
          range(hdr['NAXIS2'])]
-    #something is going wrong here, Fixed as usual astropy was fucking thing up
-    step = int(abs((xaxis[-1]-xaxis[0])/7))
-    ticks = np.array([-3*step,-2*step,-1*step,0.,step,2*step,3*step],dtype=float)+hdr['CRVAL1']
-    pix_ticks =(ticks - hdr['CRVAL1'])/hdr['CDELT1']+(hdr['CRPIX1']-1)
+    #something is going wrong here, Fixed as usual astropy was fucking things up
+    step = sf.float_to_int(abs((xaxis[-1]-xaxis[0])/7.))
+ 
+    ticks = np.array(\
+        np.round(np.array([-3*step,-2*step,-1*step,0,step,2*step,3*step],dtype=float)\
+        +hdr['CRVAL1']),dtype=int)
+    pix_ticks =(ticks - hdr['CRVAL1'])/hdr['CDELT1']+(hdr['CRPIX1']-0.5)
+    #print(ticks,pix_ticks)
     ax.set_xticks(pix_ticks)
-    ax.set_xticklabels([f'{int(i):d}' for i in ticks],size=5,ha='center')
-    ax.set_yticks(range(len(yaxis))[0:-1:int(len(yaxis) / 5)])
-    ax.set_yticklabels(['{:.1f}'.format(i) for i in yaxis[0:-1:int(len(yaxis) / 5)]])
+    ax.set_xticklabels([f'{i:d}' for i in ticks],size=5,ha='center')
+    ax.set_yticks(range(len(yaxis))[0:-1:sf.float_to_int(len(yaxis) / 5)])
+    ax.set_yticklabels(['{:.1f}'.format(i) for i in yaxis[0:-1:sf.float_to_int(len(yaxis) / 5)]])
     ax.grid()
    
     #Add some contours
@@ -1816,11 +1823,11 @@ def square_plot(ax):
     xmin, xmax = ax.get_xlim()
     ymin, ymax = ax.get_ylim()
     if xmax > ymax:
-        diff = int(xmax-ymax)/2.
+        diff = (xmax-ymax)/2.
         ax.set_ylim(ymin-diff,ymax+diff)
         ymin, ymax = ax.get_ylim()
     else:
-        diff = int(ymax-xmax)/2.
+        diff = (ymax-xmax)/2.
         ax.set_xlim(xmin-diff,xmax+diff)
         xmin, xmax = ax.get_xlim()
 square_plot.__doc__ =f'''
