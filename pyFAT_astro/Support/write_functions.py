@@ -1172,12 +1172,12 @@ def plot_PV(Configuration,image=None, model = None, figure = None, \
                             vmin=minint, vmax=maxint,aspect='auto')
     #The fits header is one based but assumes that the value is in the middle of the pixel
     #imshow seems to place the value at the edge
-    xaxis = [hdr['CRVAL1'] + (i - hdr['CRPIX1']+0.5) \
+    xaxis = [hdr['CRVAL1'] + (i - hdr['CRPIX1']+1.) \
         * (hdr['CDELT1']) for i in range(hdr['NAXIS1'])]
     #for i in range(len(xaxis)):
     #    print(f'pixel {i} has value {xaxis[i]}')
     #exit()
-    yaxis = [hdr['CRVAL2'] + (i - hdr['CRPIX2']+0.5) * (hdr['CDELT2']) for i in
+    yaxis = [hdr['CRVAL2'] + (i - hdr['CRPIX2']+1.) * (hdr['CDELT2']) for i in
          range(hdr['NAXIS2'])]
     #something is going wrong here, Fixed as usual astropy was fucking things up
     step = sf.float_to_int(abs((xaxis[-1]-xaxis[0])/7.))
@@ -1185,7 +1185,7 @@ def plot_PV(Configuration,image=None, model = None, figure = None, \
     ticks = np.array(\
         np.round(np.array([-3*step,-2*step,-1*step,0,step,2*step,3*step],dtype=float)\
         +hdr['CRVAL1']),dtype=int)
-    pix_ticks =(ticks - hdr['CRVAL1'])/hdr['CDELT1']+(hdr['CRPIX1']-0.5)
+    pix_ticks =(ticks - hdr['CRVAL1'])/hdr['CDELT1']+(hdr['CRPIX1']-1.)
     #print(ticks,pix_ticks)
     ax.set_xticks(pix_ticks)
     ax.set_xticklabels([f'{i:d}' for i in ticks],size=5,ha='center')
