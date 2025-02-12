@@ -3456,21 +3456,25 @@ run_tirific.__doc__ =f'''
 
 
 def set_boundaries(Configuration,key,lower,upper,input=False):
+    type_to_set = 'CURRENT'
+    if input:
+        type_to_set = 'INPUT'
+    else:
+        print_log(f'''SET_BOUNDARIES: for {key} the input boundary is {Configuration[f'{key}_INPUT_BOUNDARY']}
+''',Configuration,case=['debug_add'])
+
     print_log(f'''SET_BOUNDARIES: Starting to implement the boundaries for {key} with lower = {lower} and upper = {upper}.
+We are setting the {type_to_set} boundary.              
 ''',Configuration,case=['debug_start'])
 
     check=False
     key = key.upper()
-    print_log(f'''SET_BOUNDARIES: for {key} the input boundary is {Configuration[f'{key}_INPUT_BOUNDARY']}
-''',Configuration,case=['debug_add'])
+   
     if np.sum(Configuration[f'{key}_INPUT_BOUNDARY']) != 0.:
-        print_log(f'''SET_BOUNDARIES: so we check against the input boundary
+        print_log(f'''SET_BOUNDARIES: the input boundary is not 0. so we check against it.
 ''',Configuration,case=['debug_add'])
         check = True
-    if input:
-        boundary = f'{key}_INPUT_BOUNDARY'
-    else:
-        boundary = f'{key}_CURRENT_BOUNDARY'
+    boundary =  f'{key}_{type_to_set}_BOUNDARY'
     try:
         _ = (e for e in lower)
     except TypeError:
@@ -3488,13 +3492,15 @@ def set_boundaries(Configuration,key,lower,upper,input=False):
         if check:
             #As we allow individual parts as input we should check the total in one is not 0.
             if lower[i] < Configuration[f'{key}_INPUT_BOUNDARY'][i][0] \
-                and np.sum(Configuration[f'{key}_INPUT_BOUNDARY'][i]):
+                and np.sum(Configuration[f'{key}_INPUT_BOUNDARY'][i]) != 0.:
                 lower[i] = Configuration[f'{key}_INPUT_BOUNDARY'][i][0]
             if upper[i] > Configuration[f'{key}_INPUT_BOUNDARY'][i][1] \
-                and np.sum(Configuration[f'{key}_INPUT_BOUNDARY'][i]):
+                and np.sum(Configuration[f'{key}_INPUT_BOUNDARY'][i]) != 0.:
                 upper[i] = Configuration[f'{key}_INPUT_BOUNDARY'][i][1]
         Configuration[boundary][i][0] = float(lower[i])
         Configuration[boundary][i][1] = float(upper[i])
+    print_log(f'''SET_BOUNDARIES: For {boundary} we have set {Configuration[boundary]}.
+''',Configuration,case=['debug_add'])
 set_boundaries.__doc__ =f'''
  NAME:
     set_boundaries
@@ -3624,7 +3630,7 @@ def setup_configuration(cfg):
         cfg.advanced.loops= 1
         cfg.advanced.shaker_iterations = 2
         cfg.input.main_directory= f'{cfg.input.main_directory}/FAT_Installation_Check/'
-        cfg.output.output_quantity = 0
+        cfg.output.quantity = 0
         cfg.fitting.fitting_stages = ['Create_FAT_Cube','Run_Sofia','Fit_Tirific_OSC','Tirshaker']
         #cfg.fitting.fitting_stages = ['Create_FAT_Cube','Run_Sofia','Fit_Tirific_OSC']
         cfg.cube_name = 'NGC_2903.fits'
@@ -3889,8 +3895,8 @@ Please pick one of the following {', '.join(['sinusoidal','independent','hanning
 
     if Configuration['RING_SIZE'] < 0.5:
         Configuration['RING_SIZE'] = 0.5
-    if Configuration['OUTPUT_QUANTITY'] == 5:
-        Configuration['OUTPUT_QUANTITY'] = 4
+    if Configuration['QUANTITY'] == 5:
+        Configuration['QUANTITY'] = 4
     if Configuration['SHAKER_ITERATIONS'] < 2:
         Configuration['SHAKER_ITERATIONS'] = 2
     if Configuration['NCPU'] == 1:

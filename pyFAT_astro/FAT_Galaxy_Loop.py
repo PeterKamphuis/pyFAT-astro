@@ -86,7 +86,7 @@ def FAT_Galaxy_Loop(Configuration):
 
         #if all the fitting has gone properly we create nice errors
         if  Configuration['RP_SECTION'] in ['AFTER-SMOOTHING']:
-            if Configuration['OUTPUT_QUANTITY'] != 5:
+            if Configuration['QUANTITY'] != 5:
                 if 'tirshaker' in Configuration['FITTING_STAGES']:
                     runf.tirshaker_call(
                         Configuration,Fits_Files)
@@ -96,7 +96,7 @@ def FAT_Galaxy_Loop(Configuration):
 
         catalogue_line = cf.finish_galaxy(Configuration, current_run=current_run,
                          Fits_Files=Fits_Files,exiting=registered_exception)
-        if Configuration['OUTPUT_QUANTITY'] != 5:
+        if Configuration['QUANTITY'] != 5:
             DHI = rf.get_DHI(
                 Configuration, Model=Configuration['USED_FITTING'])
             Totflux = rf.get_totflux(
@@ -110,12 +110,12 @@ def FAT_Galaxy_Loop(Configuration):
 ''', Configuration)
     except Exception as e:
         if e.__class__.__name__ in Configuration['STOP_INDIVIDUAL_ERRORS']:
-            Configuration['OUTPUT_QUANTITY'] = 5
+            Configuration['QUANTITY'] = 5
         else:
-            Configuration['OUTPUT_QUANTITY'] = 'error'
+            Configuration['QUANTITY'] = 'error'
         registered_exception = e
         Configuration['FINAL_COMMENT'] = e
-        Configuration['OUTPUT_QUANTITY'] = 'error'
+        Configuration['QUANTITY'] = 'error'
         try:
             tmp=Fits_Files
         except:
@@ -295,9 +295,9 @@ def MP_initialize_sofia(Configuration,timing_lock,catalogue_lock):
         print(f"What is going on? {e}, {e.__class__.__name__} ")
         succes =False
         if e.__class__.__name__ in Configuration['STOP_INDIVIDUAL_ERRORS']:
-            Configuration['OUTPUT_QUANTITY'] = 5
+            Configuration['QUANTITY'] = 5
         else:
-            Configuration['OUTPUT_QUANTITY'] = 'error'
+            Configuration['QUANTITY'] = 'error'
         registered_exception = e
         Configuration['FINAL_COMMENT'] = e
         catalogue_line = cf.finish_galaxy(Configuration,
@@ -350,7 +350,7 @@ def MP_Fitting_Loop(input,timing_lock,catalogue_lock):
 
         #if all the fitting has gone properly we create nice errors
 
-        if Configuration['OUTPUT_QUANTITY'] != 5:
+        if Configuration['QUANTITY'] != 5:
             if 'tirshaker' in Configuration['FITTING_STAGES']:
                 runf.tirshaker_call(
                     Configuration,Fits_Files)
@@ -362,7 +362,7 @@ def MP_Fitting_Loop(input,timing_lock,catalogue_lock):
                          Fits_Files=Fits_Files,timing_lock=timing_lock,
                          catalogue_lock = catalogue_lock,
                          exiting=registered_exception)
-        if Configuration['OUTPUT_QUANTITY'] != 5:
+        if Configuration['QUANTITY'] != 5:
             DHI = rf.get_DHI(
                 Configuration, Model=Configuration['USED_FITTING'])
             Totflux = rf.get_totflux(
@@ -376,12 +376,12 @@ def MP_Fitting_Loop(input,timing_lock,catalogue_lock):
 ''', Configuration)
     except Exception as e:
         if e.__class__.__name__ in Configuration['STOP_INDIVIDUAL_ERRORS']:
-            Configuration['OUTPUT_QUANTITY'] = 5
+            Configuration['QUANTITY'] = 5
         else:
-            Configuration['OUTPUT_QUANTITY'] = 'error'
+            Configuration['QUANTITY'] = 'error'
         registered_exception = e
         Configuration['FINAL_COMMENT'] = e
-        Configuration['OUTPUT_QUANTITY'] = 'error'
+        Configuration['QUANTITY'] = 'error'
         catalogue_line = cf.finish_galaxy(Configuration,
                           current_run=current_run,Fits_Files=Fits_Files,
                           timing_lock=timing_lock, catalogue_lock = catalogue_lock,

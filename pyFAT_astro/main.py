@@ -100,8 +100,8 @@ def main():
 
             # Create a file to write the results to if if required
             if Original_Configuration['OUTPUT_CATALOGUE']:
-                if not os.path.exists(Original_Configuration['OUTPUT_CATALOGUE']) or Original_Configuration['NEW_OUTPUT']:
-                    if os.path.exists(Original_Configuration['OUTPUT_CATALOGUE']) and Original_Configuration['NEW_OUTPUT']:
+                if not os.path.exists(Original_Configuration['OUTPUT_CATALOGUE']) or Original_Configuration['NEW']:
+                    if os.path.exists(Original_Configuration['OUTPUT_CATALOGUE']) and Original_Configuration['NEW']:
                         os.rename(Original_Configuration['OUTPUT_CATALOGUE'],f"{os.path.splitext(Original_Configuration['OUTPUT_CATALOGUE'])[0]}_Prev.txt")
                     with open(Original_Configuration['OUTPUT_CATALOGUE'],'w') as output_catalogue:
                         comment = 'Comments on Fit Result'

@@ -2600,11 +2600,6 @@ def regularise_warp(Configuration,Tirific_Template, min_error = None, \
             new_change_dict['CHANGE_ANGLE'] = new_change_angle
             new_change_dict['THETA']['FACTOR'] = sm_theta_factor
             new_change_dict['PHI']['FACTOR'] = sm_phi_factor
-            #tyr= True
-            #if tyr:
-            #    plot_output(radii,change_angle,new_change_dict,i)
-                
-
                                 
             print_log(f'''REGULARISE_WARP: For side {i} we get
         {'':8s} Original Theta = {Theta}
@@ -2717,31 +2712,6 @@ regularise_warp.__doc__ =f'''
 
  NOTE: Errors are not returned but they are written to the template
 '''
-def plot_output(radius, input_parameters, output_parameters,i):
-        colors = ['r','b','g','k']
-        plt.figure(89,figsize=(16,16),dpi=300,facecolor = 'w', edgecolor = 'k')
-        plt.subplot(2,1,1)
-        count=0
-                    
-
-            
-        plt.plot(radius,input_parameters['CHANGE_ANGLE'],c=colors[count],label='Change Angle' )
-        plt.plot(radius,output_parameters['CHANGE_ANGLE'],c=colors[count],linestyle='--',lw=3 )
-
-        plt.subplot(2,1,2)
-        plt.plot(radius,input_parameters['THETA']['FACTOR'],c=colors[count],label='THETA_FACTOR' )
-        plt.plot(radius,output_parameters['THETA']['FACTOR'],c=colors[count],linestyle='--',lw=3 )
-        count =1
-        plt.plot(radius,input_parameters['PHI']['FACTOR'],c=colors[count],label='PHI_FACTOR' )
-        plt.plot(radius,output_parameters['PHI']['FACTOR'],c=colors[count],linestyle='--',lw=3 )
-
-
-        plt.subplot(2,1,1)    
-        plt.legend()
-        plt.subplot(2,1,2)    
-        plt.legend()
-        plt.savefig(f"/home/peter/FAT_Main/Component_Test/Angular_Momentum/Comparison_Angle_{i}.png", bbox_inches='tight')
-        plt.close()
 
 def set_boundary_limits(Configuration,Tirific_Template,key,values = None, \
                         tolerance = 0.01, fixed = False):
@@ -2759,7 +2729,7 @@ def set_boundary_limits(Configuration,Tirific_Template,key,values = None, \
     if np.sum(current_boundaries) == 0. and np.sum(values) != 0.:
         current_boundaries =[[values[0]-values[1],values[0]+values[1]] for x in range(3)]
         print_log(f'''SET_BOUNDARY_LIMITS: set boundaries from values
-{'':8s} current Boundaries = {current_boundaries}
+{'':8s} new Boundaries = {current_boundaries}
 ''',Configuration,case=['debug_add'])
     elif np.sum(current_boundaries) == 0. and np.sum(values) == 0.:
         raise FunctionCallError(f'SET_BOUNDARY_LIMITS: if boundaries are not set in the Configuration call set_boundary_limits with values')
@@ -2814,7 +2784,11 @@ def set_boundary_limits(Configuration,Tirific_Template,key,values = None, \
         low = [sf.set_limits(x,min,max) for x in low]
     elif key == 'INCL':
         # for inclination the other boundaries are bracketed by the input boundary
-        high = [x if x > 50. else 50. for x in high]
+        for i,x in enumerate(high):
+            if x < 50.:
+                high[i] = 50
+            elif x > 70:
+                high[i] = 90.
         low = [x if x < 60. else 60. for x in low]
     elif key == 'PA':
         # for inclination the other boundaries are bracketed by the input boundary
@@ -2994,18 +2968,8 @@ def set_fitting_parameters(Configuration, Tirific_Template, \
         Tirific_Template['LOOPS'] = f"{Configuration['LOOPS']}"
     fitting_settings = {}
     fitting_keys = ['VARY','VARINDX','MODERATE','DELEND','DELSTART','MINDELTA','PARMAX','PARMIN']
-
-    if 'INCL' not in initial_estimates:
-        try:
-            profile = np.array([np.mean([x,y]) for x,y in \
-                zip(sf.load_tirific(Configuration,Tirific_Template, ['INCL']),\
-                sf.load_tirific(Configuration,Tirific_Template, [f"INCL_2"]) )],dtype=float)  
-            diff = abs(np.max(profile)-np.min(profile))/10.
-        except ValueError:
-            profile = sf.load_tirific(Configuration,Tirific_Template, ['INCL'],array=True)
-            diff = abs(np.max(profile)-np.min(profile))/10.
-        initial_estimates['INCL'] = [profile[0],sf.set_limits(diff,1.,5.)/np.sin(np.radians(profile[0]))]
-
+    set_missing_estimates(Configuration,Tirific_Template,initial_estimates)
+  
     if parameters_to_adjust[0] == 'NO_ADJUSTMENT':
         if stage in ['initial','run_cc','after_cc']:
             if initial_estimates['INCL'][0] < 30.:
@@ -3043,32 +3007,11 @@ def set_fitting_parameters(Configuration, Tirific_Template, \
     for center in Configuration['CENTRAL_FIX']:
         if center in parameters_to_adjust:
             parameters_to_adjust.remove(center)
-
-    #VSYS should always be in the initial estimates as sbr setting uses it
-    for key in ['VSYS']:
-        if key not in initial_estimates:
-            profile = np.array(sf.load_tirific(Configuration,Tirific_Template, ['VSYS']),dtype=float)
-            initial_estimates['VSYS'] = [profile[0],Configuration['CHANNEL_WIDTH']/2.]
-
+    # Make sure all values are in initial estimates        
+    set_missing_estimates(Configuration,Tirific_Template,initial_estimates,\
+        parameters_to_adjust=parameters_to_adjust)
+   
     for key in parameters_to_adjust:
-        if key not in initial_estimates:
-            profile = np.array([np.mean([x,y]) for x,y in \
-                                zip(sf.load_tirific(Configuration,Tirific_Template, [key]),\
-                                sf.load_tirific(Configuration,Tirific_Template, [f"{key}_2"]))],dtype=float)
-            diff = abs(np.max(profile)-np.min(profile))/10.
-            if key == 'PA':
-                initial_estimates['PA'] = [profile[0],sf.set_limits(diff,0.5,10)]
-            elif key == 'VROT':
-                initial_estimates['VROT'] = [np.nanmax(profile),sf.set_limits(np.nanstd(profile[1:]),np.nanmax(profile)-np.nanmin(profile[1:]),np.nanmax(profile))]
-            elif key == 'XPOS':
-                initial_estimates['XPOS'] = [profile[0],0.1*Configuration['BEAM_IN_PIXELS'][1]*Configuration['PIXEL_SIZE']]
-            elif key == 'YPOS':
-                initial_estimates['YPOS'] = [profile[0],0.1*Configuration['BEAM_IN_PIXELS'][1]*Configuration['PIXEL_SIZE']]
-            elif key == 'SDIS':
-                initial_estimates['SDIS'] = [np.mean(profile),Configuration['CHANNEL_WIDTH']]
-            elif key == 'Z0':
-                initial_estimates['Z0'] = sf.convertskyangle(Configuration,[0.2,0.05], physical = True)
-
         if key not in modifiers:
             print_log(f'''SET_FITTING_PARAMETERS: Adding {key} to the modifiers
 ''',Configuration,case=['debug_add'])
@@ -3328,8 +3271,6 @@ set_fitting_parameters.__doc__ = '''
  NOTE:
 '''
 
-
-
 def set_generic_fitting(Configuration, key , stage = 'initial', \
         basic_variation = 5.,slope = None, flat_slope = False, symmetric = False,\
                         fixed = True, moderate = 3, step_modifier = None,\
@@ -3502,8 +3443,90 @@ def set_generic_moderate(Configuration,key):
         moderate = 3
     return moderate
 
+def set_missing_estimates(Configuration,Tirific_Template,initial_estimates,\
+        parameters_to_adjust=['NO_ADJUSTMENT']):
+    #VSYS And INCL should always be in the initial estimates as sbr setting uses it
+    if 'INCL' not in initial_estimates:
+        try:
+            profile = np.array([np.mean([x,y]) for x,y in \
+                zip(sf.load_tirific(Configuration,Tirific_Template, ['INCL']),\
+                sf.load_tirific(Configuration,Tirific_Template, [f"INCL_2"]) )],dtype=float)  
+            diff = abs(np.max(profile)-np.min(profile))/10.
+        except ValueError:
+            profile = sf.load_tirific(Configuration,Tirific_Template, ['INCL'],array=True)
+            diff = abs(np.max(profile)-np.min(profile))/10.
+        initial_estimates['INCL'] = [profile[0],sf.set_limits(diff,1.,5.)\
+            /np.sin(np.radians(profile[0]))]
 
-#Function
+    if 'VSYS' not in initial_estimates:
+        profile = np.array(sf.load_tirific(Configuration,Tirific_Template,\
+            ['VSYS']),dtype=float)
+        initial_estimates['VSYS'] = [profile[0],Configuration['CHANNEL_WIDTH']/2.]
+
+    for key in parameters_to_adjust:
+        if key not in initial_estimates and key != 'NO_ADJUSTMENT':
+            if key in ['PA','VROT','SDIS','XPOS','YPOS']:
+                profile = np.array([np.mean([x,y]) for x,y in \
+                    zip(sf.load_tirific(Configuration,Tirific_Template, [key]),\
+                    sf.load_tirific(Configuration,Tirific_Template, \
+                    [f"{key}_2"]))],dtype=float)
+            if key == 'PA':
+                diff = abs(np.max(profile)-np.min(profile))/10.
+                initial_estimates['PA'] = [profile[0],sf.set_limits(diff,0.5,10)]
+            elif key == 'VROT':
+                initial_estimates['VROT'] = [np.nanmax(profile),\
+                    sf.set_limits(np.nanstd(profile[1:]),\
+                    np.nanmax(profile)-np.nanmin(profile[1:]),np.nanmax(profile))]
+            elif key == 'XPOS':
+                initial_estimates['XPOS'] = [profile[0],0.1*\
+                    Configuration['BEAM_IN_PIXELS'][1]*Configuration['PIXEL_SIZE']]
+            elif key == 'YPOS':
+                initial_estimates['YPOS'] = [profile[0],0.1*\
+                    Configuration['BEAM_IN_PIXELS'][1]*Configuration['PIXEL_SIZE']]
+            elif key == 'SDIS':
+                initial_estimates['SDIS'] = [np.mean(profile),Configuration['CHANNEL_WIDTH']]
+            elif key == 'Z0':
+                error_z0 = 0.05
+                if 'VROT' in initial_estimates:
+                    if initial_estimates['VROT'][0] < 120.:
+                        #The smaller the VROT the bigger the error on the Z0
+                        error_z0 *= (120./initial_estimates['VROT'][0])**2
+                initial_estimates['Z0'] = sf.convertskyangle(Configuration,\
+                    [0.2,error_z0], physical = True)
+
+set_missing_estimates.__doc__ = '''
+ NAME:
+    set_missing_estimates
+
+ PURPOSE:
+    Set the parameters that are missing in initial estimates in set_fitting_parameters 
+
+ CATEGORY:
+    modify_template
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    Tirific_Template = The tirific template
+    initial_estimates = dictionary with initital estimates
+
+ OPTIONAL INPUTS:
+
+
+    parameters_to_adjust  = ['NO_ADJUSTMENT']
+    a list of parameters that have to be set
+
+   
+ OUTPUTS:
+    Nothing is returned but the initial_estimates is updated
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
+
 def set_model_parameters(Configuration, Tirific_Template,Model_Values, \
         stage = 'initial'):
     parameters_to_set = ['RADI','VROT_profile','Z0','SBR_profile','INCL','PA','XPOS','YPOS','VSYS','SDIS']
@@ -4055,16 +4078,11 @@ beamarea = {Configuration['BEAM_AREA']}, channelwidth = {Configuration['CHANNEL_
             sbr_input['VARY'] =\
                 [f"!SBR {inner_ring+1}:{last_ring_to_fit[0]+1} SBR_2 {inner_ring+1}:{last_ring_to_fit[1]+1}"]
         
-        skiprings = [[],[]]
-        for j in [0,1]:
-            for i in range(last_ring_to_fit[j]+1,inner_ring+1,-2):
-                skiprings[j].append(f'{i:d}')
-            for i in range(inner_ring,1):
-                skiprings[j].append(f'{i:d}')
-           
-        sbr_input['VARINDX'] =\
-            [f"SBR {' '.join(skiprings[0])} SBR_2 {' '.join(skiprings[1])}"]
-
+     
+        sbr_input['VARINDX'] = \
+            set_sbr_varindex(Configuration,last_ring_to_fit,inner_ring)
+    
+       
         for i in range(Configuration['NUMBER_OF_DISKS']):
             for i,var in enumerate(par_to_fill):
                 sbr_input[var].append(value[i])
@@ -4127,6 +4145,51 @@ set_sbr_fitting.__doc__ =f'''
 
  NOTE:
 '''
+
+def set_sbr_varindex(Configuration,last_ring_to_fit,inner_ring):
+    skiprings = [[],[]]
+    for j in [0,1]:
+        for i in range(last_ring_to_fit[j]+1,inner_ring+1,-2):
+            skiprings[j].append(f'{i:d}')
+        for i in range(inner_ring,1):
+            skiprings[j].append(f'{i:d}')
+    var_setting = "" 
+    front = ['SBR','SBR_2']
+    for j in [0,1]:
+        if len(skiprings[j]) > 0:
+            var_setting += f"{front[j]}  {' '.join(skiprings[j])} "
+    return [var_setting]
+set_sbr_varindex.__doc__ =f'''
+ NAME:
+    set_sbr_varindex
+
+ PURPOSE:
+    set the sbr varindex for the SBR 
+
+ CATEGORY:
+    modify_template
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    last_ring_to_fit = list with the extend of the rings to fit
+    inner_ring = list with the inner ring extend
+
+
+ OPTIONAL INPUTS:
+
+
+ OUTPUTS:
+    the sbr input for the VARINDX parameter
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE:
+'''
+         
+
 
 def set_vrot_fitting(Configuration, stage = 'initial', rotation = None):
     if rotation is None:

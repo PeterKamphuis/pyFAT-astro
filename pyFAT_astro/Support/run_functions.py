@@ -1007,7 +1007,7 @@ def fitting_osc(Configuration,Fits_Files,Initial_Parameters):
             copyfile(source, target )
         else:
             Configuration['FINAL_COMMENT'] = 'We could not converge on the extent or centre of the galaxy'
-            Configuration['OUTPUT_QUANTITY'] = 5
+            Configuration['QUANTITY'] = 5
         Configuration['FIT_TIME'][1] = datetime.now()
     enter_recovery_point(Configuration,Fits_Files=Fits_Files,Tirific_Template=Tirific_Template,\
         message=f'After we apply the smoothing',point_ID='AFTER-SMOOTHING')

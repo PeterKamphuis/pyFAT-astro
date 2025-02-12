@@ -26,11 +26,11 @@ class DummyLock():
 def check_legitimacy_osc(Configuration):
     print_log(f'''CHECK_LEGITIMACY_OSC: Start.
 ''',Configuration,case=['debug_start'])
-    if Configuration['OUTPUT_QUANTITY'] == 'error':
+    if Configuration['QUANTITY'] == 'error':
         print_log(f'''CHECK_LEGITIMACY_OSC: An unspecified error is registered. The final message should reflect this.
 ''',Configuration)
         return
-    elif Configuration['OUTPUT_QUANTITY'] == 5:
+    elif Configuration['QUANTITY'] == 5:
         print_log(f'''CHECK_LEGITIMACY_OSC: A FAT specific error is registered. The final message should reflect this.
 ''',Configuration)
         return
@@ -346,7 +346,7 @@ cleanup.__doc__ =f'''
 
 def cleanup_final(Configuration,Fits_Files):
     print_log(f'''CLEANUP_FINAL: Starting the final cleanup of the directory.
-{'':8s} The request is {Configuration['OUTPUT_QUANTITY']}
+{'':8s} The request is {Configuration['QUANTITY']}
 ''',Configuration,case = ['debug_start','verbose'] )
 
     if Configuration['USED_FITTING'] == 'Fit_Tirific_OSC':
@@ -360,7 +360,7 @@ def cleanup_final(Configuration,Fits_Files):
     for file in clean_files:
     # Not remove anything but cleanup all
         try:
-            if Configuration['OUTPUT_QUANTITY'] >= 5 or Configuration['OUTPUT_QUANTITY'] == 0:
+            if Configuration['QUANTITY'] >= 5 or Configuration['QUANTITY'] == 0:
                 os.rename(f"{Configuration['FITTING_DIR']}{file}",f"{Configuration['LOG_DIRECTORY']}{file}")
             else:
                 os.remove(f"{Configuration['FITTING_DIR']}{file}")
@@ -369,7 +369,7 @@ def cleanup_final(Configuration,Fits_Files):
 
     fit_directories = [Configuration['USED_FITTING']]
     delete_ext = ['.log']
-    if Configuration['OUTPUT_QUANTITY'] == 4:
+    if Configuration['QUANTITY'] == 4:
         delete_ext.append('.fits')
 
     for dir in fit_directories:
@@ -387,8 +387,8 @@ def cleanup_final(Configuration,Fits_Files):
                     pass
                 except IsADirectoryError:
                     pass
-            if (Configuration['OUTPUT_QUANTITY'] == 2 and extension != ".fits") \
-                or (5 > Configuration['OUTPUT_QUANTITY'] >= 3):
+            if (Configuration['QUANTITY'] == 2 and extension != ".fits") \
+                or (5 > Configuration['QUANTITY'] >= 3):
                 if file != f"{Configuration['USED_FITTING']}.def" and file != f"{Configuration['USED_FITTING']}.fits":
                     try:
                         if not (Configuration['DEBUG'] and extension == '.def'):
@@ -403,7 +403,7 @@ def cleanup_final(Configuration,Fits_Files):
             stage_dirs.append('Error_Shaker')
 
     for dirs in stage_dirs:
-        if 5 > Configuration['OUTPUT_QUANTITY'] >= 1:
+        if 5 > Configuration['QUANTITY'] >= 1:
             files_in_dir = os.listdir(f"{Configuration['FITTING_DIR']}{dirs}")
             for file in files_in_dir:
                 try:
@@ -557,7 +557,7 @@ def finish_galaxy(Configuration,current_run = 'Not initialized',\
         check_legitimacy_osc(Configuration)
 
 
-    if Configuration['OUTPUT_QUANTITY'] == 'error':
+    if Configuration['QUANTITY'] == 'error':
         error_message = '''
             Your code has crashed for some reason. If this message completely baffles you then please submit the trace back as a bug report to: \n
             https://github.com/PeterKamphuis/pyFAT/issues \n
@@ -582,15 +582,15 @@ def finish_galaxy(Configuration,current_run = 'Not initialized',\
         if Configuration['MULTIPROCESSING']:
             Configuration['ACCEPTED'] = False
             Configuration['FINAL_COMMENT'] = f"The code crashed while fitting this galaxy please check it's log."
-            Configuration['OUTPUT_QUANTITY'] = 5
+            Configuration['QUANTITY'] = 5
         else:
             if exiting != None:
                 sys.exit(1)
             else:
                 Configuration['ACCEPTED'] = False
                 Configuration['FINAL_COMMENT'] = f"The code crashed while fitting this galaxy please check it's log."
-                Configuration['OUTPUT_QUANTITY'] = 5
-    elif Configuration['OUTPUT_QUANTITY'] == 5:
+                Configuration['QUANTITY'] = 5
+    elif Configuration['QUANTITY'] == 5:
         print_log(f'''
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 {"":8s}FAT could not find an acceptable model for the galaxy in directory {Configuration['FITTING_DIR']}.
@@ -599,7 +599,7 @@ def finish_galaxy(Configuration,current_run = 'Not initialized',\
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ''',Configuration, case = ['main','screen'])
 
-    elif Configuration['OUTPUT_QUANTITY'] < 4:
+    elif Configuration['QUANTITY'] < 4:
         print_log( f'''Producing final output in {Configuration['FITTING_DIR']}.
 ''',Configuration)
         # We need to produce a FinalModel Directory with moment maps and an XV-Diagram of the model.

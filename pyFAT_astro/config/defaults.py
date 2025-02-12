@@ -60,9 +60,9 @@ class Output:
     log_directory: str = f'Logs/{datetime.now().strftime("%d-%m-%Y")}'
     log_file: str = 'Log.txt'  # Name of the log file
     catalogue: str = 'pyFAT_results.txt'
-    new_output: bool = True  # Create all output anew
+    new: bool = True  # Create all output anew
     # How much output you would like to maintain for each galaxy. 0 just organize the output and keep all (This will also happen when a fit is unsuccesful, this can be a lot of files); 1 remove optimized files, log files and input files; 2  remove optimized files, log files, input files, ps files and unsmoothed files; 3 (Default) remove optimized files, log files, input files, ps files, unsmoothed files and all model fits files except the final model; 4 keep only the def files and remove all other output. 5 indicates a failed fit clean up. >6 is the same as 0. Residuals are created for all cases where the fits files are maintained.
-    output_quantity: int = 3
+    quantity: int = 3
     # If you want FAT to output a warp radius, tiltograms and warp radius set warp_output (Default = n)
     warp_output: bool = False
     # The font to be used in the plots

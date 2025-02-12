@@ -79,13 +79,13 @@ Output Keywords
 
   The output catalogue with the results per galaxy indicating a success or failure with possible failure reason.
 
-**new_output**:
+**new**:
 
   *bool, optional, default = True*
 
   Create all output anew. Set this to false in case you are looking for a final catalogue and the fitting got interrupted.
 
-**output_quantity**:
+**quantity**:
 
   *int, optional, default = 3*
 
@@ -372,12 +372,12 @@ Advanced Keywords
 
 **recovery_point**
 
-  *str, optional, default='Start'*
+  *str, optional, default='START_0'*
 
   filename of a pickle file of where to restart the pyFAT fitting. The default starts at the start.
   This only works for individual galaxies being fitted. If corresponding to an actual file name in the set log directory the code will restart the fitting from this point. 
   This reloads the configuration from a log file and thus can not be used to change settings mid fitting.
-  !!!!!!!!!!!!Untested for Now!!!!!!!!!!!!!!!
+ 
 
 
 Individual Keywords
