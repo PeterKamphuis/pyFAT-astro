@@ -74,7 +74,6 @@ class Output:
 
 @dataclass
 class Advanced:
-    start_directory: str = f'{os.getcwd()}'
     # The maximum number of iterations that FAT tries to calls trific bfeore it call it quits
     max_iterations: int = 15
     loops: int = 7  # The number of full loops set for tirific in a  single iteration, this is increased every time the maximum is reach upto max 15 loops

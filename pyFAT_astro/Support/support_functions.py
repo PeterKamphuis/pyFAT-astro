@@ -3623,7 +3623,7 @@ set_individual_configuration.__doc__ =f'''
 def setup_configuration(cfg):
     Configuration = Proper_Dictionary({})
     Configuration['ORIGINAL_CONFIGURATION'] = cfg
- 
+    Configuration['START_DIRECTORY'] = f'{os.getcwd()}'
     if cfg.installation_check:
         cfg.fitting.fixed_parameters=['INCL','PA','SDIS']
         cfg.advanced.max_iterations= 1
