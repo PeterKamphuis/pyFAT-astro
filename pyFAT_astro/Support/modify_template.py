@@ -3040,8 +3040,8 @@ def set_fitting_parameters(Configuration, Tirific_Template, \
 {'':8s} With these values {modifiers[key]}
 ''',Configuration,case=['debug_add'])
     ###############-- Modfier adaptations for large galaxies ####################
-    if Configuration['OUTER_RINGS_DOUBLED']:
-        for par_to_change in ['XPOS','YPOS']:
+    if Configuration['OUTER_RINGS_DOUBLED'] and not  Configuration['CENTRAL_CONVERGENCE']:
+        for par_to_change in ['XPOS','YPOS','VSYS']:
             if par_to_change in modifiers:
                 modifiers[par_to_change]  = np.array(modifiers[par_to_change],dtype=float)*\
                                             np.array([4.,3.,5.],dtype=float)
@@ -3990,8 +3990,8 @@ beamarea = {Configuration['BEAM_AREA']}, channelwidth = {Configuration['CHANNEL_
 
 
      
-       
-        if np.mean(Configuration['SIZE_IN_BEAMS']) < max_size or Configuration['NUMBER_OF_DISKS'] == 1:
+        if np.mean(Configuration['SIZE_IN_BEAMS']) < max_size or Configuration['NUMBER_OF_DISKS'] == 1\
+              or (Configuration['OUTER_RINGS_DOUBLED'] and Configuration['ITERATIONS'] <= 1.):
             extend = np.max(last_ring_to_fit)
                
             sbr_input['VARY'] =  np.array([f"SBR {x+1} SBR_2 {x+1}" for x \
