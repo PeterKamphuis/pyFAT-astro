@@ -17,6 +17,7 @@ def report_version():
         __version__ = version("pyFAT-astro")
     except:
         __version__ = "dev"
+   
     # perhaps we are in a github with tags; in that case return describe
     path = os.path.dirname(os.path.abspath(__file__))
     try:
@@ -25,8 +26,10 @@ def report_version():
             'cd %s; git describe --tags' % path, shell=True, stderr=subprocess.STDOUT).rstrip().decode()
     except subprocess.CalledProcessError:
         result = None
+    
     if result != None and 'fatal' not in result:
-        # will succeed if tags exist
+        # will succeed if tags exist which means we are in a github branch
+        result = f'{__version__}-GitHub_Direct_Install'
         return result
     else:
         # perhaps we are in a github without tags? Cook something up if so
@@ -35,8 +38,10 @@ def report_version():
                 'cd %s; git rev-parse --short HEAD' % path, shell=True, stderr=subprocess.STDOUT).rstrip().decode()
         except subprocess.CalledProcessError:
             result = None
+    
         if result != None and 'fatal' not in result:
-            return __version__+'-'+result
+            result = f'{__version__}-GitHub_Direct_Install'
+            return result
         else:
             # we are probably in an installed version
             return __version__
