@@ -318,7 +318,7 @@ check_source_brightness.__doc__ =f'''
 def combine_pa(Configuration,pa,vel_pa,sofia_pa,vel_pa_unreliable=False,\
                inclination=[60.,0.]):
     print_log(f'''COMBINE_PA: Combining the intensity (pa={pa}), the kinematic pa (pa={vel_pa}, reliable = {vel_pa_unreliable}) and sofias estimate (pa ={sofia_pa})
-''' , Configuration,case= ['debug_add'])
+''' , Configuration,case= ['debug_start'])
     
     collected_pas = []
     if ~np.isnan(pa[0]):
@@ -332,7 +332,20 @@ def combine_pa(Configuration,pa,vel_pa,sofia_pa,vel_pa_unreliable=False,\
         if vel_pa_unreliable:
             collected_pas[-1][1] *= 2.
     if ~np.isnan(sofia_pa[0]):
-        collected_pas.append(sofia_pa) 
+        collected_pas.append(sofia_pa)
+    no_errors_pas = [x[0] for x in collected_pas]     
+    diff = [abs(x-y) for x,y in zip(no_errors_pas[:-1],no_errors_pas[1:])]
+    if any([x > 300. for x in diff]):
+        median_pas = np.nanmedian(no_errors_pas)
+        for i,pa in enumerate(no_errors_pas):
+            if median_pas > 180. :
+                if pa < 180:
+                    collected_pas[i][0] = pa+360.
+            else:
+                if pa >= 180:
+                    collected_pas[i][0] = pa-360.
+    print_log(f'''COMBINE_PA: the pas to be weighted {collected_pas}.
+''' , Configuration,case= ['debug_add'])            
     pa = sf.obtain_weighted_mean(collected_pas)
     '''
     #if we do not have a vel pa we use the the sofia estimate
