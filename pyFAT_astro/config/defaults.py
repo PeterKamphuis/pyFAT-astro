@@ -17,6 +17,7 @@ except ImportError:
     # Try backported to PY<37 `importlib_resources`.
     # For Py<3.9 files is not available
     from importlib_resources import files as import_pack_files
+    
 @dataclass
 class Fitting:
 
