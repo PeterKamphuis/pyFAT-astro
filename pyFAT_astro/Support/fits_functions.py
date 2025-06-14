@@ -15,6 +15,7 @@ from make_moments.functions import moments
 #from pyFAT_astro.Support.read_functions import obtain_border_pix
 from scipy import ndimage
 import numpy as np
+import psutil
 import copy
 import warnings
 import os
@@ -302,11 +303,24 @@ cut_cubes.__doc__ =f'''
 '''
 
 def cutout_cube(Configuration,filename,sub_cube):
-    Cube = fits.open(Configuration['FITTING_DIR']+filename,uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
-    hdr = Cube[0].header
-
+    hdr = fits.getheader(filename)
+    if hdr['NAXIS'] == 3:
+        memory_required =  hdr['NAXIS1']*hdr['NAXIS2']*hdr['NAXIS3']*4./(1024**3)*1.2
+    elif hdr['NAXIS'] == 2:
+        memory_required =  hdr['NAXIS1']*hdr['NAXIS2']*4./(1024**3)*1.2
+    available_memory = psutil.virtual_memory().available/(1024**3) 
+    if available_memory < memory_required: 
+        error_message = f'''You're cube is too big for to read, we will need {memory_required} Gb and have only {available_memory}.'''
+        print_log(error_message,Configuration,case = ['main','screen'])
+        raise MemoryError(error_message)
+  
+    Cube = fits.open(Configuration['FITTING_DIR']+filename,uint = False,\
+        do_not_scale_image_data=True,ignore_blank = True,\
+        output_verify= 'ignore') 
+    Cube[0].data.astype(np.float32) 
     if hdr['NAXIS'] == 3:
         data = Cube[0].data[sub_cube[0,0]:sub_cube[0,1],sub_cube[1,0]:sub_cube[1,1],sub_cube[2,0]:sub_cube[2,1]]
+        Cube.close()
         hdr['NAXIS1'] = sub_cube[2,1]-sub_cube[2,0]
         hdr['NAXIS2'] = sub_cube[1,1]-sub_cube[1,0]
         hdr['NAXIS3'] = sub_cube[0,1]-sub_cube[0,0]
