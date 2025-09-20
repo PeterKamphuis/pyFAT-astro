@@ -352,10 +352,28 @@ Advanced Keywords
 
 **sbr_input_boundary**
 
-    *list, optional, default = [[0., 0.], [0., 0.], [0., 0.]]*
+  *list, optional, default = [[0., 0.], [0., 0.], [0., 0.]]*
 
-    The boundaries that the surface brightness profile needs to remain within. Too small boundaries can lead to FAT not finding a a succesfull model.
-    Given as min,max for the three areas of the fit: the central part, the approaching side warp, the receding side warp.
+  The boundaries that the surface brightness profile needs to remain within. Too small boundaries can lead to FAT not finding a a succesfull model.
+  Given as min,max for the three areas of the fit: the central part, the approaching side warp, the receding side warp.
+   # The brightest pixels need to have a SNR above this value
+**source_max_snr**
+
+  *float, optional, default = 2.5
+
+  The brightest pixels need to have a SNR above this value
+
+**source_max_fraction**
+  
+  *float,optional, default = 0.075*
+
+  The fraction of pixels in the source that need to be above max_snr
+   
+**source_mean_snr**
+  
+  *float, optional, default = 0.5*
+
+  The mean SNR required in the source
 
 **sofia_threshold**
 
