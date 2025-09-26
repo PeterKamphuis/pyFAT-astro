@@ -1412,7 +1412,7 @@ def set_trm_template(Configuration):
         trm_template.tirshaker.individual_loops=1 
         trm_template.general.verbose = True
 
-
+    trm_template.tirshaker.tirific= Configuration['TIRIFIC']
     trm_template.tirshaker.deffile_in = 'Error_Shaker/Error_Shaker_FAT_Start.def'
     trm_template.general.directory = f'{Configuration["FITTING_DIR"]}'
 
