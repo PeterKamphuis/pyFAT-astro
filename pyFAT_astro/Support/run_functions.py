@@ -19,6 +19,7 @@ from pyFAT_astro import Templates as templates
 from omegaconf import OmegaConf
 from astropy.wcs import WCS
 from astropy.io import fits
+from packaging.version import Version
 from shutil import copyfile
 
 import pyFAT_astro.Support.read_functions as rf
@@ -949,7 +950,7 @@ def fitting_osc(Configuration,Fits_Files,Initial_Parameters):
         # First we want to read the template
         Tirific_Template = sf.tirific_template()
         # if the CTYPE3 is not 'VELO' we want to make a copy of the fitting cube that is used in tirific
-        if Configuration['HDR_VELOCITY'] != 'VELO':
+        if Configuration['HDR_VELOCITY'] != 'VELO' and Version(Configuration['TIRIFIC_VERSION']) < Version('2.3.12'):
             Fits_Files = wf.create_tirific_run_cube(Configuration,Fits_Files)
       
         Configuration['FIT_TIME'][0] = datetime.now()

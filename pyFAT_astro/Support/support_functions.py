@@ -10,6 +10,7 @@ from pyFAT_astro.Support.log_functions import print_log,get_usage_statistics,\
 from pyFAT_astro import Templates as templates
 from collections import OrderedDict #used in Proper_Dictionary
 from numpy.linalg import LinAlgError
+from packaging.version import Version
 from scipy.optimize import curve_fit, OptimizeWarning
 from scipy import ndimage
 from scipy.signal import savgol_filter
@@ -672,10 +673,12 @@ Your header did not have a unit for the third axis, that is bad policy.
 Please note that FAT can only deal with velocity cubes, not frequency.
 ''',Configuration, case=['main','screen'])
                 raise BadHeaderError(f'The Cube has a non-standard velocity projection (CTYPE3 = {hdr["CTYPE3"]})')
-        #Tirific will only run with VELO so if VRAD of VOPT then we need to run with VELO and fix it in the end
+        
+        #Tirific pre 2.3.12 will only run with VELO so if VRAD of VOPT then we need to run with VELO and fix it in the end
         Configuration['HDR_VELOCITY'] = hdr['CTYPE3']
         if  hdr['CTYPE3'].upper() in ['VRAD','VOPT']:
-            print_log(f'''CLEAN_HEADER: you are use a velocity type of {hdr['CTYPE3'].upper()} however tirific takes issue with this.
+            if Version(Configuration['TIRIFIC_VERSION']) < Version('2.3.12'):
+                print_log(f'''CLEAN_HEADER: you are use a velocity type of {hdr['CTYPE3'].upper()} however tirific takes issue with this.
 As such we are replacing it with VELO before every tirific run. 
 !!!!!!!!!!!! ---- We are not converting anything so your fitting and all products are are of type {hdr['CTYPE3'].upper()}-------!!!!!!!!                                              
 ''',Configuration)
@@ -2378,6 +2381,21 @@ get_tirific_output_names.__doc__=f'''
  NOTE:
 '''
 
+def get_tirific_version(Configuration):
+    '''Get the version of the TiRiFiC code from the command line'''
+    version = None
+    try:
+        output = subprocess.Popen([Configuration['TIRIFIC'],f"-v"],\
+                                       stdout = subprocess.PIPE, stderr = subprocess.PIPE,\
+                                       universal_newlines = True)
+        for line in output.stdout:
+            if line.startswith("TiRiFiC v."):
+                version = line.split(" ")[2].split('_')[0]
+                break
+    except subprocess.CalledProcessError as e:
+        version = '2.3.11'
+    return version
+
 def get_vel_pa(Configuration,velocity_field,center_in=\
         np.array([None,None],dtype=float),Fits_Files =None ):
     center = copy.deepcopy(center_in)
@@ -3409,7 +3427,7 @@ We were running {deffile} and failed to find the output {output_fits} or {output
 We were running {deffile} and failed to find the output {output_fits} or {output_deffile}.
 ''')
     #If we are running tirific with an incorrect velocity type we should addapt the velocity type of the output
-    if Configuration['HDR_VELOCITY'] != 'VELO':
+    if Configuration['HDR_VELOCITY'] != 'VELO' and Version(Configuration['TIRIFIC_VERSION']) < Version('2.3.12'):
         cube = fits.open(output_fits)
         cube[0].header['CTYPE3'] = Configuration['HDR_VELOCITY']
         fits.writeto(output_fits,cube[0].data,cube[0].header,overwrite=True)
@@ -3680,6 +3698,10 @@ def setup_configuration(cfg):
                     Configuration[str(sub_key).upper()] =  getattr(input_key,sub_key)
         else:
             Configuration[str(key).upper()] = input_key
+
+    Configuration['TIRIFIC_VERSION'] = get_tirific_version(Configuration)
+  
+
 
     #if we have a recovery ppoint we will try to start everything from there
     if Configuration['RECOVERY_POINT'] != 'START_0':
