@@ -1970,6 +1970,8 @@ get_fit_groups.__doc__ =f'''
  EXAMPLE:
 
  NOTE:
+    It looks like this is no longer used with the introduuction of TRM Errors
+
 '''
 
 def get_inclination_pa(Configuration, Image, center, cutoff = 0.):
