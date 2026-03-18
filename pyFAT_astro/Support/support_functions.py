@@ -584,9 +584,8 @@ def check_tiltogram(Configuration, tiltogram,inner_min=3):
 ''',Configuration,case= ['debug_start'])
         rings_found = False
         while not rings_found:
-            ring_location = np.where(np.nanmax(diff) == diff)[0]
-            if ring_location.size > 1:
-                ring_location = ring_location[0]
+            ring_location = int(np.where(np.nanmax(diff) == diff)[0][0])
+           
             if theta_inner[ring_location] < 5. and theta_mutual[ring_location] > 15.:
                 Configuration['INNER_FIX'][i] = float_to_int(set_limits(ring_location-1,inner_min,Configuration['NO_RINGS']*3./4.-1))
                 rings_found = True
@@ -1637,18 +1636,13 @@ def fit_sine(Configuration,x,y):
     x= np.array(x,dtype=float)
     y= np.array(y,dtype=float)
     est_peak = np.nanmax(y)-np.mean(y)
-    peak_location = np.where(y == np.nanmax(y))[0]
-    if peak_location.size > 1:
-        peak_location = int(peak_location[0])
-    min_location =  np.where(y == np.nanmin(y))[0]
-    if min_location.size > 1:
-        min_location = int(min_location[0])
+    #This should only fail when np.nanmax(y) is not in y which would mean all y is None
+    # That would be a very different problem
+    peak_location = int(np.where(y == np.nanmax(y))[0][0])
+    min_location =  int(np.where(y == np.nanmin(y))[0][0])
+   
     est_width = float(abs(x[peak_location]-x[min_location])/(2.*np.pi))
     est_amp = np.mean(y)
-    peak_location = np.where(y == np.nanmax(y))[0]
-    if peak_location.size > 1:
-        peak_location = int(peak_location[0])
-
     est_center = float(x[peak_location])
 
     est_width=est_width*(2.*np.pi/180.)
@@ -1720,9 +1714,8 @@ def fit_gaussian(Configuration,x,y, covariance = False,errors = None):
         absolute_sigma = False
     else:
         absolute_sigma = True
-    peak_location = np.where(y == est_peak)[0]
-    if peak_location.size > 1:
-        peak_location = peak_location[0]
+    # est peak should be in y so if this fails there is problem with y    
+    peak_location = int(np.where(y == est_peak)[0][0])   
     est_center = float(x[peak_location])
     est_sigma = np.nansum(y*(x-est_center)**2)/np.nansum(y)
 
@@ -1991,15 +1984,11 @@ def get_inclination_pa(Configuration, Image, center, cutoff = 0.):
         
         ratios=sin_ratios
 
-        max_index = np.where(ratios == np.nanmax(ratios))[0]
-        if max_index.size > 1:
-            max_index = max_index[0]
-        min_index = np.where(ratios == np.nanmin(ratios))[0]
-        if min_index.size > 1:
-            min_index = min_index[0]
+        max_index = int(np.where(ratios == np.nanmax(ratios))[0][0])
+        min_index = int(np.where(ratios == np.nanmin(ratios))[0][0])
         #From here we know it is 1 value so lets set it to an integer    
-        max_index = set_limits(int(max_index),2,177)
-        min_index = set_limits(int(min_index),2,177)
+        max_index = set_limits(max_index,2,177)
+        min_index = set_limits(min_index,2,177)
 
         if min_index > 135 and max_index < 45:
             min_index=min_index-90
@@ -2310,7 +2299,7 @@ get_profile.__doc__=f'''
 def get_system_string(string):
     '''Escape any spaces in string with backlash'''
     if len(string.split()) > 1:
-        string = "\ ".join(string.split())
+        string = r"\ ".join(string.split())
     return string
 get_system_string.__doc__=f'''
  NAME:
@@ -2435,11 +2424,11 @@ def get_vel_pa(Configuration,velocity_field,center_in=\
        
     #fits.writeto(f'{Configuration["FITTING_DIR"]}/testvf.fits',sm_velocity_field,overwrite=True)
     max_pos = np.where(np.nanmax(sm_velocity_field) == sm_velocity_field)
-    #Python is a super weird language so make a decent list of np output
-
-    max_pos = [float(max_pos[0]),float(max_pos[1])]
+   
+    #Python is a super weird language so make a decent list of np output    
+    max_pos = [float(max_pos[0][0]),float(max_pos[1][0])]
     min_pos = np.where(np.nanmin(sm_velocity_field) == sm_velocity_field)
-    min_pos = [float(min_pos[0]),float(min_pos[1])]
+    min_pos = [float(min_pos[0][0]),float(min_pos[1][0])]
 
     print_log(f'''GET_VEL_PA: This is the location of the maximum {max_pos} and minimum {min_pos}
 ''',Configuration,case=['debug_add'])

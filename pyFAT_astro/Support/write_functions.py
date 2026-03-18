@@ -463,6 +463,7 @@ def make_overview_plot(Configuration,Fits_Files ):
     plt.rc('font', **labelfont)
     plt.rcParams['xtick.direction'] = 'in'
     plt.rcParams['ytick.direction'] = 'in'
+    plt.rcParams["text.usetex"] = False
 # First some textual information
 
     if Configuration['SUB_DIR'] == './':
@@ -831,7 +832,7 @@ def make_overview_plot(Configuration,Fits_Files ):
     if 'INCL' in Configuration['FIXED_PARAMETERS'][0]:
         ax_INCL.text(1.01,0.5,'Forced Flat', rotation =-90,va='center',ha='left', color='black',transform = ax_INCL.transAxes,
           bbox=dict(facecolor='white',edgecolor='white',pad=0.,alpha=0.),zorder=7,fontsize=10*size_factor)
-    plt.ylabel('Incl ($^{\circ}$)',**labelfont)
+    plt.ylabel(r'Incl ($^{\circ}$)',**labelfont)
     arcmin,arcmax = ax_INCL.get_xlim()
     sec_ax = ax_INCL.twiny()
     sec_ax.set_xlim(sf.convertskyangle(Configuration,arcmin),sf.convertskyangle(Configuration,arcmax))
@@ -853,8 +854,8 @@ def make_overview_plot(Configuration,Fits_Files ):
     if 'PA' in Configuration['FIXED_PARAMETERS'][0]:
         ax_PA.text(1.01,0.5,'Forced Flat', va='center',ha='left', color='black',rotation = -90, transform = ax_PA.transAxes,
           bbox=dict(facecolor='white',edgecolor='white',pad=0.,alpha=0.),zorder=7,fontsize=10*size_factor)
-    plt.xlabel('Radius (arcsec)',**labelfont)
-    plt.ylabel('PA ($^{\circ}$)',**labelfont)
+    plt.xlabel(r'Radius (arcsec)',**labelfont)
+    plt.ylabel(r'PA ($^{\circ}$)',**labelfont)
     arcmin,arcmax = ax_PA.get_xlim()
     sec_ax = ax_PA.twiny()
     sec_ax.set_xlim(sf.convertskyangle(Configuration,arcmin),sf.convertskyangle(Configuration,arcmax))
@@ -995,8 +996,8 @@ def make_overview_plot(Configuration,Fits_Files ):
                edgecolor='none', alpha=0.4, lw=4, facecolor='k', hatch = None, zorder=-1)
     ax_RAD.add_patch(mod_ell)
     ax_RAD.legend(loc='upper left', bbox_to_anchor=(0.0, -0.3), shadow=True, ncol=1)
-    plt.xlabel('RA ($^{\circ}$)',**labelfont)
-    plt.ylabel('DEC ($^{\circ}$)',**labelfont)
+    plt.xlabel(r'RA ($^{\circ}$)',**labelfont)
+    plt.ylabel(r'DEC ($^{\circ}$)',**labelfont)
     cube_mod.close()
     cube.close()
     channels_map.close()

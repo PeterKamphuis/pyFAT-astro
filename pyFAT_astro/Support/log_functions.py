@@ -53,17 +53,20 @@ class full_system_tracking:
                self.CPU = 0.
                self.RAM = 0.
                for proc in psu.process_iter():
-                  if proc.username() == self.user \
-                     and proc.status() == 'running'\
-                     and (proc.name() == self.python or\
-                        proc.name() == self.tirific or\
-                        proc.name() == self.sofia or\
-                        proc.name() == 'python3'):
-                     try:
-                           self.CPU += proc.cpu_percent(interval=0.5)/self.cpus
-                           self.RAM += (proc.memory_info()[0])/2**30.
-                     except:
-                           pass
+                  try:
+                     if proc.username() == self.user \
+                        and proc.status() == 'running'\
+                        and (proc.name() == self.python or\
+                           proc.name() == self.tirific or\
+                           proc.name() == self.sofia or\
+                           proc.name() == 'python3'):
+                        try:
+                              self.CPU += proc.cpu_percent(interval=0.5)/self.cpus
+                              self.RAM += (proc.memory_info()[0])/2**30.
+                        except:
+                              pass
+                  except psutil.NoSuchProcess:
+                     pass
                #file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Gb for TiRiFiC \n")
                with open(self.file,'a') as resources:
                   resources.write(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S'):20s} {self.sys_cpu:>10.1f} {self.sys_ram:>10.2f} {self.CPU:>10.1f} {self.RAM:>10.2f} \n")
