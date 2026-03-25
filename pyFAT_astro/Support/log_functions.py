@@ -65,7 +65,7 @@ class full_system_tracking:
                               self.RAM += (proc.memory_info()[0])/2**30.
                         except:
                               pass
-                  except psutil.NoSuchProcess:
+                  except psu.NoSuchProcess:
                      pass
                #file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Gb for TiRiFiC \n")
                with open(self.file,'a') as resources:
