@@ -10,6 +10,7 @@ from pyFAT_astro.Support.log_functions import print_log,get_usage_statistics,\
 from pyFAT_astro import Templates as templates
 from collections import OrderedDict #used in Proper_Dictionary
 from numpy.linalg import LinAlgError
+from packaging.version import Version
 from scipy.optimize import curve_fit, OptimizeWarning
 from scipy import ndimage
 from scipy.signal import savgol_filter
@@ -583,9 +584,8 @@ def check_tiltogram(Configuration, tiltogram,inner_min=3):
 ''',Configuration,case= ['debug_start'])
         rings_found = False
         while not rings_found:
-            ring_location = np.where(np.nanmax(diff) == diff)[0]
-            if ring_location.size > 1:
-                ring_location = ring_location[0]
+            ring_location = int(np.where(np.nanmax(diff) == diff)[0][0])
+           
             if theta_inner[ring_location] < 5. and theta_mutual[ring_location] > 15.:
                 Configuration['INNER_FIX'][i] = float_to_int(set_limits(ring_location-1,inner_min,Configuration['NO_RINGS']*3./4.-1))
                 rings_found = True
@@ -672,10 +672,12 @@ Your header did not have a unit for the third axis, that is bad policy.
 Please note that FAT can only deal with velocity cubes, not frequency.
 ''',Configuration, case=['main','screen'])
                 raise BadHeaderError(f'The Cube has a non-standard velocity projection (CTYPE3 = {hdr["CTYPE3"]})')
-        #Tirific will only run with VELO so if VRAD of VOPT then we need to run with VELO and fix it in the end
+        
+        #Tirific pre 2.3.12 will only run with VELO so if VRAD of VOPT then we need to run with VELO and fix it in the end
         Configuration['HDR_VELOCITY'] = hdr['CTYPE3']
         if  hdr['CTYPE3'].upper() in ['VRAD','VOPT']:
-            print_log(f'''CLEAN_HEADER: you are use a velocity type of {hdr['CTYPE3'].upper()} however tirific takes issue with this.
+            if Version(Configuration['TIRIFIC_VERSION']) < Version('2.3.12'):
+                print_log(f'''CLEAN_HEADER: you are use a velocity type of {hdr['CTYPE3'].upper()} however tirific takes issue with this.
 As such we are replacing it with VELO before every tirific run. 
 !!!!!!!!!!!! ---- We are not converting anything so your fitting and all products are are of type {hdr['CTYPE3'].upper()}-------!!!!!!!!                                              
 ''',Configuration)
@@ -1634,18 +1636,13 @@ def fit_sine(Configuration,x,y):
     x= np.array(x,dtype=float)
     y= np.array(y,dtype=float)
     est_peak = np.nanmax(y)-np.mean(y)
-    peak_location = np.where(y == np.nanmax(y))[0]
-    if peak_location.size > 1:
-        peak_location = int(peak_location[0])
-    min_location =  np.where(y == np.nanmin(y))[0]
-    if min_location.size > 1:
-        min_location = int(min_location[0])
+    #This should only fail when np.nanmax(y) is not in y which would mean all y is None
+    # That would be a very different problem
+    peak_location = int(np.where(y == np.nanmax(y))[0][0])
+    min_location =  int(np.where(y == np.nanmin(y))[0][0])
+   
     est_width = float(abs(x[peak_location]-x[min_location])/(2.*np.pi))
     est_amp = np.mean(y)
-    peak_location = np.where(y == np.nanmax(y))[0]
-    if peak_location.size > 1:
-        peak_location = int(peak_location[0])
-
     est_center = float(x[peak_location])
 
     est_width=est_width*(2.*np.pi/180.)
@@ -1717,9 +1714,8 @@ def fit_gaussian(Configuration,x,y, covariance = False,errors = None):
         absolute_sigma = False
     else:
         absolute_sigma = True
-    peak_location = np.where(y == est_peak)[0]
-    if peak_location.size > 1:
-        peak_location = peak_location[0]
+    # est peak should be in y so if this fails there is problem with y    
+    peak_location = int(np.where(y == est_peak)[0][0])   
     est_center = float(x[peak_location])
     est_sigma = np.nansum(y*(x-est_center)**2)/np.nansum(y)
 
@@ -1967,6 +1963,8 @@ get_fit_groups.__doc__ =f'''
  EXAMPLE:
 
  NOTE:
+    It looks like this is no longer used with the introduuction of TRM Errors
+
 '''
 
 def get_inclination_pa(Configuration, Image, center, cutoff = 0.):
@@ -1986,15 +1984,11 @@ def get_inclination_pa(Configuration, Image, center, cutoff = 0.):
         
         ratios=sin_ratios
 
-        max_index = np.where(ratios == np.nanmax(ratios))[0]
-        if max_index.size > 1:
-            max_index = max_index[0]
-        min_index = np.where(ratios == np.nanmin(ratios))[0]
-        if min_index.size > 1:
-            min_index = min_index[0]
+        max_index = int(np.where(ratios == np.nanmax(ratios))[0][0])
+        min_index = int(np.where(ratios == np.nanmin(ratios))[0][0])
         #From here we know it is 1 value so lets set it to an integer    
-        max_index = set_limits(int(max_index),2,177)
-        min_index = set_limits(int(min_index),2,177)
+        max_index = set_limits(max_index,2,177)
+        min_index = set_limits(min_index,2,177)
 
         if min_index > 135 and max_index < 45:
             min_index=min_index-90
@@ -2305,7 +2299,7 @@ get_profile.__doc__=f'''
 def get_system_string(string):
     '''Escape any spaces in string with backlash'''
     if len(string.split()) > 1:
-        string = "\ ".join(string.split())
+        string = r"\ ".join(string.split())
     return string
 get_system_string.__doc__=f'''
  NAME:
@@ -2378,6 +2372,21 @@ get_tirific_output_names.__doc__=f'''
  NOTE:
 '''
 
+def get_tirific_version(Configuration):
+    '''Get the version of the TiRiFiC code from the command line'''
+    version = None
+    try:
+        output = subprocess.Popen([Configuration['TIRIFIC'],f"-v"],\
+                                       stdout = subprocess.PIPE, stderr = subprocess.PIPE,\
+                                       universal_newlines = True)
+        for line in output.stdout:
+            if line.startswith("TiRiFiC v."):
+                version = line.split(" ")[2].split('_')[0]
+                break
+    except subprocess.CalledProcessError as e:
+        version = '2.3.11'
+    return version
+
 def get_vel_pa(Configuration,velocity_field,center_in=\
         np.array([None,None],dtype=float),Fits_Files =None ):
     center = copy.deepcopy(center_in)
@@ -2415,11 +2424,11 @@ def get_vel_pa(Configuration,velocity_field,center_in=\
        
     #fits.writeto(f'{Configuration["FITTING_DIR"]}/testvf.fits',sm_velocity_field,overwrite=True)
     max_pos = np.where(np.nanmax(sm_velocity_field) == sm_velocity_field)
-    #Python is a super weird language so make a decent list of np output
-
-    max_pos = [float(max_pos[0]),float(max_pos[1])]
+   
+    #Python is a super weird language so make a decent list of np output    
+    max_pos = [float(max_pos[0][0]),float(max_pos[1][0])]
     min_pos = np.where(np.nanmin(sm_velocity_field) == sm_velocity_field)
-    min_pos = [float(min_pos[0]),float(min_pos[1])]
+    min_pos = [float(min_pos[0][0]),float(min_pos[1][0])]
 
     print_log(f'''GET_VEL_PA: This is the location of the maximum {max_pos} and minimum {min_pos}
 ''',Configuration,case=['debug_add'])
@@ -3409,7 +3418,7 @@ We were running {deffile} and failed to find the output {output_fits} or {output
 We were running {deffile} and failed to find the output {output_fits} or {output_deffile}.
 ''')
     #If we are running tirific with an incorrect velocity type we should addapt the velocity type of the output
-    if Configuration['HDR_VELOCITY'] != 'VELO':
+    if Configuration['HDR_VELOCITY'] != 'VELO' and Version(Configuration['TIRIFIC_VERSION']) < Version('2.3.12'):
         cube = fits.open(output_fits)
         cube[0].header['CTYPE3'] = Configuration['HDR_VELOCITY']
         fits.writeto(output_fits,cube[0].data,cube[0].header,overwrite=True)
@@ -3680,6 +3689,10 @@ def setup_configuration(cfg):
                     Configuration[str(sub_key).upper()] =  getattr(input_key,sub_key)
         else:
             Configuration[str(key).upper()] = input_key
+
+    Configuration['TIRIFIC_VERSION'] = get_tirific_version(Configuration)
+  
+
 
     #if we have a recovery ppoint we will try to start everything from there
     if Configuration['RECOVERY_POINT'] != 'START_0':
