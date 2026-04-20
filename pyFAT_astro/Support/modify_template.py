@@ -774,11 +774,6 @@ def cut_low_rings(Configuration, Tirific_Template,Fits_Files, fit_type = 'Unknow
 {'':8s} {Tirific_Template}
 ''',Configuration,case= ['debug_add']) 
     
-    
-
-
-
-
 cut_low_rings.__doc__  =f'''
  NAME:
     cut_low_rings
@@ -806,6 +801,99 @@ cut_low_rings.__doc__  =f'''
     Unspecified
 
  NOTE: Very simple function only to be used after smoothing
+'''
+def determine_fit_order(Configuration, key, radii, profile,fixed,allowed_order = [None,None]):
+    if len(radii) > 10.:
+        start_order = sf.float_to_int(len(radii)/5.)
+    else:
+        start_order = 0
+    st_fit = 0
+    if key in ['VROT']:
+        bound_fit = 1
+        if np.mean(profile[1:3]) > 120.:
+            if zero_point == None:
+                zero_point = np.mean(profile[1:3])
+            st_fit = 1
+
+        #This needs another -1 because the 0 and 1/5. ring are more or less 1 ring
+        max_order = sf.set_limits(len(radii)-fixed-2,3,8)
+        #The rotation curve varies a lot so the lower limit should be as high as possible
+        #But at least 3 less than max order and maximally 4
+        if len(radii)-fixed-2 <= 6:
+            lower_limit=sf.set_limits(3,3,max_order-2)
+        elif len(radii)-fixed-2 <= 10:
+            lower_limit=sf.set_limits(4,3,max_order-2)
+        else:
+            lower_limit=sf.set_limits(5,3,max_order-2)
+       
+        start_order = sf.set_limits(start_order,lower_limit,max_order)
+         
+        print_log(f'''DETERMINE_FIT_ORDER: For VROT we set the lower limit to {lower_limit} and the max order to {max_order}
+start order = s{start_order}
+''',Configuration,case = ['debug_add'])
+
+    else:
+        bound_fit = 0
+        if key in ['PA']:
+            max_order = sf.set_limits(len(radii)-2,4,8)
+            start_order = 3  
+        elif key in ['INCL']:
+            max_order = sf.set_limits(len(radii)-2,3,5)
+            start_order = 1               
+        elif key in ['Z0']:
+            max_order = sf.set_limits(len(radii)-fixed,3,5)
+        elif key in ['SBR']:
+            max_order = sf.set_limits(len(radii)-2,4,8)
+            start_order = 3
+        else:
+            max_order = sf.set_limits(len(radii)-1,3,7)
+
+    if allowed_order[0]:
+        if start_order < allowed_order[0]:
+            start_order=  allowed_order[0]
+    if start_order >= max_order:
+        max_order = start_order+1
+    if allowed_order[1]:
+        if max_order > allowed_order[1]:
+            max_order=  allowed_order[1]
+
+    print_log(f'''DETERMINE_FIT_ORDER: For {key} we start at {start_order} because we have {len(radii)} rings of which {fixed} are fixed
+{'':8s} this gives us a maximum order of {max_order}
+''',Configuration,case = ['debug_add'])
+    return st_fit, start_order, max_order, bound_fit
+determine_fit_order.__doc__  =f'''
+ NAME:
+    determine_fit_order
+
+ PURPOSE:
+    Determine the fitting order for a given parameter based on the configuration and profile.
+
+
+ CATEGORY:
+    modify_template
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    key = parameter key (e.g., 'VROT', 'PA', 'INCL', 'Z0', 'SBR')
+    radii = array of radii
+    profile = array of profile values
+    fixed = number of fixed rings
+    allowed_order = list of allowed orders [min_order, max_order]
+
+ OPTIONAL INPUTS:
+
+
+ OUTPUTS:
+        st_fit = whether to start at 0 or 1
+        start_order = the order to start the fit
+        max_order = the maximum order to fit
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE: 
 '''
 
 def find_parameters_and_rings(part):
@@ -978,71 +1066,26 @@ def fit_polynomial(Configuration,radii,profile,error, key, \
         error[:fixed] = error[:fixed]/10.
     elif key in ['VROT']:
         #fixed =len(radii)-Configuration['OUTER_SLOPE_START']
+        min_error = Configuration['CHANNEL_WIDTH'] if Configuration['CHANNEL_WIDTH'] > 0. else np.nanmin(error)
         fixed =sf.set_limits(len(radii)-np.min(Configuration['LAST_RELIABLE_RINGS']),1,len(radii))
-        error[np.min(Configuration['LAST_RELIABLE_RINGS']):] = Configuration['CHANNEL_WIDTH']
-        error[0] = Configuration['CHANNEL_WIDTH']
+        error[np.min(Configuration['LAST_RELIABLE_RINGS']):] = min_error
+        error[0] = min_error
         #error[1] = error[1]*3.
     else:
         fixed = 1
 
-    if len(radii) > 10.:
-        start_order = sf.float_to_int(len(radii)/5.)
-    else:
-        start_order = 0
+   
 
 
-
-    st_fit = 0
-    if key in ['VROT']:
-        bound_fit = 1
-        if np.mean(profile[1:3]) > 120.:
-            if zero_point == None:
-                zero_point = np.mean(profile[1:3])
-            st_fit = 1
-
-        #This needs another -1 because the 0 and 1/5. ring are more or less 1 ring
-        max_order = sf.set_limits(len(radii)-fixed-2,3,8)
-        #The rotation curve varies a lot so the lower limit should be as high as possible
-        #But at least 3 less than max order and maximally 4
-        if len(radii)-fixed-2 <= 6:
-            lower_limit=sf.set_limits(3,3,max_order-2)
-        elif len(radii)-fixed-2 <= 10:
-            lower_limit=sf.set_limits(4,3,max_order-2)
-        else:
-            lower_limit=sf.set_limits(5,3,max_order-2)
-        start_order = sf.set_limits(start_order,lower_limit,max_order)
-
-    else:
-        bound_fit = 0
-        if key in ['PA']:
-            max_order = sf.set_limits(len(radii)-2,4,8)
-            start_order = 3  
-        elif key in ['INCL']:
-            max_order = sf.set_limits(len(radii)-2,3,5)
-            start_order = 1               
-        elif key in ['Z0']:
-            max_order = sf.set_limits(len(radii)-fixed,3,5)
-        elif key in ['SBR']:
-            max_order = sf.set_limits(len(radii)-2,4,8)
-            start_order = 3
-        else:
-            max_order = sf.set_limits(len(radii)-1,3,7)
-
-    if allowed_order[0]:
-        if start_order < allowed_order[0]:
-            start_order=  allowed_order[0]
-    if start_order >= max_order:
-        max_order = start_order+1
-    if allowed_order[1]:
-        if max_order > allowed_order[1]:
-            max_order=  allowed_order[1]
-
-    print_log(f'''FIT_POLYNOMIAL: For {key} we start at {start_order} because we have {len(radii)} rings of which {fixed} are fixed
-{'':8s} this gives us a maximum order of {max_order}
-''',Configuration,case = ['debug_add'])
+    st_fit,start_order,max_order,bound_fit = determine_fit_order(Configuration,
+        key, radii, profile,fixed,allowed_order=allowed_order)
+   
     found = False
     count = 0
     failed=False
+    if max_order <= start_order:
+        raise RuntimeError(f'''FIT_POLYNOMIAL: The maximum order {max_order} is smaller than the starting order {start_order}. 
+This should not happen in pyFAT and indicates an error in the code.''')
     while not found:
         reduced_chi = []
         order = range(start_order,max_order+1)
@@ -1062,7 +1105,8 @@ def fit_polynomial(Configuration,radii,profile,error, key, \
 
         for ord in order:
             fit_prof = np.poly1d(np.polyfit(radii[st_fit:],profile[st_fit:],ord,w=1./error[st_fit:]))
-
+            print_log(f'''FIT_POLYNOMIAL: fit_prof {fit_prof}
+              ''',Configuration,case = ['debug_add'])
             if st_fit > 0.:
                 fit_profile = np.concatenate(([zero_point],[e for e in fit_prof(radii[st_fit:])]))
             else:
@@ -1077,7 +1121,9 @@ def fit_polynomial(Configuration,radii,profile,error, key, \
                 for i in range(len(fit_profile)-5,len(fit_profile)):
                     if fit_profile[i-1] < fit_profile[i]:
                         fit_profile[i]=fit_profile[i-1]*0.9
-            
+            print_log(f'''FIT_POLYNOMIAL: After fixing the profile we get
+{'':8s} {key} = {', '.join([str(x) for x in fit_profile[st_fit:]])}
+''',Configuration,case = ['debug_add'])
             red_chi = np.sum((profile[st_fit:]-fit_profile[st_fit:])**2/error[st_fit:]**2)/(len(radii[st_fit:])-ord)
             #We penailze profiles that go outside the boundaries
             print_log(f'''FIT_POLYNOMIAL: From the final profile we get chi**2 = {red_chi}
