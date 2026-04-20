@@ -1356,11 +1356,7 @@ def fix_profile(Configuration, key, profile, Tirific_Template = None,\
             inner_max = np.nanmax(profile[i,:sf.float_to_int(len(profile[i,:])/2.)])
             mean = np.nanmean(profile[i,:])
             if inner_mean < mean or inner_mean < np.nanmean(profile[i,-3:]):
-                ind = np.where(profile[i,:] == inner_max)[0]
-                if ind.size > 1:
-                    ind = int(ind[0])
-                else:
-                    ind = int(ind)
+                ind = int(np.where(profile[i,:] == inner_max)[0][0])                
                 profile[i,:ind] = inner_max
             profile[i] =np.hstack([[profile[i,0]],[y if y <= x else x*0.95 for x,y in zip(profile[i,:],profile[i,1:])]])
     if key == 'VROT':

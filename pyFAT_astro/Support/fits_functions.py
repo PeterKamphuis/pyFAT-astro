@@ -303,7 +303,7 @@ cut_cubes.__doc__ =f'''
 '''
 
 def cutout_cube(Configuration,filename,sub_cube):
-    hdr = fits.getheader(filename)
+    hdr = fits.getheader(f'{Configuration["FITTING_DIR"]}{filename}')
     if hdr['NAXIS'] == 3:
         memory_required =  hdr['NAXIS1']*hdr['NAXIS2']*hdr['NAXIS3']*4./(1024**3)*1.2
     elif hdr['NAXIS'] == 2:
@@ -314,7 +314,7 @@ def cutout_cube(Configuration,filename,sub_cube):
         print_log(error_message,Configuration,case = ['main','screen'])
         raise MemoryError(error_message)
   
-    Cube = fits.open(Configuration['FITTING_DIR']+filename,uint = False,\
+    Cube = fits.open(f'{Configuration["FITTING_DIR"]}{filename}',uint = False,\
         do_not_scale_image_data=True,ignore_blank = True,\
         output_verify= 'ignore') 
     Cube[0].data.astype(np.float32) 
