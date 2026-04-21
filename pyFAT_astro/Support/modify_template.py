@@ -802,19 +802,14 @@ cut_low_rings.__doc__  =f'''
 
  NOTE: Very simple function only to be used after smoothing
 '''
-def determine_fit_order(Configuration, key, radii, profile,fixed,allowed_order = [None,None]):
+def determine_fit_order(Configuration, key, radii,fixed,allowed_order = [None,None]):
     if len(radii) > 10.:
         start_order = sf.float_to_int(len(radii)/5.)
     else:
         start_order = 0
-    st_fit = 0
     if key in ['VROT']:
         bound_fit = 1
-        if np.mean(profile[1:3]) > 120.:
-            if zero_point == None:
-                zero_point = np.mean(profile[1:3])
-            st_fit = 1
-
+        
         #This needs another -1 because the 0 and 1/5. ring are more or less 1 ring
         max_order = sf.set_limits(len(radii)-fixed-2,3,8)
         #The rotation curve varies a lot so the lower limit should be as high as possible
@@ -860,7 +855,7 @@ start order = s{start_order}
     print_log(f'''DETERMINE_FIT_ORDER: For {key} we start at {start_order} because we have {len(radii)} rings of which {fixed} are fixed
 {'':8s} this gives us a maximum order of {max_order}
 ''',Configuration,case = ['debug_add'])
-    return st_fit, start_order, max_order, bound_fit
+    return start_order, max_order, bound_fit
 determine_fit_order.__doc__  =f'''
  NAME:
     determine_fit_order
@@ -1074,12 +1069,14 @@ def fit_polynomial(Configuration,radii,profile,error, key, \
     else:
         fixed = 1
 
-   
 
-
-    st_fit,start_order,max_order,bound_fit = determine_fit_order(Configuration,
-        key, radii, profile,fixed,allowed_order=allowed_order)
-   
+    start_order,max_order,bound_fit = determine_fit_order(Configuration,
+        key, radii,fixed,allowed_order=allowed_order)
+    st_fit = 0
+    if np.mean(profile[1:3]) > 120.:
+        if zero_point == None:
+            zero_point = np.mean(profile[1:3])
+        st_fit = 1
     found = False
     count = 0
     failed=False

@@ -3588,7 +3588,9 @@ Therefore we remove the Create_FAT_Cube stages from the loop.
         Configuration['FITTING_DIR'] = f"{Configuration['MAIN_DIRECTORY']}"
     else:
         Configuration['FITTING_DIR'] = f"{Configuration['MAIN_DIRECTORY']}{Full_Catalogue['DIRECTORYNAME'][current_galaxy_index]}/"
-  
+    if Configuration['INPUT_CUBE_DIR'] == 'Unset':
+        Configuration['INPUT_CUBE_DIR'] = Configuration['FITTING_DIR']
+
     if 'sofia_catalogue' in Configuration['FITTING_STAGES']:
         Configuration['INPUT_CUBE']= f"{Full_Catalogue['CUBENAME'][current_galaxy_index]}_FAT.fits"
     else:
@@ -3737,6 +3739,7 @@ Please give a legit recovery point (Note that the default log is by date.)''')
                'FITTING_DIR': 'Unset', # Full path of the directory in which the fitting takes place, set at start of loop
                'BASE_NAME': 'Unset', #Basename for FAT products, typically {input_cube}_FAT, set at start of loop
                'INPUT_CUBE': 'Unset', # Name of the input cube as listed in full catalogue
+               'INPUT_CUBE_DIR': 'Unset', # Directory of the input cube, as listed in thee full catalogues
                'STOP_INDIVIDUAL_ERRORS': ['SmallSourceError','BadSourceError'\
                                         ,'FaintSourceError','BadHeaderError',\
                                         'BadCubeError','BadMaskError',\

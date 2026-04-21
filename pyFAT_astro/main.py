@@ -77,6 +77,9 @@ def main():
                 Full_Catalogue['DISTANCE'] = [-1.]
                 Full_Catalogue['DIRECTORYNAME'] = ['./']
                 Full_Catalogue['CUBENAME'] = [cfg.cube_name.split('/')[-1]]
+                if cfg.cube_name.count('/') > 0:
+                    Original_Configuration['INPUT_CUBE_DIR'] = '/'.join(cfg.cube_name.split('/')[:-1])
+              
             elif 'sofia_catalogue' in Original_Configuration['FITTING_STAGES']:
                 Full_Catalogue = rf.sofia_input_catalogue(Original_Configuration)
             elif not Original_Configuration['CATALOGUE'] is None:
@@ -90,7 +93,8 @@ def main():
 {'':8s}and 'sofia_catalogue' was not in the fitting stages (We found { Original_Configuration['FITTING_STAGES']})
 {'':8s}Please add any of these when calling pyFAT or at them in the correct manner to the yml configuration file.
 ''')                        
-        
+            if Original_Configuration['INPUT_CUBE_DIR'] == 'Unset':
+                Original_Configuration['INPUT_CUBE_DIR'] = './'
             # Get the longest directory name to format the output directory properlyFit_Tirific_OSC
             for directory in Full_Catalogue['DIRECTORYNAME']:
                 if directory == './':

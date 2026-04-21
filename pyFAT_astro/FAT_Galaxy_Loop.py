@@ -182,9 +182,9 @@ def initialize_loop(Configuration):
     Fits_Files['CHANNEL_MAP'] = f"Sofia_Output/{Configuration['BASE_NAME']}_chan.fits"
     Fits_Files['TIR_RUN_CUBE'] = copy.deepcopy(Fits_Files['FITTING_CUBE'])
     if 'create_fat_cube' in Configuration['FITTING_STAGES']:
-        if not os.path.exists(f"{Configuration['FITTING_DIR']}/{Fits_Files['ORIGINAL_CUBE']}"):
+        if not os.path.exists(f"{Configuration['INPUT_CUBE_DIR']}/{Fits_Files['ORIGINAL_CUBE']}"):
             raise BadCatalogueError(
-                f'''We can not find the file {Fits_Files['ORIGINAL_CUBE']}. This is likely to be due to a typo in your catalog {Configuration['CATALOGUE']}.''')
+                f'''We can not find the file {Configuration['INPUT_CUBE_DIR']}/{Fits_Files['INPUT_CUBE']}. This is likely to be due to a typo in your catalog {Configuration['CATALOGUE']}.''')
     else:
         if not os.path.exists(f"{Configuration['FITTING_DIR']}/{Fits_Files['FITTING_CUBE']}"):
             raise BadCatalogueError(
