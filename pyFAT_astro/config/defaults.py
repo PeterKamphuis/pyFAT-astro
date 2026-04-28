@@ -40,8 +40,7 @@ class Fitting:
     opt_pixel_beam: int = 4
 
     distance: float = -1.  # Distance to the galaxy, set from the catalogue at start of loop in case of batch fitting
-
-
+   
 @dataclass
 class Input:
     main_directory: str = f'{os.getcwd()}'
@@ -112,6 +111,12 @@ class Advanced:
         default_factory=lambda: [[0., 0.], [0., 0.], [0., 0.]])
     sbr_input_boundary: List = field(
         default_factory=lambda: [[0., 0.], [0., 0.], [0., 0.]])
+    # If true the code looks for a maximum radius in the catalog (r_max) and the model is not allowed to extend beyond this radius.   
+    # If set this remains fixed throughout the code and is not updated
+    # If the catalogue input contains r_min or r_max the code will set the radius_input_boundary to these values
+    # Should be in arcsec
+    radius_input_boundary: List = field(
+        default_factory=lambda: [0., 0.])
     # The brightest pixels need to have a SNR above this value
     source_max_snr: float = 2.5
     # The fraction of pixels in the source that need to be above max_snr

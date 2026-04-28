@@ -294,8 +294,8 @@ def calculate_change_boundary(Configuration,multiple,theta_zero,phi_zero,
             poss_theta_bound.append(float('NaN'))
             poss_phi_bound.append(float('NaN'))
         else:
-            poss_theta_bound.append(float(theta_tmp))
-            poss_phi_bound.append(float(phi_tmp))
+            poss_theta_bound.append(theta_tmp[0])
+            poss_phi_bound.append(phi_tmp[0])
     minimum = -1*np.sqrt(np.min(np.array([x-theta_zero for x in poss_theta_bound],dtype=float))**2\
                 +np.min(np.array([x-phi_zero for x in poss_phi_bound],dtype=float))**2)
     maximum = np.sqrt(np.max(np.array([x-theta_zero for x in poss_theta_bound],dtype=float))**2\
@@ -561,7 +561,11 @@ def check_parameter_against_settings(Configuration,Tirific_Template\
             #VROT starts with a 0 so we need to avoid it here
             prev = values[0]
             if not key in ['VROT']:
-                if values[0] == 0.:
+                if key in ['SBR','SBR_2']:
+                    if Configuration['RADIUS_INPUT_BOUNDARY'][0] == 0. and \
+                        values[0] == 0.:
+                        raise ProgramError(f'''While checking the fit settings although there is no minimum radius the  first values in {key} was 0. This should never happen and indicates an error while setting up the template.''')
+                elif values[0] == 0.:
                     raise ProgramError(f'''While checking the fit settings the first value of {key} was 0. 
 This should never happen and indicates an error while setting up the template.''')
                 for x in values:
@@ -1602,7 +1606,13 @@ def fix_sbr(Configuration,Tirific_Template, smooth = False, initial = False ):
                 last = sbr[i,last_ring_to_fit]
                 second = sbr[i,last_ring_to_fit-1]
                 sbr[i,last_ring_to_fit-1] = last
-                sbr[i,last_ring_to_fit] = second         
+                sbr[i,last_ring_to_fit] = second   
+    # If we have a minimum radius then we want to set those to 0
+    if Configuration['RADIUS_INPUT_BOUNDARY'][0] > 0.:
+        for i in [0,1]:
+            sbr[i,radii < Configuration['RADIUS_INPUT_BOUNDARY'][0]] = 0.
+
+
     if smooth and not not_too_faint:
         print_log(f'''FIX_SBR: All SBR rings are below the cutoff limits
 {'':8s}original sbr = {original_sbr}

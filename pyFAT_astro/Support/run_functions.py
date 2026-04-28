@@ -4,7 +4,7 @@
 
 
 from pyFAT_astro.Support.clean_functions import clean_before_sofia,\
-    clean_after_sofia,transfer_errors,transfer_fitting_parameters
+    clean_after_sofia,transfer_errors
 from pyFAT_astro.Support.fits_functions import cut_cubes
 from make_moments.functions import extract_pv,moments
 from pyFAT_astro.Support.log_functions import print_log,update_statistics,enter_recovery_point
@@ -339,8 +339,12 @@ def check_inclination(Configuration,Tirific_Template,Fits_Files, \
     Configuration['TIRIFIC_RUNNING'] = other_run[0]
     Configuration['TIRIFIC_PID'] =  other_run[1]
     low= np.where(mom_chi == np.nanmin(mom_chi))[0]
-    if low.size > 1:
-        low = low[0]
+    if low.size > 1 or type(low) == np.ndarray:
+        low = int(low[0])
+    print_log(f'''CHECK_INCLINATION: we should transform the inclination by {incl_to_check[low]} into a float
+incl_to_check = {incl_to_check} dtype = {type(incl_to_check)}
+low = {low} dtype = {type(low)}              
+''',Configuration,case= ['debug_add'])    
     new_incl = float(incl_to_check[low])
     print_log(f'''CHECK_INCLINATION: This is the new inclination {new_incl} it was {current[1][0]}.
 {'':8s}mom_chi = {mom_chi}
@@ -522,6 +526,11 @@ def check_source(Configuration, Fits_Files):
                 /(Configuration['BEAM_IN_PIXELS'][0])+5.)
     print_log(f'''CHECK_SOURCE: From Sofia we find a max extend of {Configuration['MAX_SIZE_IN_BEAMS']}
 ''', Configuration,case= ['verbose'])
+    if Configuration['MAX_SIZE_IN_BEAMS'] > Configuration['RADIUS_INPUT_BOUNDARY'][1]/Configuration['BEAM'][0]:
+        Configuration['MAX_SIZE_IN_BEAMS'] = Configuration['RADIUS_INPUT_BOUNDARY'][1]/Configuration['BEAM'][0]
+        print_log(f'''CHECK_SOURCE: The max size is bigger than the  user supplied limit {Configuration['MAX_SIZE_IN_BEAMS']}
+''', Configuration,case= ['verbose'])
+     
     #if Configuration['MAX_SIZE_IN_BEAMS'] > 20.:
     #    smooth_field = True
     #else:

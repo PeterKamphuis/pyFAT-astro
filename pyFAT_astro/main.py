@@ -92,9 +92,10 @@ def main():
 {'':8s}input.catalogue= (We found { Original_Configuration['CATALOGUE']})
 {'':8s}and 'sofia_catalogue' was not in the fitting stages (We found { Original_Configuration['FITTING_STAGES']})
 {'':8s}Please add any of these when calling pyFAT or at them in the correct manner to the yml configuration file.
-''')                        
-            if Original_Configuration['INPUT_CUBE_DIR'] == 'Unset':
-                Original_Configuration['INPUT_CUBE_DIR'] = './'
+''')                       
+            
+            #if Original_Configuration['INPUT_CUBE_DIR'] == 'Unset':
+             #   Original_Configuration['INPUT_CUBE_DIR'] = './'
             # Get the longest directory name to format the output directory properlyFit_Tirific_OSC
             for directory in Full_Catalogue['DIRECTORYNAME']:
                 if directory == './':

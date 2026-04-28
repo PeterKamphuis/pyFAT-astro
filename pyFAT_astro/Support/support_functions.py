@@ -91,6 +91,7 @@ def calc_rings(Configuration,size_in_beams = 0., ring_size  = 0.):
         ring_size = Configuration['RING_SIZE']
     if size_in_beams == 0.:
         size_in_beams = np.max(Configuration['SIZE_IN_BEAMS'])
+   
     print_log(f'''CALC_RINGS: Calculating the number of rings in the model.
 {'':8s} size in beams = {size_in_beams}
 {'':8s} ring_size = {ring_size}
@@ -301,7 +302,7 @@ def calculate_am_vector(Configuration,PA_in,Inclination_in, multiple = None,
         # And make sure the inner 3 rings are the same
         Inclination[0:3] = np.mean(Inclination[0:3])
         PA[0:3] = np.mean(PA[0:3])
-        return PA,Inclination
+        return np.array(PA,dtype=float),np.array(Inclination,dtype=float)
     else:
         # For this the PA has to be between 0-90
         PA=np.array(PA_in,dtype=float)
@@ -316,7 +317,7 @@ def calculate_am_vector(Configuration,PA_in,Inclination_in, multiple = None,
         Theta=np.arctan(abs(np.tan(Inclination*(np.pi/180.)))*abs(np.tan(PA*(np.pi/180.))))
         Phi = np.arctan(abs(np.tan(PA*(np.pi/180.)))/np.sin(Theta))
 
-        return Theta,Phi,multiple
+        return np.array(Theta,dtype=float),np.array(Phi,dtype=float),np.array(multiple,dtype=float)
 calculate_am_vector.__doc__ =f'''
  NAME:
     calculate_am_vector
@@ -3588,15 +3589,31 @@ Therefore we remove the Create_FAT_Cube stages from the loop.
         Configuration['FITTING_DIR'] = f"{Configuration['MAIN_DIRECTORY']}"
     else:
         Configuration['FITTING_DIR'] = f"{Configuration['MAIN_DIRECTORY']}{Full_Catalogue['DIRECTORYNAME'][current_galaxy_index]}/"
+   
     if Configuration['INPUT_CUBE_DIR'] == 'Unset':
         Configuration['INPUT_CUBE_DIR'] = Configuration['FITTING_DIR']
-
+    
     if 'sofia_catalogue' in Configuration['FITTING_STAGES']:
         Configuration['INPUT_CUBE']= f"{Full_Catalogue['CUBENAME'][current_galaxy_index]}_FAT.fits"
     else:
         Configuration['INPUT_CUBE']= f"{base}{extension[1]}"
         if zipped:
             Configuration['INPUT_CUBE'] += '.gz'
+     # The parameters that need boundary limits are set here
+    boundary_limit_keys = ['PA','INCL', 'SDIS', 'Z0','VSYS','XPOS','YPOS','VROT','SBR']
+    for key in boundary_limit_keys:
+        #let's allow for only fixing 1
+        if f'{key}_MIN' in Full_Catalogue['ENTRIES']:
+            for i in [0,1,2]:
+                Configuration[f"{key}_INPUT_BOUNDARY"][i][0] = float(Full_Catalogue[f'{key}_MIN'][current_galaxy_index])
+        if f'{key}_MAX' in Full_Catalogue['ENTRIES']:
+            for i in [0,1,2]:
+                Configuration[f"{key}_INPUT_BOUNDARY"][i][1] = float(Full_Catalogue[f'{key}_MAX'][current_galaxy_index])
+       
+    if 'R_MIN' in Full_Catalogue['ENTRIES']:
+        Configuration['RADIUS_INPUT_BOUNDARY'][0] = float(Full_Catalogue['R_MIN'][current_galaxy_index])
+    if 'R_MAX' in Full_Catalogue['ENTRIES']:
+        Configuration['RADIUS_INPUT_BOUNDARY'][1] = float(Full_Catalogue['R_MAX'][current_galaxy_index])
 
     return(Configuration)
 set_individual_configuration.__doc__ =f'''
