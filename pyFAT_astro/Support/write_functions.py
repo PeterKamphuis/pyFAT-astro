@@ -419,7 +419,8 @@ def make_overview_plot(Configuration,Fits_Files ):
             Vars_to_plot.append(f'# {x}_2_ERR')
     FAT_Model = sf.load_tirific(Configuration,\
         f"{Configuration['FITTING_DIR']}Finalmodel/Finalmodel.def",\
-        Variables= Vars_to_plot,array=True ,brightness_check=True)
+        Variables= Vars_to_plot,array=True ,brightness_check=True,
+        inner_rings = Configuration['MIN_RING'] )
     Extra_Model_File = f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}_Iteration_{Configuration['ITERATIONS']}.def"
 
     if os.path.exists(Extra_Model_File):
@@ -600,12 +601,14 @@ def make_overview_plot(Configuration,Fits_Files ):
     ax_moment1.set_label('Velocity Field')
     #Comp_ax1.set_facecolor('black')
     # we need contour levels and
-    inclination_correction = sf.set_limits(FAT_Model[Vars_to_plot.index('INCL'),0]+12.5,20.,90.)
+    inclination_correction = sf.set_limits(FAT_Model[Vars_to_plot.index('INCL'),Configuration['MIN_RING']]+12.5,20.,90.)
     velocity_width= sf.set_limits(1.25*np.nanmax(FAT_Model[Vars_to_plot.index('VROT'),:])*np.sin(np.radians(inclination_correction)),30.,700.)
 
     max_color= FAT_Model[Vars_to_plot.index('VSYS'),0]+velocity_width
     min_color= FAT_Model[Vars_to_plot.index('VSYS'),0]-velocity_width
-
+    print_log(f'''MAKE_OVERVIEW_PLOT: We find the following limits for the velocity field: min_color = {min_color} and max_color = {max_color}.
+made from the systemic velocity of {FAT_Model[Vars_to_plot.index('VSYS'),0]:.2f} km/s and a velocity width of {velocity_width:.2f} km/s, which is based on the maximum rotational velocity of {np.nanmax(FAT_Model[Vars_to_plot.index('VROT'),:]):.2f} km/s and an inclination correction of {inclination_correction:.2f} degrees.
+''',Configuration,case=['debug_add'])
     moment1_plot = ax_moment1.imshow(moment1[0].data, cmap='rainbow', origin='lower', alpha=1, vmin = min_color, vmax = max_color )
     plt.ylabel('DEC')
     #Stupid python suddenly finds its own labels
@@ -615,6 +618,10 @@ def make_overview_plot(Configuration,Fits_Files ):
     velocity_step=sf.set_limits(np.round(((max_color-min_color)*0.9)/20.),1.,30.)
     integer_array = np.linspace(0,20,21)-10
     momlevel = [FAT_Model[Vars_to_plot.index('VSYS'),0]+x*velocity_step for x in integer_array if min_color < FAT_Model[Vars_to_plot.index('VSYS'),0]+x*velocity_step < max_color]
+    print_log(f'''MAKE_OVERVIEW_PLOT: We find the following contour levels for the velocity field: {momlevel}
+from min_color = {min_color} to max_color = {max_color} with a velocity step of {velocity_step}.
+inclination correction is {inclination_correction} and velocity width is {velocity_width}.
+''',Configuration,case=['debug_add'])
     ax_moment1.contour(moment1[0].data, transform=ax_moment1.get_transform(im_wcs),
                levels=momlevel, colors='white',linewidths=1.5 *size_factor, zorder =4)
     ax_moment1.contour(moment1[0].data, transform=ax_moment1.get_transform(im_wcs),

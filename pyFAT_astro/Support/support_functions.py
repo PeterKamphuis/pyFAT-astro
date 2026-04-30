@@ -2564,7 +2564,7 @@ isiterable.__doc__ =f'''
 #The functions load_tirifiic,load_template and get_from template were extremely similar
 #This replaces all with a single function
 def load_tirific(Configuration,def_input,Variables = None,array = False,\
-        ensure_rings = False,brightness_check=False ):
+        ensure_rings = False,brightness_check=False,inner_rings=0 ):
     #Cause python is the dumbest and mutable objects in the FAT_defaults
     # such as lists transfer
     if Variables is None:
@@ -2619,6 +2619,7 @@ def load_tirific(Configuration,def_input,Variables = None,array = False,\
                    ext = '_2'  
            
             cut = np.where(out[Variables.index(f'SBR{ext}'),:] < 1e-15)
+            cut = [x for x in cut[0] if x > inner_rings]
             if np.sum(cut) > 0.:
                 out[Variables.index(variable),cut] = float('NaN')
         
@@ -3784,6 +3785,7 @@ Please give a legit recovery point (Note that the default log is by date.)''')
 
                'MAX_SIZE_IN_BEAMS': 30, # The galaxy is not allowed to extend beyond this number of beams in radius, set in check_source
                'MIN_SIZE_IN_BEAMS': 0., # Minimum allowed radius in number of beams of the galaxy, set in check_source
+               'MIN_RING': 0., # Minimum allowed ring of the galaxy, initially set in check_source and the modified in set_new_size. based on RADIUS_INPUT_BOUNDARY[0] smaller rings are not fitted and the SBR is set to 0.  
                'SIZE_IN_BEAMS': np.full(2,0.,dtype=float),  #The radius of the galaxy in number of beams, adapted after running Sofia
                'NO_RINGS': 0., # The number of rings in the fit,
                'LAST_RELIABLE_RINGS': [0.,0.], # Location of the rings where the SBR drops below the cutoff limits, adapted after every run. Should only be modified in check_size

@@ -610,6 +610,7 @@ Checking the central flux in a box with size of {Configuration['BEAM_IN_PIXELS']
 {'':8s} We got SBR = {SBR_initial}, VROT = {VROT_initial}
 ''',Configuration,case= ['debug_add'])
 
+    #Ok so as all the initil estimate are set we populate some conf parameter
 
     # The extent is fairly well determined and the maximum should be no more than +3 beams and a minimum no less than 4
     # Switching here from doubled outer rings causes problems though
@@ -629,8 +630,10 @@ Checking the central flux in a box with size of {Configuration['BEAM_IN_PIXELS']
 {"":8s}CHECK_SOURCE: We will use {2.*(Configuration['NO_RINGS']-1)} rings for the model with a ring size of {Configuration['RING_SIZE']}.
 ''',Configuration)
    
-
-
+    #the minimum ring Where it is +1 as tirific rings are 1 based
+    if Configuration['RADIUS_INPUT_BOUNDARY'][0] > 0.:
+        Configuration['MIN_RING'] =  int(np.where(new_radii < Configuration['RADIUS_INPUT_BOUNDARY'][0])[0][-1])+1
+    
 
     if Configuration['CHANNEL_DEPENDENCY'].lower() == 'hanning':
         vres = (Configuration['CHANNEL_WIDTH']*2)/(2.*np.sqrt(2.*np.log(2)))
