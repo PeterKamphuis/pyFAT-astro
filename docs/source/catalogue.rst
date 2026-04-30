@@ -51,3 +51,7 @@ id|distance|directoryname|cubename|basename
 
 Where the last column corresponds to the basename used in the sofia run. pyFAT assumes the sofia products are located in the main fitting directory specified under directoryname. If this is not the case, e.g. because all sofia output is in a single directory, the sofia directory can be specified with the configuration keyeword output.sofia_dir.
 pyFAT never touches original input files and thus the sofia input will be copied into Sofia_Output directory in the fitting directory. When providing the SoFiA input the keyword fitting.fitting_stages should include Existing_Sofia instead of Run_Sofia.
+
+The catalogue also allows the user to set the minimum and maximum extend of the model through the columns r_min and r_max. These are then loaded as advanced.radius_input_boundary=[r_min, r_max] for every galaxy.
+When set to 0. they will be ignored.
+id|distance|directoryname|cubename|r_min|r_max

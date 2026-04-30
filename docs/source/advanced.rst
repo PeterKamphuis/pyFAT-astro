@@ -366,6 +366,8 @@ Advanced Keywords
   If the minimum radius is not 0. this does not affect the rings in the  model but it sets the SBR in all rings smaller than this radius to 0.
   Individual rings in below the minimum radius are not modified from the initial guess and when a parameter is fixed they are interpolated.
   These latter issues are simply cosmetic as with SBR = 0. these rings do not affect the fit. 
+
+  These can be set for individual galaxies in the catalogue through r_min and r_max.
   
 **source_max_snr**
 
