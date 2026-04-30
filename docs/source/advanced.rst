@@ -357,6 +357,23 @@ Advanced Keywords
   The boundaries that the surface brightness profile needs to remain within. Too small boundaries can lead to FAT not finding a a succesfull model.
   Given as min,max for the three areas of the fit: the central part, the approaching side warp, the receding side warp.
    # The brightest pixels need to have a SNR above this value
+
+
+    # If true the code looks for a maximum radius in the catalog (r_max) and the model is not allowed to extend beyond this radius.   
+    # If set this remains fixed throughout the code and is not updated
+    # If the catalogue input contains r_min or r_max the code will set the radius_input_boundary to these values
+    # Should be in arcsec
+
+**radius_input_boundary**
+
+  *list, optional, default = [0., 0.]*
+
+  The boundaries that the radius needs to remain within as minimum and maximum radius set in arcsec. 
+  If not 0. the maximum radius simply stops the model from adding rings and extend beyond this radius.
+  If the minimum radius is not 0. this does not affect the rings in the  model but it sets the SBR in all rings smaller than this radius to 0.
+  Individual rings in below the minimum radius are not modified from the initial guess and when a parameter is fixed they are interpolated.
+  These latter issues are simply cosmetic as with SBR = 0. these rings do not affect the fit. 
+  
 **source_max_snr**
 
   *float, optional, default = 2.5
