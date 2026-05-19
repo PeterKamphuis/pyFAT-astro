@@ -853,12 +853,12 @@ start order = s{start_order}
         else:
             max_order = sf.set_limits(len(radii)-1,3,7)
 
-    if allowed_order[0]:
+    if allowed_order[0] is not None:
         if start_order < allowed_order[0]:
             start_order=  allowed_order[0]
     if start_order >= max_order:
         max_order = start_order+1
-    if allowed_order[1]:
+    if allowed_order[1] is not None:
         if max_order > allowed_order[1]:
             max_order=  allowed_order[1]
 
