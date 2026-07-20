@@ -59,7 +59,7 @@ def basicinfo(Configuration,initialize = False,stage='TiRiFiC' ,
 #The total flux is determined by the source finder in the initial estimates and the total emission in the masked cube of the final model in the fits
 #D_HI is determined as the diameter where the major axis with given PA cuts the 10^20 column of the moment0 map
 # {'RA':>25s} {'DEC':>25s} {'VSYS':>20s} {'PA':>20s} {'Inclination':>20s} {'Max VRot':>20s} {'V_mask':>20s} {'Tot FLux':>20s} {'D_HI':>20s} {'Distance':>20s} {'HI Mass':>20s} {'D_HI_kpc':>20s}
-# {'hh:mm:ss':>25s} {'dd:mm:ss':>25s} {'km/s':>20s} {'deg':>20s} {'deg':>20s} {'km/s':>20s} {'km/s':>20s} {'Jy':>20s} {'arcsec':>20s} {'Mpc':>20s} {'M_solar':>20s} {'kpc':>20s}
+# {'hh:mm:ss':>25s} {'dd:mm:ss':>25s} {'km/s':>20s} {'deg':>20s} {'deg':>20s} {'km/s':>20s} {'km/s':>20s} {'Jy x km/s':>20s} {'arcsec':>20s} {'Mpc':>20s} {'M_solar':>20s} {'kpc':>20s}
 # The initial input
 ''')
     else:
@@ -1322,8 +1322,8 @@ plot_PV.__doc__ =f'''
 def plot_individual_ax(Configuration,ax,combined_time,combined_loads):
     ax.plot(combined_time,combined_loads['Tirific']['MEM'],'b-',lw=0.5)
     ax.plot(combined_time,combined_loads['FAT']['MEM'],'b--',lw=0.5)
-    ax.set_ylim(0,np.max([combined_loads['Tirific']['MEM'],combined_loads['FAT']['MEM']]) \
-                      +np.max([combined_loads['Tirific']['MEM'],combined_loads['FAT']['MEM']])/10.)
+    ax.set_ylim(0,np.nanmax([combined_loads['Tirific']['MEM'],combined_loads['FAT']['MEM']]) \
+                      +np.nanmax([combined_loads['Tirific']['MEM'],combined_loads['FAT']['MEM']])/10.)
    
    
     ax2 = ax.twinx()
@@ -1450,8 +1450,12 @@ plot_usage_stats.__doc__ =f'''
 '''
 
 def read_statistics(Configuration):
-    labels = {'FAT': {'label':[], 'Time':[]}, 'Tirific':{'label':[], 'Time':[]}}
-    loads = {'FAT':{'CPU':[],'MEM':[],'Time':[]},'Tirific':{'CPU':[],'MEM':[],'Time': []}}
+    labels = {'FAT': {'label':[], 'Time':[]}, 
+              'Tirific':{'label':[], 'Time':[]}} 
+             
+    loads = {'FAT':{'CPU':[],'MEM':[],'Time':[]},
+             'Tirific':{'CPU':[],'MEM':[],'Time': []}}
+          
     with open(f"{Configuration['LOG_DIRECTORY']}Usage_Statistics.txt") as file:
         lines = file.readlines()
     current_stage = 'Not_Found'
@@ -1474,8 +1478,7 @@ def read_statistics(Configuration):
         time = diff.total_seconds()/60.-gap_time
     
         if line[0] == '#':
-            if tmp[1] == 'TIRIFIC:':
-
+            if tmp[1] == 'RUN_TIRIFIC:':
                 if tmp[2].lower() == 'initializing':
                     tmp2 = line.split('=')[1].split()
                     current_stage = tmp2[0].strip()
@@ -1506,16 +1509,16 @@ def read_statistics(Configuration):
         else:
             if tmp[-1].lower() == 'tirific':
                 loads['Tirific']['Time'].append(time)
-                loads['Tirific']['CPU'].append(tmp[4])
-               
+                loads['Tirific']['CPU'].append(tmp[4]) 
                 loads['Tirific']['MEM'].append(tmp[8])
+            
             else:
                 loads['FAT']['Time'].append(time)
                 loads['FAT']['CPU'].append(tmp[4])
                 loads['FAT']['MEM'].append(tmp[8])
-            if float(tmp[4]) > maxCPU:
+            if float(tmp[4]) > maxCPU and not np.isnan(float(tmp[4])):
                     maxCPU = float(tmp[4])
-            if float(tmp[8]) > maxMEM:
+            if float(tmp[8]) > maxMEM and not np.isnan(float(tmp[8])):
                     maxMEM = float(tmp[8])
     return loads,labels,maxCPU,maxMEM
 read_statistics.__doc__ =f'''

@@ -3340,8 +3340,9 @@ def set_generic_fitting(Configuration, key , stage = 'initial', \
     if isinstance(flat_inner,int):
         flat_inner = [flat_inner,flat_inner]
     NUR = Configuration['NO_RINGS']
+    
     min_ring = 1 if Configuration['MIN_RING'] < 2 else Configuration['MIN_RING']
- 
+   
     input= {}
     print_log(f'''SET_GENERIC_FITTING: flat is {fixed}
 ''', Configuration,case=['debug_add'])
@@ -3349,7 +3350,8 @@ def set_generic_fitting(Configuration, key , stage = 'initial', \
         print_log(f'''SET_GENERIC_FITTING: Fitting all as 1.
 ''', Configuration,case=['debug_add'])
         input['VARY'] =  np.array([f"{key} {min_ring}:{NUR} {key}_2 {min_ring}:{NUR}"],dtype=str)
-        input['VARINDX'] = np.array([f"{key} 1:{min_ring-1}  {key}_2 1:{min_ring-1}"],dtype=str)
+        if min_ring > 1:
+            input['VARINDX'] = np.array([f"{key} 1:{min_ring-1}  {key}_2 1:{min_ring-1}"],dtype=str)
         input['PARMAX'] = np.array([Configuration[f'{key}_CURRENT_BOUNDARY'][0][1]],dtype=float)
         input['PARMIN'] = np.array([Configuration[f'{key}_CURRENT_BOUNDARY'][0][0]],dtype=float)
         input['MODERATE'] = np.array([moderate],dtype=int) #How many steps from del start to del end
@@ -3379,6 +3381,9 @@ def set_generic_fitting(Configuration, key , stage = 'initial', \
 
             input['VARY'].append(f"{key} {min_ring}:{end[0]} {key}_2 {min_ring}:{end[1]}")
             input['VARY'] = np.array(input['VARY'],dtype=str)
+            if min_ring> 1:
+                input['VARINDX'] = np.array([f"{key} 1:{min_ring-1}  {key}_2 1:{min_ring-1}"],dtype=str)
+    
             input['PARMAX'] = np.array([Configuration[f'{key}_CURRENT_BOUNDARY'][1][1],\
                                         Configuration[f'{key}_CURRENT_BOUNDARY'][2][1],\
                                         Configuration[f'{key}_CURRENT_BOUNDARY'][0][1]],dtype=float)
@@ -3405,6 +3410,9 @@ def set_generic_fitting(Configuration, key , stage = 'initial', \
             else:
                 input['VARY'] =  np.concatenate((np.array([f"!{key} {NUR}:{flat_inner+1} {key}_2 {NUR}:{flat_inner+1}"],dtype=str),\
                                                  np.array([f"{key} {min_ring}:{flat_inner} {key}_2 {min_ring}:{flat_inner}"],dtype=str)))
+            if min_ring> 1:
+                input['VARINDX'] = np.array([f"{key} 1:{min_ring-1}  {key}_2 1:{min_ring-1}"],dtype=str)
+    
             input['PARMAX'] = np.array([Configuration[f'{key}_CURRENT_BOUNDARY'][1][1],\
                                         Configuration[f'{key}_CURRENT_BOUNDARY'][0][1]],dtype=float)
             input['PARMIN'] = np.array([Configuration[f'{key}_CURRENT_BOUNDARY'][1][0],\
@@ -3749,8 +3757,8 @@ def set_new_size(Configuration,Tirific_Template, fit_type = 'Undefined',
 ''',Configuration,case=['debug_add'])
         if key == 'RADI':
             Tirific_Template[key] = f" {' '.join([f'{x:.2f}' for x in radii])}"
-            if Configuration['RADIUS_INPUT_BOUNDARY'][0] > 0.:
-                old_min_ring = copy.deepcopy(Configuration['MIN_RING'])
+            old_min_ring = copy.deepcopy(Configuration['MIN_RING'])
+            if Configuration['RADIUS_INPUT_BOUNDARY'][0] > 0.:   
                 Configuration['MIN_RING'] =  int(np.where(radii < Configuration['RADIUS_INPUT_BOUNDARY'][0])[0][-1])+1
                 print_log(f'''SET_NEW_SIZE: We have a radius input boundary of {Configuration['RADIUS_INPUT_BOUNDARY'][0]} and the last ring that is below this boundary is {ignore_rings}. We will ignore the rings below this boundary and set the minimum ring to {Configuration['MIN_RING']}
 ''',Configuration,case=['debug_add'])
@@ -3799,11 +3807,13 @@ def set_new_size(Configuration,Tirific_Template, fit_type = 'Undefined',
     current_rings = sf.calc_rings(Configuration)
     #This could lead to replacing a value smaller than the other side
     Tirific_Template['VARY'] = Tirific_Template['VARY'].replace(f"{old_rings}",f"{current_rings}")
-    # Have to replace the min ring as well 
-    Tirific_Template['VARY'] = Tirific_Template['VARY'].replace(f"{old_min_ring}",f"{Configuration['MIN_RING']}")
-    
     Tirific_Template['VARINDX'] = Tirific_Template['VARINDX'].replace(f"{old_rings-1}",f"{current_rings-1}")
     Tirific_Template['VARINDX'] = Tirific_Template['VARINDX'].replace(f"{old_rings}",f"{current_rings}")
+   
+    if Configuration['MIN_RING'] != old_min_ring:
+        # Have to replace the min ring as well 
+        Tirific_Template['VARY'] = Tirific_Template['VARY'].replace(f"{old_min_ring}",f"{Configuration['MIN_RING']}")
+        Tirific_Template['VARINDX'] = Tirific_Template['VARINDX'].replace(f"{old_min_ring}",f"{Configuration['MIN_RING']}")
     
     Tirific_Template['NUR'] = f"{current_rings}"
     # if we cut we want to flatten things

@@ -252,9 +252,46 @@ extract_date.__doc__ =f'''
 
 def get_usage_statistics(Configuration,process):
         # psutil returns bytes
-    memory_in_mb = (process.memory_info()[0])/2**20. 
-    cpu_percent = process.cpu_percent(interval=1)
-    return cpu_percent,memory_in_mb
+   children = process.children(recursive=True)  
+   try:
+      memory_in_mb = (process.memory_info()[0])/2**20.
+      #print_log(f'get_usage_statistics: memory usage of {process.name()} is {memory_in_mb} Mb'
+      #   ,Configuration,case=['debug_start'])
+   except Exception as e:
+      #print_log(f'get_usage_statistics: Could not get memory usage of {process.name()}. Error: {e}'
+      #          ,Configuration,case=['debug_add'])
+      memory_in_mb = np.nan
+   try:
+   
+      cpu_percent = process.cpu_percent(interval=0.5)
+      #print_log(f'get_usage_statistics: CPU usage of {process.name()} is {cpu_percent} %'
+      #   ,Configuration,case=['debug_add'])
+   except Exception as e:
+
+      #print_log(f'get_usage_statistics: Could not get CPU usage of {process.name()}. Error: {e}'
+      #          ,Configuration,case=['debug_add'])
+      cpu_percent = np.nan 
+   for child in children:
+    
+      try:
+         memory_in_mb += (child.memory_info()[0])/2**20.
+         #print_log(f'get_usage_statistics: memory usage of {child.name()} is {memory_in_mb} Mb'
+         #   ,Configuration,case=['debug_start'])
+      except Exception as e:
+         #print_log(f'get_usage_statistics: Could not get memory usage of {child.name()}. Error: {e}'
+         #          ,Configuration,case=['debug_add'])
+         memory_in_mb += 0.
+      try:
+         cpu_percent += child.cpu_percent(interval=0.5)
+         #print_log(f'get_usage_statistics: CPU usage of {child.name()} is {cpu_percent} %'
+         #   ,Configuration,case=['debug_add'])
+      except Exception as e:
+
+         #print_log(f'get_usage_statistics: Could not get CPU usage of {child.name()}. Error: {e}'
+         #          ,Configuration,case=['debug_add'])
+         cpu_percent += 0. 
+
+   return cpu_percent,memory_in_mb
 
 get_usage_statistics.__doc__ =f'''
  NAME:
@@ -462,22 +499,20 @@ print_log.__doc__ =f'''
     This is useful for testing functions.
 '''
 
-def update_statistics(Configuration,process= None,message = None ):
-    if Configuration['TIMING']:
-        function = traceback.format_stack()[-2].split('\n')
-        function = function[0].split()[-1].strip()
-        if process is None:
-            process = Configuration['FAT_PSUPROCESS']
-            program = 'pyFAT'
-        else:
-            program = 'TiRiFiC'
-
-        CPU,mem = get_usage_statistics(Configuration,process)
-        with open(f"{Configuration['LOG_DIRECTORY']}Usage_Statistics.txt",'a') as file:
-            if message:
-                file.write(f"# {function.upper()}: {message} at {datetime.now()} \n")
-            # We cannot copy the process so initialize in the configuration
-            file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Mb for {program} \n")
+def update_statistics(Configuration,program='TiRiFiC',process= None,message = None ):
+   if Configuration['TIMING']:
+      function = traceback.format_stack()[-2].split('\n')
+      function = function[0].split()[-1].strip()
+      if process is None:
+         process = Configuration['FAT_PSUPROCESS']
+         program = 'pyFAT'
+   
+      CPU,mem = get_usage_statistics(Configuration,process)
+      with open(f"{Configuration['LOG_DIRECTORY']}Usage_Statistics.txt",'a') as file:
+         if message:
+               file.write(f"# {function.upper()}: {message} at {datetime.now()} \n")
+         # We cannot copy the process so initialize in the configuration
+         file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Mb for {program} \n")
 update_statistics.__doc__ =f'''
  NAME:
     update_statistics

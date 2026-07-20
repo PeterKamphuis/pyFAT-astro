@@ -116,7 +116,7 @@ class Advanced:
     # If the catalogue input contains r_min or r_max the code will set the radius_input_boundary to these values
     # Should be in arcsec
     radius_input_boundary: List = field(
-        default_factory=lambda: [0., 0.])
+        default_factory=lambda: [-1., -1.])
     # The brightest pixels need to have a SNR above this value
     source_max_snr: float = 2.5
     # The fraction of pixels in the source that need to be above max_snr

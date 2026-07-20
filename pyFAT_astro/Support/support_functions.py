@@ -6,7 +6,7 @@ from pyFAT_astro.Support.fat_errors import SupportRunError,SmallSourceError,\
                                               BadHeaderError,FittingError,TirificOutputError,\
                                               SofiaMissingError
 from pyFAT_astro.Support.log_functions import print_log,get_usage_statistics,\
-    recover_recovery_point_conf
+    recover_recovery_point_conf,update_statistics
 from pyFAT_astro import Templates as templates
 from collections import OrderedDict #used in Proper_Dictionary
 from numpy.linalg import LinAlgError
@@ -89,15 +89,16 @@ A class of ordered dictionary where keys can be inserted in at specified locatio
 def calc_rings(Configuration,size_in_beams = 0., ring_size  = 0.):
     if ring_size == 0.:
         ring_size = Configuration['RING_SIZE']
+    
     if size_in_beams == 0.:
         size_in_beams = np.max(Configuration['SIZE_IN_BEAMS'])
-   
+    
     print_log(f'''CALC_RINGS: Calculating the number of rings in the model.
 {'':8s} size in beams = {size_in_beams}
 {'':8s} ring_size = {ring_size}
 {'':8s} the maximum amount of rings = {Configuration['MAX_SIZE_IN_BEAMS']}
 ''',Configuration,case= ['debug_start'])
-
+  
     est_rings = round((size_in_beams-1./5.)/(ring_size)+2.)
     #if est_rings > 20 and Configuration['MAX_SIZE_IN_BEAMS'] > 25:
     if est_rings > 20:
@@ -3340,34 +3341,25 @@ We are in in stage {stage} and fit_type {fit_type} and have done {Configuration[
     counter = 0
 
     current_process= psu.Process(current_run.pid)
-
+ 
     initialized = datetime.now()
-    if Configuration['TIMING']:
-        time.sleep(0.1)
-        with open(f"{Configuration['LOG_DIRECTORY']}Usage_Statistics.txt",'a') as file:
-            file.write(f"# TIRIFIC: Initializing Tirific at stage = {fit_type}, Loop = {Configuration['ITERATIONS']} {datetime.now()} \n")
-            CPU,mem = get_usage_statistics(Configuration,current_process)
-            file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Mb for TiRiFiC \n")
-    else:
-        time.sleep(0.1)
-
+    update_statistics(Configuration,process=current_process,message=f"Initializing Tirific at stage = {fit_type}")  
+   
     if Configuration['VERBOSE_SCREEN']:
         print(f"\r{'':8s}RUN_TIRIFIC: 0 % Completed", end =" ",flush = True)
     triggered = False
+    message = None
     for tir_out_line in current_run.stdout:
         tmp = re.split(r"[/: ]+",tir_out_line.strip())
         counter += 1
         if (counter % 50) == 0:
-            if Configuration['TIMING']:
-                with open(f"{Configuration['LOG_DIRECTORY']}Usage_Statistics.txt",'a') as file:
-                    if tmp[0] == 'L' and not triggered:
-                        if tmp[1] == '1':
-                            file.write(f"# TIRIFIC: Started the actual fitting {datetime.now()} \n")
-                    CPU,mem = get_usage_statistics(Configuration,current_process)
-                    file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Mb for TiRiFiC \n")
+            update_statistics(Configuration,process=current_process,message=message)
+            if not message is None:
+                message = None  
         if tmp[0] == 'L':
             if not triggered:
                 triggered = True
+                message = f"Started the actual fitting"
             if int(tmp[1]) != currentloop and Configuration['VERBOSE_SCREEN']:
                 print(f"\r{'':8s}RUN_TIRIFIC: {set_limits(float(tmp[1])-1.,0.,float(max_loop))/float(max_loop)*100.:.1f} % Completed", end =" ",flush = True)
             currentloop  = int(tmp[1])
@@ -3393,14 +3385,12 @@ We were running {deffile} and failed to find the output {output_fits} or {output
 ''')
     if Configuration['VERBOSE_SCREEN']:
         print(f'\n')
-    if Configuration['TIMING']:
-        with open(f"{Configuration['LOG_DIRECTORY']}Usage_Statistics.txt",'a') as file:
-            file.write(f"# TIRIFIC: Finished this run {datetime.now()} \n")
-            CPU,mem = get_usage_statistics(Configuration,current_process)
-            file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Mb for TiRiFiC \n")
+  
+        
+    update_statistics(Configuration,process=current_process,message=f"Finished this run")
     if Configuration['VERBOSE_SCREEN']:
         print(f"{'':8s}RUN_TIRIFIC: Finished the current tirific run.")
-
+   
     #The break off goes faster sometimes than the writing of the file so let's make sure it is present
     time.sleep(1.0)
     wait_counter = 0
@@ -3785,7 +3775,7 @@ Please give a legit recovery point (Note that the default log is by date.)''')
 
                'MAX_SIZE_IN_BEAMS': 30, # The galaxy is not allowed to extend beyond this number of beams in radius, set in check_source
                'MIN_SIZE_IN_BEAMS': 0., # Minimum allowed radius in number of beams of the galaxy, set in check_source
-               'MIN_RING': 0., # Minimum allowed ring of the galaxy, initially set in check_source and the modified in set_new_size. based on RADIUS_INPUT_BOUNDARY[0] smaller rings are not fitted and the SBR is set to 0.  
+               'MIN_RING': 0, # Minimum allowed ring of the galaxy, initially set in check_source and the modified in set_new_size. based on RADIUS_INPUT_BOUNDARY[0] smaller rings are not fitted and the SBR is set to 0.  
                'SIZE_IN_BEAMS': np.full(2,0.,dtype=float),  #The radius of the galaxy in number of beams, adapted after running Sofia
                'NO_RINGS': 0., # The number of rings in the fit,
                'LAST_RELIABLE_RINGS': [0.,0.], # Location of the rings where the SBR drops below the cutoff limits, adapted after every run. Should only be modified in check_size
@@ -3974,6 +3964,7 @@ setup_configuration.__doc__ =f'''
 
 def sbr_limits(Configuration, Tirific_Template ):
     radii = load_tirific(Configuration,Tirific_Template,Variables=['RADI'],array=True)
+   
     if len(radii) == 0.:
         radii = set_rings(Configuration)
         Tirific_Template['RADI']= ' '.join([str(x) for x in radii])
@@ -3995,6 +3986,7 @@ def sbr_limits(Configuration, Tirific_Template ):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         sbr_ring_limits=9e-4*(ringarea/beamsolid)**(-0.82)*ratio
+    
     if ringarea[0] == 0.:
          sbr_ring_limits[0]=np.nanmin(sbr_ring_limits)
          sbr_ring_limits[1]=sbr_ring_limits[2]/2.
