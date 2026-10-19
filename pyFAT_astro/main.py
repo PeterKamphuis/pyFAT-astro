@@ -137,7 +137,8 @@ def main():
                 with open(Original_Configuration['MAIN_DIRECTORY']+'Timing_Result.txt','w') as timing_result:
                     timing_result.write("Timing results for every section of the fit process for all galaxies.  \n")
                 # If we do this we should have 1 cpu to keep going
-                Original_Configuration['NCPU'] -= 1
+                if Original_Configuration['NCPU'] > 1:
+                    Original_Configuration['NCPU'] -= 1
             system_monitor = full_system_tracking(Original_Configuration)
             fst = threading.Thread(target=system_monitor.start_monitoring)
             fst.start()
