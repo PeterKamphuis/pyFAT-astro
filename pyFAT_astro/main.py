@@ -23,6 +23,8 @@ from pyFAT_astro.Support.fat_errors import ProgramError,BadCatalogueError,InputE
 from pyFAT_astro.Support.write_functions import reorder_output_catalogue
 from pyFAT_astro.Support.log_functions import full_system_tracking
 
+import omegaconf
+
 def warn_with_traceback(message, category, filename, lineno, file=None, line=None):
     log = file if hasattr(file,'write') else sys.stderr
     traceback.print_stack(file=log)
@@ -46,8 +48,10 @@ def main():
         print(f"This is version {pyFAT_astro.__version__} of pyFAT.")
         if pyFAT_astro.__branch__:
             print(f"This is a github distribution and we are on the branch {pyFAT_astro.__branch__}.")
+      
         cfg =process_input(argv)
         
+
         # if we set more cpus than available we limit to the available cpus
         try:
             if cfg.ncpu > len(psutil.Process().cpu_affinity()):
@@ -222,6 +226,19 @@ def main():
         pass
     except InputError:
         traceback.print_exception(*sys.exc_info())
+        try:
+            system_monitor.stop_monitoring()
+            fst.join()
+        except:
+            pass
+        pass
+    except omegaconf.errors.ConfigKeyError as e:
+        #tmp = e.split()
+        #print(e,type(e),dir(e),e.full_key) 
+        print(f'''{''.join(['-']*20)} Configuration Error {''.join(['-']*20)}
+The key {e.full_key} is not avalaible as input to pyFAT, please make sure your yaml version and pyFAT version match.
+{''.join(['-']*61)}''')
+        #traceback.print_exception(*sys.exc_info())
         try:
             system_monitor.stop_monitoring()
             fst.join()
