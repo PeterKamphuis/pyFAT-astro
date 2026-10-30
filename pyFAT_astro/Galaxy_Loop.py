@@ -20,7 +20,7 @@ from pyFAT_astro.Support.fat_errors import BadCatalogueError
 from pyFAT_astro.Support.log_functions import print_log,enter_recovery_point\
     ,update_statistics
 
-def FAT_Galaxy_Loop(Configuration):
+def Galaxy_Loop(Configuration):
 
     try:
         registered_exception = None
@@ -68,6 +68,14 @@ def FAT_Galaxy_Loop(Configuration):
             if  Configuration['RP_SECTION'] in ['ITERATION',\
                 'AFTER-PREPARATIONS','BEFORE-SMOOTHING']:
                 current_run,Tirific_Template = runf.fitting_osc(
+                    Configuration, Fits_Files,  Initial_Parameters)
+            else:
+                current_run = 'Not set'
+                Tirific_Template = copy.deepcopy(Configuration['Tirific_Template'])
+        elif 'fit_fable' in Configuration['FITTING_STAGES']:
+            if  Configuration['RP_SECTION'] in ['ITERATION',\
+                'AFTER-PREPARATIONS','BEFORE-SMOOTHING']:
+                current_run,Tirific_Template = runf.fitting_fable(
                     Configuration, Fits_Files,  Initial_Parameters)
             else:
                 current_run = 'Not set'
@@ -335,6 +343,9 @@ def MP_Fitting_Loop(input,timing_lock,catalogue_lock):
 
         if 'fit_tirific_osc' in Configuration['FITTING_STAGES']:   
             current_run,Tirific_Template = runf.fitting_osc(
+                Configuration, Fits_Files, Initial_Parameters)
+        elif 'fit_fable' in Configuration['FITTING_STAGES']:
+            runf.fitting_fable(
                 Configuration, Fits_Files, Initial_Parameters)
         elif 'fit_make_your_own' in Configuration['FITTING_STAGES']:
             print_log(f'''FAT_GALAXY_LOOPS: If you add any fitting routine make sure that the fit stage  starts with Fit_

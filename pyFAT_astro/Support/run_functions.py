@@ -10,7 +10,7 @@ from make_moments.functions import extract_pv,moments
 from pyFAT_astro.Support.log_functions import print_log,update_statistics,enter_recovery_point
 from pyFAT_astro.Support.modify_template import write_new_to_template,\
     smooth_profile,set_cflux,fix_sbr,regularise_profile,set_fitting_parameters,\
-    check_size,set_errors,get_warp_slope,check_angles,write_center,\
+    check_size,get_warp_slope,check_angles,write_center,\
     set_boundary_limits,regularise_warp,set_new_size,cut_low_rings
 from pyFAT_astro.Support.constants import H_0
 from pyFAT_astro.Support.fat_errors import FaintSourceError,BadConfigurationError,\
@@ -831,47 +831,46 @@ check_vobs.__doc__='''
 '''
 def construct_kernels(Configuration,sofia_template):
     #we always want the unsmoothed cube
-    spatial_kernels= [0]
-    if np.sum(Configuration['NAXES'][:2])/(2.*sf.float_to_int(Configuration['BEAM_IN_PIXELS'][0]))  > 5:
-        spatial_kernels.append(sf.float_to_int(Configuration['BEAM_IN_PIXELS'][0]))
-    if np.sum(Configuration['NAXES'][:2])/(2.*sf.float_to_int(Configuration['BEAM_IN_PIXELS'][0]))  > 15:
-        spatial_kernels.append(sf.float_to_int(Configuration['BEAM_IN_PIXELS'][0]*2.))
-    if np.sum(Configuration['NAXES'][:2])/(2.*sf.float_to_int(Configuration['BEAM_IN_PIXELS'][0]))  > 30:
-        spatial_kernels.append(sf.float_to_int(Configuration['BEAM_IN_PIXELS'][0]*3))
-    if np.sum(Configuration['NAXES'][:2])/(2.*sf.float_to_int(Configuration['BEAM_IN_PIXELS'][0]))  > 45:
-        spatial_kernels.append(sf.float_to_int(Configuration['BEAM_IN_PIXELS'][0]*4))
+    if Configuration['SOFIA_SPATIAL_KERNELS'][0] is None :
+      
+        spatial_kernels= [0]
+        if np.sum(Configuration['NAXES'][:2])/(2.*sf.float_to_int(Configuration['BEAM_IN_PIXELS'][0]))  > 5:
+            spatial_kernels.append(sf.float_to_int(Configuration['BEAM_IN_PIXELS'][0]))
+        if np.sum(Configuration['NAXES'][:2])/(2.*sf.float_to_int(Configuration['BEAM_IN_PIXELS'][0]))  > 15:
+            spatial_kernels.append(sf.float_to_int(Configuration['BEAM_IN_PIXELS'][0]*2.))
+        if np.sum(Configuration['NAXES'][:2])/(2.*sf.float_to_int(Configuration['BEAM_IN_PIXELS'][0]))  > 30:
+            spatial_kernels.append(sf.float_to_int(Configuration['BEAM_IN_PIXELS'][0]*3))
+        if np.sum(Configuration['NAXES'][:2])/(2.*sf.float_to_int(Configuration['BEAM_IN_PIXELS'][0]))  > 45:
+            spatial_kernels.append(sf.float_to_int(Configuration['BEAM_IN_PIXELS'][0]*4))
+        Configuration['SOFIA_SPATIAL_KERNELS'] = spatial_kernels
+    else:
+        spatial_kernels = Configuration['SOFIA_SPATIAL_KERNELS']
 
     print_log(f'''CONSTRUCT_KERNELS: We use the following spatial_kernels
 {'':8s} spatial kernels = {spatial_kernels}
 ''', Configuration)
-    velocity_kernels = [0]
-    #We want to smooth at 5 km/s,10 kms and 15 and 25 km/s andif the cube spans more than 400 km/s\
-    #also at 50 km/s
-    dispersion = [5.,10,15.,25. ,50.]
-    fact = 5.
-    for disp in dispersion:
-        kernel = sf.float_to_int(disp/Configuration['CHANNEL_WIDTH'])
-        if disp == 50:
-            fact = 8.
-        if kernel*fact < Configuration['NAXES'][2]:
-            if fact == 8.:
-                Configuration['VEL_SMOOTH_EXTENDED'] = True
-                print_log(f'''CONSTRUCT_KERNELS: Using a very extended velocity smoothing as the cube spans more than 400 km/s.
+
+    if Configuration['SOFIA_VELOCITY_KERNELS'][0] is None:
+        velocity_kernels = [0]
+ 
+        #We want to smooth at 5 km/s,10 kms and 15 and 25 km/s andif the cube spans more than 400 km/s\
+        #also at 50 km/s
+        dispersion = [5.,10,15.,25. ,50.]
+        fact = 5.
+        for disp in dispersion:
+            kernel = sf.float_to_int(disp/Configuration['CHANNEL_WIDTH'])
+            if disp == 50:
+                fact = 8.
+            if kernel*fact < Configuration['NAXES'][2]:
+                if fact == 8.:
+                    Configuration['VEL_SMOOTH_EXTENDED'] = True
+                    print_log(f'''CONSTRUCT_KERNELS: Using a very extended velocity smoothing as the cube spans more than 400 km/s.
 ''', Configuration)       
-            velocity_kernels.append(kernel)
-    '''
-    if Configuration['NAXES'][2] > 12:
-        velocity_kernels.append(3)
-    if Configuration['NAXES'][2] > 24:
-        velocity_kernels.append(6)
-    if Configuration['NAXES'][2] > 48:
-        velocity_kernels.append(12)
-    if Configuration['NAXES'][2] > 52:
-        velocity_kernels.append(16)
-        Configuration['VEL_SMOOTH_EXTENDED'] = True
-        print_log(f''CONSTRUCT_KERNELS: Using a very extended velocity smoothing as the cube has more than 52 channels.
-'', Configuration)
-    '''
+                velocity_kernels.append(kernel)
+        Configuration['SOFIA_VELOCITY_KERNELS'] = velocity_kernels
+    else:
+        velocity_kernels = Configuration['SOFIA_VELOCITY_KERNELS']
+  
     print_log(f'''CONSTRUCT_KERNELS: We use the following velocity kernels
 {'':8s} velocity kernels = {velocity_kernels}
 ''', Configuration)
@@ -906,6 +905,17 @@ construct_kernels.__doc__ =f'''
 
  NOTE:
 '''
+
+def copy_sofia_input(Configuration, sofia_template):
+   
+    for key in Configuration:
+        keysplit = key.split('_')
+        if keysplit[0] == 'SOFIA':
+            if keysplit[1] not in ['SPATIAL','VELOCITY','COMMAND',
+                'THRESHOLD','OVERWRITE','RAN','TIME','DIR','BASENAME']:
+                sofiakey = ('.'.join(keysplit[1:])).lower()
+                sofia_template[sofiakey] = Configuration[key]
+   
 def failed_fit(Configuration,Tirific_Template,current_run, Fits_Files,\
         stage='initial', fit_type='Fit_Tirific_OSC'):
     print_log(f'''FAILED_FIT: Tirific failed to produce output in {fit_type}. It might be an unspecified crash.
@@ -963,6 +973,25 @@ failed_fit.__doc__ =f'''
 
  NOTE:
 '''
+def fitting_fable(Configuration,Fits_Files,Initial_Parameters):
+    import fable
+
+    if Configuration['RP_SECTION'] =='AFTER-PREPARATIONS':
+        Tirific_Template = sf.tirific_template()
+        fable_dictionary = wf.initialize_def_file(Configuration, Fits_Files,Tirific_Template, \
+                                   Initial_Parameters= Initial_Parameters, \
+                                   fit_type=Configuration['USED_FITTING'])
+    else:
+        from pyFAT_astro.Support.support_functions import translate_tt_to_fable_dict
+        fable_dictionary = translate_tt_to_fable_dict(Configuration, Configuration['Tirific_Template'])
+    prepared_fable = fable.prepare(Fits_Files['FITTING_CUBE'], **fable_dictionary,
+        seed=1,progress=False,mask=Fits_Files['MASK'])
+    fable_settings = prepared_fable.settings
+    print(fable_settings)
+    result= fable_settings.run()
+    exit()
+
+
 def fitting_osc(Configuration,Fits_Files,Initial_Parameters):
     current_run = 'Not Initialized'
     if Configuration['RP_SECTION'] =='AFTER-PREPARATIONS':
@@ -1473,10 +1502,10 @@ def sofia(Configuration, Fits_Files):
     sofia_template = rf.sofia_template()
     sf.create_directory('Sofia_Output',Configuration['FITTING_DIR'])
     os.chdir(Configuration['FITTING_DIR'])
-    counter = 3
+  
     sofia_template['input.data'] = Fits_Files['FITTING_CUBE']
     spatial_kernels,velocity_kernels = construct_kernels(Configuration,sofia_template)
-
+    copy_sofia_input(Configuration,sofia_template)
     sofia_ok = False
     while not sofia_ok:
         clean_before_sofia(Configuration)
@@ -1484,7 +1513,7 @@ def sofia(Configuration, Fits_Files):
         wf.sofia(sofia_template,'sofia_input.par')
         print_log("RUN_SOFIA: Running SoFiA. \n",Configuration)
         # Check which sofia to start
-        sfrun = subprocess.Popen([Configuration['SOFIA2'],'sofia_input.par'], 
+        sfrun = subprocess.Popen([Configuration['SOFIA_COMMAND'],'sofia_input.par'], 
             stdout = subprocess.PIPE, stderr = subprocess.PIPE,
             cwd=Configuration['FITTING_DIR'],universal_newlines = True)
       
@@ -1496,8 +1525,8 @@ def sofia(Configuration, Fits_Files):
          
         
         sofia_run, sofia_warnings_are_annoying = sfrun.communicate()
-        print_log(sofia_run, Configuration)
-
+        print_log(sofia_run, Configuration,case=['main','screen'])
+      
         if sfrun.returncode == 8:
             if Configuration['SOFIA_THRESHOLD'] > 3.:
                 log_statement = f'''RUN_SOFIA: We did not find a source at a threshold of {Configuration['SOFIA_THRESHOLD']}
@@ -1516,7 +1545,7 @@ def sofia(Configuration, Fits_Files):
         elif sfrun.returncode == 0:
             sofia_ok = True
         else:
-            print_log(sofia_warnings_are_annoying.decode("utf-8"), Configuration,case=['main','screen'])
+            print_log(sofia_warnings_are_annoying, Configuration,case=['main','screen'])
             raise SofiaRunError("RUN_SOFIA:Sofia did not execute properly. See log for details")
 
     #Move sofia output to the desired Directory

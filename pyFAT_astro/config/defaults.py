@@ -5,7 +5,7 @@
 import os
 from dataclasses import dataclass, field
 from datetime import datetime
-from omegaconf import OmegaConf,MISSING
+from omegaconf import MISSING
 #from multiprocessing import cpu_count
 import psutil
 import sys
@@ -33,6 +33,7 @@ class Fitting:
     # Run_Sofia: Run Sofia on the FAT cube and  process the output
     # Existing_Sofia: It is assumed the Sofia output exist and specified in the fitting catalogue, this means a catalogue exists for every cubelet
     # Fit_Tirific_OSC: Run FAT using the Tirific program in multiple iterations and smooth
+    # Fit_Fable: Run FAT using the Fable fitting routine instead of Tirific
     # Tirshaker: Bootstrap errors for the final model. This can take a long time
     ring_size: float = 1.1  # The size of the rings in number of beams
     fixed_parameters:  List = field(default_factory=lambda: [
@@ -48,10 +49,24 @@ class Input:
     channel_dependency: str = 'independent'
     catalogue: Optional[str] = None
     tirific: str = "tirific"  # Command to call tirific
-    sofia2: str = "sofia"  # Command to call sofia 2
-    sofia_basename: Optional[str] = None
+   
+@dataclass 
+class Sofia:
+    command: str = "sofia"  # Command to call sofia 2
+    basename: Optional[str] = None
     # Directory of the existing Sofia output. Only used if the input catalogue is sofia or pre-processed sofia is somewhere
-    sofia_dir: Optional[str] = None
+    dir: Optional[str] = None
+    threshold: float = 5.  # Threshold for Sofia detection
+
+
+    # If we are using a sofia catalogue and want tor overwrite the create FAT Cubes
+    overwrite: bool = False
+    spatial_kernels: List = field(default_factory=lambda: [None])
+    velocity_kernels: List = field(default_factory=lambda: [None])
+    # the above options are special but for the rest we can enter any sofia parameter
+    # as sofia.input parameter as sofia_input
+    dilation_enable: bool = True
+
 
 
 @dataclass
@@ -123,13 +138,11 @@ class Advanced:
     source_max_fraction: float = 0.075
     # The mean SNR required in the source
     source_mean_snr: float = 0.5
-    sofia_threshold: int = 5
     #option to bypass all initial checks on the intial sofia source and simply force the TRM fitting
     force_fit: bool = False
     # Add the channel dependency, minimum inclination,
     debug_function: List = field(default_factory=lambda: ['ALL'] )
-    # If we are using a sofia catalogue and want tor overwrite the create FAT Cubes
-    sofia_overwrite: bool = False
+ 
     #We want to be able to start at a given point in the code.
     recovery_point: str = 'START_0'
 
@@ -146,65 +159,6 @@ class defaults:
     configuration_file: Optional[str] = None
     input: Input = field(default_factory = Input)
     output: Output = field(default_factory = Output)
+    sofia: Sofia = field(default_factory = Sofia)
     fitting: Fitting = field(default_factory = Fitting)
     advanced: Advanced = field(default_factory = Advanced)
-
-def process_input(argv):
-    if '-v' in argv or '--version' in argv:
-        #The version is always printed so only need to exit()
-        sys.exit()
-
-    if '-h' in argv or '--help' in argv:
-        from pyFAT_astro.Support.log_functions import return_help_message
-        print(return_help_message())
-        sys.exit()
-    #First import the defaults
-    cfg = OmegaConf.structured(defaults)
-    #if ncpu is the total available remove 1
-    if cfg.ncpu == psutil.cpu_count():
-        cfg.ncpu -= 1
-
-    # read command line arguments anything list input should be set in brackets '' e.g. pyROTMOD 'rotmass.MD=[1.4,True,True]'
-    inputconf = OmegaConf.from_cli(argv)
-    cfg_input = OmegaConf.merge(cfg,inputconf)
-    # Print examples if requested
-    if cfg_input.print_examples:
-        no_cube = OmegaConf.masked_copy(cfg, ['ncpu','input','output',\
-            'fitting','advanced'])
-        with open('FAT_defaults.yml','w') as default_write:
-            default_write.write(OmegaConf.to_yaml(no_cube))
-        my_resources = import_pack_files('pyFAT_astro.config')
-        data = (my_resources / 'FAT_Input_Catalogue.txt').read_bytes()
-        with open('FAT_Example_Catalogue.txt','w+b') as default_write:
-            default_write.write(data)
-        print(f'''We have printed the file FAT_defaults.yml FAT_Input_Catalogue.txt in {os.getcwd()}.
-''')
-        sys.exit()
-    #if a configuration file is provided read it
-    if not cfg_input.configuration_file is None:
-        succes = False
-        while not succes:
-            try:
-                yaml_config = OmegaConf.load(cfg_input.configuration_file)
-        #merge yml file with defaults
-                cfg = OmegaConf.merge(cfg,yaml_config)
-                succes = True
-            except FileNotFoundError:
-                cfg_input.configuration_file = input(f'''
-You have provided a config file ({cfg_input.configuration_file}) but it can't be found.
-If you want to provide a config file please give the correct name.
-Else press CTRL-C to abort.
-configuration_file = ''')
-
-
-
-    cfg = OmegaConf.merge(cfg,inputconf)
-    
-    if not any([cfg.cube_name, cfg.configuration_file, cfg.installation_check\
-                ,cfg.print_examples,cfg.input.catalogue]):
-        from pyFAT_astro.Support.fat_errors import InputError
-        raise InputError(f'''You have not provided a cube_name, configuration_file or input_catalogue
-nor requested the installation_check or print_examples.
-We are crashes because that means you want to do nothing.''')
-    
-    return cfg

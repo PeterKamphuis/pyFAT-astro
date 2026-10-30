@@ -16,9 +16,9 @@ import threading
 from datetime import datetime
 from multiprocessing import Pool,get_context,Lock,Manager
 
-from pyFAT_astro.FAT_Galaxy_Loop import FAT_Galaxy_Loop,MP_initialize_sofia,\
+from pyFAT_astro.Galaxy_Loop import Galaxy_Loop,MP_initialize_sofia,\
                                         MP_Fitting_Loop
-from pyFAT_astro.config.defaults import process_input
+from pyFAT_astro.config.functions import process_input
 from pyFAT_astro.Support.fat_errors import ProgramError,BadCatalogueError,InputError
 from pyFAT_astro.Support.write_functions import reorder_output_catalogue
 from pyFAT_astro.Support.log_functions import full_system_tracking
@@ -69,8 +69,8 @@ def main():
             warnings.showwarning = warn_with_traceback
         if Original_Configuration['RP_SECTION'] == 'START':
             #First we check for sofia and TiRiFiC
-            Original_Configuration['SOFIA2'] = \
-                sf.find_program(Original_Configuration['SOFIA2'], "SoFiA 2")
+            Original_Configuration['SOFIA_COMMAND'] = \
+                sf.find_program(Original_Configuration['SOFIA_COMMAND'], "SoFiA 2")
             Original_Configuration['TIRIFIC'] =\
                 sf.find_program(Original_Configuration['TIRIFIC'], "TiRiFiC")
             if not cfg.cube_name is None:
@@ -203,7 +203,7 @@ def main():
                     Configuration = sf.set_individual_configuration(current_galaxy_index,Full_Catalogue,Original_Configuration)
                 else:
                     Configuration = Original_Configuration
-                catalogue_line = FAT_Galaxy_Loop(Configuration)
+                catalogue_line = Galaxy_Loop(Configuration)
         
         if Original_Configuration['TIMING']:
             system_monitor.stop_monitoring()

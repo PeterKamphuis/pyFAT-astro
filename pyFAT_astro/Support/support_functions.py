@@ -3690,6 +3690,9 @@ def setup_configuration(cfg):
                         if req_key not in value:
                             value.append(req_key)
                     Configuration[str(sub_key).upper()] =  [value,value]
+                elif str(key) == 'sofia':
+                    value = getattr(input_key,sub_key)
+                    Configuration[str(f'{key}_{sub_key}').upper()] = value
                 elif isinstance(getattr(input_key,sub_key),omegaconf.listconfig.ListConfig):
                     Configuration[str(sub_key).upper()] = list(getattr(input_key,sub_key))
                     for i,oyt in enumerate(Configuration[str(sub_key).upper()]):
@@ -3699,7 +3702,7 @@ def setup_configuration(cfg):
                     Configuration[str(sub_key).upper()] =  getattr(input_key,sub_key)
         else:
             Configuration[str(key).upper()] = input_key
-
+ 
     Configuration['TIRIFIC_VERSION'] = get_tirific_version(Configuration)
   
 
@@ -3720,7 +3723,7 @@ def setup_configuration(cfg):
         except FileExistsError:
             raise InputError(f'''We failed to locate the file {Configuration['LOG_DIRECTORY']}RP_{ Configuration['RECOVERY_POINT']}.pkl
 Please give a legit recovery point (Note that the default log is by date.)''')
-            pass     
+             
     # None cfg additions, that is additions that should be reset for every galaxy
     boolean_keys = ['OPTIMIZED', # Are we fitting an optimized cube
                 'TIRIFIC_RUNNING', # Is there a tirific initialized
@@ -3850,7 +3853,7 @@ Please provide the correct path and file name.
     # Make sure all selected stages exist
     possible_stages = ['Fit_Tirific_OSC','Create_FAT_Cube',\
         'Run_Sofia','Restart_Fitting','External_Sofia','Sofia_Catalogue',\
-        'Tirshaker','Fit_Make_Your_Own']
+        'Tirshaker','Fit_Make_Your_Own','Fit_Fable']
     possible_stages_l = [x.lower() for x in possible_stages]
     approved_stages = []
     fit_count = 0
@@ -3897,10 +3900,10 @@ Please pick one of the following {', '.join(possible_stages)}.
         raise InputError(f"Fit_Tirific_OSC only allows for 2 or 1 disk. This won't work exiting.")
 
     #Check that the channel_dependency is acceptable
-    while Configuration['CHANNEL_DEPENDENCY'].lower() not in ['sinusoidal','independent','hanning']:
+    while Configuration['CHANNEL_DEPENDENCY'].lower() not in ['sinusoidal','independent','hanning','spectre']:
         Configuration['CHANNEL_DEPENDENCY'] = input(f'''
 The channel dependency  {'CHANNEL_DEPENDENCY'} is not supported by FAT.
-Please pick one of the following {', '.join(['sinusoidal','independent','hanning'])}.
+Please pick one of the following {', '.join(['sinusoidal','independent','hanning','spectre'])}.
 : ''')
 
 
@@ -4467,3 +4470,28 @@ tirific_template.__doc__ ='''
  NOTE:
 '''
 
+def translate_tt_to_fable_dict(Configuration,tirific_template):
+    fable_dict = {'radii': tirific_template['RADI'][1:]}
+    fable_dict['vrot'] = [np.mean([x,y]) for x,y in zip(
+        tirific_template['VROT'][1:], tirific_template['VROT_2'][1:])]
+    fable_dict['incl'] = [np.mean([x,y]) for x,y in zip(
+        tirific_template['INCL'][1:], tirific_template['INCL_2'][1:])]
+    fable_dict['pa'] = [np.mean([x,y]) for x,y in zip(
+        tirific_template['PA'][1:], tirific_template['PA_2'][1:])]
+    fable_dict['center'] = [np.mean([np.mean([x,y]) for x,y in zip(
+        tirific_template['XPOS'][1:], tirific_template['XPOS_2'][1:])]),
+        np.mean([np.mean([x,y]) for x,y in zip(
+        tirific_template['YPOS'][1:], tirific_template['YPOS_2'][1:])])
+        ]
+    fable_dict['vsys'] = np.mean([np.mean([x,y]) for x,y in zip(
+        tirific_template['VSYS'][1:], tirific_template['VSYS_2'][1:])])
+    fable_dict['sigma'] = [np.mean([x,y])*1.004e4 for x,y in zip(
+        tirific_template['SBR'][1:], tirific_template['SBR_2'][1:])]
+    
+    fable_dict['vdisp'] = [np.sqrt(np.mean([x,y])**2+tirific_template['CONDISP'][0]**2) 
+        for x,y in zip(tirific_template['SDIS'][1:], tirific_template['SDIS_2'][1:])]
+    fable_dict['noise'] = tirific_template['RMS']
+    fable_dict['distance'] = Configuration['DISTANCE']
+
+    return fable_dict
+    

@@ -196,7 +196,7 @@ def initialize_def_file(Configuration, Fits_Files,Tirific_Template,\
                                 initial_estimates = Initial_Parameters )
         #if 'VSYS' in Initial_Parameters:
         #    Initial_Parameters['VSYS'] = [x*1000. for x in Initial_Parameters['VSYS']]
-    elif fit_type in ['Extent_Convergence','Fit_Tirific_OSC']:
+    elif fit_type in ['Extent_Convergence','Fit_Tirific_OSC','Fit_Fable']:
         #if 'VSYS' in Initial_Parameters and fit_type == 'Fit_Tirific_OSC':
         #    Initial_Parameters['VSYS'] = [x/1000. for x in Initial_Parameters['VSYS']]
        
@@ -222,8 +222,11 @@ def initialize_def_file(Configuration, Fits_Files,Tirific_Template,\
 
         set_fitting_parameters(Configuration, Tirific_Template,stage = 'initialize_os',
                                initial_estimates=Initial_Parameters )
-
-    tirific(Configuration,Tirific_Template,name = f'{fit_type}_In.def' )
+    if fit_type == 'Fit_Fable':
+        fable_dictionary = sf.translate_tt_to_fable_dict(Configuration, Tirific_Template)
+        return fable_dictionary
+    else:
+        tirific(Configuration,Tirific_Template,name = f'{fit_type}_In.def' )
 
 initialize_def_file.__doc__ =f'''
  NAME:
