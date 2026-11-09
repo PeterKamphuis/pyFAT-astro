@@ -338,10 +338,16 @@ def check_inclination(Configuration,Tirific_Template,Fits_Files, \
     sf.finish_current_run(Configuration, incl_run)
     Configuration['TIRIFIC_RUNNING'] = other_run[0]
     Configuration['TIRIFIC_PID'] =  other_run[1]
+    #Moving this away from a where call the below line works incorporate in new version for now patch
+    # new_incl= incl_to_check[mom_chi.index(np.nanmin(mom_chi))]
+   
     low= np.where(mom_chi == np.nanmin(mom_chi))[0]
-    if low.size > 1:
+   
+    #numpy 2.4 changes the output from np.where so add low.ndim
+    if low.size > 1 or low.ndim > 0.:
         low = low[0]
     new_incl = float(incl_to_check[low])
+   
     print_log(f'''CHECK_INCLINATION: This is the new inclination {new_incl} it was {current[1][0]}.
 {'':8s}mom_chi = {mom_chi}
 {'':8s}low = {low}
@@ -976,11 +982,13 @@ def fitting_osc(Configuration,Fits_Files,Initial_Parameters):
             current_run = one_step_converge(Configuration, Fits_Files,Tirific_Template,current_run)
 
             if (Configuration['ITERATIONS'] == 1  and np.sum(Configuration['SIZE_IN_BEAMS']) < 10.6) or  (Configuration['ACCEPTED'] and np.sum(Configuration['SIZE_IN_BEAMS']) < 6.6):
+            #if True:
                 print_log(f'''FITTING_OSC: Checking the inclination due to small galaxy size.
     {'':8s}PA = {Tirific_Template['PA']}
     {'':8s}INCL = {Tirific_Template['INCL']}
     ''',Configuration,case= ['debug_add'])
                 check_inclination(Configuration,Tirific_Template,Fits_Files, fit_type =Configuration['USED_FITTING'])
+               
             enter_recovery_point(Configuration,Fits_Files=Fits_Files,Tirific_Template=Tirific_Template,\
                         message=f'After Iteration { Configuration["ITERATIONS"]}',\
                         point_ID='ITERATION')
