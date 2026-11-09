@@ -32,7 +32,7 @@ class full_system_tracking:
       self.python = self.main_pyFAT.name()
       self.tirific = Configuration['TIRIFIC']
       self.font_file = Configuration['FONT_FILE']
-      self.sofia = Configuration['SOFIA2']
+      self.sofia = Configuration['SOFIA']
       self.file = f"{Configuration['MAIN_DIRECTORY']}FAT_Resources_Used.txt"
       self.plot_name= f"{Configuration['MAIN_DIRECTORY']}pyFAT_Resources_Monitor.pdf"
       self.cpus= psu.cpu_count()
