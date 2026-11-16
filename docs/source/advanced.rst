@@ -369,6 +369,7 @@ Advanced Keywords
 
   These can be set for individual galaxies in the catalogue through r_min and r_max.
   
+   # The brightest pixels need to have a SNR above this value
 **source_max_snr**
 
   *float, optional, default = 2.5
