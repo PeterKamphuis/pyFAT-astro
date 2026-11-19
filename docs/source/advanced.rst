@@ -111,7 +111,7 @@ Output Keywords
 
   *bool, optional, default = False*
 
-  Switch for whether you want pyFAT top produce a warp radius and tiltograms.
+  Switch for whether you want pyFAT to produce a warp radius and tiltograms.
 
 **debug**:
 
