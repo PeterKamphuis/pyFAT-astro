@@ -235,9 +235,9 @@ def main():
     except omegaconf.errors.ConfigKeyError as e:
         #tmp = e.split()
         #print(e,type(e),dir(e),e.full_key) 
-        print(f'''{''.join(['-']*20)} Configuration Error {''.join(['-']*20)}
-The key {e.full_key} is not avalaible as input to pyFAT, please make sure your yaml version and pyFAT version match.
-{''.join(['-']*61)}''')
+        print(f'''{''.join(['-']*30)} Configuration Error {''.join(['-']*30)}
+The key '{e.full_key}' is not avalaible as input to pyFAT, please make sure your yaml version and pyFAT version match.
+{''.join(['-']*81)}''')
         #traceback.print_exception(*sys.exc_info())
         try:
             system_monitor.stop_monitoring()

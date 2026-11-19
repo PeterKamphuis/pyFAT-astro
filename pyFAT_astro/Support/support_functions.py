@@ -1498,6 +1498,7 @@ def fit_center_ellipse(Configuration,map,inclination= -1, pa = -1):
     max = np.max(map)
     ellipses = np.linspace(max/2.,max,num=10)
     parameters =[]
+   
     for el_out,el_in in zip(ellipses,ellipses[1:]):
         map_to_fit = np.zeros(map.shape)
         map_to_fit[map < el_in ] = 1.
@@ -1523,10 +1524,12 @@ def fit_center_ellipse(Configuration,map,inclination= -1, pa = -1):
         weight = [x[-1]  for x in parameters ]
     else:
         weight = [x[-1]/((abs(x[2]-inclination)+abs(x[3]-inclination)))  for x in parameters ]
-    x_center = np.sum([x*y for x,y in zip(x_in,weight)])/np.sum(weight)
-    y_center = np.sum([x*y for x,y in zip(y_in,weight)])/np.sum(weight)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        x_center = np.sum([x*y for x,y in zip(x_in,weight)])/np.sum(weight)
+        y_center = np.sum([x*y for x,y in zip(y_in,weight)])/np.sum(weight)
 
-    return [x_center,y_center]
+    return [float(x_center),float(y_center)]
 fit_center_ellipse.__doc__= '''
 NAME:
    fit_center_ellipse
@@ -2111,10 +2114,7 @@ get_inclination_pa.__doc__ =f'''
 '''
 
 def get_new_center(Configuration, map_in, inclination=-1,pa=-1, noise= 0.):
-
     new_center = fit_center_ellipse(Configuration,map_in,inclination=inclination,pa=pa )
-
-
     return new_center,True,False
 
 
