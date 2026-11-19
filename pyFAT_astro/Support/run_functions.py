@@ -339,16 +339,7 @@ def check_inclination(Configuration,Tirific_Template,Fits_Files, \
     Configuration['TIRIFIC_RUNNING'] = other_run[0]
     Configuration['TIRIFIC_PID'] =  other_run[1]
     #Moving this away from a where call the below line works incorporate in new version for now patch
-    # new_incl= incl_to_check[mom_chi.index(np.nanmin(mom_chi))]
-   
-    low= np.where(mom_chi == np.nanmin(mom_chi))[0]
-    if low.size > 1 or low.ndim > 0:
-        low = int(low[0])
-    print_log(f'''CHECK_INCLINATION: we should transform the inclination by {incl_to_check[low]} into a float
-incl_to_check = {incl_to_check} dtype = {type(incl_to_check)}
-low = {low} dtype = {type(low)}              
-''',Configuration,case= ['debug_add'])    
-    new_incl = float(incl_to_check[low])
+    new_incl= float(incl_to_check[mom_chi.index(np.nanmin(mom_chi))])
    
     print_log(f'''CHECK_INCLINATION: This is the new inclination {new_incl} it was {current[1][0]}.
 {'':8s}mom_chi = {mom_chi}
