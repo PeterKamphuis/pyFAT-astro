@@ -343,7 +343,6 @@ def check_inclination(Configuration,Tirific_Template,Fits_Files, \
    
     print_log(f'''CHECK_INCLINATION: This is the new inclination {new_incl} it was {current[1][0]}.
 {'':8s}mom_chi = {mom_chi}
-{'':8s}low = {low}
 ''',Configuration,case= ['debug_add'])
 
 
