@@ -6,7 +6,7 @@ from pyFAT_astro.Support.fat_errors import SupportRunError,SmallSourceError,\
                                               BadHeaderError,FittingError,TirificOutputError,\
                                               SofiaMissingError
 from pyFAT_astro.Support.log_functions import print_log,get_usage_statistics,\
-    recover_recovery_point_conf
+    recover_recovery_point_conf,update_statistics
 from pyFAT_astro import Templates as templates
 from collections import OrderedDict #used in Proper_Dictionary
 from numpy.linalg import LinAlgError
@@ -89,14 +89,16 @@ A class of ordered dictionary where keys can be inserted in at specified locatio
 def calc_rings(Configuration,size_in_beams = 0., ring_size  = 0.):
     if ring_size == 0.:
         ring_size = Configuration['RING_SIZE']
+    
     if size_in_beams == 0.:
         size_in_beams = np.max(Configuration['SIZE_IN_BEAMS'])
+    
     print_log(f'''CALC_RINGS: Calculating the number of rings in the model.
 {'':8s} size in beams = {size_in_beams}
 {'':8s} ring_size = {ring_size}
 {'':8s} the maximum amount of rings = {Configuration['MAX_SIZE_IN_BEAMS']}
 ''',Configuration,case= ['debug_start'])
-
+  
     est_rings = round((size_in_beams-1./5.)/(ring_size)+2.)
     #if est_rings > 20 and Configuration['MAX_SIZE_IN_BEAMS'] > 25:
     if est_rings > 20:
@@ -301,7 +303,7 @@ def calculate_am_vector(Configuration,PA_in,Inclination_in, multiple = None,
         # And make sure the inner 3 rings are the same
         Inclination[0:3] = np.mean(Inclination[0:3])
         PA[0:3] = np.mean(PA[0:3])
-        return PA,Inclination
+        return np.array(PA,dtype=float),np.array(Inclination,dtype=float)
     else:
         # For this the PA has to be between 0-90
         PA=np.array(PA_in,dtype=float)
@@ -316,7 +318,7 @@ def calculate_am_vector(Configuration,PA_in,Inclination_in, multiple = None,
         Theta=np.arctan(abs(np.tan(Inclination*(np.pi/180.)))*abs(np.tan(PA*(np.pi/180.))))
         Phi = np.arctan(abs(np.tan(PA*(np.pi/180.)))/np.sin(Theta))
 
-        return Theta,Phi,multiple
+        return np.array(Theta,dtype=float),np.array(Phi,dtype=float),np.array(multiple,dtype=float)
 calculate_am_vector.__doc__ =f'''
  NAME:
     calculate_am_vector
@@ -1496,6 +1498,7 @@ def fit_center_ellipse(Configuration,map,inclination= -1, pa = -1):
     max = np.max(map)
     ellipses = np.linspace(max/2.,max,num=10)
     parameters =[]
+   
     for el_out,el_in in zip(ellipses,ellipses[1:]):
         map_to_fit = np.zeros(map.shape)
         map_to_fit[map < el_in ] = 1.
@@ -1521,10 +1524,12 @@ def fit_center_ellipse(Configuration,map,inclination= -1, pa = -1):
         weight = [x[-1]  for x in parameters ]
     else:
         weight = [x[-1]/((abs(x[2]-inclination)+abs(x[3]-inclination)))  for x in parameters ]
-    x_center = np.sum([x*y for x,y in zip(x_in,weight)])/np.sum(weight)
-    y_center = np.sum([x*y for x,y in zip(y_in,weight)])/np.sum(weight)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        x_center = np.sum([x*y for x,y in zip(x_in,weight)])/np.sum(weight)
+        y_center = np.sum([x*y for x,y in zip(y_in,weight)])/np.sum(weight)
 
-    return [x_center,y_center]
+    return [float(x_center),float(y_center)]
 fit_center_ellipse.__doc__= '''
 NAME:
    fit_center_ellipse
@@ -2109,10 +2114,7 @@ get_inclination_pa.__doc__ =f'''
 '''
 
 def get_new_center(Configuration, map_in, inclination=-1,pa=-1, noise= 0.):
-
     new_center = fit_center_ellipse(Configuration,map_in,inclination=inclination,pa=pa )
-
-
     return new_center,True,False
 
 
@@ -2563,7 +2565,7 @@ isiterable.__doc__ =f'''
 #The functions load_tirifiic,load_template and get_from template were extremely similar
 #This replaces all with a single function
 def load_tirific(Configuration,def_input,Variables = None,array = False,\
-        ensure_rings = False,brightness_check=False ):
+        ensure_rings = False,brightness_check=False,inner_rings=0 ):
     #Cause python is the dumbest and mutable objects in the FAT_defaults
     # such as lists transfer
     if Variables is None:
@@ -2618,6 +2620,7 @@ def load_tirific(Configuration,def_input,Variables = None,array = False,\
                    ext = '_2'  
            
             cut = np.where(out[Variables.index(f'SBR{ext}'),:] < 1e-15)
+            cut = [x for x in cut[0] if x > inner_rings]
             if np.sum(cut) > 0.:
                 out[Variables.index(variable),cut] = float('NaN')
         
@@ -3338,34 +3341,25 @@ We are in in stage {stage} and fit_type {fit_type} and have done {Configuration[
     counter = 0
 
     current_process= psu.Process(current_run.pid)
-
+ 
     initialized = datetime.now()
-    if Configuration['TIMING']:
-        time.sleep(0.1)
-        with open(f"{Configuration['LOG_DIRECTORY']}Usage_Statistics.txt",'a') as file:
-            file.write(f"# TIRIFIC: Initializing Tirific at stage = {fit_type}, Loop = {Configuration['ITERATIONS']} {datetime.now()} \n")
-            CPU,mem = get_usage_statistics(Configuration,current_process)
-            file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Mb for TiRiFiC \n")
-    else:
-        time.sleep(0.1)
-
+    update_statistics(Configuration,process=current_process,message=f"Initializing Tirific at stage = {fit_type}")  
+   
     if Configuration['VERBOSE_SCREEN']:
         print(f"\r{'':8s}RUN_TIRIFIC: 0 % Completed", end =" ",flush = True)
     triggered = False
+    message = None
     for tir_out_line in current_run.stdout:
         tmp = re.split(r"[/: ]+",tir_out_line.strip())
         counter += 1
         if (counter % 50) == 0:
-            if Configuration['TIMING']:
-                with open(f"{Configuration['LOG_DIRECTORY']}Usage_Statistics.txt",'a') as file:
-                    if tmp[0] == 'L' and not triggered:
-                        if tmp[1] == '1':
-                            file.write(f"# TIRIFIC: Started the actual fitting {datetime.now()} \n")
-                    CPU,mem = get_usage_statistics(Configuration,current_process)
-                    file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Mb for TiRiFiC \n")
+            update_statistics(Configuration,process=current_process,message=message)
+            if not message is None:
+                message = None  
         if tmp[0] == 'L':
             if not triggered:
                 triggered = True
+                message = f"Started the actual fitting"
             if int(tmp[1]) != currentloop and Configuration['VERBOSE_SCREEN']:
                 print(f"\r{'':8s}RUN_TIRIFIC: {set_limits(float(tmp[1])-1.,0.,float(max_loop))/float(max_loop)*100.:.1f} % Completed", end =" ",flush = True)
             currentloop  = int(tmp[1])
@@ -3391,14 +3385,12 @@ We were running {deffile} and failed to find the output {output_fits} or {output
 ''')
     if Configuration['VERBOSE_SCREEN']:
         print(f'\n')
-    if Configuration['TIMING']:
-        with open(f"{Configuration['LOG_DIRECTORY']}Usage_Statistics.txt",'a') as file:
-            file.write(f"# TIRIFIC: Finished this run {datetime.now()} \n")
-            CPU,mem = get_usage_statistics(Configuration,current_process)
-            file.write(f"{datetime.now()} CPU = {CPU} % Mem = {mem} Mb for TiRiFiC \n")
+  
+        
+    update_statistics(Configuration,process=current_process,message=f"Finished this run")
     if Configuration['VERBOSE_SCREEN']:
         print(f"{'':8s}RUN_TIRIFIC: Finished the current tirific run.")
-
+   
     #The break off goes faster sometimes than the writing of the file so let's make sure it is present
     time.sleep(1.0)
     wait_counter = 0
@@ -3588,13 +3580,31 @@ Therefore we remove the Create_FAT_Cube stages from the loop.
         Configuration['FITTING_DIR'] = f"{Configuration['MAIN_DIRECTORY']}"
     else:
         Configuration['FITTING_DIR'] = f"{Configuration['MAIN_DIRECTORY']}{Full_Catalogue['DIRECTORYNAME'][current_galaxy_index]}/"
-  
+   
+    if Configuration['INPUT_CUBE_DIR'] == 'Unset':
+        Configuration['INPUT_CUBE_DIR'] = Configuration['FITTING_DIR']
+    
     if 'sofia_catalogue' in Configuration['FITTING_STAGES']:
         Configuration['INPUT_CUBE']= f"{Full_Catalogue['CUBENAME'][current_galaxy_index]}_FAT.fits"
     else:
         Configuration['INPUT_CUBE']= f"{base}{extension[1]}"
         if zipped:
             Configuration['INPUT_CUBE'] += '.gz'
+     # The parameters that need boundary limits are set here
+    boundary_limit_keys = ['PA','INCL', 'SDIS', 'Z0','VSYS','XPOS','YPOS','VROT','SBR']
+    for key in boundary_limit_keys:
+        #let's allow for only fixing 1
+        if f'{key}_MIN' in Full_Catalogue['ENTRIES']:
+            for i in [0,1,2]:
+                Configuration[f"{key}_INPUT_BOUNDARY"][i][0] = float(Full_Catalogue[f'{key}_MIN'][current_galaxy_index])
+        if f'{key}_MAX' in Full_Catalogue['ENTRIES']:
+            for i in [0,1,2]:
+                Configuration[f"{key}_INPUT_BOUNDARY"][i][1] = float(Full_Catalogue[f'{key}_MAX'][current_galaxy_index])
+       
+    if 'R_MIN' in Full_Catalogue['ENTRIES']:
+        Configuration['RADIUS_INPUT_BOUNDARY'][0] = float(Full_Catalogue['R_MIN'][current_galaxy_index])
+    if 'R_MAX' in Full_Catalogue['ENTRIES']:
+        Configuration['RADIUS_INPUT_BOUNDARY'][1] = float(Full_Catalogue['R_MAX'][current_galaxy_index])
 
     return(Configuration)
 set_individual_configuration.__doc__ =f'''
@@ -3737,6 +3747,7 @@ Please give a legit recovery point (Note that the default log is by date.)''')
                'FITTING_DIR': 'Unset', # Full path of the directory in which the fitting takes place, set at start of loop
                'BASE_NAME': 'Unset', #Basename for FAT products, typically {input_cube}_FAT, set at start of loop
                'INPUT_CUBE': 'Unset', # Name of the input cube as listed in full catalogue
+               'INPUT_CUBE_DIR': 'Unset', # Directory of the input cube, as listed in thee full catalogues
                'STOP_INDIVIDUAL_ERRORS': ['SmallSourceError','BadSourceError'\
                                         ,'FaintSourceError','BadHeaderError',\
                                         'BadCubeError','BadMaskError',\
@@ -3764,6 +3775,7 @@ Please give a legit recovery point (Note that the default log is by date.)''')
 
                'MAX_SIZE_IN_BEAMS': 30, # The galaxy is not allowed to extend beyond this number of beams in radius, set in check_source
                'MIN_SIZE_IN_BEAMS': 0., # Minimum allowed radius in number of beams of the galaxy, set in check_source
+               'MIN_RING': 0, # Minimum allowed ring of the galaxy, initially set in check_source and the modified in set_new_size. based on RADIUS_INPUT_BOUNDARY[0] smaller rings are not fitted and the SBR is set to 0.  
                'SIZE_IN_BEAMS': np.full(2,0.,dtype=float),  #The radius of the galaxy in number of beams, adapted after running Sofia
                'NO_RINGS': 0., # The number of rings in the fit,
                'LAST_RELIABLE_RINGS': [0.,0.], # Location of the rings where the SBR drops below the cutoff limits, adapted after every run. Should only be modified in check_size
@@ -3952,6 +3964,7 @@ setup_configuration.__doc__ =f'''
 
 def sbr_limits(Configuration, Tirific_Template ):
     radii = load_tirific(Configuration,Tirific_Template,Variables=['RADI'],array=True)
+   
     if len(radii) == 0.:
         radii = set_rings(Configuration)
         Tirific_Template['RADI']= ' '.join([str(x) for x in radii])
@@ -3973,6 +3986,7 @@ def sbr_limits(Configuration, Tirific_Template ):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         sbr_ring_limits=9e-4*(ringarea/beamsolid)**(-0.82)*ratio
+    
     if ringarea[0] == 0.:
          sbr_ring_limits[0]=np.nanmin(sbr_ring_limits)
          sbr_ring_limits[1]=sbr_ring_limits[2]/2.

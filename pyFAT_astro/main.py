@@ -23,6 +23,8 @@ from pyFAT_astro.Support.fat_errors import ProgramError,BadCatalogueError,InputE
 from pyFAT_astro.Support.write_functions import reorder_output_catalogue
 from pyFAT_astro.Support.log_functions import full_system_tracking
 
+import omegaconf
+
 def warn_with_traceback(message, category, filename, lineno, file=None, line=None):
     log = file if hasattr(file,'write') else sys.stderr
     traceback.print_stack(file=log)
@@ -46,8 +48,10 @@ def main():
         print(f"This is version {pyFAT_astro.__version__} of pyFAT.")
         if pyFAT_astro.__branch__:
             print(f"This is a github distribution and we are on the branch {pyFAT_astro.__branch__}.")
+      
         cfg =process_input(argv)
         
+
         # if we set more cpus than available we limit to the available cpus
         try:
             if cfg.ncpu > len(psutil.Process().cpu_affinity()):
@@ -77,6 +81,9 @@ def main():
                 Full_Catalogue['DISTANCE'] = [-1.]
                 Full_Catalogue['DIRECTORYNAME'] = ['./']
                 Full_Catalogue['CUBENAME'] = [cfg.cube_name.split('/')[-1]]
+                if cfg.cube_name.count('/') > 0:
+                    Original_Configuration['INPUT_CUBE_DIR'] = '/'.join(cfg.cube_name.split('/')[:-1])
+              
             elif 'sofia_catalogue' in Original_Configuration['FITTING_STAGES']:
                 Full_Catalogue = rf.sofia_input_catalogue(Original_Configuration)
             elif not Original_Configuration['CATALOGUE'] is None:
@@ -89,8 +96,10 @@ def main():
 {'':8s}input.catalogue= (We found { Original_Configuration['CATALOGUE']})
 {'':8s}and 'sofia_catalogue' was not in the fitting stages (We found { Original_Configuration['FITTING_STAGES']})
 {'':8s}Please add any of these when calling pyFAT or at them in the correct manner to the yml configuration file.
-''')                        
-        
+''')                       
+            
+            #if Original_Configuration['INPUT_CUBE_DIR'] == 'Unset':
+             #   Original_Configuration['INPUT_CUBE_DIR'] = './'
             # Get the longest directory name to format the output directory properlyFit_Tirific_OSC
             for directory in Full_Catalogue['DIRECTORYNAME']:
                 if directory == './':
@@ -132,7 +141,8 @@ def main():
                 with open(Original_Configuration['MAIN_DIRECTORY']+'Timing_Result.txt','w') as timing_result:
                     timing_result.write("Timing results for every section of the fit process for all galaxies.  \n")
                 # If we do this we should have 1 cpu to keep going
-                Original_Configuration['NCPU'] -= 1
+                if Original_Configuration['NCPU'] > 1:
+                    Original_Configuration['NCPU'] -= 1
             system_monitor = full_system_tracking(Original_Configuration)
             fst = threading.Thread(target=system_monitor.start_monitoring)
             fst.start()
@@ -216,6 +226,19 @@ def main():
         pass
     except InputError:
         traceback.print_exception(*sys.exc_info())
+        try:
+            system_monitor.stop_monitoring()
+            fst.join()
+        except:
+            pass
+        pass
+    except omegaconf.errors.ConfigKeyError as e:
+        #tmp = e.split()
+        #print(e,type(e),dir(e),e.full_key) 
+        print(f'''{''.join(['-']*30)} Configuration Error {''.join(['-']*30)}
+The key '{e.full_key}' is not avalaible as input to pyFAT, please make sure your yaml version and pyFAT version match.
+{''.join(['-']*81)}''')
+        #traceback.print_exception(*sys.exc_info())
         try:
             system_monitor.stop_monitoring()
             fst.join()

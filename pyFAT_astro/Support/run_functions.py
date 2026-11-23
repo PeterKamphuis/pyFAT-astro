@@ -4,7 +4,7 @@
 
 
 from pyFAT_astro.Support.clean_functions import clean_before_sofia,\
-    clean_after_sofia,transfer_errors,transfer_fitting_parameters
+    clean_after_sofia,transfer_errors
 from pyFAT_astro.Support.fits_functions import cut_cubes
 from make_moments.functions import extract_pv,moments
 from pyFAT_astro.Support.log_functions import print_log,update_statistics,enter_recovery_point
@@ -21,6 +21,7 @@ from astropy.wcs import WCS
 from astropy.io import fits
 from packaging.version import Version
 from shutil import copyfile
+from time import sleep
 
 import pyFAT_astro.Support.read_functions as rf
 import pyFAT_astro.Support.support_functions as sf
@@ -33,16 +34,15 @@ except ImportError:
     from importlib_resources import open_text as pack_open_txt
 
 import os
-import sys
 import copy
+import psutil
 
 import subprocess
 import numpy as np
-import traceback
 import warnings
 
 import re
-from datetime import datetime
+from datetime import datetime, time
 
 def check_angle_convergence(Configuration,Tirific_Template,\
         fit_type = 'Undefined'):
@@ -339,18 +339,10 @@ def check_inclination(Configuration,Tirific_Template,Fits_Files, \
     Configuration['TIRIFIC_RUNNING'] = other_run[0]
     Configuration['TIRIFIC_PID'] =  other_run[1]
     #Moving this away from a where call the below line works incorporate in new version for now patch
-    # new_incl= incl_to_check[mom_chi.index(np.nanmin(mom_chi))]
-   
-    low= np.where(mom_chi == np.nanmin(mom_chi))[0]
-   
-    #numpy 2.4 changes the output from np.where so add low.ndim
-    if low.size > 1 or low.ndim > 0.:
-        low = low[0]
-    new_incl = float(incl_to_check[low])
+    new_incl= float(incl_to_check[mom_chi.index(np.nanmin(mom_chi))])
    
     print_log(f'''CHECK_INCLINATION: This is the new inclination {new_incl} it was {current[1][0]}.
 {'':8s}mom_chi = {mom_chi}
-{'':8s}low = {low}
 ''',Configuration,case= ['debug_add'])
 
 
@@ -528,6 +520,15 @@ def check_source(Configuration, Fits_Files):
                 /(Configuration['BEAM_IN_PIXELS'][0])+5.)
     print_log(f'''CHECK_SOURCE: From Sofia we find a max extend of {Configuration['MAX_SIZE_IN_BEAMS']}
 ''', Configuration,case= ['verbose'])
+    if Configuration['RADIUS_INPUT_BOUNDARY'][1] < 0.:
+        Configuration['RADIUS_INPUT_BOUNDARY'][1] = Configuration['MAX_SIZE_IN_BEAMS']*Configuration['BEAM'][0]
+        print_log(f'''CHECK_SOURCE: The user did not supply a maximum radius. We will use the sofia estimate of {Configuration['RADIUS_INPUT_BOUNDARY'][1]} arcsec
+''', Configuration,case= ['verbose'])
+    if Configuration['MAX_SIZE_IN_BEAMS'] > Configuration['RADIUS_INPUT_BOUNDARY'][1]/Configuration['BEAM'][0]:
+        Configuration['MAX_SIZE_IN_BEAMS'] = Configuration['RADIUS_INPUT_BOUNDARY'][1]/Configuration['BEAM'][0]
+        print_log(f'''CHECK_SOURCE: The max size is bigger than the  user supplied limit {Configuration['MAX_SIZE_IN_BEAMS']}
+''', Configuration,case= ['verbose'])
+     
     #if Configuration['MAX_SIZE_IN_BEAMS'] > 20.:
     #    smooth_field = True
     #else:
@@ -607,6 +608,7 @@ Checking the central flux in a box with size of {Configuration['BEAM_IN_PIXELS']
 {'':8s} We got SBR = {SBR_initial}, VROT = {VROT_initial}
 ''',Configuration,case= ['debug_add'])
 
+    #Ok so as all the initil estimate are set we populate some conf parameter
 
     # The extent is fairly well determined and the maximum should be no more than +3 beams and a minimum no less than 4
     # Switching here from doubled outer rings causes problems though
@@ -626,8 +628,10 @@ Checking the central flux in a box with size of {Configuration['BEAM_IN_PIXELS']
 {"":8s}CHECK_SOURCE: We will use {2.*(Configuration['NO_RINGS']-1)} rings for the model with a ring size of {Configuration['RING_SIZE']}.
 ''',Configuration)
    
-
-
+    #the minimum ring Where it is +1 as tirific rings are 1 based
+    if Configuration['RADIUS_INPUT_BOUNDARY'][0] > 0.:
+        Configuration['MIN_RING'] =  int(np.where(new_radii < Configuration['RADIUS_INPUT_BOUNDARY'][0])[0][-1])+1
+    
 
     if Configuration['CHANNEL_DEPENDENCY'].lower() == 'hanning':
         vres = (Configuration['CHANNEL_WIDTH']*2)/(2.*np.sqrt(2.*np.log(2)))
@@ -650,8 +654,11 @@ Checking the central flux in a box with size of {Configuration['BEAM_IN_PIXELS']
               RA=[ra,abs(err_x*header['CDELT1'])],
               DEC=[dec,abs(err_y*header['CDELT2'])],
               VSYS =[v_app,abs(err_z*header['CDELT3']/1000.)],
-              PA=pa, Inclination = inclination, Max_Vrot = [max_vrot,max_vrot_dev], Tot_Flux = [f_sum,f_sum_err], V_mask = [VELboun[1]-VELboun[0],vres],
-              Distance = Configuration['DISTANCE'] , DHI = [2*Configuration['SIZE_IN_BEAMS'][0]*Configuration['BEAM'][0],Configuration['BEAM'][0]*Configuration['RING_SIZE']])
+              PA=pa, Inclination = inclination, Max_Vrot = [max_vrot,max_vrot_dev], 
+              Tot_Flux = [f_sum,f_sum_err], V_mask = [VELboun[1]-VELboun[0],vres],
+              Distance = Configuration['DISTANCE'] , 
+              DHI = [2*Configuration['SIZE_IN_BEAMS'][0]*Configuration['BEAM'][0],
+                     Configuration['BEAM'][0]*Configuration['RING_SIZE']])
 
 
     # extract a PV-Diagram
@@ -1473,9 +1480,19 @@ def sofia(Configuration, Fits_Files):
         wf.sofia(sofia_template,'sofia_input.par')
         print_log("RUN_SOFIA: Running SoFiA. \n",Configuration)
         # Check which sofia to start
-        sfrun = subprocess.Popen([Configuration['SOFIA2'],'sofia_input.par'], stdout = subprocess.PIPE, stderr = subprocess.PIPE)
+        sfrun = subprocess.Popen([Configuration['SOFIA2'],'sofia_input.par'], 
+            stdout = subprocess.PIPE, stderr = subprocess.PIPE,
+            cwd=Configuration['FITTING_DIR'],universal_newlines = True)
+      
+        current_process = psutil.Process(sfrun.pid)
+      
+        while sfrun.poll() is None:
+            update_statistics(Configuration,program='SoFiA',process=current_process)
+            sleep(0.5)
+         
+        
         sofia_run, sofia_warnings_are_annoying = sfrun.communicate()
-        print_log(sofia_run.decode("utf-8"), Configuration)
+        print_log(sofia_run, Configuration)
 
         if sfrun.returncode == 8:
             if Configuration['SOFIA_THRESHOLD'] > 3.:
@@ -1535,8 +1552,8 @@ def tirshaker_call(Configuration,Fits_Files):
     # First we make a directory to keep all contained
     update_statistics(Configuration, message= "Starting the Tirshaker call run")
 
-    from TRM_errors.main import main as errors_main
-
+    #from TRM_errors.main import main as errors_main
+  
    
     if not os.path.isdir(f"{Configuration['FITTING_DIR']}/Error_Shaker/"):
         os.mkdir(f"{Configuration['FITTING_DIR']}/Error_Shaker/")
@@ -1560,8 +1577,19 @@ def tirshaker_call(Configuration,Fits_Files):
     #setup a yaml file for TRM_errors
     set_trm_template(Configuration)
    
-    #Then call the TRM  main function
-    errors_main([f'configuration_file={Configuration["FITTING_DIR"]}/Error_Shaker/FAT_conf.yml'])
+    #We run TRM_errors as a subprocess such that we can track its cpu usage and memory usage. 
+    # This is precause otherwise we don't have actual core usage while running tirific just start and end
+    tirshaker_run = subprocess.Popen(['create_TRM_errors',
+        f'configuration_file={Configuration["FITTING_DIR"]}/Error_Shaker/FAT_conf.yml'],\
+        stdout = subprocess.PIPE, stderr = subprocess.PIPE,\
+        cwd=Configuration['FITTING_DIR'],universal_newlines = True)
+    current_process = psutil.Process(tirshaker_run.pid)
+    update_statistics(Configuration, message= "Starting the Tirshaker call ")
+    while tirshaker_run.poll() is None:
+        update_statistics(Configuration,program='Tirshaker',process=current_process)
+        sleep(0.5)
+       
+        
     update_statistics(Configuration, message= "After the Tirshaker call run")
 
     out_name = f"{Configuration['FITTING_DIR']}/{Configuration['USED_FITTING']}/{Configuration['USED_FITTING']}.def"

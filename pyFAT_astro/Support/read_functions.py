@@ -1306,14 +1306,20 @@ def moment0_orientation(Configuration,Fits_Files,mom0,scale_factor=None,
             central = cube[0].data[:,\
                 sf.float_to_int(center[1]-buffer):sf.float_to_int(center[1]+buffer),\
                 sf.float_to_int(center[0]-buffer):sf.float_to_int(center[0]+buffer)]
-
+            
             if np.count_nonzero(np.isnan(central))/central.size < 0.1:
-                center,checked_center,center_stable = sf.get_new_center(\
+                center_fit,checked_center,center_stable = sf.get_new_center(\
                     Configuration,mom0[0].data,inclination=inclination[0],pa=pa[0],\
                     noise=median_noise_in_map)
-                center_counter += 1
-                new_center = True
-                print_log(f'''MOMENT0_ORIENTATION: We calculated a new center {center}.
+                if not np.isnan(center_fit[0]) and not np.isnan(center_fit[1]):
+                    center = copy.deepcopy(center_fit)
+                    center_counter += 1
+                    new_center = True
+                    print_log(f'''MOMENT0_ORIENTATION: We calculated a new center {center}.
+''',Configuration,case= ['debug_add'])
+                else:
+                    center_stable = True
+                    print_log(f'''MOMENT0_ORIENTATION: Failed to calculate a new center. Keeping the previous one.
 ''',Configuration,case= ['debug_add'])
             else:
                 center_stable = True

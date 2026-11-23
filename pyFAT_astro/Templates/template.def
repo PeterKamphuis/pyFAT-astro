@@ -1,5 +1,6 @@
 LOGNAME=
 NCORES= 4
+ACTION= 1
 RESTARTNAME= restart.txt
 INSET=
 BOX=

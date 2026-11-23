@@ -59,7 +59,7 @@ def basicinfo(Configuration,initialize = False,stage='TiRiFiC' ,
 #The total flux is determined by the source finder in the initial estimates and the total emission in the masked cube of the final model in the fits
 #D_HI is determined as the diameter where the major axis with given PA cuts the 10^20 column of the moment0 map
 # {'RA':>25s} {'DEC':>25s} {'VSYS':>20s} {'PA':>20s} {'Inclination':>20s} {'Max VRot':>20s} {'V_mask':>20s} {'Tot FLux':>20s} {'D_HI':>20s} {'Distance':>20s} {'HI Mass':>20s} {'D_HI_kpc':>20s}
-# {'hh:mm:ss':>25s} {'dd:mm:ss':>25s} {'km/s':>20s} {'deg':>20s} {'deg':>20s} {'km/s':>20s} {'km/s':>20s} {'Jy':>20s} {'arcsec':>20s} {'Mpc':>20s} {'M_solar':>20s} {'kpc':>20s}
+# {'hh:mm:ss':>25s} {'dd:mm:ss':>25s} {'km/s':>20s} {'deg':>20s} {'deg':>20s} {'km/s':>20s} {'km/s':>20s} {'Jy x km/s':>20s} {'arcsec':>20s} {'Mpc':>20s} {'M_solar':>20s} {'kpc':>20s}
 # The initial input
 ''')
     else:
@@ -419,7 +419,8 @@ def make_overview_plot(Configuration,Fits_Files ):
             Vars_to_plot.append(f'# {x}_2_ERR')
     FAT_Model = sf.load_tirific(Configuration,\
         f"{Configuration['FITTING_DIR']}Finalmodel/Finalmodel.def",\
-        Variables= Vars_to_plot,array=True ,brightness_check=True)
+        Variables= Vars_to_plot,array=True ,brightness_check=True,
+        inner_rings = Configuration['MIN_RING'] )
     Extra_Model_File = f"{Configuration['FITTING_DIR']}{fit_type}/{fit_type}_Iteration_{Configuration['ITERATIONS']}.def"
 
     if os.path.exists(Extra_Model_File):
@@ -600,12 +601,14 @@ def make_overview_plot(Configuration,Fits_Files ):
     ax_moment1.set_label('Velocity Field')
     #Comp_ax1.set_facecolor('black')
     # we need contour levels and
-    inclination_correction = sf.set_limits(FAT_Model[Vars_to_plot.index('INCL'),0]+12.5,20.,90.)
+    inclination_correction = sf.set_limits(FAT_Model[Vars_to_plot.index('INCL'),Configuration['MIN_RING']]+12.5,20.,90.)
     velocity_width= sf.set_limits(1.25*np.nanmax(FAT_Model[Vars_to_plot.index('VROT'),:])*np.sin(np.radians(inclination_correction)),30.,700.)
 
     max_color= FAT_Model[Vars_to_plot.index('VSYS'),0]+velocity_width
     min_color= FAT_Model[Vars_to_plot.index('VSYS'),0]-velocity_width
-
+    print_log(f'''MAKE_OVERVIEW_PLOT: We find the following limits for the velocity field: min_color = {min_color} and max_color = {max_color}.
+made from the systemic velocity of {FAT_Model[Vars_to_plot.index('VSYS'),0]:.2f} km/s and a velocity width of {velocity_width:.2f} km/s, which is based on the maximum rotational velocity of {np.nanmax(FAT_Model[Vars_to_plot.index('VROT'),:]):.2f} km/s and an inclination correction of {inclination_correction:.2f} degrees.
+''',Configuration,case=['debug_add'])
     moment1_plot = ax_moment1.imshow(moment1[0].data, cmap='rainbow', origin='lower', alpha=1, vmin = min_color, vmax = max_color )
     plt.ylabel('DEC')
     #Stupid python suddenly finds its own labels
@@ -615,6 +618,10 @@ def make_overview_plot(Configuration,Fits_Files ):
     velocity_step=sf.set_limits(np.round(((max_color-min_color)*0.9)/20.),1.,30.)
     integer_array = np.linspace(0,20,21)-10
     momlevel = [FAT_Model[Vars_to_plot.index('VSYS'),0]+x*velocity_step for x in integer_array if min_color < FAT_Model[Vars_to_plot.index('VSYS'),0]+x*velocity_step < max_color]
+    print_log(f'''MAKE_OVERVIEW_PLOT: We find the following contour levels for the velocity field: {momlevel}
+from min_color = {min_color} to max_color = {max_color} with a velocity step of {velocity_step}.
+inclination correction is {inclination_correction} and velocity width is {velocity_width}.
+''',Configuration,case=['debug_add'])
     ax_moment1.contour(moment1[0].data, transform=ax_moment1.get_transform(im_wcs),
                levels=momlevel, colors='white',linewidths=1.5 *size_factor, zorder =4)
     ax_moment1.contour(moment1[0].data, transform=ax_moment1.get_transform(im_wcs),
@@ -1315,8 +1322,8 @@ plot_PV.__doc__ =f'''
 def plot_individual_ax(Configuration,ax,combined_time,combined_loads):
     ax.plot(combined_time,combined_loads['Tirific']['MEM'],'b-',lw=0.5)
     ax.plot(combined_time,combined_loads['FAT']['MEM'],'b--',lw=0.5)
-    ax.set_ylim(0,np.max([combined_loads['Tirific']['MEM'],combined_loads['FAT']['MEM']]) \
-                      +np.max([combined_loads['Tirific']['MEM'],combined_loads['FAT']['MEM']])/10.)
+    ax.set_ylim(0,np.nanmax([combined_loads['Tirific']['MEM'],combined_loads['FAT']['MEM']]) \
+                      +np.nanmax([combined_loads['Tirific']['MEM'],combined_loads['FAT']['MEM']])/10.)
    
    
     ax2 = ax.twinx()
@@ -1443,8 +1450,12 @@ plot_usage_stats.__doc__ =f'''
 '''
 
 def read_statistics(Configuration):
-    labels = {'FAT': {'label':[], 'Time':[]}, 'Tirific':{'label':[], 'Time':[]}}
-    loads = {'FAT':{'CPU':[],'MEM':[],'Time':[]},'Tirific':{'CPU':[],'MEM':[],'Time': []}}
+    labels = {'FAT': {'label':[], 'Time':[]}, 
+              'Tirific':{'label':[], 'Time':[]}} 
+             
+    loads = {'FAT':{'CPU':[],'MEM':[],'Time':[]},
+             'Tirific':{'CPU':[],'MEM':[],'Time': []}}
+          
     with open(f"{Configuration['LOG_DIRECTORY']}Usage_Statistics.txt") as file:
         lines = file.readlines()
     current_stage = 'Not_Found'
@@ -1467,8 +1478,7 @@ def read_statistics(Configuration):
         time = diff.total_seconds()/60.-gap_time
     
         if line[0] == '#':
-            if tmp[1] == 'TIRIFIC:':
-
+            if tmp[1] == 'RUN_TIRIFIC:':
                 if tmp[2].lower() == 'initializing':
                     tmp2 = line.split('=')[1].split()
                     current_stage = tmp2[0].strip()
@@ -1499,16 +1509,16 @@ def read_statistics(Configuration):
         else:
             if tmp[-1].lower() == 'tirific':
                 loads['Tirific']['Time'].append(time)
-                loads['Tirific']['CPU'].append(tmp[4])
-               
+                loads['Tirific']['CPU'].append(tmp[4]) 
                 loads['Tirific']['MEM'].append(tmp[8])
+            
             else:
                 loads['FAT']['Time'].append(time)
                 loads['FAT']['CPU'].append(tmp[4])
                 loads['FAT']['MEM'].append(tmp[8])
-            if float(tmp[4]) > maxCPU:
+            if float(tmp[4]) > maxCPU and not np.isnan(float(tmp[4])):
                     maxCPU = float(tmp[4])
-            if float(tmp[8]) > maxMEM:
+            if float(tmp[8]) > maxMEM and not np.isnan(float(tmp[8])):
                     maxMEM = float(tmp[8])
     return loads,labels,maxCPU,maxMEM
 read_statistics.__doc__ =f'''

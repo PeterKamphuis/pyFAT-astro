@@ -149,7 +149,7 @@ def create_fat_cube(Configuration, Fits_Files = None,sofia_catalogue=False,\
         Cube = fits.open(f"{Configuration['SOFIA_DIR']}{name}_{id}_cube.fits",\
             uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
     else:
-        Cube = fits.open(Configuration['FITTING_DIR']+Fits_Files['ORIGINAL_CUBE'],\
+        Cube = fits.open(f"{Configuration['INPUT_CUBE_DIR']}/{Fits_Files['ORIGINAL_CUBE']}",\
             uint = False, do_not_scale_image_data=True,ignore_blank = True, output_verify= 'ignore')
     data = Cube[0].data
     hdr = Cube[0].header

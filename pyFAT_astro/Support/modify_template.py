@@ -294,8 +294,8 @@ def calculate_change_boundary(Configuration,multiple,theta_zero,phi_zero,
             poss_theta_bound.append(float('NaN'))
             poss_phi_bound.append(float('NaN'))
         else:
-            poss_theta_bound.append(float(theta_tmp))
-            poss_phi_bound.append(float(phi_tmp))
+            poss_theta_bound.append(theta_tmp[0])
+            poss_phi_bound.append(phi_tmp[0])
     minimum = -1*np.sqrt(np.min(np.array([x-theta_zero for x in poss_theta_bound],dtype=float))**2\
                 +np.min(np.array([x-phi_zero for x in poss_phi_bound],dtype=float))**2)
     maximum = np.sqrt(np.max(np.array([x-theta_zero for x in poss_theta_bound],dtype=float))**2\
@@ -561,7 +561,11 @@ def check_parameter_against_settings(Configuration,Tirific_Template\
             #VROT starts with a 0 so we need to avoid it here
             prev = values[0]
             if not key in ['VROT']:
-                if values[0] == 0.:
+                if key in ['SBR','SBR_2']:
+                    if Configuration['RADIUS_INPUT_BOUNDARY'][0] == 0. and \
+                        values[0] == 0.:
+                        raise ProgramError(f'''While checking the fit settings although there is no minimum radius the  first values in {key} was 0. This should never happen and indicates an error while setting up the template.''')
+                elif values[0] == 0.:
                     raise ProgramError(f'''While checking the fit settings the first value of {key} was 0. 
 This should never happen and indicates an error while setting up the template.''')
                 for x in values:
@@ -641,6 +645,12 @@ def check_size(Configuration,Tirific_Template, fit_type = 'Undefined', \
             print_log(f'''CHECK_SIZE: Interpolating SBR
 ''',Configuration,case= ['debug_add'])
             old_radii = np.array(sf.load_tirific(Configuration,Tirific_Template, ['RADI']),dtype = float)
+            print_log(f'''CHECK_SIZE: The current radii and old radii are
+{'':8s} radii = {radii}
+{'':8s} old_radii = {old_radii}
+but they should be always the same, it make little sense to have different radii and SBR profiles, this indicates an error in the template setup.
+''',Configuration,case= ['debug_add'])
+            raise ProgramError(f'''CHECK_SIZE: The current radii and old radii are are not the same''')
             for i in [0,1]:
                 sbr[i] = np.interp(np.array(radii,dtype=float),np.array(old_radii[0],dtype=float),np.array(sbr[i],dtype=float))
     print_log(f'''CHECK_SIZE: These are the ring SBRs and limits we will use:
@@ -774,11 +784,6 @@ def cut_low_rings(Configuration, Tirific_Template,Fits_Files, fit_type = 'Unknow
 {'':8s} {Tirific_Template}
 ''',Configuration,case= ['debug_add']) 
     
-    
-
-
-
-
 cut_low_rings.__doc__  =f'''
  NAME:
     cut_low_rings
@@ -806,6 +811,94 @@ cut_low_rings.__doc__  =f'''
     Unspecified
 
  NOTE: Very simple function only to be used after smoothing
+'''
+def determine_fit_order(Configuration, key, radii,fixed,allowed_order = [None,None]):
+    if len(radii) > 10.:
+        start_order = sf.float_to_int(len(radii)/5.)
+    else:
+        start_order = 0
+    if key in ['VROT']:
+        bound_fit = 1
+        
+        #This needs another -1 because the 0 and 1/5. ring are more or less 1 ring
+        max_order = sf.set_limits(len(radii)-fixed-2,3,8)
+        #The rotation curve varies a lot so the lower limit should be as high as possible
+        #But at least 3 less than max order and maximally 4
+        if len(radii)-fixed-2 <= 6:
+            lower_limit=sf.set_limits(3,3,max_order-2)
+        elif len(radii)-fixed-2 <= 10:
+            lower_limit=sf.set_limits(4,3,max_order-2)
+        else:
+            lower_limit=sf.set_limits(5,3,max_order-2)
+       
+        start_order = sf.set_limits(start_order,lower_limit,max_order)
+         
+        print_log(f'''DETERMINE_FIT_ORDER: For VROT we set the lower limit to {lower_limit} and the max order to {max_order}
+start order = s{start_order}
+''',Configuration,case = ['debug_add'])
+
+    else:
+        bound_fit = 0
+        if key in ['PA']:
+            max_order = sf.set_limits(len(radii)-2,4,8)
+            start_order = 3  
+        elif key in ['INCL']:
+            max_order = sf.set_limits(len(radii)-2,3,5)
+            start_order = 1               
+        elif key in ['Z0']:
+            max_order = sf.set_limits(len(radii)-fixed,3,5)
+        elif key in ['SBR']:
+            max_order = sf.set_limits(len(radii)-2,4,8)
+            start_order = 3
+        else:
+            max_order = sf.set_limits(len(radii)-1,3,7)
+
+    if allowed_order[0] is not None:
+        if start_order < allowed_order[0]:
+            start_order=  allowed_order[0]
+    if start_order >= max_order:
+        max_order = start_order+1
+    if allowed_order[1] is not None:
+        if max_order > allowed_order[1]:
+            max_order=  allowed_order[1]
+
+    print_log(f'''DETERMINE_FIT_ORDER: For {key} we start at {start_order} because we have {len(radii)} rings of which {fixed} are fixed
+{'':8s} this gives us a maximum order of {max_order}
+''',Configuration,case = ['debug_add'])
+    return start_order, max_order, bound_fit
+determine_fit_order.__doc__  =f'''
+ NAME:
+    determine_fit_order
+
+ PURPOSE:
+    Determine the fitting order for a given parameter based on the configuration and profile.
+
+
+ CATEGORY:
+    modify_template
+
+ INPUTS:
+    Configuration = Standard FAT configuration
+    key = parameter key (e.g., 'VROT', 'PA', 'INCL', 'Z0', 'SBR')
+    radii = array of radii
+    profile = array of profile values
+    fixed = number of fixed rings
+    allowed_order = list of allowed orders [min_order, max_order]
+
+ OPTIONAL INPUTS:
+
+
+ OUTPUTS:
+        st_fit = whether to start at 0 or 1
+        start_order = the order to start the fit
+        max_order = the maximum order to fit
+
+ OPTIONAL OUTPUTS:
+
+ PROCEDURES CALLED:
+    Unspecified
+
+ NOTE: 
 '''
 
 def find_parameters_and_rings(part):
@@ -978,71 +1071,28 @@ def fit_polynomial(Configuration,radii,profile,error, key, \
         error[:fixed] = error[:fixed]/10.
     elif key in ['VROT']:
         #fixed =len(radii)-Configuration['OUTER_SLOPE_START']
+        min_error = Configuration['CHANNEL_WIDTH'] if Configuration['CHANNEL_WIDTH'] > 0. else np.nanmin(error)
         fixed =sf.set_limits(len(radii)-np.min(Configuration['LAST_RELIABLE_RINGS']),1,len(radii))
-        error[np.min(Configuration['LAST_RELIABLE_RINGS']):] = Configuration['CHANNEL_WIDTH']
-        error[0] = Configuration['CHANNEL_WIDTH']
+        error[np.min(Configuration['LAST_RELIABLE_RINGS']):] = min_error
+        error[0] = min_error
         #error[1] = error[1]*3.
     else:
         fixed = 1
 
-    if len(radii) > 10.:
-        start_order = sf.float_to_int(len(radii)/5.)
-    else:
-        start_order = 0
 
-
-
+    start_order,max_order,bound_fit = determine_fit_order(Configuration,
+        key, radii,fixed,allowed_order=allowed_order)
     st_fit = 0
-    if key in ['VROT']:
-        bound_fit = 1
-        if np.mean(profile[1:3]) > 120.:
-            if zero_point == None:
-                zero_point = np.mean(profile[1:3])
-            st_fit = 1
-
-        #This needs another -1 because the 0 and 1/5. ring are more or less 1 ring
-        max_order = sf.set_limits(len(radii)-fixed-2,3,8)
-        #The rotation curve varies a lot so the lower limit should be as high as possible
-        #But at least 3 less than max order and maximally 4
-        if len(radii)-fixed-2 <= 6:
-            lower_limit=sf.set_limits(3,3,max_order-2)
-        elif len(radii)-fixed-2 <= 10:
-            lower_limit=sf.set_limits(4,3,max_order-2)
-        else:
-            lower_limit=sf.set_limits(5,3,max_order-2)
-        start_order = sf.set_limits(start_order,lower_limit,max_order)
-
-    else:
-        bound_fit = 0
-        if key in ['PA']:
-            max_order = sf.set_limits(len(radii)-2,4,8)
-            start_order = 3  
-        elif key in ['INCL']:
-            max_order = sf.set_limits(len(radii)-2,3,5)
-            start_order = 1               
-        elif key in ['Z0']:
-            max_order = sf.set_limits(len(radii)-fixed,3,5)
-        elif key in ['SBR']:
-            max_order = sf.set_limits(len(radii)-2,4,8)
-            start_order = 3
-        else:
-            max_order = sf.set_limits(len(radii)-1,3,7)
-
-    if allowed_order[0]:
-        if start_order < allowed_order[0]:
-            start_order=  allowed_order[0]
-    if start_order >= max_order:
-        max_order = start_order+1
-    if allowed_order[1]:
-        if max_order > allowed_order[1]:
-            max_order=  allowed_order[1]
-
-    print_log(f'''FIT_POLYNOMIAL: For {key} we start at {start_order} because we have {len(radii)} rings of which {fixed} are fixed
-{'':8s} this gives us a maximum order of {max_order}
-''',Configuration,case = ['debug_add'])
+    if np.mean(profile[1:3]) > 120.:
+        if zero_point == None:
+            zero_point = np.mean(profile[1:3])
+        st_fit = 1
     found = False
     count = 0
     failed=False
+    if max_order <= start_order:
+        raise RuntimeError(f'''FIT_POLYNOMIAL: The maximum order {max_order} is smaller than the starting order {start_order}. 
+This should not happen in pyFAT and indicates an error in the code.''')
     while not found:
         reduced_chi = []
         order = range(start_order,max_order+1)
@@ -1062,7 +1112,8 @@ def fit_polynomial(Configuration,radii,profile,error, key, \
 
         for ord in order:
             fit_prof = np.poly1d(np.polyfit(radii[st_fit:],profile[st_fit:],ord,w=1./error[st_fit:]))
-
+            print_log(f'''FIT_POLYNOMIAL: fit_prof {fit_prof}
+              ''',Configuration,case = ['debug_add'])
             if st_fit > 0.:
                 fit_profile = np.concatenate(([zero_point],[e for e in fit_prof(radii[st_fit:])]))
             else:
@@ -1077,7 +1128,9 @@ def fit_polynomial(Configuration,radii,profile,error, key, \
                 for i in range(len(fit_profile)-5,len(fit_profile)):
                     if fit_profile[i-1] < fit_profile[i]:
                         fit_profile[i]=fit_profile[i-1]*0.9
-            
+            print_log(f'''FIT_POLYNOMIAL: After fixing the profile we get
+{'':8s} {key} = {', '.join([str(x) for x in fit_profile[st_fit:]])}
+''',Configuration,case = ['debug_add'])
             red_chi = np.sum((profile[st_fit:]-fit_profile[st_fit:])**2/error[st_fit:]**2)/(len(radii[st_fit:])-ord)
             #We penailze profiles that go outside the boundaries
             print_log(f'''FIT_POLYNOMIAL: From the final profile we get chi**2 = {red_chi}
@@ -1559,7 +1612,13 @@ def fix_sbr(Configuration,Tirific_Template, smooth = False, initial = False ):
                 last = sbr[i,last_ring_to_fit]
                 second = sbr[i,last_ring_to_fit-1]
                 sbr[i,last_ring_to_fit-1] = last
-                sbr[i,last_ring_to_fit] = second         
+                sbr[i,last_ring_to_fit] = second   
+    # If we have a minimum radius then we want to set those to 0
+    if Configuration['RADIUS_INPUT_BOUNDARY'][0] > 0.:
+        for i in [0,1]:
+            sbr[i,radii < Configuration['RADIUS_INPUT_BOUNDARY'][0]] = 0.
+
+
     if smooth and not not_too_faint:
         print_log(f'''FIX_SBR: All SBR rings are below the cutoff limits
 {'':8s}original sbr = {original_sbr}
@@ -3281,13 +3340,18 @@ def set_generic_fitting(Configuration, key , stage = 'initial', \
     if isinstance(flat_inner,int):
         flat_inner = [flat_inner,flat_inner]
     NUR = Configuration['NO_RINGS']
+    
+    min_ring = 1 if Configuration['MIN_RING'] < 2 else Configuration['MIN_RING']
+   
     input= {}
     print_log(f'''SET_GENERIC_FITTING: flat is {fixed}
 ''', Configuration,case=['debug_add'])
     if (stage in ['after_os','final_os','after_cc','after_ec','parameterized']) or fixed:
         print_log(f'''SET_GENERIC_FITTING: Fitting all as 1.
 ''', Configuration,case=['debug_add'])
-        input['VARY'] =  np.array([f"{key} 1:{NUR} {key}_2 1:{NUR}"],dtype=str)
+        input['VARY'] =  np.array([f"{key} {min_ring}:{NUR} {key}_2 {min_ring}:{NUR}"],dtype=str)
+        if min_ring > 1:
+            input['VARINDX'] = np.array([f"{key} 1:{min_ring-1}  {key}_2 1:{min_ring-1}"],dtype=str)
         input['PARMAX'] = np.array([Configuration[f'{key}_CURRENT_BOUNDARY'][0][1]],dtype=float)
         input['PARMIN'] = np.array([Configuration[f'{key}_CURRENT_BOUNDARY'][0][0]],dtype=float)
         input['MODERATE'] = np.array([moderate],dtype=int) #How many steps from del start to del end
@@ -3306,6 +3370,8 @@ def set_generic_fitting(Configuration, key , stage = 'initial', \
             add = ''
             for i in[0,1]:
                 if i == 1: add='_2'
+                if flat_inner[i] < min_ring:
+                    flat_inner[i] =  min_ring+1
                 if flat_inner[i]+1 >= NUR:
                     input['VARY'].append(f"!{key}{add} {NUR}")
                     end.append(NUR-1)
@@ -3313,8 +3379,11 @@ def set_generic_fitting(Configuration, key , stage = 'initial', \
                     input['VARY'].append(f"!{key}{add} {NUR}:{flat_inner[i]+1}")
                     end.append(flat_inner[i])
 
-            input['VARY'].append(f"{key} 1:{end[0]} {key}_2 1:{end[1]}")
+            input['VARY'].append(f"{key} {min_ring}:{end[0]} {key}_2 {min_ring}:{end[1]}")
             input['VARY'] = np.array(input['VARY'],dtype=str)
+            if min_ring> 1:
+                input['VARINDX'] = np.array([f"{key} 1:{min_ring-1}  {key}_2 1:{min_ring-1}"],dtype=str)
+    
             input['PARMAX'] = np.array([Configuration[f'{key}_CURRENT_BOUNDARY'][1][1],\
                                         Configuration[f'{key}_CURRENT_BOUNDARY'][2][1],\
                                         Configuration[f'{key}_CURRENT_BOUNDARY'][0][1]],dtype=float)
@@ -3333,12 +3402,17 @@ def set_generic_fitting(Configuration, key , stage = 'initial', \
 {'':8s} limits = {Configuration[f'{key}_CURRENT_BOUNDARY']}
 ''', Configuration,case=['debug_add'])
             flat_inner = int(np.min(flat_inner))
+            if flat_inner < min_ring:
+                flat_inner =  min_ring
             if flat_inner+1 >= NUR:
                 input['VARY'] =  np.concatenate((np.array([f"!{key} {NUR} {key}_2 {NUR}"],dtype=str),\
-                                                 np.array([f"{key} 1:{NUR-1} {key}_2 1:{NUR-1}"],dtype=str)))
+                                                 np.array([f"{key} {min_ring}:{NUR-1} {key}_2 {min_ring}:{NUR-1}"],dtype=str)))
             else:
                 input['VARY'] =  np.concatenate((np.array([f"!{key} {NUR}:{flat_inner+1} {key}_2 {NUR}:{flat_inner+1}"],dtype=str),\
-                                                 np.array([f"{key} 1:{flat_inner} {key}_2 1:{flat_inner}"],dtype=str)))
+                                                 np.array([f"{key} {min_ring}:{flat_inner} {key}_2 {min_ring}:{flat_inner}"],dtype=str)))
+            if min_ring> 1:
+                input['VARINDX'] = np.array([f"{key} 1:{min_ring-1}  {key}_2 1:{min_ring-1}"],dtype=str)
+    
             input['PARMAX'] = np.array([Configuration[f'{key}_CURRENT_BOUNDARY'][1][1],\
                                         Configuration[f'{key}_CURRENT_BOUNDARY'][0][1]],dtype=float)
             input['PARMIN'] = np.array([Configuration[f'{key}_CURRENT_BOUNDARY'][1][0],\
@@ -3683,6 +3757,11 @@ def set_new_size(Configuration,Tirific_Template, fit_type = 'Undefined',
 ''',Configuration,case=['debug_add'])
         if key == 'RADI':
             Tirific_Template[key] = f" {' '.join([f'{x:.2f}' for x in radii])}"
+            old_min_ring = copy.deepcopy(Configuration['MIN_RING'])
+            if Configuration['RADIUS_INPUT_BOUNDARY'][0] > 0.:   
+                Configuration['MIN_RING'] =  int(np.where(radii < Configuration['RADIUS_INPUT_BOUNDARY'][0])[0][-1])+1
+                print_log(f'''SET_NEW_SIZE: We have a radius input boundary of {Configuration['RADIUS_INPUT_BOUNDARY'][0]} and the last ring that is below this boundary is {ignore_rings}. We will ignore the rings below this boundary and set the minimum ring to {Configuration['MIN_RING']}
+''',Configuration,case=['debug_add'])
         else:
             if interpolate:
                 radii_int=np.array(radii,dtype=float)
@@ -3730,6 +3809,12 @@ def set_new_size(Configuration,Tirific_Template, fit_type = 'Undefined',
     Tirific_Template['VARY'] = Tirific_Template['VARY'].replace(f"{old_rings}",f"{current_rings}")
     Tirific_Template['VARINDX'] = Tirific_Template['VARINDX'].replace(f"{old_rings-1}",f"{current_rings-1}")
     Tirific_Template['VARINDX'] = Tirific_Template['VARINDX'].replace(f"{old_rings}",f"{current_rings}")
+   
+    if Configuration['MIN_RING'] != old_min_ring:
+        # Have to replace the min ring as well 
+        Tirific_Template['VARY'] = Tirific_Template['VARY'].replace(f"{old_min_ring}",f"{Configuration['MIN_RING']}")
+        Tirific_Template['VARINDX'] = Tirific_Template['VARINDX'].replace(f"{old_min_ring}",f"{Configuration['MIN_RING']}")
+    
     Tirific_Template['NUR'] = f"{current_rings}"
     # if we cut we want to flatten things
     #if current_rings < old_rings:
@@ -3891,7 +3976,7 @@ def set_sbr_fitting(Configuration,Tirific_Template, stage = 'no_stage'):
 {'':8s} No_Rings = {Configuration['NO_RINGS']}
 ''',Configuration,case=['debug_start'])
     sbr_input = {}
-    inner_ring = 2
+    inner_ring = 2 if Configuration['MIN_RING'] < 2 else Configuration['MIN_RING']
     sbr_profile= sf.load_tirific(Configuration,Tirific_Template,Variables= ['SBR','SBR_2'],array=True)
     radii= sf.load_tirific(Configuration,Tirific_Template, Variables=['RADI'],array=True)
     last_ring_to_fit = []
@@ -3928,11 +4013,14 @@ def set_sbr_fitting(Configuration,Tirific_Template, stage = 'no_stage'):
                 fact[i]=2.5
 
             for x in range(len(radii)-1,inner_ring-1,-1):
-                if radii[x] <= Configuration['SIZE_IN_BEAMS'][i]*Configuration['BEAM'][0]:
+                if Configuration['RADIUS_INPUT_BOUNDARY'][0] <= radii[x] <= Configuration['SIZE_IN_BEAMS'][i]*Configuration['BEAM'][0]:
                     sbr_profile[i,x] = sf.set_limits(sbr_profile[i,x],sbr_ring_limits[x]/fact[i]*2.,1.)
                 else:
                     sbr_profile[i,x] = 0.
-            sbr_profile[i,:inner_ring] = [sf.set_limits(x,np.min(sbr_ring_limits),1.) for x in sbr_profile[i,:inner_ring]]
+            if inner_ring == 2:
+                sbr_profile[i,:inner_ring] = [sf.set_limits(x,np.min(sbr_ring_limits),1.) for x in sbr_profile[i,:inner_ring]]
+            else:
+                sbr_profile[i,:inner_ring] = [0. for x in sbr_profile[i,:inner_ring]]
             if i == 0:
                 ext=''
             else:
@@ -4028,10 +4116,10 @@ beamarea = {Configuration['BEAM_AREA']}, channelwidth = {Configuration['CHANNEL_
                         sbr_input['MINDELTA'].append(sbr_ring_limits[x]/20.)
             for key in input_variables:
                 sbr_input[key] =np.array(sbr_input[key]) 
-
-        sbr_input['VARY'] = np.concatenate((sbr_input['VARY'],\
-            [f"SBR {' '.join([str(int(x)) for x in range(1,inner_ring+1)])} SBR_2 {' '.join([str(int(x)) for x in range(1,inner_ring+1)])}"]\
-            ),axis=0)
+        if inner_ring <= 2:
+            sbr_input['VARY'] = np.concatenate((sbr_input['VARY'],\
+                [f"SBR {' '.join([str(int(x)) for x in range(1,inner_ring+1)])} SBR_2 {' '.join([str(int(x)) for x in range(1,inner_ring+1)])}"]\
+                ),axis=0)
         if limits_for_max:
             sbr_input['PARMAX'] = np.concatenate((sbr_input['PARMAX'],\
                 [sf.set_limits(np.mean([sbr_smoothed_profile[0,2:4],\
@@ -4204,12 +4292,12 @@ def set_vrot_fitting(Configuration, stage = 'initial', rotation = None):
     else:
         modifier= [Configuration['LIMIT_MODIFIER'][0]/2,Configuration['LIMIT_MODIFIER'][0],Configuration['LIMIT_MODIFIER'][0]/3.]
 
-
+    min_ring = 2 if Configuration['MIN_RING'] < 2 else Configuration['MIN_RING']
 
     if stage in ['after_cc', 'after_ec', 'final_os']:
-        vrot_input['VARY'] =  np.array([f"VROT {NUR}:2 VROT_2 {NUR}:2"],dtype=str)
+        vrot_input['VARY'] =  np.array([f"VROT {NUR}:{min_ring} VROT_2 {NUR}:{min_ring}"],dtype=str)
     else:
-        vrot_input['VARY'] =  np.array([f"!VROT {NUR}:2 VROT_2 {NUR}:2"],dtype=str)
+        vrot_input['VARY'] =  np.array([f"!VROT {NUR}:{min_ring} VROT_2 {NUR}:{min_ring}"],dtype=str)
     vrot_input['PARMAX'] = np.array([Configuration['VROT_CURRENT_BOUNDARY'][0][1]],dtype=float)
     vrot_input['PARMIN'] = np.array([Configuration['VROT_CURRENT_BOUNDARY'][0][0]],dtype=float)
     vrot_input['MODERATE'] = np.array([5],dtype=float) #How many steps from del start to del end
@@ -4232,7 +4320,8 @@ def set_vrot_fitting(Configuration, stage = 'initial', rotation = None):
             Configuration['OUTER_SLOPE_START'] = inner_slope
         else:
             inner_slope = Configuration['OUTER_SLOPE_START']
-
+        if inner_slope < min_ring:
+            inner_slope = min_ring
 
         if inner_slope >= NUR-1:
             if rotation[0] > 180.:
