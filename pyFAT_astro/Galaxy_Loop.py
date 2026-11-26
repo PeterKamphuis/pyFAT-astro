@@ -67,14 +67,17 @@ def Galaxy_Loop(Configuration):
         if 'fit_tirific_osc' in Configuration['FITTING_STAGES']:
             if  Configuration['RP_SECTION'] in ['ITERATION',\
                 'AFTER-PREPARATIONS','BEFORE-SMOOTHING']:
+               
                 current_run,Tirific_Template = runf.fitting_osc(
                     Configuration, Fits_Files,  Initial_Parameters)
             else:
                 current_run = 'Not set'
                 Tirific_Template = copy.deepcopy(Configuration['Tirific_Template'])
         elif 'fit_fable' in Configuration['FITTING_STAGES']:
+
             if  Configuration['RP_SECTION'] in ['ITERATION',\
                 'AFTER-PREPARATIONS','BEFORE-SMOOTHING']:
+                
                 current_run,Tirific_Template = runf.fitting_fable(
                     Configuration, Fits_Files,  Initial_Parameters)
             else:

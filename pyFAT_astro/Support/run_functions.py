@@ -984,8 +984,8 @@ def fitting_fable(Configuration,Fits_Files,Initial_Parameters):
     else:
         from pyFAT_astro.Support.support_functions import translate_tt_to_fable_dict
         fable_dictionary = translate_tt_to_fable_dict(Configuration, Configuration['Tirific_Template'])
-    prepared_fable = fable.prepare(Fits_Files['FITTING_CUBE'], **fable_dictionary,
-        seed=1,progress=False,mask=Fits_Files['MASK'])
+    prepared_fable = fable.prepare(f'{Configuration["FITTING_DIR"]}{Fits_Files["FITTING_CUBE"]}', **fable_dictionary,
+        seed=1,progress=False,mask=f'{Configuration["FITTING_DIR"]}{Fits_Files["MASK"]}')
     fable_settings = prepared_fable.settings
     print(fable_settings)
     result= fable_settings.run()

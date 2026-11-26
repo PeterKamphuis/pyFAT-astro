@@ -3179,7 +3179,9 @@ def set_fitting_parameters(Configuration, Tirific_Template, \
         if key == 'VROT':
             fitting_settings['VROT'] = set_vrot_fitting(Configuration,stage = stage, rotation = initial_estimates['VROT'] )
         elif key == 'SBR':
+          
             fitting_settings['SBR'] = set_sbr_fitting(Configuration,Tirific_Template,stage = stage)
+          
         else:
             flat_slope = False
             symmetric = False

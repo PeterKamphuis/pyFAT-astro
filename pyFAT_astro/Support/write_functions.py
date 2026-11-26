@@ -204,7 +204,7 @@ def initialize_def_file(Configuration, Fits_Files,Tirific_Template,\
             fit_type=fit_type)
         
         #Vars_to_Set =  ['XPOS','YPOS','VSYS','VROT','INCL','PA','SDIS','SBR','SBR_2','Z0']
-        if fit_type == 'Fit_Tirific_OSC':
+        if fit_type in ['Fit_Tirific_OSC','Fit_Fable']:
             set_model_parameters(Configuration, Tirific_Template,Initial_Parameters,stage='initialize_def_file' )
        
         # Finally we set how these parameters are fitted.

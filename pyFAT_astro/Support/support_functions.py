@@ -15,6 +15,7 @@ from scipy.optimize import curve_fit, OptimizeWarning
 from scipy import ndimage
 from scipy.signal import savgol_filter
 from astropy.wcs import WCS
+from astropy.coordinates import SkyCoord
 from astropy.io import fits
 
 try:
@@ -655,7 +656,10 @@ Your header did not have a unit for the third axis, that is bad policy.
             raise BadHeaderError('The Cube has frequency as a velocity axis this is not supported')
 
         #vel_types = ['VELO-HEL','VELO-LSR','VELO', 'VELOCITY','VOPT','VRAD']
-        vel_types = ['VELO','VOPT','VRAD']
+        if 'fit_fable' in Configuration['FITTING_STAGES']:
+            vel_types = ['VELO','VOPT','VRAD']
+        else:
+            vel_types = ['VOPT','VRAD']
         if hdr['CTYPE3'].upper() not in vel_types:
             if hdr['CTYPE3'].split('-')[0].upper() in ['RA','DEC']:
                 print_log(f'''CLEAN_HEADER: Your zaxis is a spatial axis not a velocity axis.
@@ -665,6 +669,10 @@ Your header did not have a unit for the third axis, that is bad policy.
             if hdr['CTYPE3'].split('-')[0].upper() == 'VELO':
                 frame = hdr['CTYPE3'].split('-')[1].upper()
                 hdr['CTYPE3'] = 'VELO'
+                if 'fit_fable' in Configuration['FITTING_STAGES']:
+                    print_log(f'''CLEAN_HEADER: You are using fable fitting but VELO is unclear as a velocity type,
+{"":8s}changing CTYPE3 to VRAD.''',Configuration)
+                    hdr['CTYPE3'] = 'VRAD'
                 if frame in ['LSR','LSRK']:
                     hdr['SPECSYS3']='LSRK'
                 elif frame in ['HEL','HELO']:
@@ -677,7 +685,7 @@ Please note that FAT can only deal with velocity cubes, not frequency.
         
         #Tirific pre 2.3.12 will only run with VELO so if VRAD of VOPT then we need to run with VELO and fix it in the end
         Configuration['HDR_VELOCITY'] = hdr['CTYPE3']
-        if  hdr['CTYPE3'].upper() in ['VRAD','VOPT']:
+        if  hdr['CTYPE3'].upper() in ['VRAD','VOPT'] and 'fit_tirific_osc' in Configuration['FITTING_STAGES']:
             if Version(Configuration['TIRIFIC_VERSION']) < Version('2.3.12'):
                 print_log(f'''CLEAN_HEADER: you are use a velocity type of {hdr['CTYPE3'].upper()} however tirific takes issue with this.
 As such we are replacing it with VELO before every tirific run. 
@@ -4470,28 +4478,40 @@ tirific_template.__doc__ ='''
  NOTE:
 '''
 
-def translate_tt_to_fable_dict(Configuration,tirific_template):
-    fable_dict = {'radii': tirific_template['RADI'][1:]}
-    fable_dict['vrot'] = [np.mean([x,y]) for x,y in zip(
-        tirific_template['VROT'][1:], tirific_template['VROT_2'][1:])]
-    fable_dict['incl'] = [np.mean([x,y]) for x,y in zip(
-        tirific_template['INCL'][1:], tirific_template['INCL_2'][1:])]
-    fable_dict['pa'] = [np.mean([x,y]) for x,y in zip(
-        tirific_template['PA'][1:], tirific_template['PA_2'][1:])]
-    fable_dict['center'] = [np.mean([np.mean([x,y]) for x,y in zip(
-        tirific_template['XPOS'][1:], tirific_template['XPOS_2'][1:])]),
-        np.mean([np.mean([x,y]) for x,y in zip(
-        tirific_template['YPOS'][1:], tirific_template['YPOS_2'][1:])])
+def translate_tt_to_fable_dict(Configuration,Tirific_Template):
+    radii,vrot,vrot_2, incl,incl_2, pa, pa_2, xpos, xpos_2, ypos,\
+        ypos_2, vsys, vsys_2, sbr, sbr_2, sdis, sdis_2 = load_tirific(
+        Configuration,Tirific_Template,Variables=['RADI','VROT','VROT_2',
+        'INCL','INCL_2','PA','PA_2','XPOS','XPOS_2','YPOS','YPOS_2',
+        'VSYS','VSYS_2','SBR','SBR_2','SDIS','SDIS_2'],array=True)
+    fable_dict = {'radii': radii[1:]}
+
+    fable_dict['vrot'] = [np.mean([float(x),float(y)]) for x,y in zip(
+        vrot[1:], vrot_2[1:])]
+    fable_dict['inclination'] = [np.mean([float(x),float(y)]) for x,y in zip(
+        incl[1:], incl_2[1:])]
+    fable_dict['position_angle'] = [np.mean([float(x),float(y) ]) for x,y in zip(
+        pa[1:], pa_2[1:])]
+    center = [np.mean([np.mean([float(x),float(y)]) for x,y in zip(
+        xpos[1:], xpos_2[1:])]),
+        np.mean([np.mean([float(x),float(y)]) for x,y in zip(
+        ypos[1:], ypos_2[1:])])
         ]
-    fable_dict['vsys'] = np.mean([np.mean([x,y]) for x,y in zip(
-        tirific_template['VSYS'][1:], tirific_template['VSYS_2'][1:])])
-    fable_dict['sigma'] = [np.mean([x,y])*1.004e4 for x,y in zip(
-        tirific_template['SBR'][1:], tirific_template['SBR_2'][1:])]
+    hdr = fits.getheader(Configuration['FITSFILE'])
+
     
-    fable_dict['vdisp'] = [np.sqrt(np.mean([x,y])**2+tirific_template['CONDISP'][0]**2) 
-        for x,y in zip(tirific_template['SDIS'][1:], tirific_template['SDIS_2'][1:])]
-    fable_dict['noise'] = tirific_template['RMS']
-    fable_dict['distance'] = Configuration['DISTANCE']
+    fable_dict['center'] = center
+    fable_dict['vsys'] = np.mean([np.mean([float(x),float(y)]) for x,y in zip(
+        vsys[1:], vsys_2[1:])])
+    fable_dict['surface_density'] = [np.mean([float(x),float(y)])*1.004e4 for x,y in zip(
+        sbr[1:], sbr_2[1:])]
+    
+    fable_dict['vdisp'] = [np.mean([float(x),float(y)]) 
+        for x,y in zip(sdis[1:], sdis_2[1:])]
+    
+    fable_dict['channel_response'] = float(Tirific_Template['CONDISP'])
+    fable_dict['noise'] = float(Tirific_Template['RMS'])
+    fable_dict['distance'] = float(Configuration['DISTANCE'])
 
     return fable_dict
     
